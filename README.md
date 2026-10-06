@@ -1,7 +1,8 @@
-# bumblebeam
+# BumbleBeam
 
-My open-source work for the [Beam](https://github.com/BeamMW/beam) privacy blockchain, as a member of
-its community. Everything here is public, Apache-2.0, and checked against the Beam core itself.
+Open-source contributions to the [Beam](https://github.com/BeamMW/beam) ($BEAM) privacy blockchain, as a
+member of its community: mining tools, a pool and more. Everything here is public, Apache-2.0, and
+checked against the Beam core itself.
 
 The first goal is mining. Today one pool holds about 75–90% of Beam's hashrate, the fastest
 BeamHash III miners are closed source with a dev fee, and the only open pool code dates from
@@ -12,7 +13,7 @@ BeamHash III miners are closed source with a dev fee, and the only open pool cod
 | [`oracle/`](oracle) | BeamHash III verification and difficulty checks, tested against the Beam core and real mainnet blocks | **done** (step 1) |
 | [`vectors/`](vectors) | Test vectors: real mainnet headers, the core's difficulty decisions, full solution sets from the reference solver | **done** (step 1) |
 | [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
-| [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style. Live network data; the pool's own numbers are demo data until the server exists | **UI ready** |
+| [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Live network data; the pool's own numbers are demo data until the server exists | **UI ready** |
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
 | `pool/` server | Stratum server, share accounting, payouts (Rust) | next |
 | `miner/` | BeamHash III GPU solver: CUDA first, then Metal and AMD | next |
@@ -65,9 +66,17 @@ cmake -S . -B build -G Ninja && cmake --build build
 ## Pool web UI
 
 Open `pool/web/index.html` through any static server (`python3 -m http.server -d pool/web`). It needs
-no build step and no framework. It uses the Beam Explorer's palette and type, and its numbers come
-live from the Explorer's public API, including every other Beam pool. It reads the pool's own data
-from `/api/*` (or `?api=<url>`); until the server exists, it shows clearly labelled demo data.
+no build step and no framework. It follows the Beam Explorer's design (palette, type, header and
+footer, chart style), and its network numbers come live from the Explorer's public API, including
+every other Beam pool. It reads the pool's own data from `/api/*` as described in
+[`pool/API.md`](pool/API.md); until the server exists, it shows clearly labelled demo data. From
+localhost, `?api=<url>` points it at another server; on a public host the parameter is ignored.
+
+Every value from an API is typed and escaped before it reaches the page. The pool fee is **0.5%**
+on PPLNS and solo alike, with no payout fee. The block reward is derived from the height with the
+core's emission rule (25 BEAM today, 12.5 from height 4,730,400), so it stays right without a
+redeploy. Payouts need an **offline** Beam address: a regular one expires and needs the wallet
+online, so the guide asks for the offline kind and the login warns otherwise.
 
 ## License
 

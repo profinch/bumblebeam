@@ -1,23 +1,65 @@
 // bumblebeam pool web UI: data layer.
 //
 // Two sources:
-//  - the pool's own API (pool/API.md), at ?api=<url> or the page's origin. While the pool server
-//    does not exist yet, a seeded generator stands in and the UI says so.
-//  - live Beam network data from the Beam Explorer's public APIs (CORS open):
-//    beamterminal.0xmx.net/api/mining/* and explorer.0xmx.net/api/hdrs.
+//  - the pool's own API (pool/API.md) at the page's origin. While the pool server does not exist
+//    yet, a seeded generator stands in and the UI says so. From localhost, ?api=<url> points the
+//    UI at another server; on a public host the parameter is ignored, so a crafted link cannot
+//    feed the page foreign data.
+//  - live Beam network data: the pool server's /api/network cache when it exists, else the Beam
+//    Explorer's public APIs (CORS open): beamterminal.0xmx.net/api/mining/* and
+//    explorer.0xmx.net/api/hdrs.
+//
+// Everything that leaves this file is typed: numbers are finite numbers or null, strings are
+// length-capped strings. Views still escape strings before putting them in HTML.
 'use strict';
 
 const BB = (() => {
   const params = new URLSearchParams(location.search);
-  const POOL_API = (params.get('api') || (location.protocol.startsWith('http') ? location.origin : '')).replace(/\/$/, '');
+  const DEV = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const POOL_API = ((DEV && params.get('api')) || (location.protocol.startsWith('http') ? location.origin : '')).replace(/\/$/, '');
   const TERMINAL = 'https://beamterminal.0xmx.net/api';
   const EXPLORER = 'https://explorer.0xmx.net/api';
 
   const GROTH = 1e8;
-  const BLOCK_REWARD = 25 * GROTH;
-  const MATURITY = 240;
-  const FEE = 0.5;          // percent, PPLNS and SOLO
+  const MATURITY = 240;          // coinbase maturity, blocks
+  const FEE = 0.5;               // percent, PPLNS and SOLO
   const MIN_PAYOUT = 0.1 * GROTH;
+  const PAYOUT_INTERVAL = 7200;  // seconds
+
+  let netCache = null; // last good network() result
+
+  // ---------- Beam emission (core Rules::get_Emission, mainnet) ----------
+  // 100 BEAM per block in year one (80 to miners, 20 treasury), halving every four years after
+  // that; the treasury took 10 of the 50 in years two to five and nothing since. So miners get
+  // 80, 40, 25, 12.5, ... Confirmed against coinbase outputs in the explorer (25 BEAM at height
+  // 4,0xx,xxx in 2026).
+  const DROP0 = 525600, DROP1 = 2102400; // one year, four years of 60 s blocks
+  const HEIGHT_FALLBACK = 4068800;        // mainnet tip on 2026-10-07; used only when no height is known at all
+  function emissionAt(height) {
+    const known = Number(height) || (netCache && netCache.height) || HEIGHT_FALLBACK;
+    const h = Math.max(0, Math.floor(known));
+    if (h < DROP0) return { reward: 80, next: DROP0 };
+    const n = 1 + Math.floor((h - DROP0) / DROP1);
+    const full = 100 / 2 ** n, treasury = n === 1 ? 10 : 0;
+    return { reward: full - treasury, next: DROP0 + n * DROP1 };
+  }
+  const blockReward = (height) => Math.round(emissionAt(height).reward * GROTH);
+  function nextRewardChange(height) {
+    const e = emissionAt(height);
+    return { height: e.next, reward: Math.round(emissionAt(e.next).reward * GROTH) };
+  }
+
+  // ---------- typing helpers ----------
+  const num = (x) => {
+    if (x == null || x === '') return null;
+    const n = typeof x === 'string' ? Number(x.replace(/,/g, '')) : Number(x);
+    return Number.isFinite(n) ? n : null;
+  };
+  const str = (x, max = 200) => (x == null ? '' : String(x).slice(0, max));
+  const series = (s) => (Array.isArray(s)
+    ? s.map((p) => (Array.isArray(p) ? [num(p[0]), num(p[1])] : [num(p && p.ts), num(p && p.value)])).filter((p) => p[0] != null && p[1] != null)
+    : []);
+  const tsOf = (x) => (typeof x === 'string' && /[^\d.]/.test(x) ? num(Date.parse(x) / 1000) : num(x));
 
   async function getJSON(url, timeoutMs = 8000) {
     const ctl = new AbortController();
@@ -33,35 +75,60 @@ const BB = (() => {
 
   // ---------- live network ----------
 
-  let netCache = null, netAt = 0;
+  function normPool(x) {
+    return {
+      id: str(x.id, 40), name: str(x.name, 40) || 'unknown', website: str(x.website, 200), scheme: str(x.payout_scheme ?? x.scheme, 12),
+      fee: num(x.fee), hashrate: num(x.hashrate) || 0, miners: num(x.miners), workers: num(x.workers),
+      blocks24h: num(x.blocks_past_24h ?? x.blocks_24h ?? x.blocks24h), lastTs: tsOf(x.last_block_ts ?? x.lastTs),
+      series: series(x.hashrate_series ?? x.series),
+    };
+  }
+
+  let netAt = 0, proxyFailedAt = 0;
   async function network() {
     if (netCache && Date.now() - netAt < 25000) return netCache;
+    const out = { ok: false, pools: [], hashrate: null, height: null, difficulty: null, avgBlock: null, blocks24h: null, source: null };
+
+    // The pool server caches the explorer for all visitors; use it when it answers.
+    if (POOL_API && mode !== 'demo' && Date.now() - proxyFailedAt > 60000) {
+      try {
+        const p = await getJSON(`${POOL_API}/api/network`, 3000);
+        out.ok = true;
+        out.source = 'pool';
+        out.hashrate = num(p.hashrate);
+        out.height = num(p.height);
+        out.difficulty = num(p.difficulty);
+        out.avgBlock = num(p.avgBlock);
+        out.blocks24h = num(p.blocks24h);
+        out.pools = (Array.isArray(p.pools) ? p.pools : []).map(normPool);
+        netCache = out; netAt = Date.now();
+        return out;
+      } catch (e) {
+        proxyFailedAt = Date.now();
+      }
+    }
+
     const [pools, hdrs] = await Promise.allSettled([
       getJSON(`${TERMINAL}/mining/pools`),
       getJSON(`${EXPLORER}/hdrs?nMax=61&cols=Td`),
     ]);
-    const out = { ok: false, pools: [], hashrate: null, height: null, difficulty: null, avgBlock: null, blocks24h: null };
+    out.source = 'explorer';
     if (pools.status === 'fulfilled') {
       const p = pools.value;
       out.ok = true;
-      out.hashrate = p.network_hashrate;
-      out.height = p.block_height;
-      out.blocks24h = p.blocks_24h_total;
-      out.pools = (p.pools || []).map((x) => ({
-        id: x.id, name: x.name, website: x.website, scheme: x.payout_scheme, fee: x.fee,
-        hashrate: x.hashrate || 0, miners: x.miners, workers: x.workers,
-        blocks24h: x.blocks_past_24h ?? x.blocks_24h, lastTs: x.last_block_ts ? Date.parse(x.last_block_ts) / 1000 : null,
-        series: (x.hashrate_series || []).map((s) => [s.ts, s.value]),
-      }));
+      out.hashrate = num(p.network_hashrate);
+      out.height = num(p.block_height);
+      out.blocks24h = num(p.blocks_24h_total);
+      out.pools = (Array.isArray(p.pools) ? p.pools : []).map(normPool);
     }
     if (hdrs.status === 'fulfilled') {
       const rows = (hdrs.value.value || []).slice(1);
-      const parse = (s) => Number(String(s).replace(/,/g, ''));
       if (rows.length > 1) {
         out.ok = true;
-        out.height = out.height || rows[0][0].value;
-        out.difficulty = parse(rows[0][2]);
-        out.avgBlock = (rows[0][1].value - rows[rows.length - 1][1].value) / (rows.length - 1);
+        out.height = out.height || num(rows[0][0] && rows[0][0].value);
+        out.difficulty = num(rows[0][2]);
+        const t0 = num(rows[0][1] && rows[0][1].value), t1 = num(rows[rows.length - 1][1] && rows[rows.length - 1][1].value);
+        if (t0 != null && t1 != null) out.avgBlock = (t0 - t1) / (rows.length - 1);
       }
     }
     if (out.ok) { netCache = out; netAt = Date.now(); }
@@ -70,27 +137,78 @@ const BB = (() => {
 
   async function networkBlocks(limit = 30) {
     const r = await getJSON(`${TERMINAL}/mining/blocks?limit=${limit}`);
-    return (r.blocks || []).map((b) => ({ height: b.height, ts: Date.parse(b.ts) / 1000, by: b.mined_by }));
+    return (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.mined_by, 40) }));
+  }
+
+  // ---------- pool API: normalisation ----------
+
+  const STATUS = ['pending', 'confirmed', 'orphaned'];
+  function normStats(r) {
+    r = r || {};
+    const c = r.config || {}, s = r.stats || {}, node = (Array.isArray(r.nodes) && r.nodes[0]) || {};
+    const height = num(node.height);
+    const fee = num(c.fee) ?? FEE;
+    return {
+      hashrate: num(r.hashrate) || 0, minersTotal: num(r.minersTotal) || 0, workersTotal: num(r.workersTotal) || 0,
+      lastBlockFound: num(s.lastBlockFound), roundShares: num(s.roundShares),
+      height, difficulty: num(node.difficulty), networkHashrate: num(node.networkhashps),
+      fee, soloFee: num(c.soloFee) ?? fee, minPayout: num(c.minPayout) ?? MIN_PAYOUT, scheme: str(c.payoutScheme, 16) || 'PPLNS',
+      pplnsWindow: num(c.pplnsWindow), maturity: num(c.maturity) ?? MATURITY, payoutInterval: num(c.payoutInterval) ?? PAYOUT_INTERVAL,
+      blockReward: num(c.blockReward) ?? blockReward(height),
+      chart: series(r.charts && r.charts.hashrate),
+      blocks24h: num(r.blocks24h), effort24h: num(r.effort24h),
+    };
+  }
+  const normBlock = (b) => ({
+    height: num(b.height) || 0, hash: str(b.hash, 64), ts: num(b.ts), reward: num(b.reward) || 0, fees: num(b.fees) || 0,
+    effort: num(b.effort), status: STATUS.includes(b.status) ? b.status : 'pending', confirmations: num(b.confirmations) || 0,
+    finder: str(b.finder, 64), mode: b.mode === 'solo' ? 'solo' : 'pplns',
+  });
+  const normMinerRow = (m) => ({
+    hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), workers: num(m.workers) || 0, lastShare: num(m.lastShare),
+  });
+  const normWorker = (w) => ({
+    name: str(w.name, 64), hashrate: num(w.hashrate) || 0, hashrate24h: num(w.hashrate24h), lastShare: num(w.lastShare), online: !!w.online,
+    stale: num(w.stale), rejected: num(w.rejected),
+  });
+  const normPayment = (p) => ({ ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 64) });
+  const normMiner = (m) => ({
+    address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,
+    immature: num(m.immature) || 0, paid: num(m.paid) || 0, lastShare: num(m.lastShare),
+    workers: (Array.isArray(m.workers) ? m.workers : []).map(normWorker), chart: series(m.charts && m.charts.hashrate),
+    payments: (Array.isArray(m.payments) ? m.payments : []).map(normPayment),
+  });
+  function normalize(path, r) {
+    const p = path.split('?')[0];
+    if (p === 'stats') return normStats(r);
+    if (p === 'blocks') return { blocks: (Array.isArray(r && r.blocks) ? r.blocks : []).map(normBlock) };
+    if (p === 'payments') return { payments: (Array.isArray(r && r.payments) ? r.payments : []).map(normPayment) };
+    if (p === 'miners') return { miners: (Array.isArray(r && r.miners) ? r.miners : []).map(normMinerRow) };
+    if (p.startsWith('miners/')) return normMiner(r || {});
+    return r;
   }
 
   // ---------- pool API, or the demo stand-in ----------
 
   let mode = null; // 'live' | 'demo'
+  let liveTriedAt = 0;
   async function pool(path) {
-    if (mode !== 'demo' && POOL_API) {
+    // In demo mode, try the real server again once a minute so it is picked up when it comes up.
+    if (POOL_API && (mode !== 'demo' || Date.now() - liveTriedAt > 60000)) {
+      liveTriedAt = Date.now();
       try {
         const r = await getJSON(`${POOL_API}/api/${path}`, 4000);
         mode = 'live';
-        return r;
+        return normalize(path, r);
       } catch (e) {
         if (mode === 'live') throw e;
       }
     }
     mode = 'demo';
-    return Demo.get(path, await network().catch(() => null));
+    return normalize(path, Demo.get(path, await network().catch(() => null)));
   }
 
-  // ---------- demo generator (deterministic per hour, anchored to the live chain) ----------
+  // ---------- demo generator (deterministic per 10 minutes, anchored to the live chain) ----------
 
   const Demo = (() => {
     function rng(seed) {
@@ -118,7 +236,8 @@ const BB = (() => {
       const r = rng(20261006);
       const netHash = (net && net.hashrate) || 45000;
       const height = (net && net.height) || 4068700;
-      const base = 1650; // Sol/s, ~3.6% of the network
+      const reward = blockReward(height);
+      const base = 1650; // Sol/s, ~3.5% of the network
 
       const series = [];
       for (let t = now - 86400; t <= now; t += 600) {
@@ -133,8 +252,7 @@ const BB = (() => {
         const share = i === 36 ? left : Math.min(left * 0.5, hashrate * (0.25 / (i + 1)) * (0.6 + r()));
         left -= share;
         const nW = 1 + ((r() * 4) | 0);
-        const addr = hex(r, 66);
-        miners.push({ address: addr, hashrate: share, hashrate24h: share * (0.92 + r() * 0.12), workers: nW, lastShare: now - ((r() * 50) | 0) });
+        miners.push({ address: hex(r, 66), hashrate: share, hashrate24h: share * (0.92 + r() * 0.12), workers: nW, lastShare: now - ((r() * 50) | 0) });
       }
       miners.sort((a, b) => b.hashrate - a.hashrate);
 
@@ -147,7 +265,7 @@ const BB = (() => {
         const conf = height - h;
         const orphan = conf > 2 && r() < 0.012;
         blocks.push({
-          height: h, hash: hex(r, 64), ts: t, reward: BLOCK_REWARD, fees: Math.round(r() * 3e6),
+          height: h, hash: hex(r, 64), ts: t, reward, fees: Math.round(r() * 3e6),
           effort: -Math.log(1 - r() * 0.999), confirmations: conf,
           status: orphan ? 'orphaned' : conf >= MATURITY ? 'confirmed' : 'pending',
           finder: `rig${1 + ((r() * 9) | 0)}`, mode: r() < 0.08 ? 'solo' : 'pplns',
@@ -156,21 +274,21 @@ const BB = (() => {
       }
 
       const payments = [];
-      for (let pt = Math.floor(now / 7200) * 7200; pt > now - 86400 * 3; pt -= 7200) {
-        payments.push({ ts: pt, amount: Math.round((0.6 + r() * 0.8) * 2 * 3600 * perSec * BLOCK_REWARD), miners: 12 + ((r() * 20) | 0), kernel: hex(r, 64) });
+      for (let pt = Math.floor(now / PAYOUT_INTERVAL) * PAYOUT_INTERVAL; pt > now - 86400 * 3; pt -= PAYOUT_INTERVAL) {
+        payments.push({ ts: pt, amount: Math.round((0.6 + r() * 0.8) * PAYOUT_INTERVAL * perSec * reward), miners: 12 + ((r() * 20) | 0), kernel: hex(r, 64) });
       }
 
-      const blocks24h = blocks.filter((b) => b.ts > now - 86400).length;
+      const day = blocks.filter((b) => b.ts > now - 86400);
       world = {
         now, hashrate, series, miners, blocks, payments, height, netHash,
         stats: {
           hashrate, minersTotal: miners.length, workersTotal: miners.reduce((s, m) => s + m.workers, 0),
           stats: { lastBlockFound: blocks[0] ? blocks[0].ts : null, roundShares: 0 },
           nodes: [{ name: 'beam-node-1', height: String(height), difficulty: String((net && net.difficulty) || 2.72e6), networkhashps: String(netHash), lastBeat: String(now) }],
-          config: { fee: FEE, soloFee: FEE, minPayout: MIN_PAYOUT, payoutScheme: 'PPLNS', pplnsWindow: 2.0, blockReward: BLOCK_REWARD, maturity: MATURITY },
+          config: { fee: FEE, soloFee: FEE, minPayout: MIN_PAYOUT, payoutScheme: 'PPLNS', pplnsWindow: 2.0, blockReward: reward, maturity: MATURITY, payoutInterval: PAYOUT_INTERVAL },
           charts: { hashrate: series },
-          blocks24h,
-          luck24h: blocks24h / Math.max(1, 1440 * (base / netHash)),
+          blocks24h: day.length,
+          effort24h: day.length ? day.reduce((s, b) => s + b.effort, 0) / day.length : null,
         },
       };
       worldKey = key;
@@ -184,24 +302,27 @@ const BB = (() => {
       const nW = known ? known.workers : 1 + ((r() * 3) | 0);
       const workers = Array.from({ length: nW }, (_, i) => {
         const h = hr / nW * (0.7 + r() * 0.6);
-        return { name: `rig${i + 1}`, hashrate: h, hashrate24h: h * (0.9 + r() * 0.15), lastShare: w.now - ((r() * 40) | 0), online: hr > 0 };
+        return { name: `rig${i + 1}`, hashrate: h, hashrate24h: h * (0.9 + r() * 0.15), lastShare: w.now - ((r() * 40) | 0), online: hr > 0, stale: r() * 0.02, rejected: r() * 0.003 };
       });
       const series = w.series.map(([t, v]) => [t, hr ? hr * (v / w.hashrate) * (0.9 + r() * 0.2) : 0]);
       const payments = w.payments.slice(0, 12).map((p) => ({ ts: p.ts, amount: Math.round(p.amount * (hr / w.hashrate)), kernel: p.kernel }));
+      const reward = blockReward(w.height);
       return {
-        address, hashrate: hr, hashrate24h: hr * 0.97, balance: Math.round(r() * MIN_PAYOUT), immature: Math.round(hr / w.hashrate * 6 * BLOCK_REWARD),
-        paid: Math.round(hr / w.hashrate * 900 * BLOCK_REWARD), lastShare: hr ? w.now - 5 : null, workers, charts: { hashrate: series }, payments,
+        address, hashrate: hr, hashrate24h: hr * 0.97, balance: Math.round(r() * MIN_PAYOUT), immature: Math.round(hr / w.hashrate * 6 * reward),
+        paid: Math.round(hr / w.hashrate * 900 * reward), lastShare: hr ? w.now - 5 : null, workers, charts: { hashrate: series }, payments,
       };
     }
 
     function get(path, net) {
       const w = build(net);
       const [p, q] = path.split('?');
-      const limit = Number(new URLSearchParams(q || '').get('limit') || 50);
+      const qs = new URLSearchParams(q || '');
+      const limit = Math.min(500, Number(qs.get('limit')) || 50);
+      const before = Number(qs.get('before')) || Infinity;
       if (p === 'stats') return w.stats;
-      if (p === 'blocks') return { blocks: w.blocks.slice(0, limit) };
+      if (p === 'blocks') return { blocks: w.blocks.filter((b) => b.height < before).slice(0, limit) };
       if (p === 'payments') return { payments: w.payments.slice(0, limit) };
-      if (p === 'miners') return { miners: w.miners.slice(0, limit) };
+      if (p === 'miners') return { miners: w.miners.slice(0, limit).map(({ address, ...m }) => m) };
       if (p.startsWith('miners/')) return miner(w, decodeURIComponent(p.slice(7)));
       throw new Error(`demo: unknown path ${path}`);
     }
@@ -210,9 +331,11 @@ const BB = (() => {
   })();
 
   return {
-    GROTH, BLOCK_REWARD, MATURITY, FEE,
+    GROTH, MATURITY, FEE,
+    blockReward, nextRewardChange,
     network, networkBlocks, pool,
     get mode() { return mode; },
+    get dev() { return DEV; },
     stratumHost: () => (mode === 'live' && POOL_API ? new URL(POOL_API).hostname : '<pool-host>'),
   };
 })();

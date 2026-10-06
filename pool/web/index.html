@@ -3,36 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bumblebeam pool</title>
-<meta name="description" content="bumblebeam: an open-source, community-run BeamHash III mining pool for Beam">
+<title>BumbleBeam Pool - community PoW pool for BEAM</title>
+<meta name="description" content="BumbleBeam Pool: an open-source, community-run BeamHash III mining pool for Beam (BEAM)">
+<meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="top">
   <div class="top-row">
-    <a class="brand" href="#/">
+    <a class="brand" href="#/" aria-label="BumbleBeam Pool, home">
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
-        <defs><linearGradient id="bg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient></defs>
-        <path d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#bg)"/>
-        <path d="M8 13h16M7 18h18M9 23h14" stroke="#042548" stroke-width="2.4" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient>
+          <clipPath id="lc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath>
+        </defs>
+        <path class="hex" d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#lg)"/>
+        <g class="bee">
+          <g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round">
+            <path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/>
+          </g>
+          <ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/>
+          <ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/>
+          <rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/>
+          <g clip-path="url(#lc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g>
+          <circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/>
+        </g>
       </svg>
-      <span>bumblebeam <em>pool</em></span>
+      <span class="word">Bumble<b>Beam</b></span>
     </a>
     <form class="search" id="search" role="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      <input id="search-input" placeholder="Search wallet address…" autocomplete="off" spellcheck="false" aria-label="Wallet address">
-      <kbd>Ctrl K</kbd>
+      <input id="search-input" placeholder="Your payout address: hashrate, unpaid balance, payouts" autocomplete="off" spellcheck="false" aria-label="Your payout address, to open your pool stats">
+      <kbd id="search-kbd">Ctrl K</kbd>
     </form>
-    <nav class="main-nav" id="main-nav">
+    <nav class="main-nav" id="main-nav" aria-label="Main">
       <a href="#/" data-route="dashboard">Pool</a>
+      <a href="#/network" data-route="network">Network</a>
       <a href="#/blocks" data-route="blocks">Blocks</a>
       <a href="#/miners" data-route="miners">Miners</a>
+      <a href="#/" data-route="my" id="nav-my" hidden>My stats</a>
       <a href="#/payments" data-route="payments">Payments</a>
       <a href="#/connect" data-route="connect">Start mining</a>
     </nav>
   </div>
-  <nav class="sub-nav" id="sub-nav"></nav>
 </header>
 
 <div class="demo-banner" id="demo-banner" hidden>
@@ -40,11 +54,15 @@
   Network numbers and the other pools are live from the Beam Explorer.
 </div>
 
-<main id="view" aria-live="polite"></main>
+<main id="view"></main>
 
 <footer class="foot">
-  <span>bumblebeam: open source, Apache-2.0 · <a href="https://github.com/profinch/bumblebeam">github.com/profinch/bumblebeam</a></span>
-  <span>Network data: <a href="https://explorer.beam.mw">explorer.beam.mw</a></span>
+  <a href="https://github.com/profinch/bumblebeam">GitHub</a>
+  <a href="https://github.com/profinch/bumblebeam/blob/main/pool/API.md">API</a>
+  <a href="https://beam.mw">Beam</a>
+  <a href="https://explorer.beam.mw">Explorer</a>
+  <span class="dim">Apache-2.0 · community PoW pool for BEAM</span>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
 </footer>
 
 <script src="data.js"></script>
