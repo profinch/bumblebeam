@@ -1,76 +1,75 @@
 # bumblebeam
 
-An open, community-run mining stack for [Beam](https://github.com/BeamMW/beam): a **BeamHash III GPU
-miner** and a **mining pool**, both written from scratch for speed, with no closed parts and no
-developer fee.
+My open-source work for the [Beam](https://github.com/BeamMW/beam) privacy blockchain, as a member of
+its community. Everything here is public, Apache-2.0, and checked against the Beam core itself.
 
-> Status: **design stage.** Nothing here mines yet. The numbers below are measured; the targets are
-> targets.
+The first goal is mining. Today one pool holds about 75–90% of Beam's hashrate, the fastest
+BeamHash III miners are closed source with a dev fee, and the only open pool code dates from
+2020–2021. bumblebeam builds the open alternative piece by piece, starting with the ground truth.
 
-## Why
-
-Measured on 2026-10-06 at height ≈ 4,068,700:
-
-- **One pool holds about 90% of the network.** 2Miners has ~37.9 kSol/s of a ~41–52 kSol/s network,
-  HeroMiners ~4.6 kSol/s, and everyone else is below 1 kSol/s
-  ([miningboard](https://miningboard.com/pool-stats/beam); pool APIs; explorer `/hdrs`).
-- **The fastest BeamHash III miners are closed source.** lolMiner and GMiner both charge a dev fee. The
-  open miners in BeamMW (`opencl-miner`, `cuda-miner`) stop at BeamHash II (2020) and BeamHash I (2019).
-- **The only open pool is from 2020–2021.** It is `BeamMW/beam-mine` and `beam-stratum-pool`, which
-  are s-nomp forks for Node.js 10 with native modules that no longer build.
-- **Difficulty has fallen from 25.7 M (January 2024) to 2.7 M.** Fewer than ~150 miners keep the chain
-  running, so one good open tool makes a difference.
-
-## Components
-
-### `miner/`: BeamHash III solver
-
-| Backend | Target hardware | Priority |
+| Part | What it is | Status |
 |---|---|---|
-| CUDA | NVIDIA Ampere/Ada/Blackwell (reference card: RTX 3090) | 1 |
-| Metal | Apple Silicon (unified memory, no CPU↔GPU copies) | 2 |
-| HIP / OpenCL | AMD | 3 |
-| CPU (NEON/AVX2) | verification and testing only | — |
+| [`oracle/`](oracle) | BeamHash III verification and difficulty checks, tested against the Beam core and real mainnet blocks | **done** (step 1) |
+| [`vectors/`](vectors) | Test vectors: real mainnet headers, the core's difficulty decisions, full solution sets from the reference solver | **done** (step 1) |
+| [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
+| [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style. Live network data; the pool's own numbers are demo data until the server exists | **UI ready** |
+| [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
+| `pool/` server | Stratum server, share accounting, payouts (Rust) | next |
+| `miner/` | BeamHash III GPU solver: CUDA first, then Metal and AMD | next |
 
-**Goal:** beat the best published BeamHash III hashrate on the same card, at the same power, with a
-**0% fee**. The bar on an RTX 3090 is ~52 Sol/s at ~290 W (lolMiner, per
-[WhatToMine](https://whattomine.com/coins/294-beam-beamhashiii/gpus)).
+## Numbers that set the bar
 
-**Baseline:** the reference solver in the Beam core (`3rdparty/crypto/beamHashIII_impl.cpp`) measured
-on an Apple M5 Pro: **302 s per run, 3 solutions (≈0.01 Sol/s per thread), 9.8 GB RAM**. That is
-5,000× below a GPU. It is the correctness oracle, not a starting point.
+Measured on 2026-10-06, at height ≈ 4,068,700:
 
-What the solver must do well is set out in [docs/beamhash3.md](docs/beamhash3.md).
+- **Network:** ~45–52 kSol/s at a difficulty of ~2.7 M, down from 25.7 M in January 2024. Pools:
+  2Miners ~35 kSol/s, HeroMiners ~4.5 kSol/s, and the rest below 1 kSol/s (Beam Explorer mining page,
+  pool APIs).
+- **Best published miner:** ~52 Sol/s on an RTX 3090 at ~290 W (lolMiner, per
+  [WhatToMine](https://whattomine.com/coins/294-beam-beamhashiii/gpus)).
+- **The core's reference CPU solver** on an Apple M5 Pro: 302–316 s per run, ~10 GB of RAM, 1–3
+  solutions. It is the correctness oracle, not a starting point.
 
-### `pool/`: pool server
+What a fast solver has to do is set out in [docs/beamhash3.md](docs/beamhash3.md).
 
-- **Stratum:** a native server that speaks Beam's own stratum dialect (`login` / `job` / `solution`,
-  `pow/stratum.h` in the core), so every existing Beam miner connects unchanged. It also supports
-  NiceHash-style extranonce.
-- **Share verification:** native code ported from the core verifier. This replaces the Node.js
-  `beamhashverify` addon.
-- **Upstream:** the pool takes work from our own `beam-node` (7.5.14493+, HF6) over the node's stratum.
-  It keeps a hot standby node and switches to the new block template in under 100 ms.
-- **Rewards:** PPLNS, plus solo mode on the same port. Fee 0–0.5%.
-- **Payouts:** sent through `wallet-api`, batched, with the optional MaxPrivacy (Lelantus) payout every
-  Beam wallet supports.
-- **Transparency:** every found block, share window and payout can be checked from a public API.
-- **Stack:** Rust (tokio). One binary plus Postgres. No PHP, Redis or MySQL.
+## Step 1: the oracle
 
-At Beam's scale (a few hundred workers) throughput is not the hard part. **Uptime, low stale rates,
-correct payouts and trust are.** The pool is built for those.
+`oracle/` has two implementations side by side:
 
-## Roadmap
+- **`third_party/beam/`** is the Beam core's BeamHash III code, copied unchanged. It is what every
+  node runs.
+- **`src/pow.cpp`** is bumblebeam's own check, behind a C API (`include/bumblebeam/pow.h`) that the
+  pool and the miner both use. It needs no allocation and no `std::bitset`. Single-threaded on an
+  M5 Pro it does **~750,000 solution checks/s, ~80× faster than the reference**
+  (`bb-pow bench vectors/mainnet_headers.json`).
 
-1. **Oracle and test vectors.** Wrap the core verifier and the reference solver, and generate test
-   vectors (header, nonce → solutions).
-2. **CUDA miner v0.** A correct solver at any speed that passes the oracle on 10⁴ nonces.
-3. **CUDA miner v1.** A bandwidth-bound design; reach parity with lolMiner on an RTX 3090.
-4. **Stratum client and a public alpha** of the miner.
-5. **Pool v0.** Stratum, verification, PPLNS accounting and payouts on masternet or testnet.
-6. **Pool v1 on mainnet.**
-7. **Metal backend**, then AMD.
+`test_oracle` holds the second one to the first and to the chain. One run makes 42,348 checks and
+all pass, also under ASan/UBSan:
+
+- **Real blocks:** 121 BeamHash III mainnet headers from HF2 (777,777) through HF6 (3,928,666) to the
+  tip. The core accepted each one in `hdrdump`, and their block hashes match explorer.beam.mw.
+- **Reference parity:** 36,133 mutated solutions (bit flips in solution, nonce, input and extra
+  nonce; swapped subtrees; duplicated indices). Accept/reject equals the reference on every one, and
+  each subtree swap is reported as the right error.
+- **Difficulty:** 4,000 decisions taken from `Difficulty::IsTargetReached` in the core, including the
+  exact target boundary (target − 1, target, target + 1).
+- **Completeness:** every solution the reference solver finds for a given input, which a GPU solver
+  will have to find too.
+
+```sh
+cmake -S . -B build -G Ninja && cmake --build build
+./build/oracle/test_oracle vectors
+./build/oracle/bb-pow check <input> <nonce> <solution> [packed-difficulty]
+./build/oracle/bb-pow solve <input> <nonce>        # reference solver: slow, ~10 GB
+```
+
+## Pool web UI
+
+Open `pool/web/index.html` through any static server (`python3 -m http.server -d pool/web`). It needs
+no build step and no framework. It uses the Beam Explorer's palette and type, and its numbers come
+live from the Explorer's public API, including every other Beam pool. It reads the pool's own data
+from `/api/*` (or `?api=<url>`); until the server exists, it shows clearly labelled demo data.
 
 ## License
 
-[Apache-2.0](LICENSE), the same license as the Beam core, whose verifier code this project reuses.
+[Apache-2.0](LICENSE), the same license as the Beam core, whose code `oracle/third_party/beam`
+reuses unchanged.

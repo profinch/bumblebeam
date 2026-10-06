@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bumblebeam pool</title>
+<meta name="description" content="bumblebeam: an open-source, community-run BeamHash III mining pool for Beam">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="#/">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <defs><linearGradient id="bg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient></defs>
+        <path d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#bg)"/>
+        <path d="M8 13h16M7 18h18M9 23h14" stroke="#042548" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      <span>bumblebeam <em>pool</em></span>
+    </a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Search wallet address…" autocomplete="off" spellcheck="false" aria-label="Wallet address">
+      <kbd>Ctrl K</kbd>
+    </form>
+    <nav class="main-nav" id="main-nav">
+      <a href="#/" data-route="dashboard">Pool</a>
+      <a href="#/blocks" data-route="blocks">Blocks</a>
+      <a href="#/miners" data-route="miners">Miners</a>
+      <a href="#/payments" data-route="payments">Payments</a>
+      <a href="#/connect" data-route="connect">Start mining</a>
+    </nav>
+  </div>
+  <nav class="sub-nav" id="sub-nav"></nav>
+</header>
+
+<div class="demo-banner" id="demo-banner" hidden>
+  <b>Demo data.</b> The pool server is not running yet, so the pool's own numbers below are generated.
+  Network numbers and the other pools are live from the Beam Explorer.
+</div>
+
+<main id="view" aria-live="polite"></main>
+
+<footer class="foot">
+  <span>bumblebeam: open source, Apache-2.0 · <a href="https://github.com/profinch/bumblebeam">github.com/profinch/bumblebeam</a></span>
+  <span>Network data: <a href="https://explorer.beam.mw">explorer.beam.mw</a></span>
+</footer>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
