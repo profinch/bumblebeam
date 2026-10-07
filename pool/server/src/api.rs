@@ -102,7 +102,7 @@ async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
 }
 
 async fn miner(State(api): State<Api>, Path(address): Path<String>) -> R {
-    let address = address.trim().to_string();
+    let address: String = address.chars().filter(|c| !c.is_whitespace()).collect();
     if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Ok(Json(json!({ "error": "not a Beam address" })));
     }

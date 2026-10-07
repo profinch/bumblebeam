@@ -41,7 +41,8 @@
   const effortColor = (e) => (e == null ? 'inherit' : e > 1.5 ? 'var(--color-red)' : e < 0.7 ? 'var(--accent)' : 'inherit');
   const explorerBlock = (h) => `https://explorer.beam.mw/#/explorer/block/${Math.round(Number(h) || 0)}`;
   const explorerKernel = (k) => `https://explorer.beam.mw/#/explorer/kernel/${encodeURIComponent(k)}`;
-  const minerHref = (a) => `#/miners/${encodeURIComponent(a)}`;
+  const cleanAddress = (a) => String(a ?? '').replace(/\s+/g, '');
+  const minerHref = (a) => `#/miners/${encodeURIComponent(cleanAddress(a))}`;
 
   // ---------- charts ----------
   function sparkline(series, color = '#f25f5b') {
@@ -307,6 +308,7 @@
   }
 
   async function minerView(address) {
+    address = cleanAddress(address);
     const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}`), BB.pool('stats')]);
     rememberAddress(m.address || address);
     const toPayout = stats.minPayout ? Math.min(1, m.balance / stats.minPayout) : null;
@@ -424,7 +426,7 @@
     });
     function render() {
       const port = state.mode === 'solo' ? (state.tls === '1' ? pSoloTls : pSolo) : (state.tls === '1' ? pPplnsTls : pPplns);
-      const addr = $('#addr').value.trim(), worker = $('#worker').value.trim().replace(/[^\w-]/g, '') || 'rig1';
+      const addr = cleanAddress($('#addr').value), worker = $('#worker').value.trim().replace(/[^\w-]/g, '') || 'rig1';
       const user = `${addr || '<address>'}.${worker}`;
       const tlsFlag = state.tls === '1';
       $('#portline').textContent = `${host}:${port} · ${state.mode === 'solo' ? 'solo' : 'PPLNS'}${tlsFlag ? ' · TLS' : ''}`;
@@ -496,7 +498,7 @@
   window.addEventListener('hashchange', () => render(true));
   $('#search').addEventListener('submit', (e) => {
     e.preventDefault();
-    const v = $('#search-input').value.trim();
+    const v = cleanAddress($('#search-input').value);
     if (v) location.hash = minerHref(v);
   });
   $('#search-kbd').textContent = MAC ? '⌘ K' : 'Ctrl K';
