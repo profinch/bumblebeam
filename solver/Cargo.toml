@@ -11,6 +11,8 @@ hex = "0.4"
 rand = "0.8"
 serde_json = "1"
 anyhow = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = "1"
 
 [build-dependencies]
 cc = "1"

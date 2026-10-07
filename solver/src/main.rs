@@ -28,7 +28,15 @@ fn main() -> Result<()> {
             Ok(())
         }
         Some("check") => check(args.get(1).map(|s| s.as_str()).unwrap_or("../vectors"), args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3)),
-        _ => { eprintln!("usage: bumblebeam-solver bench [seconds] [threads] | solve <input> <nonce> [extra] | check <vectors-dir> [n]"); std::process::exit(2) }
+        Some("mine") => {
+            let get = |flag: &str| args.windows(2).find(|w| w[0] == flag).map(|w| w[1].clone());
+            let pool = get("--pool").ok_or_else(|| anyhow!("--pool host:port"))?;
+            let user = get("--user").ok_or_else(|| anyhow!("--user <address>.<worker>"))?;
+            let tls = get("--tls").map(|v| v != "0").unwrap_or(true);
+            if let Some(t) = get("--threads").and_then(|s| s.parse().ok()) { rayon::ThreadPoolBuilder::new().num_threads(t).build_global()?; }
+            bumblebeam_solver::stratum::mine(&pool, &user, tls)
+        }
+        _ => { eprintln!("usage: bumblebeam-solver bench [seconds] [threads] | solve <input> <nonce> [extra] | check <vectors-dir> [n] | mine --pool host:port --user addr.worker [--tls 0|1] [--threads N]"); std::process::exit(2) }
     }
 }
 
@@ -41,10 +49,11 @@ fn bench(seconds: f64, threads: Option<usize>) -> Result<()> {
     let t0 = Instant::now();
     let (mut runs, mut sols, mut rejected) = (0usize, 0usize, 0usize);
     eprintln!("threads: {}", rayon::current_num_threads());
+    let mut solver = bumblebeam_solver::Solver::default();
     while t0.elapsed().as_secs_f64() < seconds {
         rng.fill_bytes(&mut nonce);
         let t = Instant::now();
-        let (s, st) = bumblebeam_solver::solve(&input, &nonce, &[0; 4]);
+        let (s, st) = solver.solve(&input, &nonce, &[0; 4]);
         runs += 1; sols += s.len(); rejected += st.rejected;
         eprintln!("run {runs}: {:.2} s, {} solutions, elements per round {:?}", t.elapsed().as_secs_f64(), s.len(), st.elements);
     }

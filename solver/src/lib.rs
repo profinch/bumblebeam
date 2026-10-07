@@ -208,11 +208,13 @@ fn leaves_overlap(a: &[u32], b: &[u32]) -> bool {
     a.iter().any(|x| b.contains(x))
 }
 
-/// One collision round: mix, collide on 24 bits, merge pairs into the next round's elements.
-fn round<const L: usize, const NL: usize, const LO: usize, const NLO: usize>(input: &[Elem<L, NL>], mix_len: u32, pad: usize, out_len: u32) -> Vec<Elem<LO, NLO>> {
+/// One collision round: mix, collide on 24 bits, merge pairs into the next round's elements,
+/// written into `out` (cleared first; its allocation is reused across runs).
+fn round<const L: usize, const NL: usize, const LO: usize, const NLO: usize>(input: &[Elem<L, NL>], mix_len: u32, pad: usize, out_len: u32, out: &mut Vec<Elem<LO, NLO>>) {
     let (keys, starts) = bucketize(input, mix_len, pad);
     let cap = input.len() + input.len() / 4;
-    let mut out: Vec<Elem<LO, NLO>> = Vec::with_capacity(cap);
+    out.clear();
+    out.reserve(cap);
     let out_ptr = out.as_mut_ptr() as usize;
     let cursor = AtomicUsize::new(0);
     (0..BUCKETS).into_par_iter().for_each(|b| {
@@ -249,7 +251,6 @@ fn round<const L: usize, const NL: usize, const LO: usize, const NLO: usize>(inp
         }
     });
     unsafe { out.set_len(cursor.load(Ordering::Relaxed)) };
-    out
 }
 
 /// Pack 32 leaf indices (25 bits each, little-endian bit stream) plus the extra nonce.
@@ -268,8 +269,19 @@ pub fn pack_solution(leaves: &[u32; 32], extra: &[u8; 4]) -> [u8; 104] {
 
 pub struct SolveStats { pub elements: [usize; 6], pub candidates: usize, pub rejected: usize }
 
+/// A solver instance. Each run allocates its round arrays and frees each one as soon as the next
+/// round is built: keeping all 13 GB resident between runs made macOS compress pages and the run
+/// three times slower, so there is no buffer reuse here.
+#[derive(Default)]
+pub struct Solver {}
+
 /// All solutions for (input, nonce, extra nonce), each verified by the oracle.
 pub fn solve(input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>, SolveStats) {
+    Solver::default().solve(input, nonce, extra)
+}
+
+impl Solver {
+pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>, SolveStats) {
     let k = pre_pow(input, nonce, extra);
     // seed: 7 limbs per element, leaf = own index
     let mut seed: Vec<Elem<7, 1>> = Vec::with_capacity(N);
@@ -284,21 +296,26 @@ pub fn solve(input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>,
     unsafe { seed.set_len(N) };
 
     let mut elements = [N, 0, 0, 0, 0, 0];
-    let r1: Vec<Elem<7, 2>> = round::<7, 1, 7, 2>(&seed, 448, 1, 424);
+    let mut r1: Vec<Elem<7, 2>> = Vec::new();
+    round::<7, 1, 7, 2>(&seed, 448, 1, 424, &mut r1);
     drop(seed);
     elements[1] = r1.len();
-    let r2: Vec<Elem<7, 4>> = round::<7, 2, 7, 4>(&r1, 424, 2, 400);
+    let mut r2: Vec<Elem<7, 4>> = Vec::new();
+    round::<7, 2, 7, 4>(&r1, 424, 2, 400, &mut r2);
     drop(r1);
     elements[2] = r2.len();
-    let r3: Vec<Elem<6, 8>> = round::<7, 4, 6, 8>(&r2, 400, 4, 376);
+    let mut r3: Vec<Elem<6, 8>> = Vec::new();
+    round::<7, 4, 6, 8>(&r2, 400, 4, 376, &mut r3);
     drop(r2);
     elements[3] = r3.len();
-    let r4: Vec<Elem<5, 9>> = round::<6, 8, 5, 9>(&r3, 376, 6, 288);
+    let mut r4: Vec<Elem<5, 9>> = Vec::new();
+    round::<6, 8, 5, 9>(&r3, 376, 6, 288, &mut r4);
     elements[4] = r4.len();
+    let (r3, r4) = (&r3, &r4);
 
     // round 5: mix at 288 with 9 leaves; a pair is a solution when the 24 bits after the collision
     // bits cancel too, i.e. the low 48 bits of the mixed limbs are equal
-    let (keys, starts) = bucketize(&r4, 288, 9);
+    let (keys, starts) = bucketize(r4, 288, 9);
     let candidates = AtomicUsize::new(0);
     let found: Vec<[u8; 104]> = (0..BUCKETS).into_par_iter().flat_map_iter(|b| {
         let mut slice: Vec<(u32, u64)> = keys[starts[b]..starts[b + 1]].to_vec();
@@ -342,3 +359,6 @@ pub fn solve(input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>,
     elements[5] = ok.len();
     (ok, SolveStats { elements, candidates: candidates.load(Ordering::Relaxed), rejected })
 }
+}
+
+pub mod stratum;
