@@ -31,15 +31,24 @@
 }
 
 * { box-sizing: border-box; }
+/* The page gradient on its own fixed layer, as tall as the viewport with the browser bars
+   hidden (lvh). A "background-attachment: fixed" body is sized to the viewport with the bars
+   shown, so on phones a band of restarted gradient showed at the bottom while scrolling. */
+body::before {
+  content: ''; position: fixed; left: 0; top: 0; z-index: -1; pointer-events: none;
+  width: 100%; height: 100vh; height: 100lvh;
+  background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%);
+}
 html, body { margin: 0; padding: 0; }
+/* the colour past the page's ends (overscroll) is the gradient's last one */
+html { background: #0a5a80; }
 body {
   min-height: 100vh;
   display: flex; flex-direction: column;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 14px;
-  background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%) fixed;
-  background-color: var(--bg);
+  background: transparent;
   overflow-x: hidden;
 }
 a { color: var(--accent); text-decoration: none; }
