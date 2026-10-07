@@ -67,6 +67,20 @@ cmake -S . -B build -G Ninja && cmake --build build
 ./build/oracle/bb-pow solve <input> <nonce>        # reference solver: slow, ~10 GB
 ```
 
+## CPU miner: download and run
+
+Binaries for Linux x86-64, macOS (Apple Silicon) and Windows x86-64 are on the
+[releases page](https://github.com/profinch/bumblebeam/releases) (tags `miner-v*`). Unpack and:
+
+```sh
+bumblebeam-miner mine --pool <pool host>:3443 --user <your offline Beam address>.<worker name>
+bumblebeam-miner bench 60      # what this machine does: runs/s and sol/s
+```
+
+It needs about 7 GB of free memory and all cores; expect 0.5–1 Sol/s on a modern desktop, which
+is a dev tool and a way to take part without a GPU, not an income. Every solution is verified by
+the oracle before it is sent. Details and tuning in [`miner/README.md`](miner/README.md).
+
 ## Pool web UI
 
 Open `pool/web/index.html` through any static server (`python3 -m http.server -d pool/web`). It needs

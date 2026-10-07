@@ -10,8 +10,38 @@ use std::time::Instant;
 
 fn hex32(s: &str) -> Result<Vec<u8>> { Ok(hex::decode(s.trim())?) }
 
+const USAGE: &str = "bumblebeam-miner: CPU miner for Beam (BeamHash III), every solution verified by the oracle
+
+  bumblebeam-miner mine --pool <host:port> --user <address>.<worker> [--tls 0|1] [--threads N]
+  bumblebeam-miner bench [seconds] [threads]      measure this machine: runs/s and sol/s
+  bumblebeam-miner check <vectors-dir> [n]        re-solve n mainnet headers and the reference vectors
+  bumblebeam-miner solve <input-hex> <nonce-hex> [extra-hex]
+
+A run needs about 7 GB of free memory. TLS is on by default (Beam pools default to it).
+Environment: BB_THREADS, BB_CHUNK (stash chunk), BB_TRACE=1 (phase times), BB_REUSE=1, BB_ALLOW_LOW_MEMORY=1.";
+
+/// Refuse to start on a machine that cannot hold one run, instead of dying mid-run.
+fn check_memory() -> Result<()> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let avail = sys.available_memory();
+    let need = bumblebeam_miner::PEAK_MEMORY_BYTES;
+    if avail < need && std::env::var_os("BB_ALLOW_LOW_MEMORY").is_none() {
+        anyhow::bail!("{:.1} GB of memory available, a run needs about {:.0} GB; free memory or set BB_ALLOW_LOW_MEMORY=1 to try anyway",
+            avail as f64 / 1e9, need as f64 / 1e9);
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(t) = std::env::var("BB_THREADS").ok().and_then(|s| s.parse().ok()) { let _ = rayon::ThreadPoolBuilder::new().num_threads(t).build_global(); }
+    match args.first().map(|s| s.as_str()) {
+        Some("--version") | Some("-V") => { println!("bumblebeam-miner {}", env!("CARGO_PKG_VERSION")); return Ok(()); }
+        Some("--help") | Some("-h") | None => { println!("{USAGE}"); return Ok(()); }
+        _ => {}
+    }
+    if matches!(args.first().map(|s| s.as_str()), Some("mine") | Some("bench") | Some("check") | Some("solve")) { check_memory()?; }
     match args.first().map(|s| s.as_str()) {
         Some("bench") => bench(args.get(1).and_then(|s| s.parse().ok()).unwrap_or(60.0), args.get(2).and_then(|s| s.parse().ok())),
         Some("solve") => {
@@ -32,11 +62,12 @@ fn main() -> Result<()> {
             let get = |flag: &str| args.windows(2).find(|w| w[0] == flag).map(|w| w[1].clone());
             let pool = get("--pool").ok_or_else(|| anyhow!("--pool host:port"))?;
             let user = get("--user").ok_or_else(|| anyhow!("--user <address>.<worker>"))?;
-            let tls = get("--tls").map(|v| v != "0").unwrap_or(true);
-            if let Some(t) = get("--threads").and_then(|s| s.parse().ok()) { rayon::ThreadPoolBuilder::new().num_threads(t).build_global()?; }
+            let tls = get("--tls").map(|v| v != "0" && v != "off").unwrap_or(true);
+            if let Some(t) = get("--threads").and_then(|s| s.parse().ok()) { let _ = rayon::ThreadPoolBuilder::new().num_threads(t).build_global(); }
+            eprintln!("bumblebeam-miner {} | {} threads | pool {} (tls {}) | user {}…", env!("CARGO_PKG_VERSION"), rayon::current_num_threads(), pool, tls, &user[..user.len().min(16)]);
             bumblebeam_miner::stratum::mine(&pool, &user, tls)
         }
-        _ => { eprintln!("usage: bumblebeam-miner bench [seconds] [threads] | solve <input> <nonce> [extra] | check <vectors-dir> [n] | mine --pool host:port --user addr.worker [--tls 0|1] [--threads N]"); std::process::exit(2) }
+        _ => { eprintln!("{USAGE}"); std::process::exit(2) }
     }
 }
 

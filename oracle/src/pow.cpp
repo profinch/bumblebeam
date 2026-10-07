@@ -325,7 +325,9 @@ int bb_difficulty_reached(const uint8_t hash[32], uint32_t packed)
 		h[i] = v;
 	}
 
+	// h * mantissa as five 64-bit limbs.
 	uint64_t prod[5];
+#ifdef __SIZEOF_INT128__
 	unsigned __int128 carry = 0;
 	for (int i = 0; i < 4; i++)
 	{
@@ -334,13 +336,35 @@ int bb_difficulty_reached(const uint8_t hash[32], uint32_t packed)
 		carry = t >> 64;
 	}
 	prod[4] = (uint64_t) carry;
+#else
+	// No 128-bit type (MSVC): the mantissa is below 2^25, so half-word partial products fit in 64 bits.
+	uint64_t carry = 0;
+	for (int i = 0; i < 4; i++)
+	{
+		uint64_t lo = (h[i] & 0xFFFFFFFFULL) * mantissa;
+		uint64_t hi = (h[i] >> 32) * mantissa;
+		uint64_t low = (lo & 0xFFFFFFFFULL) + (carry & 0xFFFFFFFFULL);
+		uint64_t mid = (lo >> 32) + (hi & 0xFFFFFFFFULL) + (carry >> 32) + (low >> 32);
+		prod[i] = (low & 0xFFFFFFFFULL) | (mid << 32);
+		carry = (hi >> 32) + (mid >> 32);
+	}
+	prod[4] = carry;
+#endif
 
 	uint32_t limit = 256 + kMantissaBits - order; // the product must fit in `limit` bits
 	for (int i = 4; i >= 0; i--)
 	{
 		if (!prod[i])
 			continue;
-		uint32_t bitLen = (uint32_t) i * 64 + 64 - (uint32_t) __builtin_clzll(prod[i]);
+		uint32_t lz;
+#if defined(__GNUC__) || defined(__clang__)
+		lz = (uint32_t) __builtin_clzll(prod[i]);
+#else
+		lz = 0;
+		for (uint64_t v = prod[i]; !(v & (1ULL << 63)); v <<= 1)
+			lz++;
+#endif
+		uint32_t bitLen = (uint32_t) i * 64 + 64 - lz;
 		return bitLen <= limit;
 	}
 	return 1;

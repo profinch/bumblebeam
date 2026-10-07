@@ -409,7 +409,7 @@ pub fn pack_solution(leaves: &[u32; 32], extra: &[u8; 4]) -> [u8; 104] {
     s
 }
 
-pub struct SolveStats { pub elements: [usize; 6], pub candidates: usize, pub rejected: usize }
+pub struct SolveStats { pub elements: [usize; 6], pub candidates: usize, pub rejected: usize, pub aborted: bool }
 
 /// A solver instance. Bucket arrays are allocated per round and freed as soon as the next round
 /// exists (peak about 7 GB); BB_REUSE=1 keeps all five between runs on machines with memory to spare.
@@ -437,7 +437,14 @@ fn trace(label: &str, t: &mut std::time::Instant) {
 
 impl Solver {
 pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>, SolveStats) {
+    self.solve_until(input, nonce, extra, || false)
+}
+
+/// Like `solve`, but gives up between phases when `abort()` returns true (a new job arrived); the
+/// result is then empty and `SolveStats::aborted` is set.
+pub fn solve_until(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4], abort: impl Fn() -> bool) -> (Vec<[u8; 104]>, SolveStats) {
     let mut tt = std::time::Instant::now();
+    let aborted = |elements: [usize; 6]| (Vec::new(), SolveStats { elements, candidates: 0, rejected: 0, aborted: true });
     let k = pre_pow(input, nonce, extra);
     // seed straight into round-1 buckets: 7 limbs, leaf = own index, mix at 448 with one leaf
     let r0 = Buckets::<7, 1>::take(&mut self.b0);
@@ -470,19 +477,23 @@ pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<
     let mut elements = [r0.len(), 0, 0, 0, 0, 0];
     let mut overflow = r0.overflow.load(Ordering::Relaxed);
     trace("seed", &mut tt);
+    if abort() { r0.give(&mut self.b0); return aborted(elements); }
 
     let r1 = round::<7, 1, 7, 2>(&r0, 424, 424, 2, &mut self.b1);
     trace("round1", &mut tt);
     r0.give(&mut self.b0);
     elements[1] = r1.len(); overflow += r1.overflow.load(Ordering::Relaxed);
+    if abort() { r1.give(&mut self.b1); return aborted(elements); }
     let r2 = round::<7, 2, 7, 4>(&r1, 400, 400, 4, &mut self.b2);
     trace("round2", &mut tt);
     r1.give(&mut self.b1);
     elements[2] = r2.len(); overflow += r2.overflow.load(Ordering::Relaxed);
+    if abort() { r2.give(&mut self.b2); return aborted(elements); }
     let r3 = round::<7, 4, 6, 8>(&r2, 376, 376, 6, &mut self.b3);
     trace("round3", &mut tt);
     r2.give(&mut self.b2);
     elements[3] = r3.len(); overflow += r3.overflow.load(Ordering::Relaxed);
+    if abort() { r3.give(&mut self.b3); return aborted(elements); }
     let r4 = round::<6, 8, 5, 9>(&r3, 288, 288, 9, &mut self.b4);
     trace("round4", &mut tt);
     elements[4] = r4.len(); overflow += r4.overflow.load(Ordering::Relaxed);
@@ -525,8 +536,11 @@ pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<
     trace("final", &mut tt);
     r3.give(&mut self.b3);
     r4.give(&mut self.b4);
-    (ok, SolveStats { elements, candidates: candidates.load(Ordering::Relaxed), rejected })
+    (ok, SolveStats { elements, candidates: candidates.load(Ordering::Relaxed), rejected, aborted: false })
 }
 }
 
 pub mod stratum;
+
+/// Peak memory a run needs, bytes: two consecutive rounds' bucket arrays plus per-thread stashes.
+pub const PEAK_MEMORY_BYTES: u64 = 7 * 1024 * 1024 * 1024;
