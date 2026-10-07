@@ -1,5 +1,9 @@
 # BumbleBeam pool: Beam node, wallet-api, PostgreSQL and the pool.
-# Lives in /data/docker; persistent data in /data/bumblebeam (owned by uid 10001).
+# Lives in /data/docker; persistent data in /data/bumblebeam (owned by uid 10001):
+#   node/      node.db, beam-node.cfg, secrets/ (stratum TLS + api key)
+#   wallet/    wallet.db, wallet.pass
+#   pool/      pool.toml, database.url, tls/   (mounted at /etc/bumblebeam)
+#   postgres/  database files;  secrets/postgres.pass
 #   docker compose -f compose-bumblebeam.yaml up -d --build
 
 services:
@@ -21,6 +25,81 @@ services:
     networks:
       - bumblebeam
 
+  # Payouts. Anyone who can reach 10001 can spend the wallet: it is on its own
+  # internal network, published nowhere, and only answers the pool's address.
+  wallet-api:
+    image: bumblebeam-beam
+    container_name: wallet-api
+    hostname: wallet-api
+    restart: unless-stopped
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        exec wallet-api --node_addr=beam-node:10000 --wallet_path=/data/wallet.db
+        --pass="$$(cat /data/wallet.pass)" --port=10001 --use_http=1
+        --ip_whitelist=172.30.1.10 --log_level=info
+    working_dir: /data
+    volumes:
+      - /data/bumblebeam/wallet:/data
+    depends_on:
+      - beam-node
+    networks:
+      - bumblebeam
+      - wallet
+
+  postgres:
+    image: postgres:17-trixie
+    container_name: bumblebeam-postgres
+    hostname: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bumblebeam
+      POSTGRES_DB: bumblebeam
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres.pass
+    volumes:
+      - /data/bumblebeam/postgres:/var/lib/postgresql/data
+      - /data/bumblebeam/secrets/postgres.pass:/run/secrets/postgres.pass:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bumblebeam -d bumblebeam"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bumblebeam
+
+  pool:
+    image: bumblebeam-pool
+    container_name: bumblebeam-pool
+    hostname: pool
+    build:
+      context: ./containers/pool
+      args:
+        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+    restart: unless-stopped
+    ports:
+      - "3333-3334:3333-3334"             # stratum PPLNS / solo
+      - "3443-3444:3443-3444"             # stratum TLS PPLNS / solo
+      - "127.0.0.1:8080:8080"             # web UI + API, for a reverse proxy
+    volumes:
+      - /data/bumblebeam/pool:/etc/bumblebeam:ro
+    ulimits:
+      nofile: 65536
+    depends_on:
+      postgres:
+        condition: service_healthy
+      beam-node:
+        condition: service_started
+    networks:
+      bumblebeam:
+      wallet:
+        ipv4_address: 172.30.1.10
+
 networks:
   bumblebeam:
     name: bumblebeam
+  wallet:
+    name: bumblebeam-wallet
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.1.0/24
