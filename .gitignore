@@ -6,3 +6,5 @@
 .idea/
 target/
 pool/server/pool.toml
+/deploy/docker/containers/certbot/config.json
+/deploy/docker/.env

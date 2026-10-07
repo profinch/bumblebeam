@@ -1,0 +1,13 @@
+{
+  "cloudflare": {
+    "api_token": "<Cloudflare API token: Zone.DNS:Edit + Zone:Read for bumblebeam.org>"
+  },
+  "certbot": {
+    "email": "<Let's Encrypt account email>"
+  },
+  "domains": [
+    {
+      "domain": "bumblebeam.org"
+    }
+  ]
+}
