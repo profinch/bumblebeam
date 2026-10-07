@@ -26,8 +26,8 @@ need. The fifth round's pairs whose remaining 24 bits also cancel are solutions;
 are read back through the parents, packed, and verified.
 
 Measured on an Apple M5 Pro (15 threads): about 2 s a run, 0.5 runs/s, ~1 sol/s (two solutions a
-run on average), about 14 GB resident with the bucket arrays kept between runs (BB_NO_REUSE=1
-frees them after every round). The first version took 3 s a run; the gains came from writing each
+run on average), about 7 GB peak (arrays freed round by round; BB_REUSE=1 keeps them between
+runs, which did not help on the M5 Pro and swamped a 15 GB server). The first version took 3 s a run; the gains came from writing each
 round straight into the next round's buckets with the mix precomputed, a counting sort inside each
 bucket, and keeping the hot loop free of allocator calls (one stash and one scratch buffer per
 thread, found with a sampling profiler to be where half the time went). BB_TRACE=1 prints the

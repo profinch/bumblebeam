@@ -297,8 +297,10 @@ fn bucket_of(m: u64) -> usize {
     ((m >> BUCKET_BITS) as usize) & (BUCKETS - 1)
 }
 
-/// Bucket arrays are reused across runs unless BB_NO_REUSE is set.
-fn reuse_buffers() -> bool { std::env::var_os("BB_NO_REUSE").is_none() }
+/// Bucket arrays are freed after each round unless BB_REUSE is set. Keeping them resident between
+/// runs did not speed up an M5 Pro and pushed a 15 GB server into swap (five arrays, ~13 GB
+/// touched); freeing them keeps the peak near 7 GB.
+fn reuse_buffers() -> bool { std::env::var_os("BB_REUSE").is_some() }
 
 #[inline(always)]
 fn leaves_overlap(a: &[u32], b: &[u32]) -> bool {
@@ -399,8 +401,8 @@ pub fn pack_solution(leaves: &[u32; 32], extra: &[u8; 4]) -> [u8; 104] {
 
 pub struct SolveStats { pub elements: [usize; 6], pub candidates: usize, pub rejected: usize }
 
-/// A solver instance. The five bucket arrays (about 16 GB) are kept between runs so that a run
-/// does not page-fault them in again; BB_NO_REUSE=1 frees them after every round instead.
+/// A solver instance. Bucket arrays are allocated per round and freed as soon as the next round
+/// exists (peak about 7 GB); BB_REUSE=1 keeps all five between runs on machines with memory to spare.
 #[derive(Default)]
 pub struct Solver {
     b0: Option<Buckets<7, 1>>,
