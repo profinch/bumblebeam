@@ -17,6 +17,10 @@ struct Job { id: String, input: Vec<u8>, difficulty: u32, height: u64 }
 #[derive(Default)]
 struct State { job: Option<Job>, prefix: Vec<u8>, accepted: u64, rejected: u64, stale: u64, last_result: String }
 
+/// Bumped whenever the pool sends a template for a new height: a run on the old height is stopped
+/// between phases, since its shares would be stale.
+static HEIGHT_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Debug)]
 struct NoVerify(rustls::crypto::CryptoProvider);
 impl rustls::client::danger::ServerCertVerifier for NoVerify {
@@ -77,7 +81,7 @@ pub fn mine(pool: &str, user: &str, tls: bool) -> Result<()> {
     }
     let mut solver = Solver::default();
     let mut rng = rand::thread_rng();
-    let (mut runs, mut sols) = (0u64, 0u64);
+    let (mut runs, mut sols, mut aborted) = (0u64, 0u64, 0u64);
     let t0 = Instant::now();
     let mut last_report = Instant::now();
     loop {
@@ -89,7 +93,9 @@ pub fn mine(pool: &str, user: &str, tls: bool) -> Result<()> {
         nonce[..n].copy_from_slice(&prefix[..n]);
         let extra = rng.next_u32().to_le_bytes();
         let t = Instant::now();
-        let (found, _) = solver.solve(&job.input, &nonce, &extra);
+        let gen = HEIGHT_GEN.load(std::sync::atomic::Ordering::Relaxed);
+        let (found, st) = solver.solve_until(&job.input, &nonce, &extra, || HEIGHT_GEN.load(std::sync::atomic::Ordering::Relaxed) != gen);
+        if st.aborted { aborted += 1; continue; }
         runs += 1;
         sols += found.len() as u64;
         for s in &found {
@@ -101,8 +107,8 @@ pub fn mine(pool: &str, user: &str, tls: bool) -> Result<()> {
         if last_report.elapsed() >= Duration::from_secs(30) {
             let st = state.lock().unwrap();
             let el = t0.elapsed().as_secs_f64();
-            eprintln!("{:>6.0} s | {:.3} sol/s | {} runs, last {:.2} s | shares A/R/S {}/{}/{} | job {} h{} diff {:.0} | {}",
-                el, sols as f64 / el, runs, t.elapsed().as_secs_f64(), st.accepted, st.rejected, st.stale, job.id, job.height, pow::difficulty_to_double(job.difficulty), st.last_result);
+            eprintln!("{:>6.0} s | {:.3} sol/s | {} runs ({} cut by new blocks), last {:.2} s | shares A/R/S {}/{}/{} | job {} h{} diff {:.0} | {}",
+                el, sols as f64 / el, runs, aborted, t.elapsed().as_secs_f64(), st.accepted, st.rejected, st.stale, job.id, job.height, pow::difficulty_to_double(job.difficulty), st.last_result);
             last_report = Instant::now();
         }
     }
@@ -134,7 +140,11 @@ fn session(stream: Stream, state: &Arc<Mutex<State>>, user: &str, rx: &std::sync
                     "job" => {
                         let input = hex::decode(v["input"].as_str().unwrap_or("")).unwrap_or_default();
                         if input.len() == 32 {
-                            st.job = Some(Job { id: v["id"].as_str().unwrap_or("").to_string(), input, difficulty: v["difficulty"].as_u64().unwrap_or(0) as u32, height: v["height"].as_u64().unwrap_or(0) });
+                            let height = v["height"].as_u64().unwrap_or(0);
+                            if st.job.as_ref().map(|j| j.height != height).unwrap_or(true) {
+                                HEIGHT_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            }
+                            st.job = Some(Job { id: v["id"].as_str().unwrap_or("").to_string(), input, difficulty: v["difficulty"].as_u64().unwrap_or(0) as u32, height });
                         }
                     }
                     "result" => {
