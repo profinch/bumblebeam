@@ -6,6 +6,9 @@ below uses `/opt/bumblebeam` for the repository and binary, `/etc/bumblebeam` fo
 and secrets, `/var/lib/beam` for the node and wallet, and a system user `beam`; any other layout
 works, adjust the paths in the units under [`pool/deploy`](../pool/deploy).
 
+The same stack also runs in Docker: see [Docker](#docker) at the end. It is what runs
+pool.bumblebeam.org.
+
 ## 1. Packages, Rust, PostgreSQL
 
 ```sh
@@ -137,6 +140,171 @@ nginx: `proxy_pass http://127.0.0.1:8080;` for `/` with a Let's Encrypt certific
   history). The node database is disposable.
 - Update: `git pull`, `cargo build --release`, `install`, `systemctl restart bumblebeam-pool`.
   Schema migrations run on start.
-- Shares are kept seven days, hashrate samples two; the database stays small.
+- Shares are kept seven days, hashrate samples 31 (for the month chart); the database stays small.
 - Payouts lock a whole UTXO each; split coins with `tx_split` in wallet-api when many miners
   reach the threshold at once.
+
+## Docker
+
+The whole stack as one compose project: the Beam node, wallet-api, PostgreSQL, the pool, and nginx
+with certbot for the web. This is how pool.bumblebeam.org runs (Debian 13, 4 vCPU, 8 GB RAM, a
+separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker), which mirrors
+`/data/docker` on the server; persistent data lives in `/data/bumblebeam`, owned by uid 10001
+(the `beam` user inside the images):
+
+```
+/data/docker/                         = deploy/docker
+  compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool, nginx, certbot
+  containers/beam/                    node + wallet CLI + wallet-api from the release (sha256 pinned, GPG-checked)
+  containers/pool/                    builds bumblebeam-pool from this repository at BUMBLEBEAM_REF
+  containers/nginx/, containers/certbot/
+  beam-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
+/data/bumblebeam/
+  node/        node.db, beam-node.cfg, secrets/ (stratum TLS + API key)
+  wallet/      wallet.db, wallet.pass                                  <- the money, back it up
+  pool/        pool.toml, database.url, tls/                           (mounted at /etc/bumblebeam)
+  postgres/    database files;  secrets/postgres.pass
+  letsencrypt/ certificates;    logs/
+```
+
+| service | network | published |
+|---|---|---|
+| `beam-node` | `bumblebeam` | `10000` p2p; stratum `8101` stays inside |
+| `wallet-api` | `bumblebeam` + internal `bumblebeam-wallet`, fixed `172.30.1.2` | nothing; answers only the pool's `172.30.1.10` |
+| `postgres` | `bumblebeam` | nothing |
+| `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
+| `nginx` | host network | `80`, `443`, Cloudflare addresses only (host firewall) |
+| `certbot` | default | nothing |
+
+### D1. Docker on the data disk
+
+Keep images and containers off a small root or `/var`. Docker 29 stores images in **containerd**,
+so moving Docker's data root alone is not enough:
+
+```sh
+sudo systemctl stop docker.socket docker.service containerd.service
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/data-root.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --data-root /data/docker/var -H fd:// --containerd=/run/containerd/containerd.sock
+EOF
+sudo sed -i 's|^#root = "/var/lib/containerd"|root = "/data/docker/containerd"|' /etc/containerd/config.toml
+sudo mv /var/lib/docker /data/docker/var; sudo mv /var/lib/containerd /data/docker/containerd
+sudo systemctl daemon-reload && sudo systemctl start containerd docker
+sudo docker info | grep "Docker Root Dir"
+```
+
+Rotate container logs in `/etc/docker/daemon.json`:
+`{ "log-driver": "json-file", "log-opts": { "max-size": "100m", "max-file": "5" } }`.
+
+### D2. Firewall
+
+[`deploy/host/nftables.conf`](../deploy/host/nftables.conf) goes to `/etc/nftables.conf`
+(`systemctl enable nftables`). It keeps its own table and has no `flush ruleset`, so Docker's rules
+survive a reload. Input is dropped except ssh, `10000`, `3333-3334`, `3443-3444`, and `80`/`443`
+from Cloudflare's ranges. Docker-published ports go through FORWARD, not INPUT: what compose
+publishes is what is open. Apply it over ssh with a way back:
+
+```sh
+sudo nft -c -f nftables.conf && sudo systemd-run --on-active=180 /usr/sbin/nft delete table inet host
+sudo nft -f nftables.conf      # then open a second ssh session; if it works, stop the timer
+```
+
+If the provider filters too (Hetzner Robot firewall), open the same ports there.
+
+### D3. Files and secrets
+
+```sh
+sudo git clone https://github.com/profinch/bumblebeam /tmp/bb && sudo cp -a /tmp/bb/deploy/docker/. /data/docker/
+B=/data/bumblebeam; umask 077
+sudo install -d -m 755 -o 10001 -g 10001 $B $B/node
+sudo install -d -m 700 -o 10001 -g 10001 $B/wallet $B/pool $B/pool/tls $B/node/secrets
+sudo install -d -m 700 -o 999 -g 999 $B/postgres
+sudo install -d -m 755 $B/secrets $B/letsencrypt $B/logs/nginx $B/logs/certbot
+sudo install -m 600 -o 10001 -g 10001 /data/docker/beam-node.cfg.example $B/node/beam-node.cfg
+
+PW=$(head -c 48 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 32)
+printf %s "$PW" | sudo install -m 600 -o 999 -g 999 /dev/stdin $B/secrets/postgres.pass
+printf 'postgres://bumblebeam:%s@postgres:5432/bumblebeam\n' "$PW" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/database.url
+KEY=$(head -c 48 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 32)
+printf %s "$KEY" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/node/secrets/stratum.api.keys
+sed "s|^api_key = .*|api_key = \"$KEY\"|" /data/docker/pool.toml.example | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/pool.toml
+unset PW KEY
+cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml build beam-node
+sudo docker run --rm -u 10001:10001 -v $B/node/secrets:/s bumblebeam-beam \
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout /s/stratum.key -out /s/stratum.crt -subj /CN=beam-node -days 3650
+sudo docker run --rm -u 10001:10001 -v $B/pool/tls:/s bumblebeam-beam \
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout /s/pool.key -out /s/pool.crt -subj /CN=stratum.example.org \
+  -addext subjectAltName=DNS:stratum.example.org -days 825
+```
+
+In `pool.toml` set `public_host` to the stratum name. The template already points at
+`beam-node:8101`, at wallet-api on `172.30.1.2` and at `/opt/bumblebeam/web`.
+
+### D4. The node
+
+```sh
+cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml up -d beam-node
+sudo docker logs -f beam-node          # "Updating node: N% (...)"
+```
+
+`beam-node.cfg.example` has `fast_sync=0`: an archival node that keeps and serves the whole history.
+Start it first: the sync takes longer than everything else together.
+
+### D5. The wallet (operator only)
+
+```sh
+sudo /data/docker/wallet-setup.sh
+```
+
+It asks for the seed phrase and a wallet password without echoing them, restores `wallet.db`,
+writes `wallet.pass`, and puts the miner key (subkey 1), the owner key and the password into
+`beam-node.cfg`, which turns the node's stratum on. Seed and keys stay inside a throwaway
+container: not on the screen, not in the shell history, not in a host process list. It refuses to
+overwrite an existing `wallet.db`. Then:
+
+```sh
+sudo docker compose -f compose-bumblebeam.yaml up -d --force-recreate beam-node wallet-api
+```
+
+### D6. The pool
+
+```sh
+sudo docker compose -f compose-bumblebeam.yaml build --build-arg BUMBLEBEAM_REF=<commit> pool
+sudo docker compose -f compose-bumblebeam.yaml up -d postgres pool
+curl -s localhost:8080/api/health
+```
+
+Until the node is at the tip the pool logs `node still syncing: no work for miners yet`; that is
+expected. Run `admin probe-txid` before the first payout (section 7) with
+`sudo docker exec bumblebeam-pool bumblebeam-pool /etc/bumblebeam/pool.toml admin probe-txid`.
+
+### D7. Web and certificates
+
+nginx and certbot are the same as on our other hosts: certbot gets one certificate for
+`example.org` and `*.example.org` over Cloudflare DNS-01 at start and daily at 03:00 UTC, and
+leaves a trigger; nginx's cron runs `nginx-reload.sh` at 04:00 and reloads when it finds one.
+Telegram notices go out when `/data/docker/.env` has `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
+1. In Cloudflare: proxied records for the site names, a **DNS-only** record for the stratum name
+   (Cloudflare does not carry stratum).
+2. An API token: *Edit zone DNS* template plus `Zone · Zone · Read`, the one zone, client IP
+   filter = the server's address, no expiry.
+3. The token goes into `/data/docker/containers/certbot/config.json` (from `config.example.json`,
+   `chmod 600`, git-ignored). Write it there yourself.
+4. `sudo docker compose -f compose-bumblebeam.yaml up -d certbot nginx`.
+
+[`bumblebeam.conf`](../deploy/docker/containers/nginx/conf/bumblebeam.conf) serves the pool on
+`pool.bumblebeam.org` and redirects `bumblebeam.org` and `www` there.
+
+### D8. Operations
+
+- Status: `sudo docker ps`; logs: `sudo docker logs -f beam-node|wallet-api|bumblebeam-pool`.
+- Pool update: build with the new `BUMBLEBEAM_REF`, then `up -d pool`. Schema migrations run on
+  start.
+- Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
+  (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
+- Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and
+  `sudo docker exec bumblebeam-postgres pg_dump -U bumblebeam bumblebeam`. The node database is
+  disposable, but an archival resync takes long.
