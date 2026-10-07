@@ -235,6 +235,17 @@ const BB = (() => {
     }
     const hex = (r, n) => Array.from({ length: n }, () => '0123456789abcdef'[(r() * 16) | 0]).join('');
 
+    // Pool hashrate over a chart range, at the API's resolution for that range.
+    function demoSeries(now, range, base) {
+      const [span, step] = range === '30d' ? [30 * 86400, 14400] : range === '7d' ? [7 * 86400, 3600] : [86400, 600];
+      const out = [];
+      for (let t = Math.floor((now - span) / step) * step + step; t <= now; t += step) {
+        const w = Math.sin(t / 7000) * 0.06 + Math.sin(t / 2300) * 0.03 + Math.sin(t / 400000) * 0.12;
+        out.push([t, base * (1 + w + (rng(t)() - 0.5) * 0.08)]);
+      }
+      return out;
+    }
+
     let world = null, worldKey = '';
     function build(net) {
       const now = Math.floor(Date.now() / 1000);
@@ -246,11 +257,7 @@ const BB = (() => {
       const reward = blockReward(height);
       const base = 1650; // Sol/s, ~3.5% of the network
 
-      const series = [];
-      for (let t = now - 86400; t <= now; t += 600) {
-        const w = Math.sin(t / 7000) * 0.06 + Math.sin(t / 2300) * 0.03;
-        series.push([t, base * (1 + w + (rng(t)() - 0.5) * 0.08)]);
-      }
+      const series = demoSeries(now, '24h', base);
       const hashrate = series[series.length - 1][1];
 
       const miners = [];
@@ -287,7 +294,7 @@ const BB = (() => {
 
       const day = blocks.filter((b) => b.ts > now - 86400);
       world = {
-        now, hashrate, series, miners, blocks, payments, height, netHash,
+        now, base, hashrate, series, miners, blocks, payments, height, netHash,
         stats: {
           hashrate, minersTotal: miners.length, workersTotal: miners.reduce((s, m) => s + m.workers, 0),
           stats: { lastBlockFound: blocks[0] ? blocks[0].ts : null, roundShares: 0 },
@@ -302,7 +309,7 @@ const BB = (() => {
       return world;
     }
 
-    function miner(w, address) {
+    function miner(w, address, range) {
       const known = w.miners.find((m) => m.address === address);
       const r = rng(strSeed(address));
       const hr = known ? known.hashrate : (r() < 0.25 ? 0 : 20 + r() * 300);
@@ -311,7 +318,7 @@ const BB = (() => {
         const h = hr / nW * (0.7 + r() * 0.6);
         return { name: `rig${i + 1}`, hashrate: h, hashrate24h: h * (0.9 + r() * 0.15), lastShare: w.now - ((r() * 40) | 0), online: hr > 0, stale: r() * 0.02, rejected: r() * 0.003 };
       });
-      const series = w.series.map(([t, v]) => [t, hr ? hr * (v / w.hashrate) * (0.9 + r() * 0.2) : 0]);
+      const series = demoSeries(w.now, range, w.base).map(([t, v]) => [t, hr ? hr * (v / w.hashrate) * (0.9 + r() * 0.2) : 0]);
       const payments = w.payments.slice(0, 12).map((p) => ({ ts: p.ts, amount: Math.round(p.amount * (hr / w.hashrate)), kernel: p.kernel }));
       const reward = blockReward(w.height);
       return {
@@ -326,11 +333,12 @@ const BB = (() => {
       const qs = new URLSearchParams(q || '');
       const limit = Math.min(500, Number(qs.get('limit')) || 50);
       const before = Number(qs.get('before')) || Infinity;
-      if (p === 'stats') return w.stats;
+      const range = qs.get('range') || '24h';
+      if (p === 'stats') return { ...w.stats, charts: { hashrate: demoSeries(w.now, range, w.base) } };
       if (p === 'blocks') return { blocks: w.blocks.filter((b) => b.height < before).slice(0, limit) };
       if (p === 'payments') return { payments: w.payments.slice(0, limit) };
       if (p === 'miners') return { miners: w.miners.slice(0, limit).map(({ address, ...m }) => m) };
-      if (p.startsWith('miners/')) return miner(w, decodeURIComponent(p.slice(7)));
+      if (p.startsWith('miners/')) return miner(w, decodeURIComponent(p.slice(7)), range);
       throw new Error(`demo: unknown path ${path}`);
     }
 

@@ -78,7 +78,7 @@ as `https://explorer.0xmx.net/api/block?height=`, as the fallback.
 Operations: payouts lock a whole UTXO each (coinbases are 25 BEAM), so a wallet with few large
 coins runs out of `available` during a run and the rest is postponed to the next one. Splitting
 coins now and then (`tx_split` in wallet-api) keeps payouts flowing. Shares are kept for seven
-days, hashrate samples for two.
+days, hashrate samples for 31 (the month chart).
 
 ## Not yet
 

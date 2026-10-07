@@ -52,11 +52,15 @@ pub fn router(api: Api) -> Router {
         .with_state(api)
 }
 
+fn range(q: &HashMap<String, String>) -> crate::db::ChartRange {
+    crate::db::ChartRange::parse(q.get("range").map(String::as_str))
+}
+
 fn limit(q: &HashMap<String, String>, default: i64, max: i64) -> i64 {
     q.get("limit").and_then(|v| v.parse().ok()).unwrap_or(default).clamp(1, max)
 }
 
-async fn stats(State(api): State<Api>) -> R {
+async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
     let s = &api.shared;
     let t = now();
     let hashrate = s.db.pool_hashrate(t).await?;
@@ -83,7 +87,7 @@ async fn stats(State(api): State<Api>) -> R {
                     "blockFeesTo": "pool",
                     "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
                                "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
-        "charts": { "hashrate": s.db.pool_chart(t).await? },
+        "charts": { "hashrate": s.db.pool_chart(t, range(&q)).await? },
         "blocks24h": blocks24h, "effort24h": effort24h,
         "connectedWorkers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed),
     })))
@@ -101,12 +105,12 @@ async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now()).await? })))
 }
 
-async fn miner(State(api): State<Api>, Path(address): Path<String>) -> R {
+async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
     let address: String = address.chars().filter(|c| !c.is_whitespace()).collect();
     if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Ok(Json(json!({ "error": "not a Beam address" })));
     }
-    match api.shared.db.miner(&address, now()).await? {
+    match api.shared.db.miner(&address, now(), range(&q)).await? {
         Some(v) => Ok(Json(v)),
         None => Ok(Json(json!({ "address": address, "hashrate": 0, "hashrate24h": 0, "balance": 0, "immature": 0, "paid": 0,
                                 "lastShare": null, "workers": [], "charts": { "hashrate": [] }, "payments": [] }))),
