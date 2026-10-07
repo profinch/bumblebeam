@@ -4,6 +4,7 @@
 #   wallet/    wallet.db, wallet.pass
 #   pool/      pool.toml, database.url, tls/   (mounted at /etc/bumblebeam)
 #   postgres/  database files;  secrets/postgres.pass
+#   letsencrypt/  certificates (certbot, Cloudflare DNS-01);  logs/
 #   docker compose -f compose-bumblebeam.yaml up -d --build
 
 services:
@@ -95,6 +96,50 @@ services:
       bumblebeam:
       wallet:
         ipv4_address: 172.30.1.10
+
+  # Web: pool.bumblebeam.org (and bumblebeam.org, www) through Cloudflare. Host
+  # network, so the host firewall (Cloudflare ranges only on 80/443) applies; it
+  # proxies to the pool on 127.0.0.1:8080. Same image as on h1: cron runs
+  # nginx-reload.sh daily at 04:00, which reloads when certbot left a trigger.
+  nginx:
+    image: bumblebeam-nginx
+    container_name: bumblebeam-nginx
+    build: ./containers/nginx
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - HOST_HOSTNAME=${HOST_HOSTNAME:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./containers/nginx/conf:/etc/nginx/conf.d:ro
+      - /data/bumblebeam/letsencrypt:/etc/letsencrypt
+      - /data/bumblebeam/logs/nginx:/var/log/nginx
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - pool
+
+  # Let's Encrypt for bumblebeam.org + *.bumblebeam.org over Cloudflare DNS-01,
+  # same scripts as on h1: checked at start and daily at 03:00 UTC.
+  certbot:
+    image: bumblebeam-certbot
+    container_name: bumblebeam-certbot
+    build: ./containers/certbot
+    restart: unless-stopped
+    environment:
+      - HOST_HOSTNAME=${HOST_HOSTNAME:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TZ=UTC
+    volumes:
+      - ./containers/certbot/config.json:/app/config.json:ro
+      - /data/bumblebeam/logs/certbot:/var/log/certbot
+      - /data/bumblebeam/letsencrypt:/etc/letsencrypt
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "5"
 
 networks:
   bumblebeam:

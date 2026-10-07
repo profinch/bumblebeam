@@ -1,0 +1,9 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+HOST_HOSTNAME=${HOST_HOSTNAME}
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+
+0 4 * * * bash /usr/local/bin/nginx-reload.sh 2>&1 | tee -a /var/log/nginx/cron.log > /proc/1/fd/1
+
