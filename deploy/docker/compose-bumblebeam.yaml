@@ -1,0 +1,26 @@
+# BumbleBeam pool: Beam node, wallet-api, PostgreSQL and the pool.
+# Lives in /data/docker; persistent data in /data/bumblebeam (owned by uid 10001).
+#   docker compose -f compose-bumblebeam.yaml up -d --build
+
+services:
+  beam-node:
+    image: bumblebeam-beam
+    container_name: beam-node
+    hostname: beam-node
+    build: ./containers/beam
+    restart: unless-stopped
+    command: ["beam-node", "--config_file=/data/beam-node.cfg"]
+    working_dir: /data
+    ports:
+      - "10000:10000"                     # p2p, the node is a full peer
+    volumes:
+      - /data/bumblebeam/node:/data
+    ulimits:
+      nofile: 65536
+    stop_grace_period: 60s
+    networks:
+      - bumblebeam
+
+networks:
+  bumblebeam:
+    name: bumblebeam

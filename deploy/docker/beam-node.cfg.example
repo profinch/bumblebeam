@@ -1,0 +1,18 @@
+# Beam mainnet node for the pool -> /data/bumblebeam/node/beam-node.cfg, chmod 600.
+# Paths are inside the container (/data = /data/bumblebeam/node).
+port=10000
+storage=/data/node.db
+peer=eu-nodes.mainnet.beam.mw:8100
+peer=us-nodes.mainnet.beam.mw:8100
+peer=ap-nodes.mainnet.beam.mw:8100
+fast_sync=0            # archival: keeps and serves the whole history
+mine_online=0
+log_level=info
+file_log_level=info
+# stratum for the pool: uncomment once the wallet keys are in
+#stratum_port=8101
+#stratum_secrets_path=/data/secrets
+#stratum_use_tls=1
+#miner_key=<beam-wallet export_miner_key --subkey=1>
+#owner_key=<beam-wallet export_owner_key>
+#pass=<wallet password>
