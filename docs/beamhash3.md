@@ -44,6 +44,11 @@ in the five mixes.
 - **Duplicate index trees** (the same leaf twice) give invalid solutions. Pruning them early saves
   work in later rounds.
 
+## CPU reference
+
+[`miner/`](../miner) implements exactly this on the CPU in Rust, with the round-by-round layout
+described in its README; it is the readable reference for a GPU kernel.
+
 ## Correctness oracle
 
 `BeamHash_III::IsValidSolution` in the core decides what counts as a solution. Every solution the

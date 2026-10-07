@@ -7,8 +7,9 @@ checked against the Beam core itself.
 The first goal is mining. Today one pool holds about 65–75% of Beam's hashrate, and the only open
 pool code dates from 2020–2021. On the miner side the open-source
 [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM) (CUDA, OpenCL, Metal, Apache-2.0) already
-competes with the closed miners, so bumblebeam does not write its own: it builds the open pool,
-tested against the Beam core, and lends MXBM its oracle and test vectors.
+competes with the closed miners, so bumblebeam does not write a GPU miner: it builds the open
+pool, tested against the Beam core, a CPU miner as the readable reference, and lends MXBM its
+oracle and test vectors.
 
 | Part | What it is | Status |
 |---|---|---|
@@ -19,7 +20,7 @@ tested against the Beam core, and lends MXBM its oracle and test vectors.
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
 | [`docs/deploy.md`](docs/deploy.md) | How to put the node, wallet-api, PostgreSQL and the pool on a server; systemd units in [`pool/deploy`](pool/deploy) | guide |
 | [`pool/server`](pool/server) | The pool: stratum proxy to our node, oracle share checks, PPLNS and solo accounting, payouts, HTTP API (Rust) | **v0 running on a test server, mainnet** |
-| miner | Not here: [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM) is the open BeamHash III miner. Verified against this pool (RTX 3090: 52 Sol/s, 0 rejects, TLS) | use MXBM |
+| [`miner/`](miner) | CPU miner (Rust): the open reference solver, 100x the core's, every solution oracle-checked, Beam stratum over TLS. 0.5–0.75 Sol/s on an M5 Pro, so a dev tool and a way to mine without a GPU, not an earner. For GPUs use [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM), verified against this pool (RTX 3090: 52 Sol/s, 0 rejects) | **v0** |
 
 ## Numbers that set the bar
 

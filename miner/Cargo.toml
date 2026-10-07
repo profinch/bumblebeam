@@ -1,9 +1,9 @@
 [package]
-name = "bumblebeam-solver"
+name = "bumblebeam-miner"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "BumbleBeam: open CPU solver and miner for Beam's BeamHash III, every solution checked by the oracle"
+description = "BumbleBeam: open CPU miner for Beam's BeamHash III, every solution checked by the oracle"
 
 [dependencies]
 rayon = "1"

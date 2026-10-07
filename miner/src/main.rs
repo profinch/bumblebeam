@@ -1,4 +1,4 @@
-//! bumblebeam-solver: BeamHash III on the CPU.
+//! bumblebeam-miner: BeamHash III on the CPU.
 //!   bench [seconds] [threads]        random inputs, reports runs/s and sol/s
 //!   solve <input-hex> <nonce-hex> [extra-hex]   all solutions, as JSON
 //!   check <vectors-dir> [n]          re-solve n mainnet headers and the solver_*.json cases;
@@ -19,7 +19,7 @@ fn main() -> Result<()> {
             let nonce: [u8; 8] = hex32(args.get(2).ok_or_else(|| anyhow!("nonce"))?)?.try_into().map_err(|_| anyhow!("nonce must be 8 bytes"))?;
             let extra: [u8; 4] = match args.get(3) { Some(e) => hex32(e)?.try_into().map_err(|_| anyhow!("extra nonce must be 4 bytes"))?, None => [0; 4] };
             let t = Instant::now();
-            let (sols, st) = bumblebeam_solver::solve(&input, &nonce, &extra);
+            let (sols, st) = bumblebeam_miner::solve(&input, &nonce, &extra);
             let secs = t.elapsed().as_secs_f64();
             println!("{{\"input\": \"{}\", \"nonce\": \"{}\", \"extra\": \"{}\", \"seconds\": {secs:.2}, \"elements\": {:?}, \"candidates\": {}, \"rejected\": {}, \"solutions\": [",
                 hex::encode(&input), hex::encode(nonce), hex::encode(extra), st.elements, st.candidates, st.rejected);
@@ -34,9 +34,9 @@ fn main() -> Result<()> {
             let user = get("--user").ok_or_else(|| anyhow!("--user <address>.<worker>"))?;
             let tls = get("--tls").map(|v| v != "0").unwrap_or(true);
             if let Some(t) = get("--threads").and_then(|s| s.parse().ok()) { rayon::ThreadPoolBuilder::new().num_threads(t).build_global()?; }
-            bumblebeam_solver::stratum::mine(&pool, &user, tls)
+            bumblebeam_miner::stratum::mine(&pool, &user, tls)
         }
-        _ => { eprintln!("usage: bumblebeam-solver bench [seconds] [threads] | solve <input> <nonce> [extra] | check <vectors-dir> [n] | mine --pool host:port --user addr.worker [--tls 0|1] [--threads N]"); std::process::exit(2) }
+        _ => { eprintln!("usage: bumblebeam-miner bench [seconds] [threads] | solve <input> <nonce> [extra] | check <vectors-dir> [n] | mine --pool host:port --user addr.worker [--tls 0|1] [--threads N]"); std::process::exit(2) }
     }
 }
 
@@ -49,7 +49,7 @@ fn bench(seconds: f64, threads: Option<usize>) -> Result<()> {
     let t0 = Instant::now();
     let (mut runs, mut sols, mut rejected) = (0usize, 0usize, 0usize);
     eprintln!("threads: {}", rayon::current_num_threads());
-    let mut solver = bumblebeam_solver::Solver::default();
+    let mut solver = bumblebeam_miner::Solver::default();
     while t0.elapsed().as_secs_f64() < seconds {
         rng.fill_bytes(&mut nonce);
         let t = Instant::now();
@@ -72,7 +72,7 @@ fn check(dir: &str, n: usize) -> Result<()> {
         let known: [u8; 104] = hex::decode(h["solution"].as_str().unwrap())?.try_into().unwrap();
         let extra: [u8; 4] = known[100..104].try_into().unwrap();
         let t = Instant::now();
-        let (sols, st) = bumblebeam_solver::solve(&input, &nonce, &extra);
+        let (sols, st) = bumblebeam_miner::solve(&input, &nonce, &extra);
         let found = sols.iter().any(|s| *s == known);
         println!("height {}: {:.2} s, {} solutions, candidates {}, rejected {}, mainnet solution found: {}", h["height"], t.elapsed().as_secs_f64(), sols.len(), st.candidates, st.rejected, found);
         if !found { anyhow::bail!("the chain's solution for height {} was not found", h["height"]); }
@@ -83,7 +83,7 @@ fn check(dir: &str, n: usize) -> Result<()> {
         let input = hex::decode(v["input"].as_str().unwrap())?;
         let nonce: [u8; 8] = hex::decode(v["nonce"].as_str().unwrap())?.try_into().unwrap();
         let known: Vec<String> = v["solutions"].as_array().unwrap().iter().map(|s| s["solution"].as_str().unwrap().to_string()).collect();
-        let (sols, _) = bumblebeam_solver::solve(&input, &nonce, &[0; 4]);
+        let (sols, _) = bumblebeam_miner::solve(&input, &nonce, &[0; 4]);
         let ours: Vec<String> = sols.iter().map(hex::encode).collect();
         let missing: Vec<&String> = known.iter().filter(|k| !ours.contains(k)).collect();
         println!("{}: reference found {}, we found {}, missing {}", path.file_name().unwrap().to_string_lossy(), known.len(), ours.len(), missing.len());

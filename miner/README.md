@@ -1,6 +1,6 @@
-# bumblebeam-solver
+# bumblebeam-miner
 
-BeamHash III on the CPU: a solver that finds every solution the Beam core's reference finds, about
+BeamHash III on the CPU: a miner whose solver finds every solution the Beam core's reference finds, about
 a hundred times faster than that reference, and a miner that speaks Beam's stratum to any pool.
 Every solution is checked by the oracle (`oracle/`) before it leaves the solver.
 
@@ -12,10 +12,10 @@ without a GPU, and a load generator for the pool. GPU mining belongs to
 
 ```sh
 cargo build --release
-./target/release/bumblebeam-solver bench 60          # runs/s and sol/s on this machine
-./target/release/bumblebeam-solver check ../vectors   # re-solve mainnet headers: their solutions must appear
-./target/release/bumblebeam-solver solve <input-hex> <nonce-hex> [extra-nonce-hex]
-./target/release/bumblebeam-solver mine --pool pool.example.com:3443 --user <address>.<worker> [--tls 0|1] [--threads N]
+./target/release/bumblebeam-miner bench 60          # runs/s and sol/s on this machine
+./target/release/bumblebeam-miner check ../vectors   # re-solve mainnet headers: their solutions must appear
+./target/release/bumblebeam-miner solve <input-hex> <nonce-hex> [extra-nonce-hex]
+./target/release/bumblebeam-miner mine --pool pool.example.com:3443 --user <address>.<worker> [--tls 0|1] [--threads N]
 ```
 
 How it works (docs/beamhash3.md has the algorithm): 2^25 elements of 448 bits from SipHash-2-4,
