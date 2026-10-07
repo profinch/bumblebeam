@@ -25,10 +25,14 @@ colliding pair into the next round's element with its parents and the leaves the
 need. The fifth round's pairs whose remaining 24 bits also cancel are solutions; their 32 leaves
 are read back through the parents, packed, and verified.
 
-Measured on an Apple M5 Pro (15 threads): about 2 s a run, 0.5 runs/s, ~1 sol/s (two solutions a
-run on average), about 7 GB peak (arrays freed round by round; BB_REUSE=1 keeps them between
-runs, which did not help on the M5 Pro and swamped a 15 GB server). The first version took 3 s a run; the gains came from writing each
-round straight into the next round's buckets with the mix precomputed, a counting sort inside each
+Measured: Apple M5 Pro (15 threads) about 2 s a run, 0.5 runs/s, ~1 sol/s; Ryzen 9 5900X with
+DDR4-2400 (24 threads) 4 s a run, 0.25 runs/s, ~0.5 sol/s, the same at 12 threads, so there the
+memory bus is the limit. Two solutions a run on average, about 7 GB peak (arrays freed round by
+round; BB_REUSE=1 keeps them between runs, which did not help on the M5 Pro and swamped a 15 GB
+server). The first version took 3 s a run on the M5 Pro; the gains came from writing each round
+straight into the next round's buckets with the mix precomputed, a counting sort inside each
 bucket, and keeping the hot loop free of allocator calls (one stash and one scratch buffer per
-thread, found with a sampling profiler to be where half the time went). BB_TRACE=1 prints the
-time per phase.
+thread, found with a sampling profiler to be where half the time went). The stash chunk size is
+8 on Apple Silicon and 2 on x86 (BB_CHUNK overrides); BB_TRACE=1 prints the time per phase.
+Next: packing work bits and leaves to their exact widths to cut bytes per element, which is what
+the memory-bound x86 case needs.

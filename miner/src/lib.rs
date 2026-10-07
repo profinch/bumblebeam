@@ -179,8 +179,14 @@ fn merge_bits<const L: usize, const LO: usize>(a: &[u64; L], b: &[u64; L], out_l
 /// any overflow; an overflowing element is dropped and counted.
 const CAP: usize = 9216;
 /// Elements a thread collects for one destination bucket before writing them in one go: one
-/// atomic increment and one sequential copy per chunk instead of per element.
-const CHUNK: usize = 16;
+/// atomic increment and one sequential copy per chunk instead of per element. The stash is
+/// BUCKETS x chunk elements per thread, so the chunk size trades atomics for cache footprint;
+/// BB_CHUNK overrides the default for experiments.
+fn chunk_size() -> usize {
+    // measured: 8 is best on an M5 Pro (large shared L2), 2 on a Ryzen 9 5900X (512 KB L2 per core)
+    let default = if cfg!(target_arch = "aarch64") { 8 } else { 2 };
+    std::env::var("BB_CHUNK").ok().and_then(|v| v.parse().ok()).filter(|c| (1..=255).contains(c)).unwrap_or(default)
+}
 
 /// One counter per cache line, or 16 buckets' counters would bounce between cores.
 #[repr(align(64))]
@@ -243,27 +249,31 @@ impl<const L: usize, const NL: usize> Buckets<L, NL> {
 struct Stash<const L: usize, const NL: usize> {
     slots: Vec<Elem<L, NL>>,
     fill: Vec<u8>,
+    chunk: usize,
 }
 impl<const L: usize, const NL: usize> Stash<L, NL> {
-    fn new() -> Self { Stash { slots: vec![Elem::<L, NL>::ZERO; BUCKETS * CHUNK], fill: vec![0; BUCKETS] } }
+    fn new() -> Self {
+        let chunk = chunk_size();
+        Stash { slots: vec![Elem::<L, NL>::ZERO; BUCKETS * chunk], fill: vec![0; BUCKETS], chunk }
+    }
     #[inline(always)]
     fn slot(&mut self, b: usize) -> &mut Elem<L, NL> {
         let f = self.fill[b] as usize;
-        &mut self.slots[b * CHUNK + f]
+        &mut self.slots[b * self.chunk + f]
     }
     /// Call after writing `slot(b)`: counts it and flushes the bucket's chunk when full.
     #[inline(always)]
     fn commit(&mut self, out: &Buckets<L, NL>, b: usize) {
         self.fill[b] += 1;
-        if self.fill[b] as usize == CHUNK {
-            out.push_many(b, &self.slots[b * CHUNK..(b + 1) * CHUNK]);
+        if self.fill[b] as usize == self.chunk {
+            out.push_many(b, &self.slots[b * self.chunk..(b + 1) * self.chunk]);
             self.fill[b] = 0;
         }
     }
     fn flush(&mut self, out: &Buckets<L, NL>) {
         for b in 0..BUCKETS {
             let f = self.fill[b] as usize;
-            if f > 0 { out.push_many(b, &self.slots[b * CHUNK..b * CHUNK + f]); self.fill[b] = 0; }
+            if f > 0 { out.push_many(b, &self.slots[b * self.chunk..b * self.chunk + f]); self.fill[b] = 0; }
         }
     }
 }
