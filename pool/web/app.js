@@ -372,7 +372,7 @@
                 <div class="seg" id="tls"><button data-v="0">TCP</button><button class="on" data-v="1">TLS</button></div>
                 <span class="dim mono" id="portline"></span>
               </div></div>
-            <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
+            <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. <a href="https://git.maxnflaxl.dev/maxnflaxl/MXBM" target="_blank" rel="noopener">MXBM</a> is the open-source one (CUDA, OpenCL, Metal); lolMiner and GMiner work too. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
               <div class="stack" id="cmds" style="gap:8px"></div></div>
           </div>
         </section>
@@ -429,6 +429,7 @@
       const tlsFlag = state.tls === '1';
       $('#portline').textContent = `${host}:${port} · ${state.mode === 'solo' ? 'solo' : 'PPLNS'}${tlsFlag ? ' · TLS' : ''}`;
       const cmds = [
+        ['MXBM (open source, Apache-2.0)', `mxbm --algo BEAM-III --pool ${host}:${port} --user ${user} --tls ${tlsFlag ? 1 : 0}`],
         ['lolMiner', `lolMiner --algo BEAM-III --pool ${host}:${port} --user ${user}${tlsFlag ? ' --tls on' : ''}`],
         ['GMiner', `miner --algo beamhashIII --server ${host}:${port} --user ${user}${tlsFlag ? ' --ssl 1' : ''}`],
       ];

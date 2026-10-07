@@ -4,9 +4,11 @@ Open-source contributions to the [Beam](https://github.com/BeamMW/beam) ($BEAM) 
 member of its community: mining tools, a pool and more. Everything here is public, Apache-2.0, and
 checked against the Beam core itself.
 
-The first goal is mining. Today one pool holds about 75–90% of Beam's hashrate, the fastest
-BeamHash III miners are closed source with a dev fee, and the only open pool code dates from
-2020–2021. bumblebeam builds the open alternative piece by piece, starting with the ground truth.
+The first goal is mining. Today one pool holds about 65–75% of Beam's hashrate, and the only open
+pool code dates from 2020–2021. On the miner side the open-source
+[MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM) (CUDA, OpenCL, Metal, Apache-2.0) already
+competes with the closed miners, so bumblebeam does not write its own: it builds the open pool,
+tested against the Beam core, and lends MXBM its oracle and test vectors.
 
 | Part | What it is | Status |
 |---|---|---|
@@ -16,7 +18,7 @@ BeamHash III miners are closed source with a dev fee, and the only open pool cod
 | [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Served by the pool server; shows labelled demo data when opened without one | **done** |
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
 | [`pool/server`](pool/server) | The pool: stratum proxy to our node, oracle share checks, PPLNS and solo accounting, payouts, HTTP API (Rust) | **v0 running on a test server, mainnet** |
-| `miner/` | BeamHash III GPU solver: CUDA first, then Metal and AMD | next |
+| miner | Not here: [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM) is the open BeamHash III miner. Verified against this pool (RTX 3090: 52 Sol/s, 0 rejects, TLS) | use MXBM |
 
 ## Numbers that set the bar
 
@@ -25,8 +27,8 @@ Measured on 2026-10-06, at height ≈ 4,068,700:
 - **Network:** ~45–52 kSol/s at a difficulty of ~2.7 M, down from 25.7 M in January 2024. Pools:
   2Miners ~35 kSol/s, HeroMiners ~4.5 kSol/s, and the rest below 1 kSol/s (Beam Explorer mining page,
   pool APIs).
-- **Best published miner:** ~52 Sol/s on an RTX 3090 at ~290 W (lolMiner, per
-  [WhatToMine](https://whattomine.com/coins/294-beam-beamhashiii/gpus)).
+- **Miners on an RTX 3090**, measured here: lolMiner 1.98a 55–57 Sol/s at ~345 W, MXBM (CUDA)
+  51–52 Sol/s. MXBM reports 74 Sol/s on an RTX 4070 Ti SUPER and 78 on an RTX 5080.
 - **The core's reference CPU solver** on an Apple M5 Pro: 302–316 s per run, ~10 GB of RAM, 1–3
   solutions. It is the correctness oracle, not a starting point.
 
