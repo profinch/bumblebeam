@@ -342,7 +342,7 @@
       <div class="tiles">
         ${tile('Paid 24h', beam(day.reduce((s, p) => s + p.amount, 0), 2))}
         ${tile('Payout runs 24h', int(day.length), `every ${dur(stats.payoutInterval)}`)}
-        ${tile('Min payout', beam(stats.minPayout, 2), 'no payout fee; the network fee is paid by the pool')}
+        ${tile('Min payout', beam(stats.minPayout, 2), stats.minerPaysTxFee ? `network fee deducted, about ${beam(stats.shieldedFee, 3)} per payout to an offline address` : 'network fee paid by the pool')}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout transactions</h2><div class="panel-meta"><span>Kernel IDs open in the explorer</span></div></div>
       ${payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th class="num">Miners</th><th>Kernel</th></tr></thead><tbody>
@@ -353,7 +353,8 @@
 
   views.connect = async () => {
     const [stats, net] = await Promise.all([BB.pool('stats'), BB.network().catch(() => null)]);
-    const host = BB.stratumHost();
+    const host = BB.stratumHost(stats);
+    const ports = stats.ports || { pplns: 3333, solo: 3334, pplnsTls: 3443, soloTls: 3444 };
     const top = net && net.ok && net.pools.length ? net.pools.reduce((a, b) => (b.hashrate > a.hashrate ? b : a)) : null;
     return `<div class="page-head"><h1 class="page-title">Start mining</h1></div>
       <div class="grid2">
@@ -368,7 +369,7 @@
             <div class="step"><h3>Pick a mode</h3><p>PPLNS shares every block the pool finds, in proportion to your shares. Solo pays you the whole block, only when your rig finds it. Both ${pctFee(stats.fee)} fee.</p>
               <div class="row" style="align-items:center">
                 <div class="seg" id="mode"><button class="on" data-v="pplns">PPLNS</button><button data-v="solo">Solo</button></div>
-                <div class="seg" id="tls"><button class="on" data-v="0">TCP</button><button data-v="1">TLS</button></div>
+                <div class="seg" id="tls"><button data-v="0">TCP</button><button class="on" data-v="1">TLS</button></div>
                 <span class="dim mono" id="portline"></span>
               </div></div>
             <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
@@ -389,13 +390,14 @@
             <div class="stack why">
               <div><b>Open source.</b> Server, share checks and payouts are public code, tested against the Beam core on real mainnet blocks.</div>
               <div><b>Checkable.</b> Every block and payout links to the chain, and PPLNS rounds are published so you can recompute your share.</div>
-              <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no payout fee, no registration.</div>
+              <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no registration. Payouts carry only Beam's own network fee.</div>
               <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
           </section>
         </div>
       </div>
-      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}"></template>`;
+      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}"
+        data-ports="${[ports.pplns, ports.solo, ports.pplnsTls, ports.soloTls].map((p) => Number(p) || 0).join(',')}"></template>`;
   };
 
   // Beam address shapes, for a hint only; the server validates. Regular SBBS addresses are
@@ -411,7 +413,8 @@
     const ctx = $('#ctx');
     if (!ctx) return;
     const host = ctx.dataset.host, netHash = Number(ctx.dataset.net), fee = Number(ctx.dataset.fee) / 100, reward = Number(ctx.dataset.reward) / BB.GROTH;
-    const state = { mode: 'pplns', tls: '0' };
+    const [pPplns, pSolo, pPplnsTls, pSoloTls] = (ctx.dataset.ports || '3333,3334,3443,3444').split(',').map(Number);
+    const state = { mode: 'pplns', tls: '1' };
     const seg = (id, key) => $(id).addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
@@ -420,7 +423,7 @@
       render();
     });
     function render() {
-      const port = state.mode === 'solo' ? (state.tls === '1' ? 3444 : 3334) : (state.tls === '1' ? 3443 : 3333);
+      const port = state.mode === 'solo' ? (state.tls === '1' ? pSoloTls : pSolo) : (state.tls === '1' ? pPplnsTls : pPplns);
       const addr = $('#addr').value.trim(), worker = $('#worker').value.trim().replace(/[^\w-]/g, '') || 'rig1';
       const user = `${addr || '<address>'}.${worker}`;
       const tlsFlag = state.tls === '1';

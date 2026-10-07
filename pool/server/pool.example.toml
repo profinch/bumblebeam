@@ -1,0 +1,52 @@
+# BumbleBeam pool configuration. Copy to pool.toml and edit.
+
+[node]
+stratum_addr = "127.0.0.1:8101"          # beam-node --stratum_port
+api_key = "CHANGE_ME"                     # one line of the node's stratum.api.keys
+tls = true                                # beam-node --stratum_use_tls (default on)
+standby = []                              # more nodes, tried when the first is down
+sync_lag_blocks = 5                       # jobs further below the network height are not given to miners
+
+[wallet_api]
+url = ""                                  # "http://127.0.0.1:10001/api/wallet"; empty = payouts off
+acl_key = ""                              # wallet-api --use_acl key, if ACL is on
+tx_fee_groth = 1000                       # fallback fee for regular addresses; the wallet is asked first (calc_change)
+shielded_fee_groth = 1000100              # fallback for offline/max-privacy/public-offline: Beam's shielded minimum, 0.010001 BEAM
+
+[stratum]
+bind = "0.0.0.0"
+pplns_port = 3333
+solo_port = 3334
+pplns_tls_port = 3443                     # lolMiner and GMiner default to TLS for Beam; 0 disables
+solo_tls_port = 3444
+tls_cert = "/etc/bumblebeam/tls/pool.crt"   # self-signed is fine: miners do not verify
+tls_key = "/etc/bumblebeam/tls/pool.key"
+nonce_prefix_bytes = 3
+
+[pool]
+name = "BumbleBeam"
+fee_percent = 0.5
+solo_fee_percent = 0.5
+min_payout_groth = 100000000              # 1 BEAM; the shielded network fee alone is 0.01 BEAM, so keep this well above it
+miner_pays_tx_fee = true                  # the network fee comes out of the payout
+payout_interval_secs = 7200
+pplns_window = 2.0                        # x network difficulty
+maturity = 240
+verify_blocks_with_wallet = true          # coinbase must be in the wallet before credits are paid
+block_check_urls = []                     # cross-check of the block hash by height, tried in order; e.g.
+                                          # ["http://127.0.0.1:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
+                                          # your own explorer-node first, a public one as a fallback; it never confirms alone
+public_host = "pool.example.com"
+
+[vardiff]
+start = 64.0
+min = 8.0
+max = 4000000.0
+target_secs = 10.0
+
+[http]
+bind = "0.0.0.0:8080"
+web_dir = "../web"
+
+[database]
+url_file = "/etc/bumblebeam/database.url"   # a file holding postgres://user:pass@host/db, or set url = "..." here

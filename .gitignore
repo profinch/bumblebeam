@@ -4,3 +4,5 @@
 *.o
 .DS_Store
 .idea/
+target/
+pool/server/pool.toml

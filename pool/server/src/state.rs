@@ -1,0 +1,76 @@
+//! State shared between the upstream client, the stratum servers, accounting and the API.
+
+use crate::config::Config;
+use crate::db::Db;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::{mpsc, watch, RwLock};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Pplns,
+    Solo,
+}
+impl Mode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Mode::Pplns => "pplns",
+            Mode::Solo => "solo",
+        }
+    }
+}
+
+/// A block template from the node: the PoW input, the network difficulty and the height.
+#[derive(Debug)]
+pub struct Job {
+    pub upstream_id: String,
+    pub input: [u8; 32],
+    pub net_packed: u32,
+    pub height: u64,
+    pub received: Instant,
+}
+
+/// A share that reaches the network difficulty, on its way to the node.
+#[derive(Debug)]
+pub struct Submit {
+    pub job: Arc<Job>,
+    pub nonce: [u8; 8],
+    pub output: [u8; 104],
+    pub miner_id: i64,
+    pub address: String,
+    pub worker: String,
+    pub mode: Mode,
+}
+
+pub struct Shared {
+    pub cfg: Arc<Config>,
+    pub db: Db,
+    pub job_tx: watch::Sender<Option<Arc<Job>>>,
+    pub submit_tx: mpsc::Sender<Submit>,
+    /// Nonce prefix the node assigned to the pool's own stratum login (hex, may be empty).
+    pub node_prefix: RwLock<String>,
+    pub conn_seq: AtomicU64,
+    pub connected_workers: AtomicU64,
+    /// Network height from the explorer cache (0 = unknown); jobs far below it mean the node is syncing.
+    pub net_height: AtomicU64,
+    pub started: Instant,
+    pub http: reqwest::Client,
+}
+
+impl Shared {
+    pub fn current_job(&self) -> Option<Arc<Job>> {
+        self.job_tx.borrow().clone()
+    }
+    pub fn next_conn(&self) -> u64 {
+        self.conn_seq.fetch_add(1, Ordering::Relaxed) + 1
+    }
+    /// Chain tip as the node sees it: jobs are for the next block.
+    pub fn tip_height(&self) -> Option<u64> {
+        self.current_job().map(|j| j.height.saturating_sub(1))
+    }
+}
+
+pub fn now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}

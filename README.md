@@ -13,9 +13,9 @@ BeamHash III miners are closed source with a dev fee, and the only open pool cod
 | [`oracle/`](oracle) | BeamHash III verification and difficulty checks, tested against the Beam core and real mainnet blocks | **done** (step 1) |
 | [`vectors/`](vectors) | Test vectors: real mainnet headers, the core's difficulty decisions, full solution sets from the reference solver | **done** (step 1) |
 | [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
-| [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Live network data; the pool's own numbers are demo data until the server exists | **UI ready** |
+| [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Served by the pool server; shows labelled demo data when opened without one | **done** |
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
-| `pool/` server | Stratum server, share accounting, payouts (Rust) | next |
+| [`pool/server`](pool/server) | The pool: stratum proxy to our node, oracle share checks, PPLNS and solo accounting, payouts, HTTP API (Rust) | **v0 running on a test server, mainnet** |
 | `miner/` | BeamHash III GPU solver: CUDA first, then Metal and AMD | next |
 
 ## Numbers that set the bar
@@ -69,8 +69,9 @@ Open `pool/web/index.html` through any static server (`python3 -m http.server -d
 no build step and no framework. It follows the Beam Explorer's design (palette, type, header and
 footer, chart style), and its network numbers come live from the Explorer's public API, including
 every other Beam pool. It reads the pool's own data from `/api/*` as described in
-[`pool/API.md`](pool/API.md); until the server exists, it shows clearly labelled demo data. From
-localhost, `?api=<url>` points it at another server; on a public host the parameter is ignored.
+[`pool/API.md`](pool/API.md), served by [`pool/server`](pool/server); opened as plain files it
+shows clearly labelled demo data. From localhost, `?api=<url>` points it at another server; on a
+public host the parameter is ignored.
 
 Every value from an API is typed and escaped before it reaches the page. The pool fee is **0.5%**
 on PPLNS and solo alike, with no payout fee. The block reward is derived from the height with the

@@ -27,7 +27,17 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 }
 ```
 
+- `name` is the pool's display name. `config.stratumHost` and `config.ports` (`pplns`, `solo`,
+  `pplnsTls`, `soloTls`) tell the UI where miners connect; `connectedWorkers` counts open stratum connections; `nodes[0].connected` says
+  whether the pool currently has a block template from its node.
 - `fee` and `soloFee` are percentages. The pool's fee is **0.5%** on both PPLNS and solo rewards.
+- `minerPaysTxFee` and `txFee`: Beam's network fee comes out of each payout. A payout to an
+  offline, max-privacy or public-offline address is a shielded transaction and costs about
+  0.01 BEAM; to a regular address about 0.00001 BEAM. The wallet is asked for the exact fee
+  (`calc_change`) at payout time; `txFee` holds the fallbacks. This is why `minPayout` defaults to
+  1 BEAM.
+- `blockFeesTo`: the transaction fees inside a found block go to the pool, not into PPLNS; they are
+  recorded per block (`fees`) for transparency and are close to zero on Beam today.
 - `blockReward` is the miner reward at the current height from the core's emission rule (80 BEAM
   in year one, then 40, **25 today**, 12.5 from height 4,730,400, halving every 2,102,400 blocks).
   When the field is missing the UI derives it from `nodes[0].height` with the same rule.
@@ -38,7 +48,13 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 ## `GET /api/blocks?limit=50&before=<height>`
 
 The blocks the pool found, newest first; `before` pages further back. `status` is `pending`
-(fewer than `maturity` confirmations), `confirmed` or `orphaned`.
+(fewer than `maturity` confirmations), `confirmed`, `orphaned`, or `unverified`. A block is
+confirmed when its coinbase is in the pool wallet, or, if the wallet is not consulted, when the
+explorer shows our hash at that height (`verifiedBy`: `wallet`, `explorer`, `wallet+explorer`).
+A block the chain replaced is `orphaned`. A block that is on the chain but whose coinbase the
+wallet cannot see, or about which the wallet and the chain disagree, is `unverified`: it is
+neither paid nor dropped until an operator decides (`admin block <height> confirm|orphan`). Only
+the wallet's coinbase can confirm a block; the explorer alone never does.
 
 ```json
 { "blocks": [{ "height": 4068700, "hash": "…", "ts": 1791320000, "reward": 2500000000,
@@ -68,15 +84,24 @@ guessed.
   "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }] }
 ```
 
-`stale` and `rejected` are the worker's share of stale and rejected shares over 24 hours. The
+`stale` and `rejected` are the worker's share of stale and rejected shares over 24 hours, counted
+by the stratum server per connection and flushed once a minute. A stale share is one for a block
+that was already found when it arrived; it is not credited. The
 stratum server tells the miner *why* a share was rejected, using the oracle's own error names
 (`collision`, `duplicate index`, `index order`, `nonzero result`, `difficulty not reached`), so a
 miner can tell a broken kernel from a slow connection.
 
 ## `GET /api/payments?limit=50`
 
-Pool payouts, newest first: `{ "payments": [{ "ts", "amount", "miners", "kernel" }] }`. `kernel` is
-the Beam kernel ID of the payout transaction and can be checked in any explorer.
+Pool payouts, newest first, one row per payout run: `{ "payments": [{ "ts", "amount", "miners",
+"kernel", "status" }] }`. Beam pays each miner in its own transaction, so a run has one kernel per
+miner; the row shows the latest, and a miner's own page lists the kernel of each payment to them.
+Failed payments are refunded to the balance and not listed.
+
+## `GET /api/health`
+
+`{ "ok": true, "node": true, "jobAgeSecs": 12, "uptime": 86400, "workers": 41 }`. `node` is false
+while the pool has no block template, for example while the node syncs.
 
 ## `GET /api/network`
 
@@ -96,10 +121,23 @@ back to the explorer directly when this endpoint is absent.
 Beam transactions are interactive. A **regular** wallet address expires (24 hours by default) and
 needs the receiving wallet online while the payout is built, so payouts to it fail whenever the
 miner's wallet is closed. The pool therefore asks for an **offline address** (also called a
-permanent or public offline address), which any Beam wallet can generate under "Receive". The
-stratum login is validated at connect time: a regular address is accepted for mining but the
-miner gets a warning in the login response and on the miner page, and the balance accrues until an
-offline address is set by logging in with it from the same workers.
+permanent or public offline address), which any Beam wallet can generate under "Receive". A
+regular address is accepted at login with a warning in the login response. Balances belong to the
+address that mined them: a payout to a regular address is attempted each run, a failed one is
+refunded to that balance and tried again next run, and the miner's page shows the address type.
+To move to an offline address, mine with it; the old balance is paid once its wallet is online.
+
+## Payment states
+
+Each payment gets a transaction id chosen by the pool before anything is sent. `created`: the
+miner is debited and the id recorded; `pending`: the wallet accepted `tx_send` with that id;
+`completed`: the kernel id is known; `failed`: the wallet refused or the transaction failed, the
+debit is back on the balance; `review`: the wallet keeps failing to answer about the id, an
+operator decides; `sending`: a resend is in flight. A `created` payment left by a crash or a
+timeout is first looked up with `tx_status`; if the wallet does not know it, it is sent again with
+the same id, but only once `admin probe-txid` has proven that the wallet refuses a second send
+with the same id (stored in `meta.txid_honored`); until then such payments go to `review`. Money is
+refunded only when the wallet refuses and does not know the id.
 
 ## Stratum ports
 
@@ -111,5 +149,8 @@ offline address is set by logging in with it from the same workers.
 | 3444 | SOLO | yes |
 
 The login is `<wallet address>.<worker name>`, and every Beam miner speaks the protocol unchanged:
-Beam's own stratum dialect from `pow/stratum.h` in the core. Share difficulty is per worker
-(vardiff), aimed at about one share every ten seconds.
+Beam's own stratum dialect from `pow/stratum.h` in the core. lolMiner and GMiner default to TLS for
+Beam, so the TLS ports are the ones most miners land on; the certificate is self-signed and miners
+do not verify it. Share difficulty is per worker (vardiff), aimed at about one share every ten
+seconds, starting at 64. The pool assigns each connection a nonce prefix so no two rigs search the
+same nonces. The server is `pool/server` (Rust).

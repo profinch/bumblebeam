@@ -155,6 +155,13 @@ const BB = (() => {
       fee, soloFee: num(c.soloFee) ?? fee, minPayout: num(c.minPayout) ?? MIN_PAYOUT, scheme: str(c.payoutScheme, 16) || 'PPLNS',
       pplnsWindow: num(c.pplnsWindow), maturity: num(c.maturity) ?? MATURITY, payoutInterval: num(c.payoutInterval) ?? PAYOUT_INTERVAL,
       blockReward: num(c.blockReward) ?? blockReward(height),
+      stratumHost: str(c.stratumHost, 253),
+      minerPaysTxFee: c.minerPaysTxFee !== false,
+      shieldedFee: num(c.txFee && c.txFee.shielded) ?? 1000100,
+      ports: {
+        pplns: num(c.ports && c.ports.pplns) ?? 3333, solo: num(c.ports && c.ports.solo) ?? 3334,
+        pplnsTls: num(c.ports && c.ports.pplnsTls) ?? 3443, soloTls: num(c.ports && c.ports.soloTls) ?? 3444,
+      },
       chart: series(r.charts && r.charts.hashrate),
       blocks24h: num(r.blocks24h), effort24h: num(r.effort24h),
     };
@@ -336,6 +343,6 @@ const BB = (() => {
     network, networkBlocks, pool,
     get mode() { return mode; },
     get dev() { return DEV; },
-    stratumHost: () => (mode === 'live' && POOL_API ? new URL(POOL_API).hostname : '<pool-host>'),
+    stratumHost: (stats) => (stats && stats.stratumHost) || (mode === 'live' && POOL_API ? new URL(POOL_API).hostname : '<pool-host>'),
   };
 })();

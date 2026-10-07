@@ -1,0 +1,28 @@
+# throwaway config for tools/e2e.py: fake node on 18101 without TLS, test ports, test database
+[node]
+stratum_addr = "127.0.0.1:18101"
+api_key = "e2e-test-key"
+tls = false
+sync_lag_blocks = 0                       # the test template is a historical mainnet header
+
+[stratum]
+pplns_port = 13333
+solo_port = 13334
+nonce_prefix_bytes = 0
+
+[pool]
+fee_percent = 0.5
+solo_fee_percent = 0.5
+min_payout_groth = 10000000
+block_check_url = ""
+payout_interval_secs = 7200
+pplns_window = 2.0
+maturity = 240
+verify_blocks_with_wallet = false
+
+[http]
+bind = "127.0.0.1:18080"
+web_dir = "../web"
+
+[database]
+url_file = "database.test.url"   # created by the test scripts next to this file
