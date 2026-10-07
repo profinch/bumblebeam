@@ -1,0 +1,15 @@
+[Unit]
+Description=Beam mainnet node (bumblebeam pool)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=beam
+WorkingDirectory=/var/lib/beam/node
+ExecStart=/var/lib/beam/node/beam-node --config_file=/var/lib/beam/node/beam-node.cfg
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

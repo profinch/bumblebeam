@@ -1,0 +1,14 @@
+[Unit]
+Description=Beam wallet-api (bumblebeam pool payouts)
+After=network-online.target beam-node.service
+
+[Service]
+User=beam
+WorkingDirectory=/var/lib/beam/wallet
+# loopback only: anyone who can reach this port can spend the wallet
+ExecStart=/bin/bash -c 'exec /var/lib/beam/wallet/wallet-api --node_addr=127.0.0.1:10000 --wallet_path=/var/lib/beam/wallet/wallet.db --pass="$(cat /var/lib/beam/wallet/wallet.pass)" --port=10001 --use_http=1 --ip_whitelist=127.0.0.1 --log_level=info'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

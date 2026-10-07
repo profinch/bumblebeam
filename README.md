@@ -17,6 +17,7 @@ tested against the Beam core, and lends MXBM its oracle and test vectors.
 | [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
 | [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Served by the pool server; shows labelled demo data when opened without one | **done** |
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
+| [`docs/deploy.md`](docs/deploy.md) | How to put the node, wallet-api, PostgreSQL and the pool on a server; systemd units in [`pool/deploy`](pool/deploy) | guide |
 | [`pool/server`](pool/server) | The pool: stratum proxy to our node, oracle share checks, PPLNS and solo accounting, payouts, HTTP API (Rust) | **v0 running on a test server, mainnet** |
 | miner | Not here: [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM) is the open BeamHash III miner. Verified against this pool (RTX 3090: 52 Sol/s, 0 rejects, TLS) | use MXBM |
 

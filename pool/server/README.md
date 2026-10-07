@@ -37,6 +37,8 @@ How it works, in the order a share travels:
 
 ## Run
 
+A full server setup, from packages to firewall, is in [`docs/deploy.md`](../../docs/deploy.md).
+
 ```sh
 cargo build --release
 cp pool.example.toml pool.toml   # edit

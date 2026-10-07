@@ -1,0 +1,16 @@
+[Unit]
+Description=BumbleBeam mining pool
+After=network-online.target postgresql.service beam-node.service
+Wants=network-online.target
+
+[Service]
+User=beam
+WorkingDirectory=/etc/bumblebeam
+Environment=RUST_LOG=info
+ExecStart=/opt/bumblebeam/bumblebeam-pool /etc/bumblebeam/pool.toml
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
