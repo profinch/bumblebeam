@@ -10,6 +10,30 @@ test solutions for the pool and the oracle, a way to mine from any laptop, serve
 without a GPU, and a load generator for the pool. GPU mining belongs to
 [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM).
 
+## Download and run
+
+Archives for Linux x86-64, macOS (Apple Silicon) and Windows x86-64 are on the
+[releases page](https://github.com/profinch/bumblebeam/releases). Unpack, then:
+
+```sh
+./bumblebeam-miner mine --pool <pool host>:3443 --user <your Beam address>.<worker name>
+```
+
+- The machine needs about 7 GB of free memory; the miner refuses to start with less
+  (`BB_ALLOW_LOW_MEMORY=1` to try anyway) rather than die mid-run.
+- TLS is on by default, as Beam pools expect; `--tls 0` for a plain port.
+- macOS: a binary downloaded with a browser is quarantined; allow it once with
+  `xattr -d com.apple.quarantine bumblebeam-miner`. The binary is ad-hoc signed, not notarised.
+- Windows: the build is produced and unit-tested by CI but has not been run on a real machine yet;
+  reports welcome.
+- Pools differ in what address they take: bumblebeam asks for an offline address, 2Miners accepts
+  only a regular one, SunPool wants its own key. Shares at a fixed difficulty of 512 (2Miners) come
+  from a CPU every few minutes; bumblebeam lowers the difficulty for slow workers.
+- A run on the old block is cut short when the pool announces a new one, so there are no stale
+  shares from a 2-4 s run.
+
+## Build from source
+
 ```sh
 cargo build --release
 ./target/release/bumblebeam-miner bench 60          # runs/s and sol/s on this machine
