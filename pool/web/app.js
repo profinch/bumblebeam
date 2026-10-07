@@ -7,7 +7,6 @@
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const view = $('#view');
-  const MAC = /Mac|iPhone|iPad/.test(navigator.platform || '');
 
   // ---------- formatting ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -43,6 +42,8 @@
   const explorerKernel = (k) => `https://explorer.beam.mw/#/explorer/kernel/${encodeURIComponent(k)}`;
   const cleanAddress = (a) => String(a ?? '').replace(/\s+/g, '');
   const minerHref = (a) => `#/miners/${encodeURIComponent(cleanAddress(a))}`;
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const RANGES = { '24h': { label: '24h', text: 'last 24 hours' }, '7d': { label: '7d', text: 'last 7 days' }, '30d': { label: '30d', text: 'last 30 days' } };
 
   // ---------- charts ----------
   function sparkline(series, color = '#f25f5b') {
@@ -56,9 +57,10 @@
   const axis = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(v >= 1e4 ? 1 : 2)}k` : v.toFixed(v < 10 ? 1 : 0));
   // Explorer-style area chart: axis on the right, grid in both directions, the current value marked
   // by a dotted guide and a pill on the axis. `label` formats axis values and the pill.
-  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate, last 24 hours' } = {}) {
+  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h' } = {}) {
+    const span = RANGES[range] || RANGES['24h'];
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
-    if (!series.some((p) => p[1] > 0)) return '<div class="empty">No hashrate in the last 24 hours</div>';
+    if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
     const W = 1000, H = 260, L = 14, R = 96, T = 16, B = 30;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
@@ -74,12 +76,14 @@
       const t = t0 + ((t1 - t0) / 6) * i, xx = x(t).toFixed(1);
       const d = new Date(t * 1000);
       if (i > 0 && i < 6) grid += `<line class="grid" x1="${xx}" x2="${xx}" y1="${T}" y2="${H - B}"/>`;
-      grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 6 ? 'end' : 'middle'}">${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</text>`;
+      const when = range === '24h' ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        : `${MONTHS[d.getMonth()]} ${d.getDate()}${range === '7d' ? ` ${String(d.getHours()).padStart(2, '0')}:00` : ''}`;
+      grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 6 ? 'end' : 'middle'}">${when}</text>`;
     }
     const last = series[series.length - 1][1], ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const pillText = label(last), pw = pillText.length * 7.2 + 12;
     const id = `g${Math.random().toString(36).slice(2, 8)}`;
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}: now ${esc(pillText)}">
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
       ${grid}
       <line class="grid" x1="${W - R}" x2="${W - R}" y1="${T}" y2="${H - B}"/>
@@ -196,16 +200,26 @@
       </tbody></table></div></section>`;
   }
 
+  // ---------- chart range (24h / 7d / 30d), remembered per viewer ----------
+  const RANGE_KEY = 'bb.chartRange';
+  function chartRange() {
+    let r = '';
+    try { r = localStorage.getItem(RANGE_KEY) || ''; } catch (e) { /* storage may be blocked */ }
+    return RANGES[r] ? r : '24h';
+  }
+  const rangeSwitch = (cur) => `<div class="seg range" role="group" aria-label="Chart range">${Object.keys(RANGES).map((k) =>
+    `<button type="button" data-range="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${RANGES[k].label}</button>`).join('')}</div>`;
+
   // ---------- views ----------
   const views = {};
 
   views.dashboard = async () => {
-    const [stats, { blocks }, net] = await Promise.all([BB.pool('stats'), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
+    const range = chartRange();
+    const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
     const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
     const expectedPerDay = share != null ? share * 1440 : null;
     return `
-      <div class="page-head"><h1 class="page-title">Pool</h1>
-        <div class="actions"><a class="btn" href="#/connect">Start mining</a></div></div>
+      <div class="page-head"><h1 class="page-title">Pool</h1></div>
       <div class="tiles">
         ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '', 'accent')}
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
@@ -215,8 +229,8 @@
         ${tile('Min payout', beam(stats.minPayout, 2), `every ${dur(stats.payoutInterval)}, after ${int(stats.maturity)} confirmations`)}
       </div>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">Pool hashrate</h2><div class="panel-meta">${netMeta(net)}<span class="pill on">24h</span></div></div>
-        ${areaChart(stats.chart, { title: 'Pool hashrate, last 24 hours' })}
+        <div class="panel-head"><h2 class="panel-title">Pool hashrate</h2><div class="panel-meta">${netMeta(net)}${rangeSwitch(range)}</div></div>
+        ${areaChart(stats.chart, { title: 'Pool hashrate', range })}
       </section>
       <section class="panel">
         <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="#/blocks">all blocks →</a></div></div>
@@ -235,7 +249,7 @@
         </tbody></table></div></section>` : '';
     const donut = blocksDonut(net), times = blockTimes(bl);
     const next = BB.nextRewardChange(net && net.height);
-    return `<div class="page-head"><h1 class="page-title">Network</h1><div class="actions"><a class="btn" href="#/connect">Open mining calculator</a></div></div>
+    return `<div class="page-head"><h1 class="page-title">Network</h1></div>
       <div class="tiles">
         ${tile('Network hashrate', hr(net && net.hashrate), '', 'accent')}
         ${tile('Difficulty', net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M` : '—', 'solutions per block, expected')}
@@ -309,7 +323,8 @@
 
   async function minerView(address) {
     address = cleanAddress(address);
-    const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}`), BB.pool('stats')]);
+    const range = chartRange();
+    const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}?range=${range}`), BB.pool('stats')]);
     rememberAddress(m.address || address);
     const toPayout = stats.minPayout ? Math.min(1, m.balance / stats.minPayout) : null;
     return `<div class="page-head"><h1 class="page-title">Miner</h1><div class="actions"><a class="btn ghost" href="#/miners">← all miners</a></div></div>
@@ -321,7 +336,7 @@
         ${tile('Paid', beam(m.paid, 2))}
         ${tile('Last share', ago(m.lastShare))}
       </div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta"><span class="pill on">24h</span></div></div>${areaChart(m.chart, { title: 'Miner hashrate, last 24 hours' })}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers</h2></div>
           ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
@@ -460,6 +475,104 @@
     calc();
   }
 
+  // ---------- API page: pool/API.md from GitHub, so it never needs a separate update ----------
+  const API_DOC_RAW = 'https://raw.githubusercontent.com/profinch/bumblebeam/main/pool/API.md';
+  const API_DOC_PAGE = 'https://github.com/profinch/bumblebeam/blob/main/pool/API.md';
+  let apiDoc = null; // { text, at }
+
+  // Inline Markdown: code spans first, everything else escaped, then **bold** and [links](url).
+  // Relative links resolve against the file on GitHub; only https links are kept.
+  function mdInline(raw) {
+    return raw.split(/(`[^`]+`)/).map((t) => {
+      if (/^`[^`]+`$/.test(t)) return `<code>${esc(t.slice(1, -1))}</code>`;
+      return esc(t)
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, text, href) => {
+          let url;
+          try { url = new URL(href.replace(/&amp;/g, '&'), API_DOC_PAGE); } catch (e) { return text; }
+          return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${text}</a>` : text;
+        });
+    }).join('');
+  }
+
+  // The Markdown that API.md uses: headings, fenced code, tables, lists, paragraphs.
+  function mdRender(src) {
+    const lines = src.replace(/\r\n?/g, '\n').split('\n');
+    const out = [];
+    let para = [];
+    const flush = () => { if (para.length) out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; };
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim()));
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^```/.test(l)) {
+        flush();
+        const code = [];
+        while (++i < lines.length && !/^```/.test(lines[i])) code.push(lines[i]);
+        out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+      } else if (/^#{1,4}\s/.test(l)) {
+        flush();
+        const n = l.match(/^#+/)[0].length;
+        out.push(`<h${n + 1}>${mdInline(l.replace(/^#+\s+/, ''))}</h${n + 1}>`);
+      } else if (/^\|/.test(l)) {
+        flush();
+        const rows = [];
+        for (; i < lines.length && /^\|/.test(lines[i]); i++) rows.push(lines[i]);
+        i--;
+        const body = rows.slice(/^\|?[\s:|-]+$/.test(rows[1] || '') ? 2 : 1);
+        out.push(`<div class="table-wrap"><table><thead><tr>${cells(rows[0]).map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${
+          body.map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      } else if (/^\s*([-*]|\d+\.)\s/.test(l)) {
+        flush();
+        const ordered = /^\s*\d+\./.test(l), items = [];
+        for (; i < lines.length; i++) {
+          const m = lines[i].match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
+          if (m) items.push(m[1]);
+          else if (/^\s+\S/.test(lines[i]) && items.length) items[items.length - 1] += ` ${lines[i].trim()}`;
+          else break;
+        }
+        i--;
+        const tag = ordered ? 'ol' : 'ul';
+        out.push(`<${tag}>${items.map((x) => `<li>${mdInline(x)}</li>`).join('')}</${tag}>`);
+      } else if (!l.trim()) {
+        flush();
+      } else {
+        para.push(l.trim());
+      }
+    }
+    flush();
+    return out.join('\n');
+  }
+
+  views.api = async () => {
+    if (!apiDoc || Date.now() - apiDoc.at > 600000) {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      try {
+        const r = await fetch(API_DOC_RAW, { signal: ctl.signal, cache: 'no-cache' });
+        if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+        apiDoc = { text: (await r.text()).slice(0, 200000), at: Date.now() };
+      } catch (e) {
+        if (!apiDoc) {
+          return `<div class="page-head"><h1 class="page-title">API</h1></div>
+            <div class="panel empty err">Could not load the API description from GitHub. Read it at <a href="${API_DOC_PAGE}" target="_blank" rel="noopener">github.com</a>.</div>`;
+        }
+      } finally {
+        clearTimeout(t);
+      }
+    }
+    return `<div class="page-head"><h1 class="page-title">API</h1>
+        <div class="actions"><a class="btn ghost" href="${API_DOC_PAGE}" target="_blank" rel="noopener">View on GitHub</a></div></div>
+      <section class="panel md">${mdRender(apiDoc.text)}</section>`;
+  };
+
+  // Chart range switch: remembered, then the page re-renders with the new range.
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-range]');
+    if (!b || !RANGES[b.dataset.range]) return;
+    try { localStorage.setItem(RANGE_KEY, b.dataset.range); } catch (err) { /* storage may be blocked */ }
+    render(false);
+  });
+
   // Copy buttons, on every page.
   view.addEventListener('click', (e) => {
     const b = e.target.closest('[data-copy]');
@@ -501,15 +614,17 @@
     const v = cleanAddress($('#search-input').value);
     if (v) location.hash = minerHref(v);
   });
-  $('#search-kbd').textContent = MAC ? '⌘ K' : 'Ctrl K';
   setMyLink();
+  // "/" focuses the search, as on GitHub, unless the user is typing somewhere; Esc leaves it.
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#search-input').focus(); }
+    const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#search-input').focus(); }
+    else if (e.key === 'Escape' && t === $('#search-input')) t.blur();
   });
   // Live refresh every 30 s, except where the user is typing or has loaded more rows.
   setInterval(() => {
     const r = parse().route;
-    if (r === 'connect' || document.hidden || (r === 'blocks' && $('#blocks-body') && $('#blocks-body').children.length > 50)) return;
+    if (r === 'connect' || r === 'api' || document.hidden || (r === 'blocks' && $('#blocks-body') && $('#blocks-body').children.length > 50)) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
     render(false);
   }, 30000);

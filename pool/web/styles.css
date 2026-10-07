@@ -94,6 +94,13 @@ input:focus { outline: none; }
 }
 .main-nav a:hover { color: var(--text); text-decoration: none; }
 .main-nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+/* "Start mining" sits in the menu as a button, not a tab */
+.main-nav a.nav-cta {
+  margin-left: 6px; align-self: center; padding: 7px 12px; border: 1px solid rgba(0, 246, 210, 0.6); border-radius: 6px;
+  color: var(--accent); background: rgba(0, 246, 210, 0.06);
+}
+.main-nav a.nav-cta:hover { background: var(--accent-dim); color: var(--accent); }
+.main-nav a.nav-cta.active { background: rgba(0, 246, 210, 0.15); border-bottom-color: rgba(0, 246, 210, 0.6); }
 
 .demo-banner {
   box-sizing: border-box; width: calc(100% - 2 * var(--page-padding-x));
@@ -295,3 +302,21 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   .step .field { min-width: 0 !important; flex-basis: 100% !important; }
   .addr { flex-wrap: wrap; }
 }
+
+/* chart range switch in panel heads */
+.seg.range button { padding: 3px 8px; font-size: 10px; }
+
+/* API page: API.md rendered from GitHub */
+.md { font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.md h2, .md h3, .md h4 { color: var(--text); font: 700 12px var(--font-mono); letter-spacing: 0.04em; margin: 26px 0 10px; }
+.md h2 { font-size: 15px; margin-top: 4px; }
+.md h3 { font-size: 13px; padding-top: 14px; border-top: 1px solid var(--border-dim); }
+.md p { margin: 0 0 12px; }
+.md ul, .md ol { margin: 0 0 12px; padding-left: 20px; }
+.md li { margin: 0 0 6px; }
+.md b { color: var(--text); }
+.md code { font: 12px var(--font-mono); color: var(--text); background: rgba(255, 255, 255, 0.06); border-radius: 4px; padding: 1px 4px; }
+.md pre { margin: 0 0 14px; padding: 12px 14px; overflow-x: auto; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-dim); border-radius: 6px; }
+.md pre code { background: none; padding: 0; font-size: 11.5px; line-height: 1.55; white-space: pre; }
+.md .table-wrap { margin-bottom: 14px; }
+.md h3 code { font-size: inherit; color: var(--accent); background: none; padding: 0; }

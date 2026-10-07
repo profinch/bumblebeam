@@ -6,7 +6,7 @@ endpoints are `GET`. Nothing public links an address to a hashrate or a balance 
 (`*`). The UI treats every field as untrusted: numbers are coerced, strings are length-capped and
 escaped before they reach the page, so a field with HTML in it is shown as text, never rendered.
 
-## `GET /api/stats`
+## `GET /api/stats?range=24h`
 
 The pool at a glance. The top-level fields follow the **open-ethereum-pool** shape, so the Beam
 Explorer's existing `open-eth` adapter (`BeamMW/BeamExplorer`, `backend/src/mining/adapters.ts`)
@@ -44,6 +44,9 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 - `effort24h` is the average effort of the blocks found in the last 24 hours (shares spent /
   expected). It replaces the inverse "luck" figure: one direction, below 1.0 is good luck.
 - `payoutInterval` is the seconds between payout runs.
+- `charts.hashrate` is `[unix seconds, Sol/s]` pairs. `?range=24h` (default), `7d` or `30d` picks
+  the span: one point per minute, per hour or per four hours, each the average over its interval.
+  Samples are kept for 31 days.
 
 ## `GET /api/blocks?limit=50&before=<height>`
 
@@ -73,7 +76,7 @@ guessed.
 { "miners": [{ "hashrate": 52.1, "hashrate24h": 50.7, "workers": 2, "lastShare": 1791321590 }] }
 ```
 
-## `GET /api/miners/<address>`
+## `GET /api/miners/<address>?range=24h`
 
 ```json
 { "address": "…", "hashrate": 52.1, "hashrate24h": 50.7, "balance": 812345678,
@@ -84,6 +87,7 @@ guessed.
   "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }] }
 ```
 
+`charts.hashrate` takes `?range=` as in `/api/stats`; minutes without shares count as zero.
 `stale` and `rejected` are the worker's share of stale and rejected shares over 24 hours, counted
 by the stratum server per connection and flushed once a minute. A stale share is one for a block
 that was already found when it arrived; it is not credited. The

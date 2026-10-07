@@ -9,6 +9,55 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tokio_postgres::NoTls;
 
+/// Time span of a hashrate chart, from the API's `range` parameter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChartRange {
+    Day,
+    Week,
+    Month,
+}
+
+impl ChartRange {
+    /// Hashrate samples are kept this long: the longest range.
+    pub const KEEP_SECS: i64 = 31 * 86400;
+
+    /// `24h` (default), `7d` or `30d`.
+    pub fn parse(s: Option<&str>) -> Self {
+        match s {
+            Some("7d") => Self::Week,
+            Some("30d") => Self::Month,
+            _ => Self::Day,
+        }
+    }
+
+    /// (span, bucket) in seconds: one point per minute for a day, per hour for a week, per four
+    /// hours for a month, so every range is a few hundred points at most.
+    fn window(self) -> (i64, i64) {
+        match self {
+            Self::Day => (86400, 60),
+            Self::Week => (7 * 86400, 3600),
+            Self::Month => (30 * 86400, 4 * 3600),
+        }
+    }
+}
+
+/// Hashrate chart for one scope (`pool` or `m:<miner id>`), averaged per bucket. Samples are taken
+/// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
+/// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
+async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
+    let (span, bucket) = range.window();
+    let from = (now - span) / bucket * bucket + bucket;
+    let rows = c
+        .query(
+            "SELECT t, (s / GREATEST(1, LEAST($3, $4 - t) / 60.0))::FLOAT8 FROM
+               (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b
+             ORDER BY t",
+            &[&scope, &from, &bucket, &now],
+        )
+        .await?;
+    Ok(rows.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect())
+}
+
 pub struct Db {
     pool: Pool,
     /// Connection that holds the single-instance advisory lock for the life of the process.
@@ -269,7 +318,7 @@ impl Db {
             .collect())
     }
 
-    pub async fn miner(&self, address: &str, now: i64) -> Result<Option<Value>> {
+    pub async fn miner(&self, address: &str, now: i64, range: ChartRange) -> Result<Option<Value>> {
         let c = self.client().await?;
         let Some(m) = c.query_opt("SELECT id, balance, paid, last_share, TRIM(TRAILING '?' FROM address_type) FROM miners WHERE address=$1", &[&address]).await? else { return Ok(None) };
         let id: i64 = m.get(0);
@@ -289,7 +338,7 @@ impl Db {
                 &[&id, &(now - 600), &(now - 86400)],
             )
             .await?;
-        let chart = c.query("SELECT ts, hashrate FROM hashrate_samples WHERE scope=$1 AND ts > $2 ORDER BY ts", &[&format!("m:{id}"), &(now - 86400)]).await?;
+        let chart = chart(&c, &format!("m:{id}"), now, range).await?;
         let payments = c
             .query("SELECT ts, amount, fee, kernel, status FROM payments WHERE miner_id=$1 AND status <> 'failed' ORDER BY ts DESC LIMIT 50", &[&id])
             .await?;
@@ -306,7 +355,7 @@ impl Db {
                 json!({ "name": w.get::<_, String>(0), "hashrate": w.get::<_, f64>(1), "hashrate24h": w.get::<_, f64>(2),
                         "lastShare": last, "online": now - last < 300, "stale": stale as f64 / total, "rejected": rejected as f64 / total })
             }).collect::<Vec<_>>(),
-            "charts": { "hashrate": chart.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect::<Vec<_>>() },
+            "charts": { "hashrate": chart },
             "payments": payments.iter().map(|p| json!({ "ts": p.get::<_, i64>(0), "amount": p.get::<_, i64>(1), "fee": p.get::<_, i64>(2),
                                                         "kernel": p.get::<_, Option<String>>(3), "status": p.get::<_, String>(4) })).collect::<Vec<_>>(),
         })))
@@ -334,10 +383,9 @@ impl Db {
             .collect())
     }
 
-    pub async fn pool_chart(&self, now: i64) -> Result<Vec<Value>> {
+    pub async fn pool_chart(&self, now: i64, range: ChartRange) -> Result<Vec<Value>> {
         let c = self.client().await?;
-        let rows = c.query("SELECT ts, hashrate FROM hashrate_samples WHERE scope='pool' AND ts > $1 ORDER BY ts", &[&(now - 86400)]).await?;
-        Ok(rows.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect())
+        chart(&c, "pool", now, range).await
     }
 
     /// One sample per minute for the pool and for every miner active in the last ten minutes.
@@ -345,7 +393,7 @@ impl Db {
         let c = self.client().await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'pool', COALESCE(SUM(difficulty),0)/600.0 FROM shares WHERE ts > $2", &[&now, &(now - 600)]).await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id", &[&now, &(now - 600)]).await?;
-        c.execute("DELETE FROM hashrate_samples WHERE ts < $1", &[&(now - 2 * 86400)]).await?;
+        c.execute("DELETE FROM hashrate_samples WHERE ts < $1", &[&(now - ChartRange::KEEP_SECS)]).await?;
         c.execute("DELETE FROM shares WHERE ts < $1", &[&(now - 7 * 86400)]).await?;
         c.execute("DELETE FROM share_events WHERE ts < $1", &[&(now - 7 * 86400)]).await?;
         Ok(())
