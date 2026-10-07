@@ -1,5 +1,11 @@
 # Deploying the pool
 
+Two ways to the same result. The Docker stack in [`deploy/docker`](../deploy/docker) brings up
+the node, `wallet-api`, PostgreSQL, the pool, nginx and certbot with one compose file, plus an
+nftables ruleset for the host in [`deploy/host`](../deploy/host); start there for a rented
+server. This page is the bare-metal version with systemd units, useful to understand what each
+piece needs and for a machine that already runs some of it.
+
 One Linux server runs everything: a Beam node, the pool's wallet behind `wallet-api`, PostgreSQL,
 and `bumblebeam-pool`. Tested on Linux Mint 22 / Ubuntu 24.04 with Beam 7.5.14493. The layout
 below uses `/opt/bumblebeam` for the repository and binary, `/etc/bumblebeam` for configuration
