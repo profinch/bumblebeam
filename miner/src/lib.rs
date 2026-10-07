@@ -4,14 +4,15 @@
 //! the fifth round is a solution of 32 leaves. Every solution is verified with the oracle before
 //! it is returned.
 //!
-//! Layout: each round's elements are stored in one array (work limbs, the first leaves of the
-//! element's subtree that the next mix needs, and two parent indices into the previous round).
-//! Collisions are found by bucketing on the top 12 bits of the 24-bit key, then sorting inside
-//! each bucket; buckets are processed in parallel.
+//! Layout: each round's elements live in 4096 buckets chosen by bits 12..23 of their next mixed
+//! limb, which is computed and stored when the element is created. A round therefore reads one
+//! bucket sequentially, sorts it by the remaining 12 key bits, pairs equal 24-bit keys, and
+//! scatters the merged elements into the next round's buckets. Elements carry the first leaves of
+//! their subtree that the next mix needs and two packed (bucket, offset) parent references.
 
 pub mod pow;
 
-use rayon::prelude::*;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub const N: usize = 1 << 25;
@@ -23,6 +24,8 @@ const BUCKETS: usize = 1 << BUCKET_BITS;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Elem<const L: usize, const NL: usize> {
+    /// work limbs; limb 0 already holds the next round's mix (the mix replaces it, as in the
+    /// reference), and its bits 12..23 chose the bucket
     pub w: [u64; L],
     pub leaves: [u32; NL],
     pub pa: u32,
@@ -151,12 +154,11 @@ fn mix<const L: usize, const NL: usize>(e: &Elem<L, NL>, mix_len: u32, pad: usiz
     r.rotate_left(24)
 }
 
-/// (a ^ b) >> 24, masked to `out_len` bits, into LO limbs; limb 0 of each side is its mixed value.
+/// (a ^ b) >> 24, masked to `out_len` bits, into LO limbs (limb 0 of each side is its mix).
 #[inline(always)]
-fn merge_bits<const L: usize, const LO: usize>(a: &[u64; L], b: &[u64; L], ma: u64, mb: u64, out_len: u32) -> [u64; LO] {
+fn merge_bits<const L: usize, const LO: usize>(a: &[u64; L], b: &[u64; L], out_len: u32) -> [u64; LO] {
     let mut x = [0u64; 8];
-    x[0] = ma ^ mb;
-    for i in 1..L { x[i] = a[i] ^ b[i]; }
+    for i in 0..L { x[i] = a[i] ^ b[i]; }
     let mut o = [0u64; LO];
     for i in 0..LO {
         o[i] = (x[i] >> COLL) | if i + 1 < 8 { x[i + 1] << (64 - COLL) } else { 0 };
@@ -167,90 +169,218 @@ fn merge_bits<const L: usize, const LO: usize>(a: &[u64; L], b: &[u64; L], ma: u
 }
 
 // ---------- rounds ----------
+//
+// Elements live in buckets keyed by bits 12..23 of their *next* mixed limb, so a round reads one
+// bucket sequentially, pairs equal 24-bit keys inside it, and scatters each merged element into
+// the next round's bucket with its mix already computed. No array is read twice and no element is
+// fetched at random.
 
-/// Bucket every element by the top 12 bits of its 24-bit key; keeps (index, mixed limb 0).
-fn bucketize<const L: usize, const NL: usize>(input: &[Elem<L, NL>], mix_len: u32, pad: usize) -> (Vec<(u32, u64)>, Vec<usize>) {
-    let n = input.len();
-    let threads = rayon::current_num_threads().max(1);
-    let chunk = (n + threads - 1) / threads;
-    // pass 1: per-chunk histograms
-    let hists: Vec<Vec<u32>> = input.par_chunks(chunk).map(|c| {
-        let mut h = vec![0u32; BUCKETS];
-        for e in c { h[(mix(e, mix_len, pad) >> BUCKET_BITS) as usize & (BUCKETS - 1)] += 1; }
-        h
-    }).collect();
-    // bucket starts, and per-chunk write cursors
-    let mut starts = vec![0usize; BUCKETS + 1];
-    for b in 0..BUCKETS { starts[b + 1] = starts[b] + hists.iter().map(|h| h[b] as usize).sum::<usize>(); }
-    let mut cursors: Vec<Vec<usize>> = Vec::with_capacity(hists.len());
-    let mut run = starts[..BUCKETS].to_vec();
-    for h in &hists {
-        cursors.push(run.clone());
-        for b in 0..BUCKETS { run[b] += h[b] as usize; }
+/// Bucket capacity: N / 4096 is 8192 on average with a spread of about 90, so 9472 is far beyond
+/// any overflow; an overflowing element is dropped and counted.
+const CAP: usize = 9216;
+/// Elements a thread collects for one destination bucket before writing them in one go: one
+/// atomic increment and one sequential copy per chunk instead of per element.
+const CHUNK: usize = 16;
+
+/// One counter per cache line, or 16 buckets' counters would bounce between cores.
+#[repr(align(64))]
+struct Counter(std::sync::atomic::AtomicU32);
+
+pub struct Buckets<const L: usize, const NL: usize> {
+    data: Vec<std::mem::MaybeUninit<Elem<L, NL>>>,
+    counts: Vec<Counter>,
+    overflow: AtomicUsize,
+}
+unsafe impl<const L: usize, const NL: usize> Sync for Buckets<L, NL> {}
+
+impl<const L: usize, const NL: usize> Buckets<L, NL> {
+    fn new() -> Self {
+        let n = BUCKETS * CAP;
+        let mut data = Vec::with_capacity(n);
+        unsafe { data.set_len(n) }; // MaybeUninit: uninitialised is a valid state
+        Buckets { data, counts: (0..BUCKETS).map(|_| Counter(std::sync::atomic::AtomicU32::new(0))).collect(), overflow: AtomicUsize::new(0) }
     }
-    // pass 2: scatter
-    let mut out: Vec<(u32, u64)> = Vec::with_capacity(n);
-    let ptr = out.as_mut_ptr() as usize;
-    input.par_chunks(chunk).zip(cursors.into_par_iter()).enumerate().for_each(|(ci, (c, mut cur))| {
-        let base = ci * chunk;
-        for (j, e) in c.iter().enumerate() {
-            let m = mix(e, mix_len, pad);
-            let b = (m >> BUCKET_BITS) as usize & (BUCKETS - 1);
-            unsafe { *(ptr as *mut (u32, u64)).add(cur[b]) = ((base + j) as u32, m) };
-            cur[b] += 1;
+    /// Take a kept instance and empty it, or allocate.
+    fn take(slot: &mut Option<Self>) -> Self {
+        match slot.take() {
+            Some(b) => { for c in &b.counts { c.0.store(0, Ordering::Relaxed); } b.overflow.store(0, Ordering::Relaxed); b }
+            None => Self::new(),
         }
-    });
-    unsafe { out.set_len(n) };
-    (out, starts)
+    }
+    /// Keep for the next run, or free.
+    fn give(self, slot: &mut Option<Self>) {
+        if reuse_buffers() { *slot = Some(self); }
+    }
+    /// Append a chunk to bucket `b`.
+    #[inline(always)]
+    fn push_many(&self, b: usize, es: &[Elem<L, NL>]) {
+        let i = self.counts[b].0.fetch_add(es.len() as u32, Ordering::Relaxed) as usize;
+        let fit = es.len().min(CAP.saturating_sub(i));
+        if fit > 0 {
+            unsafe { std::ptr::copy_nonoverlapping(es.as_ptr(), (self.data.as_ptr() as *mut Elem<L, NL>).add(b * CAP + i), fit) };
+        }
+        if fit < es.len() {
+            self.overflow.fetch_add(es.len() - fit, Ordering::Relaxed);
+        }
+    }
+    #[inline(always)]
+    fn bucket(&self, b: usize) -> &[Elem<L, NL>] {
+        let n = (self.counts[b].0.load(Ordering::Relaxed) as usize).min(CAP);
+        unsafe { std::slice::from_raw_parts(self.data.as_ptr().add(b * CAP) as *const Elem<L, NL>, n) }
+    }
+    #[inline(always)]
+    fn get(&self, packed: u32) -> &Elem<L, NL> {
+        let (b, i) = ((packed >> 20) as usize, (packed & 0xFFFFF) as usize);
+        unsafe { &*(self.data.as_ptr().add(b * CAP + i) as *const Elem<L, NL>) }
+    }
+    fn len(&self) -> usize {
+        self.counts.iter().map(|c| (c.0.load(Ordering::Relaxed) as usize).min(CAP)).sum()
+    }
 }
 
+/// Per-thread staging: CHUNK slots per destination bucket in one array, flushed when a bucket's
+/// slots are full. Allocated once per thread per round; the hot loop never touches the allocator.
+struct Stash<const L: usize, const NL: usize> {
+    slots: Vec<Elem<L, NL>>,
+    fill: Vec<u8>,
+}
+impl<const L: usize, const NL: usize> Stash<L, NL> {
+    fn new() -> Self { Stash { slots: vec![Elem::<L, NL>::ZERO; BUCKETS * CHUNK], fill: vec![0; BUCKETS] } }
+    #[inline(always)]
+    fn slot(&mut self, b: usize) -> &mut Elem<L, NL> {
+        let f = self.fill[b] as usize;
+        &mut self.slots[b * CHUNK + f]
+    }
+    /// Call after writing `slot(b)`: counts it and flushes the bucket's chunk when full.
+    #[inline(always)]
+    fn commit(&mut self, out: &Buckets<L, NL>, b: usize) {
+        self.fill[b] += 1;
+        if self.fill[b] as usize == CHUNK {
+            out.push_many(b, &self.slots[b * CHUNK..(b + 1) * CHUNK]);
+            self.fill[b] = 0;
+        }
+    }
+    fn flush(&mut self, out: &Buckets<L, NL>) {
+        for b in 0..BUCKETS {
+            let f = self.fill[b] as usize;
+            if f > 0 { out.push_many(b, &self.slots[b * CHUNK..b * CHUNK + f]); self.fill[b] = 0; }
+        }
+    }
+}
+
+/// Exactly one task per thread pulling bucket indices from a shared counter: T stashes and T
+/// scratch buffers for the whole round instead of one per rayon split.
+fn per_thread<F: Fn(usize, &mut Scratch) + Sync>(n: usize, f: F) {
+    let next = AtomicUsize::new(0);
+    rayon::scope(|sc| {
+        for _ in 0..rayon::current_num_threads() {
+            sc.spawn(|_| {
+                let mut scratch = Scratch::default();
+                loop {
+                    let b = next.fetch_add(1, Ordering::Relaxed);
+                    if b >= n { break; }
+                    f(b, &mut scratch);
+                }
+            });
+        }
+    });
+}
+
+/// Per-thread scratch for `for_pairs`.
+#[derive(Default)]
+pub struct Scratch {
+    order: Vec<(u64, u16)>,
+}
+
+#[inline(always)]
+fn bucket_of(m: u64) -> usize {
+    ((m >> BUCKET_BITS) as usize) & (BUCKETS - 1)
+}
+
+/// Bucket arrays are reused across runs unless BB_NO_REUSE is set.
+fn reuse_buffers() -> bool { std::env::var_os("BB_NO_REUSE").is_none() }
+
+#[inline(always)]
 fn leaves_overlap(a: &[u32], b: &[u32]) -> bool {
     a.iter().any(|x| b.contains(x))
 }
 
-/// One collision round: mix, collide on 24 bits, merge pairs into the next round's elements,
-/// written into `out` (cleared first; its allocation is reused across runs).
-fn round<const L: usize, const NL: usize, const LO: usize, const NLO: usize>(input: &[Elem<L, NL>], mix_len: u32, pad: usize, out_len: u32, out: &mut Vec<Elem<LO, NLO>>) {
-    let (keys, starts) = bucketize(input, mix_len, pad);
-    let cap = input.len() + input.len() / 4;
-    out.clear();
-    out.reserve(cap);
-    let out_ptr = out.as_mut_ptr() as usize;
-    let cursor = AtomicUsize::new(0);
-    (0..BUCKETS).into_par_iter().for_each(|b| {
-        let mut slice: Vec<(u32, u64)> = keys[starts[b]..starts[b + 1]].to_vec();
-        slice.sort_unstable_by_key(|k| k.1 & 0xFFFFFF);
-        let mut local: Vec<Elem<LO, NLO>> = Vec::with_capacity(slice.len() + slice.len() / 8);
-        let mut i = 0;
-        while i < slice.len() {
-            let mut j = i + 1;
-            while j < slice.len() && (slice[j].1 ^ slice[i].1) & 0xFFFFFF == 0 { j += 1; }
-            for p in i..j {
-                for q in p + 1..j {
-                    let (mut ia, mut ma, mut ib, mut mb) = (slice[p].0, slice[p].1, slice[q].0, slice[q].1);
-                    let (ea, eb) = (&input[ia as usize], &input[ib as usize]);
-                    if ea.leaves[0] == eb.leaves[0] { continue; }
-                    if ea.leaves[0] > eb.leaves[0] { std::mem::swap(&mut ia, &mut ib); std::mem::swap(&mut ma, &mut mb); }
-                    let (ea, eb) = (&input[ia as usize], &input[ib as usize]);
-                    if leaves_overlap(&ea.leaves, &eb.leaves) { continue; }
-                    let mut e = Elem::<LO, NLO>::ZERO;
-                    e.w = merge_bits::<L, LO>(&ea.w, &eb.w, ma, mb, out_len);
-                    // canonical leaves: a's subtree then b's; a has 2^(r-1) leaves, all stored
-                    let a_count = NL.min(NLO);
-                    for k in 0..NLO { e.leaves[k] = if k < a_count { ea.leaves[k] } else { eb.leaves[k - a_count] }; }
-                    e.pa = ia; e.pb = ib;
-                    local.push(e);
-                }
-            }
-            i = j;
+/// Pairs inside one bucket with equal 24-bit keys, in canonical order (smaller first leaf first),
+/// with distinct inline leaves. Calls `f(a_idx, b_idx)`.
+#[inline(always)]
+fn for_pairs<const L: usize, const NL: usize>(items: &[Elem<L, NL>], mask: u64, scratch: &mut Scratch, mut f: impl FnMut(usize, usize)) {
+    // counting sort on the 12 key bits below the bucket bits; round 5 asks for 48 bits and gets a
+    // small sort inside each run of equal 12-bit keys
+    let n = items.len();
+    let mut counts = [0u16; BUCKETS + 1];
+    for e in items { counts[((e.w[0] & 0xFFF) as usize) + 1] += 1; }
+    for i in 0..BUCKETS { counts[i + 1] += counts[i]; }
+    let order = &mut scratch.order;
+    order.clear();
+    order.resize(n, (0, 0));
+    let mut pos = counts;
+    for (i, e) in items.iter().enumerate() {
+        let c = (e.w[0] & 0xFFF) as usize;
+        order[pos[c] as usize] = (e.w[0] & mask, i as u16);
+        pos[c] += 1;
+    }
+    if mask != 0xFF_FFFF {
+        for c in 0..BUCKETS {
+            let (lo, hi) = (counts[c] as usize, counts[c + 1] as usize);
+            if hi - lo > 1 { order[lo..hi].sort_unstable(); }
         }
-        if !local.is_empty() {
-            let at = cursor.fetch_add(local.len(), Ordering::Relaxed);
-            assert!(at + local.len() <= cap, "round output exceeds capacity");
-            unsafe { std::ptr::copy_nonoverlapping(local.as_ptr(), (out_ptr as *mut Elem<LO, NLO>).add(at), local.len()) };
+    }
+    let mut i = 0;
+    while i < order.len() {
+        let mut j = i + 1;
+        while j < order.len() && order[j].0 == order[i].0 { j += 1; }
+        for p in i..j {
+            for q in p + 1..j {
+                let (mut ia, mut ib) = (order[p].1 as usize, order[q].1 as usize);
+                let (ea, eb) = (&items[ia], &items[ib]);
+                if ea.leaves[0] == eb.leaves[0] { continue; }
+                if ea.leaves[0] > eb.leaves[0] { std::mem::swap(&mut ia, &mut ib); }
+                if leaves_overlap(&items[ia].leaves, &items[ib].leaves) { continue; }
+                f(ia, ib);
+            }
+        }
+        i = j;
+    }
+}
+
+/// One collision round: for every bucket of `input`, merge colliding pairs into `out`, each with
+/// the next round's mix precomputed and bucketed by it.
+fn round<const L: usize, const NL: usize, const LO: usize, const NLO: usize>(input: &Buckets<L, NL>, out_len: u32, next_mix_len: u32, next_pad: usize, slot: &mut Option<Buckets<LO, NLO>>) -> Buckets<LO, NLO> {
+    let out = Buckets::<LO, NLO>::take(slot);
+    let next = AtomicUsize::new(0);
+    rayon::scope(|sc| {
+        for _ in 0..rayon::current_num_threads() {
+            sc.spawn(|_| {
+                let mut stash = Stash::<LO, NLO>::new();
+                let mut scratch = Scratch::default();
+                loop {
+                    let b = next.fetch_add(1, Ordering::Relaxed);
+                    if b >= BUCKETS { break; }
+                    let items = input.bucket(b);
+                    for_pairs(items, 0xFF_FFFF, &mut scratch, |ia, ib| {
+                        let (ea, eb) = (&items[ia], &items[ib]);
+                        let mut e = Elem::<LO, NLO>::ZERO;
+                        e.w = merge_bits::<L, LO>(&ea.w, &eb.w, out_len);
+                        let a_count = NL.min(NLO);
+                        for k in 0..NLO { e.leaves[k] = if k < a_count { ea.leaves[k] } else { eb.leaves[k - a_count] }; }
+                        e.pa = ((b as u32) << 20) | ia as u32;
+                        e.pb = ((b as u32) << 20) | ib as u32;
+                        e.w[0] = mix(&e, next_mix_len, next_pad);
+                        let dest = bucket_of(e.w[0]);
+                        *stash.slot(dest) = e;
+                        stash.commit(&out, dest);
+                    });
+                }
+                stash.flush(&out);
+            });
         }
     });
-    unsafe { out.set_len(cursor.load(Ordering::Relaxed)) };
+    out
 }
 
 /// Pack 32 leaf indices (25 bits each, little-endian bit stream) plus the extra nonce.
@@ -269,85 +399,108 @@ pub fn pack_solution(leaves: &[u32; 32], extra: &[u8; 4]) -> [u8; 104] {
 
 pub struct SolveStats { pub elements: [usize; 6], pub candidates: usize, pub rejected: usize }
 
-/// A solver instance. Each run allocates its round arrays and frees each one as soon as the next
-/// round is built: keeping all 13 GB resident between runs made macOS compress pages and the run
-/// three times slower, so there is no buffer reuse here.
+/// A solver instance. The five bucket arrays (about 16 GB) are kept between runs so that a run
+/// does not page-fault them in again; BB_NO_REUSE=1 frees them after every round instead.
 #[derive(Default)]
-pub struct Solver {}
+pub struct Solver {
+    b0: Option<Buckets<7, 1>>,
+    b1: Option<Buckets<7, 2>>,
+    b2: Option<Buckets<7, 4>>,
+    b3: Option<Buckets<6, 8>>,
+    b4: Option<Buckets<5, 9>>,
+}
 
 /// All solutions for (input, nonce, extra nonce), each verified by the oracle.
 pub fn solve(input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>, SolveStats) {
     Solver::default().solve(input, nonce, extra)
 }
 
+/// Phase timings on stderr when BB_TRACE is set.
+fn trace(label: &str, t: &mut std::time::Instant) {
+    if std::env::var_os("BB_TRACE").is_some() {
+        eprintln!("  {label:<8} {:.3} s", t.elapsed().as_secs_f64());
+        *t = std::time::Instant::now();
+    }
+}
+
 impl Solver {
 pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<[u8; 104]>, SolveStats) {
+    let mut tt = std::time::Instant::now();
     let k = pre_pow(input, nonce, extra);
-    // seed: 7 limbs per element, leaf = own index
-    let mut seed: Vec<Elem<7, 1>> = Vec::with_capacity(N);
-    let sp = seed.as_mut_ptr() as usize;
-    (0..N).into_par_iter().with_min_len(4096).for_each(|i| {
-        let mut e = Elem::<7, 1>::ZERO;
-        let base = (i as u32) << 3;
-        for j in 0..7 { e.w[j] = siphash24(&k, (base + j as u32) as u64); }
-        e.leaves[0] = i as u32;
-        unsafe { *(sp as *mut Elem<7, 1>).add(i) = e };
-    });
-    unsafe { seed.set_len(N) };
-
-    let mut elements = [N, 0, 0, 0, 0, 0];
-    let mut r1: Vec<Elem<7, 2>> = Vec::new();
-    round::<7, 1, 7, 2>(&seed, 448, 1, 424, &mut r1);
-    drop(seed);
-    elements[1] = r1.len();
-    let mut r2: Vec<Elem<7, 4>> = Vec::new();
-    round::<7, 2, 7, 4>(&r1, 424, 2, 400, &mut r2);
-    drop(r1);
-    elements[2] = r2.len();
-    let mut r3: Vec<Elem<6, 8>> = Vec::new();
-    round::<7, 4, 6, 8>(&r2, 400, 4, 376, &mut r3);
-    drop(r2);
-    elements[3] = r3.len();
-    let mut r4: Vec<Elem<5, 9>> = Vec::new();
-    round::<6, 8, 5, 9>(&r3, 376, 6, 288, &mut r4);
-    elements[4] = r4.len();
-    let (r3, r4) = (&r3, &r4);
-
-    // round 5: mix at 288 with 9 leaves; a pair is a solution when the 24 bits after the collision
-    // bits cancel too, i.e. the low 48 bits of the mixed limbs are equal
-    let (keys, starts) = bucketize(r4, 288, 9);
-    let candidates = AtomicUsize::new(0);
-    let found: Vec<[u8; 104]> = (0..BUCKETS).into_par_iter().flat_map_iter(|b| {
-        let mut slice: Vec<(u32, u64)> = keys[starts[b]..starts[b + 1]].to_vec();
-        slice.sort_unstable_by_key(|k| k.1 & 0xFFFF_FFFF_FFFF);
-        let mut sols = Vec::new();
-        let mut i = 0;
-        while i < slice.len() {
-            let mut j = i + 1;
-            while j < slice.len() && (slice[j].1 ^ slice[i].1) & 0xFFFF_FFFF_FFFF == 0 { j += 1; }
-            for p in i..j {
-                for q in p + 1..j {
-                    candidates.fetch_add(1, Ordering::Relaxed);
-                    let (mut a, mut bb) = (&r4[slice[p].0 as usize], &r4[slice[q].0 as usize]);
-                    if a.leaves[0] == bb.leaves[0] { continue; }
-                    if a.leaves[0] > bb.leaves[0] { std::mem::swap(&mut a, &mut bb); }
-                    let mut leaves = [0u32; 32];
-                    let half = |e: &Elem<5, 9>, out: &mut [u32]| {
-                        out[..8].copy_from_slice(&r3[e.pa as usize].leaves);
-                        out[8..16].copy_from_slice(&r3[e.pb as usize].leaves);
-                    };
-                    half(a, &mut leaves[..16]);
-                    half(bb, &mut leaves[16..]);
-                    let mut sorted = leaves;
-                    sorted.sort_unstable();
-                    if sorted.windows(2).any(|w| w[0] == w[1]) { continue; }
-                    sols.push(pack_solution(&leaves, extra));
-                }
+    // seed straight into round-1 buckets: 7 limbs, leaf = own index, mix at 448 with one leaf
+    let r0 = Buckets::<7, 1>::take(&mut self.b0);
+    {
+        let next = AtomicUsize::new(0);
+        let r0 = &r0;
+        rayon::scope(|sc| {
+            for _ in 0..rayon::current_num_threads() {
+                sc.spawn(|_| {
+                    let mut stash = Stash::<7, 1>::new();
+                    loop {
+                        let chunk = next.fetch_add(1, Ordering::Relaxed);
+                        if chunk >= N / 8192 { break; }
+                        for i in chunk * 8192..(chunk + 1) * 8192 {
+                            let mut e = Elem::<7, 1>::ZERO;
+                            let base = (i as u32) << 3;
+                            for j in 0..7 { e.w[j] = siphash24(&k, (base + j as u32) as u64); }
+                            e.leaves[0] = i as u32;
+                            e.w[0] = mix(&e, 448, 1);
+                            let dest = bucket_of(e.w[0]);
+                            *stash.slot(dest) = e;
+                            stash.commit(r0, dest);
+                        }
+                    }
+                    stash.flush(r0);
+                });
             }
-            i = j;
-        }
-        sols
-    }).collect();
+        });
+    }
+    let mut elements = [r0.len(), 0, 0, 0, 0, 0];
+    let mut overflow = r0.overflow.load(Ordering::Relaxed);
+    trace("seed", &mut tt);
+
+    let r1 = round::<7, 1, 7, 2>(&r0, 424, 424, 2, &mut self.b1);
+    trace("round1", &mut tt);
+    r0.give(&mut self.b0);
+    elements[1] = r1.len(); overflow += r1.overflow.load(Ordering::Relaxed);
+    let r2 = round::<7, 2, 7, 4>(&r1, 400, 400, 4, &mut self.b2);
+    trace("round2", &mut tt);
+    r1.give(&mut self.b1);
+    elements[2] = r2.len(); overflow += r2.overflow.load(Ordering::Relaxed);
+    let r3 = round::<7, 4, 6, 8>(&r2, 376, 376, 6, &mut self.b3);
+    trace("round3", &mut tt);
+    r2.give(&mut self.b2);
+    elements[3] = r3.len(); overflow += r3.overflow.load(Ordering::Relaxed);
+    let r4 = round::<6, 8, 5, 9>(&r3, 288, 288, 9, &mut self.b4);
+    trace("round4", &mut tt);
+    elements[4] = r4.len(); overflow += r4.overflow.load(Ordering::Relaxed);
+    if overflow > 0 { eprintln!("warning: {overflow} elements dropped on bucket overflow"); }
+
+    // round 5: a pair is a solution when the 24 bits after the collision bits cancel too, i.e. the
+    // low 48 bits of the mixed limbs (already stored as m) are equal
+    let candidates = AtomicUsize::new(0);
+    let found_all: std::sync::Mutex<Vec<[u8; 104]>> = std::sync::Mutex::new(Vec::new());
+    per_thread(BUCKETS, |b, scratch| {
+        let items = r4.bucket(b);
+        let mut sols = Vec::new();
+        for_pairs(items, 0xFFFF_FFFF_FFFF, scratch, |ia, ib| {
+            candidates.fetch_add(1, Ordering::Relaxed);
+            let (a, bb) = (&items[ia], &items[ib]);
+            let mut leaves = [0u32; 32];
+            let half = |e: &Elem<5, 9>, out: &mut [u32]| {
+                out[..8].copy_from_slice(&r3.get(e.pa).leaves);
+                out[8..16].copy_from_slice(&r3.get(e.pb).leaves);
+            };
+            half(a, &mut leaves[..16]);
+            half(bb, &mut leaves[16..]);
+            let mut sorted = leaves;
+            sorted.sort_unstable();
+            if sorted.windows(2).any(|w| w[0] == w[1]) { return; }
+            sols.push(pack_solution(&leaves, extra));
+        });
+        if !sols.is_empty() { found_all.lock().unwrap().extend(sols); }
+    });
+    let found = found_all.into_inner().unwrap();
     let mut ok = Vec::new();
     let mut rejected = 0;
     for s in found {
@@ -357,6 +510,9 @@ pub fn solve(&mut self, input: &[u8], nonce: &[u8; 8], extra: &[u8; 4]) -> (Vec<
         }
     }
     elements[5] = ok.len();
+    trace("final", &mut tt);
+    r3.give(&mut self.b3);
+    r4.give(&mut self.b4);
     (ok, SolveStats { elements, candidates: candidates.load(Ordering::Relaxed), rejected })
 }
 }

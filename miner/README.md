@@ -25,6 +25,10 @@ colliding pair into the next round's element with its parents and the leaves the
 need. The fifth round's pairs whose remaining 24 bits also cancel are solutions; their 32 leaves
 are read back through the parents, packed, and verified.
 
-Measured on an Apple M5 Pro (15 threads): 2.5–3.5 s a run, 0.3 runs/s, 0.5–0.75 sol/s, about 11 GB
-peak. Memory is allocated per round and freed as soon as the next round exists; keeping it
-resident between runs made macOS compress pages and tripled the run time.
+Measured on an Apple M5 Pro (15 threads): about 2 s a run, 0.5 runs/s, ~1 sol/s (two solutions a
+run on average), about 14 GB resident with the bucket arrays kept between runs (BB_NO_REUSE=1
+frees them after every round). The first version took 3 s a run; the gains came from writing each
+round straight into the next round's buckets with the mix precomputed, a counting sort inside each
+bucket, and keeping the hot loop free of allocator calls (one stash and one scratch buffer per
+thread, found with a sampling profiler to be where half the time went). BB_TRACE=1 prints the
+time per phase.
