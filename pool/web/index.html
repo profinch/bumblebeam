@@ -7,7 +7,8 @@
 <meta name="description" content="BumbleBeam Pool: an open-source, community-run BeamHash III mining pool for Beam (BEAM)">
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="styles.css">
+<!-- the v=dev query becomes the commit hash in the Docker build, so a release never mixes cached and new files -->
+<link rel="stylesheet" href="styles.css?v=dev">
 </head>
 <body>
 <header class="top">
@@ -66,7 +67,7 @@
   <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
 </footer>
 
-<script src="data.js"></script>
-<script src="app.js"></script>
+<script src="data.js?v=dev"></script>
+<script src="app.js?v=dev"></script>
 </body>
 </html>

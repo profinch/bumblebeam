@@ -6,6 +6,8 @@ ARG BUMBLEBEAM_REF=main
 RUN apt-get update && apt-get install -y --no-install-recommends git g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
+# Version the UI's asset URLs with the commit, so browsers and Cloudflare fetch new files on release
+RUN sed -i "s/?v=dev/?v=$(git -C /src rev-parse --short HEAD)/g" /src/pool/web/index.html
 WORKDIR /src/pool/server
 RUN cargo build --release
 
