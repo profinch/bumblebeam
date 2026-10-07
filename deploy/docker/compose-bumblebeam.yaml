@@ -44,8 +44,10 @@ services:
     depends_on:
       - beam-node
     networks:
-      - bumblebeam
-      - wallet
+      bumblebeam:                         # to reach the node
+      wallet:
+        ipv4_address: 172.30.1.2          # the pool calls this address, not the name:
+                                          # the name may resolve on the other network
 
   postgres:
     image: postgres:17-trixie

@@ -8,7 +8,7 @@ standby = []                              # more nodes, tried when the first is 
 sync_lag_blocks = 5                       # jobs further below the network height are not given to miners
 
 [wallet_api]
-url = "http://wallet-api:10001/api/wallet"
+url = "http://172.30.1.2:10001/api/wallet"   # wallet-api on the internal wallet network
 acl_key = ""                              # wallet-api --use_acl key, if ACL is on
 tx_fee_groth = 1000                       # fallback fee for regular addresses; the wallet is asked first (calc_change)
 shielded_fee_groth = 1000100              # fallback for offline/max-privacy/public-offline: Beam's shielded minimum, 0.010001 BEAM
