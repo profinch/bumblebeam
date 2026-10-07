@@ -100,6 +100,8 @@ input:focus { outline: none; }
   color: var(--accent); background: rgba(0, 246, 210, 0.06);
 }
 .main-nav a.nav-cta:hover { background: var(--accent-dim); color: var(--accent); }
+.top-row .cta-top { display: none; }
+.cta-top.active { background: rgba(0, 246, 210, 0.15); }
 .main-nav a.nav-cta.active { background: rgba(0, 246, 210, 0.15); border-bottom-color: rgba(0, 246, 210, 0.6); }
 
 .demo-banner {
@@ -280,7 +282,10 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   .donut-wrap { grid-template-columns: 1fr; justify-items: center; }
   .top-row { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
   .search { order: 3; flex: 1 1 100%; }
-  .main-nav { margin-left: 0; overflow-x: auto; }
+  /* Start mining moves next to the logo; the menu takes its own full-width row and fits, no scroll */
+  .top-row .cta-top { display: inline-flex; order: 1; margin-left: auto; padding: 7px 12px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .main-nav a.nav-cta { display: none; }
+  .main-nav { order: 2; flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; justify-content: space-between; }
 }
 @media (max-width: 560px) {
   .main-nav a { padding: 8px 8px; font-size: 12px; }
@@ -298,7 +303,8 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   .page-head .btn { padding: 6px 10px; }
   .panel-meta { margin-left: 0; }
   .main-nav { gap: 0; }
-  .main-nav a { padding: 8px 6px; font-size: 11px; }
+  .main-nav a { padding: 8px 3px; font-size: 11px; letter-spacing: 0; }
+  .cta-top { padding: 6px 10px; font-size: 11px; }
   .step .field { min-width: 0 !important; flex-basis: 100% !important; }
   .addr { flex-wrap: wrap; }
 }

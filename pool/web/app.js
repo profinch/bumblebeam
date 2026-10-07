@@ -592,7 +592,7 @@
     const { route, arg } = parse();
     const my = ++seq;
     const navKey = route === 'miners' && arg ? (arg === myAddress() ? 'my' : 'miners') : route;
-    document.querySelectorAll('#main-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
+    document.querySelectorAll('#main-nav a, .cta-top').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
     if (scrollTop && !view.innerHTML) view.innerHTML = '<div class="empty">Loading…</div>';
     try {
       const html = await views[route](arg);
