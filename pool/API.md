@@ -34,7 +34,8 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 ```
 
 - `name` is the pool's display name. `config.stratumHost` and `config.ports` (`pplns`, `solo`,
-  `pplnsTls`, `soloTls`) tell the UI where miners connect; `connectedWorkers` counts open stratum connections; `nodes[0].connected` says
+  `pplnsTls`, `soloTls`) tell the UI where miners connect, `config.nodeAddr` (`host:port`, empty if
+  not offered) where wallets can reach the pool's node; `connectedWorkers` counts open stratum connections; `nodes[0].connected` says
   whether the pool currently has a block template from its node.
 - `fee` and `soloFee` are percentages. The pool's fee is **0.5%** on both PPLNS and solo rewards.
 - `finderBonus` is the percentage of a PPLNS block, after the fee, credited to the miner whose share

@@ -38,6 +38,7 @@ block_check_urls = []                     # cross-check of the block hash by hei
                                           # ["http://127.0.0.1:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
                                           # your own explorer-node first, a public one as a fallback; it never confirms alone
 public_host = "pool.example.com"
+public_node = ""                          # host:port of the node's p2p port for wallets, shown in the UI; empty hides it
 
 [coinbase]
 # Coinbase payouts (tools/coinbase): miners who log in with a "cb:<key>" account are paid in the blocks

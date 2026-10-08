@@ -149,6 +149,9 @@ pub struct PoolCfg {
     /// Public stratum host shown in the UI
     #[serde(default)]
     pub public_host: String,
+    /// host:port of the node's p2p port, shown in the UI for wallets to connect to; empty hides it
+    #[serde(default)]
+    pub public_node: String,
     /// Share of a PPLNS block's reward, after the fee, that goes to the miner whose share found it,
     /// on top of that miner's PPLNS part. 0 disables.
     #[serde(default)]

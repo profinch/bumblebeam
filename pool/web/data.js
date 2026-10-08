@@ -156,6 +156,7 @@ const BB = (() => {
       pplnsWindow: num(c.pplnsWindow), maturity: num(c.maturity) ?? MATURITY, payoutInterval: num(c.payoutInterval) ?? PAYOUT_INTERVAL,
       blockReward: num(c.blockReward) ?? blockReward(height),
       stratumHost: str(c.stratumHost, 253),
+      nodeAddr: str(c.nodeAddr, 260),
       minerPaysTxFee: c.minerPaysTxFee !== false,
       coinbase: c.coinbase === true,
       shieldedFee: num(c.txFee && c.txFee.shielded) ?? 1000100,
