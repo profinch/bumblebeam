@@ -352,16 +352,38 @@
 
   // Blocks: the latest ones, more on request; search and filters run over what is loaded, and a
   // height typed in and Enter opens that block.
-  const bk = { q: '', tx: false, calls: false, sh: false, fees: false, rows: [], next: null };
+  const bk = { q: '', tx: false, calls: false, sh: false, fees: false, rows: [], next: null, tip: null, looked: new Map(), timer: null };
   const bkFiltering = () => bk.q.trim() || bk.tx || bk.calls || bk.sh || bk.fees;
   function blocksFiltered() {
     const q = bk.q.trim().toLowerCase().replace(/,/g, '');
     return bk.rows.filter((b) => (!q || String(b.height).includes(q) || (b.hash && b.hash.startsWith(q)))
       && (!bk.tx || b.txs > 1) && (!bk.calls || b.calls > 0) && (!bk.sh || b.shOut || b.shIn) && (!bk.fees || b.fee > 0));
   }
+  // a height that is not loaded is fetched from the node and shown on its own
+  function lookupHeight(h) {
+    clearTimeout(bk.timer);
+    bk.timer = setTimeout(async () => {
+      if (bk.looked.has(h)) return;
+      bk.looked.set(h, 'loading');
+      try { bk.looked.set(h, normHdrs(await get(`hdrs?hMax=${h}&nMax=1`), 1).find((b) => b.height === h) || null); } catch (e) { bk.looked.set(h, null); }
+      if ($('#hdr-body') && bk.q.trim().replace(/,/g, '') === String(h)) blocksBody();
+    }, 250);
+  }
   function blocksBody() {
-    const rows = blocksFiltered();
-    $('#hdr-body').innerHTML = hdrRows(rows) || '<tr><td colspan="9" class="empty">No loaded block matches; load older blocks or open a height with Enter</td></tr>';
+    let rows = blocksFiltered();
+    const q = bk.q.trim().replace(/[,\s]/g, ''), height = /^\d{1,10}$/.test(q) ? Number(q) : null;
+    let note = '';
+    if (height != null && !rows.some((b) => b.height === height)) {
+      if (bk.tip && height > bk.tip) note = `Block ${int(height)} is not mined yet; the tip is ${int(bk.tip)}.`;
+      else {
+        const got = bk.looked.get(height);
+        if (got === undefined || got === 'loading') { note = `Looking up block ${int(height)}…`; if (got === undefined) lookupHeight(height); }
+        else if (got) rows = [got, ...rows];
+        else note = `Block ${int(height)} is not on the chain we know.`;
+      }
+    } else if (q && !rows.length && /^[0-9a-f]+$/i.test(q)) note = 'No loaded block matches. A hash is searched among loaded blocks only; Beam\'s API has no lookup by block hash.';
+    $('#hdr-body').innerHTML = hdrRows(rows) + (note ? `<tr><td colspan="9" class="empty">${esc(note)}</td></tr>` : '')
+      || '<tr><td colspan="9" class="empty">No loaded block matches the filters; load older blocks to search further back</td></tr>';
     $('#blocks-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(bk.rows.length)} loaded`;
     [['#bk-tx', bk.tx], ['#bk-calls', bk.calls], ['#bk-sh', bk.sh], ['#bk-fees', bk.fees]].forEach(([id, on]) => $(id).classList.toggle('on', on));
     const btn = $('#more-hdrs');
@@ -370,6 +392,7 @@
 
   views.home = async () => {
     const st = normStatus(await get('status'));
+    bk.tip = st.height;
     const fresh = st.height ? normHdrs(await get(`hdrs?hMax=${st.height}&nMax=${PAGE}`)) : [];
     // keep what was loaded and searched while new blocks come in (auto-refresh)
     if (bk.rows.length && bkFiltering()) {
@@ -388,7 +411,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span id="blocks-count"></span></div></div>
         ${bk.rows.length ? `<div class="names-tools">
-          <input id="bk-q" class="names-q" placeholder="Height or hash; Enter opens a height…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
+          <input id="bk-q" class="names-q" placeholder="Any height, or a hash among loaded blocks…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
           <div class="seg"><button type="button" id="bk-tx">With transactions</button><button type="button" id="bk-calls">Contract calls</button><button type="button" id="bk-sh">Shielded</button><button type="button" id="bk-fees">With fees</button></div>
         </div>
         <div class="table-wrap"><table id="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-a"><col><col class="w-d"><col class="w-tx"><col class="w-io"><col class="w-c"><col class="w-f"></colgroup>
