@@ -88,7 +88,7 @@ miners at once, each in its own outputs.
 | `bb-finalizer` | `finalizer.cpp` | daemon next to the pool's node: owner login, block finalization, chain follow, pair verification for the pool server |
 | `bb-coinbase` | `bb-coinbase.cpp` | the miner's tool: `init`, `identity`, `top-up`, `status`, `make`, `keyinfo` (uploads with curl) |
 | pool server | `pool/server/src/coinbase.rs`, `db.rs`, `accounting.rs` | the stock, the allocation, the link, payments and confirmations; `[coinbase]` in `pool.toml`, `GET /api/coinbase`, `POST /api/coinbase/pairs` |
-| node patch | `beam-node-foreign-coinbase.patch` | 41 lines against BeamMW/beam `daf7191` (branch `feat/foreign-coinbase` in profinch/beam) |
+| node patch | `beam-node-foreign-coinbase.patch` | 41 lines against BeamMW/beam `daf7191`: [BeamMW/beam#2160](https://github.com/BeamMW/beam/pull/2160) (branch `feat/foreign-coinbase` in profinch/beam) |
 | tests | `coinbase_test.cpp`, `pool/server/tools/e2e_coinbase.py`, `lab.sh` | see below |
 
 ## The node patch
@@ -175,6 +175,6 @@ finalizer is loopback and unauthenticated by design: keep it there.
 
 ## Next
 
-- A PR of the node patch to BeamMW/beam (the pool runs the patched node until then).
+- The node patch is [BeamMW/beam#2160](https://github.com/BeamMW/beam/pull/2160); the pool runs the patched node until it is merged.
 - Release binaries of `bb-coinbase` (Linux, macOS, Windows) next to the CPU miner's.
 - A sharechain in place of the pool server's PPLNS window: the same pairs, no operator in the middle.
