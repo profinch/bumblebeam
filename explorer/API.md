@@ -66,9 +66,27 @@ blocks = requests.get("https://explorer.bumblebeam.org/v1/blocks", params={"limi
 `https://explorer.bumblebeam.org/mcp` speaks MCP over Streamable HTTP (stateless, JSON
 responses, protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
 
-| explorer | pool |
+| tool | what it answers |
 |---|---|
-| `explorer_status`, `explorer_search`, `explorer_latest_blocks`, `explorer_block`, `explorer_kernel`, `explorer_supply`, `explorer_assets`, `explorer_asset`, `explorer_dex_pools`, `explorer_names`, `explorer_contracts`, `explorer_contract` | `pool_stats`, `pool_blocks`, `pool_miner`, `pool_miners`, `pool_payments`, `pool_network`, `pool_health` |
+| `explorer_status` | chain tip, peers, shielded counts |
+| `explorer_search` | what a height, kernel, contract, asset or name is |
+| `explorer_latest_blocks` | block headers, newest first, with paging |
+| `explorer_block` | one block with kernels, outputs, inputs |
+| `explorer_kernel` | a transaction kernel and its block |
+| `explorer_supply` | BEAM issued and maximum supply |
+| `explorer_assets` | assets with decimals, supply, descriptions |
+| `explorer_asset` | one asset, its history, holders and pools |
+| `explorer_dex_pools` | DEX pools, reserves and rates |
+| `explorer_names` | BANS names with status and dates |
+| `explorer_contracts` | deployed contracts |
+| `explorer_contract` | one contract's state and calls |
+| `pool_stats` | pool hashrate, miners, blocks, fees |
+| `pool_blocks` | blocks the pool found |
+| `pool_miner` | one miner by payout address |
+| `pool_miners` | top miners by hashrate |
+| `pool_payments` | payout runs |
+| `pool_network` | Beam network and every Beam pool |
+| `pool_health` | whether the pool is up and has work |
 
 ```sh
 claude mcp add --transport http bumblebeam https://explorer.bumblebeam.org/mcp
