@@ -1068,7 +1068,8 @@
   // Inline Markdown: code spans first, everything else escaped, then **bold** and [links](url).
   // Relative links resolve against the file on GitHub; only https links are kept.
   function mdInline(raw, { inTable = false } = {}) {
-    const code = (t) => `<code>${inTable ? esc(t).replace(/([/?&=])/g, '$1<wbr>') : esc(t)}</code>`;
+    // in tables, code may break after / ? & = (not after its first character), split before escaping
+    const code = (t) => `<code>${inTable ? t.split(/(?<=.[/?&=])/).map(esc).join('<wbr>') : esc(t)}</code>`;
     const span = (txt) => txt.split(/(`[^`]+`)/).map((t) => (/^`[^`]+`$/.test(t) ? code(t.slice(1, -1))
       : esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'))).join('');
     // links first, so their text may hold code: [`/v1/openapi.json`](https://…)
