@@ -621,8 +621,6 @@
     if (path + location.search !== location.pathname + location.search) history.pushState(null, '', path + location.search);
     render(true);
   }
-  // Old links had the route after a hash (/#/miners/<address>): move it into the path.
-  if (/^#\//.test(location.hash)) history.replaceState(null, '', `/${location.hash.slice(2)}${location.search}`);
 
   let seq = 0;
   async function render(scrollTop = true) {
