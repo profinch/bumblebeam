@@ -1067,18 +1067,20 @@
 
   // Inline Markdown: code spans first, everything else escaped, then **bold** and [links](url).
   // Relative links resolve against the file on GitHub; only https links are kept.
-  function mdInline(raw) {
-    return raw.split(/(`[^`]+`)/).map((t) => {
-      if (/^`[^`]+`$/.test(t)) return `<code>${esc(t.slice(1, -1))}</code>`;
-      return esc(t)
-        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, text, href) => {
-          let url;
-          try { url = new URL(href.replace(/&amp;/g, '&'), API_DOC_PAGE); } catch (e) { return text; }
-          return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${text}</a>` : text;
-        });
+  function mdInline(raw, { inTable = false } = {}) {
+    const code = (t) => `<code>${inTable ? esc(t).replace(/([/?&=])/g, '$1<wbr>') : esc(t)}</code>`;
+    const span = (txt) => txt.split(/(`[^`]+`)/).map((t) => (/^`[^`]+`$/.test(t) ? code(t.slice(1, -1))
+      : esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'))).join('');
+    // links first, so their text may hold code: [`/v1/openapi.json`](https://…)
+    return raw.split(/(\[[^\]]+\]\([^)\s]+\))/).map((t) => {
+      const m = t.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+      if (!m) return span(t);
+      let url;
+      try { url = new URL(m[2], API_DOC_PAGE); } catch (e) { return span(m[1]); }
+      return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${span(m[1])}</a>` : span(m[1]);
     }).join('');
   }
+
 
   // The Markdown that API.md uses: headings, fenced code, tables, lists, paragraphs.
   function mdRender(src) {
@@ -1086,7 +1088,7 @@
     const out = [];
     let para = [];
     const flush = () => { if (para.length) out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; };
-    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim()));
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim(), { inTable: true }));
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
       if (/^```/.test(l)) {

@@ -69,7 +69,9 @@
     const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 7.2 + 12;
     const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
-    const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + pw + 6 + ptw + 4) : 0);
+    // the current value's pill gets a fixed slot (as wide as "1.23k"), the peak label starts after it
+    const slot = Math.max(pw, 5 * 7.2 + 12);
+    const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + slot + 8 + ptw + 4) : 0);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
@@ -91,14 +93,14 @@
     }
     const ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const id = `g${Math.random().toString(36).slice(2, 8)}`;
-    // the peak: the same guide as the current value, its value in plain text at the right edge
-    // (so it does not move with the current value's width), past the current value's pill
+    // the peak: the same guide as the current value, its value in plain text a fixed distance
+    // right of the current value's pill slot, so it does not move with the current value
     let peakMark = '';
     if (peak) {
       const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
       // the guide runs on to the text, under the current value's pill (drawn after it)
-      peakMark = `<line class="now" x1="${L}" x2="${(W - 2 - ptw - 3).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
-      <text class="peak-text" x="${W - 2}" y="${ty.toFixed(1)}" text-anchor="end" dominant-baseline="central">${esc(pText)}</text>`;
+      peakMark = `<line class="now" x1="${L}" x2="${(W - R + 4 + slot + 5).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
+      <text class="peak-text" x="${(W - R + 4 + slot + 8).toFixed(1)}" y="${ty.toFixed(1)}" dominant-baseline="central">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
@@ -667,18 +669,20 @@
 
   // Inline Markdown: code spans first, everything else escaped, then **bold** and [links](url).
   // Relative links resolve against the file on GitHub; only https links are kept.
-  function mdInline(raw) {
-    return raw.split(/(`[^`]+`)/).map((t) => {
-      if (/^`[^`]+`$/.test(t)) return `<code>${esc(t.slice(1, -1))}</code>`;
-      return esc(t)
-        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, text, href) => {
-          let url;
-          try { url = new URL(href.replace(/&amp;/g, '&'), API_DOC_PAGE); } catch (e) { return text; }
-          return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${text}</a>` : text;
-        });
+  function mdInline(raw, { inTable = false } = {}) {
+    const code = (t) => `<code>${inTable ? esc(t).replace(/([/?&=])/g, '$1<wbr>') : esc(t)}</code>`;
+    const span = (txt) => txt.split(/(`[^`]+`)/).map((t) => (/^`[^`]+`$/.test(t) ? code(t.slice(1, -1))
+      : esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'))).join('');
+    // links first, so their text may hold code: [`/v1/openapi.json`](https://…)
+    return raw.split(/(\[[^\]]+\]\([^)\s]+\))/).map((t) => {
+      const m = t.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+      if (!m) return span(t);
+      let url;
+      try { url = new URL(m[2], API_DOC_PAGE); } catch (e) { return span(m[1]); }
+      return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${span(m[1])}</a>` : span(m[1]);
     }).join('');
   }
+
 
   // The Markdown that API.md uses: headings, fenced code, tables, lists, paragraphs.
   function mdRender(src) {
@@ -686,7 +690,7 @@
     const out = [];
     let para = [];
     const flush = () => { if (para.length) out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; };
-    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim()));
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim(), { inTable: true }));
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
       if (/^```/.test(l)) {
