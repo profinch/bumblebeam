@@ -1,5 +1,4 @@
 /* BumbleBeam Explorer: additions to the pool's styles.css */
-.word .sub-word { font-style: normal; font-weight: 400; color: var(--muted); font-size: 0.8em; margin-left: 4px; }
 .hash { font-family: var(--font-mono); word-break: break-all; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font: 12px var(--font-mono); }
 .kv dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding-top: 2px; }
