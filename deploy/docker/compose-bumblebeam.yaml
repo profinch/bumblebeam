@@ -26,6 +26,26 @@ services:
     networks:
       - bumblebeam
 
+  # The explorer's data: a second full node with Beam's HTTP explorer API on 8888,
+  # syncing from our archival node over the compose network. Published nowhere;
+  # explorer-web proxies the read-only API.
+  explorer-node:
+    image: bumblebeam-beam
+    container_name: explorer-node
+    hostname: explorer-node
+    restart: unless-stopped
+    command: ["explorer-node", "--config_file=/data/explorer-node.cfg"]
+    working_dir: /data
+    volumes:
+      - /data/bumblebeam/explorer:/data
+    ulimits:
+      nofile: 65536
+    stop_grace_period: 60s
+    depends_on:
+      - beam-node
+    networks:
+      - bumblebeam
+
   # Payouts. Anyone who can reach 10001 can spend the wallet: it is on its own
   # internal network, published nowhere, and only answers the pool's address.
   wallet-api:
