@@ -358,3 +358,6 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 
 /* the product name after the logo: "BumbleBeam Pool", "BumbleBeam Explorer" */
 .word .sub-word { font-style: normal; font-weight: 400; color: var(--muted); font-size: 0.8em; margin-left: 4px; }
+.kernels summary { cursor: pointer; color: var(--accent); }
+.kernels[open] summary { margin-bottom: 6px; }
+.kernels div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }

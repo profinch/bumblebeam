@@ -76,18 +76,27 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
                 total = pplns.iter().map(|(_, d)| d).sum();
             }
             let (per, total) = if total > 0.0 { (pplns, total) } else { (vec![(sub.miner_id, 1.0)], 1.0) };
-            let pot = reward as f64 * (1.0 - shared.cfg.pool.fee_percent / 100.0);
-            for (miner_id, d) in &per {
-                let amount = (pot * d / total).floor() as i64;
-                if amount > 0 {
-                    tx.execute("INSERT INTO credits (block_height, miner_id, amount) VALUES ($1,$2,$3)", &[&height, miner_id, &amount]).await?;
+            let (amounts, bonus) = pplns_split(reward, shared.cfg.pool.fee_percent, shared.cfg.pool.finder_bonus_percent, &per, total);
+            for (miner_id, amount) in amounts.iter().chain(std::iter::once(&(sub.miner_id, bonus))) {
+                if *amount > 0 {
+                    tx.execute("INSERT INTO credits (block_height, miner_id, amount) VALUES ($1,$2,$3)", &[&height, miner_id, amount]).await?;
                 }
             }
-            info!(height, miners = per.len(), window, total, lookback, "pplns block credited");
+            info!(height, miners = per.len(), window, total, lookback, finder = %crate::state::Short(&sub.address), finder_bonus = bonus, "pplns block credited");
         }
     }
     tx.commit().await?;
     Ok(())
+}
+
+/// A PPLNS block's credits: the reward minus the fee is the miners' pot; the finder's bonus comes
+/// out of it, and the rest is shared in proportion to each miner's difficulty in the window.
+/// Returns the per-miner amounts and the bonus, all rounded down (the dust stays with the pool).
+fn pplns_split(reward: i64, fee_percent: f64, bonus_percent: f64, per: &[(i64, f64)], total: f64) -> (Vec<(i64, i64)>, i64) {
+    let pot = reward as f64 * (1.0 - fee_percent / 100.0);
+    let bonus = (pot * bonus_percent / 100.0).floor() as i64;
+    let pot = pot - bonus as f64;
+    (per.iter().map(|(m, d)| (*m, (pot * d / total).floor() as i64)).collect(), bonus)
 }
 
 /// Every minute: mature pending blocks, verify them, move credits to balances.
@@ -226,4 +235,24 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pplns_split;
+
+    #[test]
+    fn pplns_split_with_finder_bonus() {
+        // 25 BEAM, 0.5% fee, 1% bonus: pot 24.875, bonus 0.24875, 24.62625 shared 3:1
+        let (amounts, bonus) = pplns_split(2_500_000_000, 0.5, 1.0, &[(1, 3.0), (2, 1.0)], 4.0);
+        assert_eq!(bonus, 24_875_000);
+        assert_eq!(amounts, vec![(1, 1_846_968_750), (2, 615_656_250)]);
+        assert!(amounts.iter().map(|a| a.1).sum::<i64>() + bonus <= 2_487_500_000);
+    }
+
+    #[test]
+    fn pplns_split_without_bonus_is_the_old_rule() {
+        let (amounts, bonus) = pplns_split(2_500_000_000, 0.5, 0.0, &[(7, 1.0)], 1.0);
+        assert_eq!((amounts, bonus), (vec![(7, 2_487_500_000)], 0));
+    }
 }

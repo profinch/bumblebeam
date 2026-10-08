@@ -152,7 +152,7 @@ const BB = (() => {
       hashrate: num(r.hashrate) || 0, minersTotal: num(r.minersTotal) || 0, workersTotal: num(r.workersTotal) || 0,
       lastBlockFound: num(s.lastBlockFound), roundShares: num(s.roundShares),
       height, difficulty: num(node.difficulty), networkHashrate: num(node.networkhashps),
-      fee, soloFee: num(c.soloFee) ?? fee, minPayout: num(c.minPayout) ?? MIN_PAYOUT, scheme: str(c.payoutScheme, 16) || 'PPLNS',
+      fee, soloFee: num(c.soloFee) ?? fee, finderBonus: num(c.finderBonus) || 0, minPayout: num(c.minPayout) ?? MIN_PAYOUT, scheme: str(c.payoutScheme, 16) || 'PPLNS',
       pplnsWindow: num(c.pplnsWindow), maturity: num(c.maturity) ?? MATURITY, payoutInterval: num(c.payoutInterval) ?? PAYOUT_INTERVAL,
       blockReward: num(c.blockReward) ?? blockReward(height),
       stratumHost: str(c.stratumHost, 253),
@@ -178,7 +178,10 @@ const BB = (() => {
     name: str(w.name, 64), hashrate: num(w.hashrate) || 0, hashrate24h: num(w.hashrate24h), lastShare: num(w.lastShare), online: !!w.online,
     stale: num(w.stale), rejected: num(w.rejected),
   });
-  const normPayment = (p) => ({ ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 64) });
+  const normPayment = (p) => ({
+    ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 64),
+    txs: (Array.isArray(p.txs) ? p.txs : []).slice(0, 500).map((t) => ({ kernel: str(t && t.kernel, 64), amount: num(t && t.amount) || 0 })).filter((t) => t.kernel),
+  });
   const normMiner = (m) => ({
     address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,
     immature: num(m.immature) || 0, paid: num(m.paid) || 0, lastShare: num(m.lastShare),
@@ -289,7 +292,9 @@ const BB = (() => {
 
       const payments = [];
       for (let pt = Math.floor(now / PAYOUT_INTERVAL) * PAYOUT_INTERVAL; pt > now - 86400 * 3; pt -= PAYOUT_INTERVAL) {
-        payments.push({ ts: pt, amount: Math.round((0.6 + r() * 0.8) * PAYOUT_INTERVAL * perSec * reward), miners: 12 + ((r() * 20) | 0), kernel: hex(r, 64) });
+        const n = 12 + ((r() * 20) | 0), txs = [];
+        for (let i = 0; i < n; i++) txs.push({ kernel: hex(r, 64), amount: Math.round((0.02 + r() * 0.1) * PAYOUT_INTERVAL * perSec * reward) });
+        payments.push({ ts: pt, amount: txs.reduce((s, t) => s + t.amount, 0), miners: n, kernel: txs[n - 1].kernel, txs });
       }
 
       const day = blocks.filter((b) => b.ts > now - 86400);
@@ -299,7 +304,7 @@ const BB = (() => {
           hashrate, minersTotal: miners.length, workersTotal: miners.reduce((s, m) => s + m.workers, 0),
           stats: { lastBlockFound: blocks[0] ? blocks[0].ts : null, roundShares: 0 },
           nodes: [{ name: 'beam-node-1', height: String(height), difficulty: String((net && net.difficulty) || 2.72e6), networkhashps: String(netHash), lastBeat: String(now) }],
-          config: { fee: FEE, soloFee: FEE, minPayout: MIN_PAYOUT, payoutScheme: 'PPLNS', pplnsWindow: 2.0, blockReward: reward, maturity: MATURITY, payoutInterval: PAYOUT_INTERVAL },
+          config: { fee: FEE, soloFee: FEE, finderBonus: 1, minPayout: MIN_PAYOUT, payoutScheme: 'PPLNS', pplnsWindow: 2.0, blockReward: reward, maturity: MATURITY, payoutInterval: PAYOUT_INTERVAL },
           charts: { hashrate: series },
           blocks24h: day.length,
           effort24h: day.length ? day.reduce((s, b) => s + b.effort, 0) / day.length : null,

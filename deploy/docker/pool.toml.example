@@ -27,6 +27,7 @@ nonce_prefix_bytes = 3
 name = "BumbleBeam"
 fee_percent = 0.5
 solo_fee_percent = 0.5
+finder_bonus_percent = 1.0                # PPLNS: share of the block (after the fee) to the rig that found it, on top of its share; 0 disables
 min_payout_groth = 100000000              # 1 BEAM; the shielded network fee alone is 0.01 BEAM, so keep this well above it
 miner_pays_tx_fee = true                  # the network fee comes out of the payout
 payout_interval_secs = 7200

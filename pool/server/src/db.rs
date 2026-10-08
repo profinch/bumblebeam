@@ -364,11 +364,13 @@ impl Db {
     pub async fn payments(&self, limit: i64) -> Result<Vec<Value>> {
         let c = self.client().await?;
         // one row per payout run (all payments of a run share the timestamp); Beam pays each miner
-        // in its own transaction, so a run has several kernels: the latest is shown
+        // in its own transaction, so a run has several kernels: all of them are listed, with amounts
+        // and without addresses, so every payout can be found on the chain
         let rows = c
             .query(
-                "SELECT ts, SUM(amount)::BIGINT, COUNT(*), MAX(kernel), COUNT(*) FILTER (WHERE status='completed') FROM payments
-                 WHERE status <> 'failed' GROUP BY ts ORDER BY ts DESC LIMIT $1",
+                "SELECT ts, SUM(amount)::BIGINT, COUNT(*), MAX(kernel), COUNT(*) FILTER (WHERE status='completed'),
+                        array_agg(kernel ORDER BY id) FILTER (WHERE kernel IS NOT NULL), array_agg(amount ORDER BY id) FILTER (WHERE kernel IS NOT NULL)
+                 FROM payments WHERE status <> 'failed' GROUP BY ts ORDER BY ts DESC LIMIT $1",
                 &[&limit],
             )
             .await?;
@@ -377,8 +379,11 @@ impl Db {
             .map(|r| {
                 let n: i64 = r.get(2);
                 let done: i64 = r.get(4);
+                let kernels = r.get::<_, Option<Vec<String>>>(5).unwrap_or_default();
+                let amounts = r.get::<_, Option<Vec<i64>>>(6).unwrap_or_default();
+                let txs: Vec<Value> = kernels.iter().zip(&amounts).map(|(k, a)| json!({ "kernel": k, "amount": a })).collect();
                 json!({ "ts": r.get::<_, i64>(0), "amount": r.get::<_, i64>(1), "miners": n, "kernel": r.get::<_, Option<String>>(3),
-                        "status": if done == n { "completed" } else { "pending" } })
+                        "status": if done == n { "completed" } else { "pending" }, "txs": txs })
             })
             .collect())
     }

@@ -227,7 +227,7 @@
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
         ${tile('Blocks 24h', int(stats.blocks24h), [expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)}` : '', stats.effort24h != null ? `effort ${pct(stats.effort24h, 0)}` : ''].filter(Boolean).join(' · '))}
         ${tile('Last block', ago(stats.lastBlockFound))}
-        ${tile('Fee', pctFee(stats.fee), `${esc(stats.scheme)} · solo ${pctFee(stats.soloFee)}`)}
+        ${tile('Fee', pctFee(stats.fee), `${esc(stats.scheme)} · solo ${pctFee(stats.soloFee)}${stats.finderBonus ? ` · finder bonus ${pctFee(stats.finderBonus)}` : ''}`)}
         ${tile('Min payout', beam(stats.minPayout, 2), `every ${dur(stats.payoutInterval)}, after ${int(stats.maturity)} confirmations`)}
       </div>
       <section class="panel">
@@ -367,12 +367,31 @@
         ${tile('Payout runs 24h', int(day.length), `every ${dur(stats.payoutInterval)}`)}
         ${tile('Min payout', beam(stats.minPayout, 2), stats.minerPaysTxFee ? `network fee deducted, about ${beam(stats.shieldedFee, 3)} per payout to an offline address` : 'network fee paid by the pool')}
       </div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout transactions</h2><div class="panel-meta"><span>Kernel IDs open in the explorer</span></div></div>
-      ${payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th class="num">Miners</th><th>Kernel</th></tr></thead><tbody>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout transactions</h2><div class="panel-meta"><span>Every payout is its own Beam transaction: open its kernel in the explorer to see it on the chain</span></div></div>
+      ${payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th class="num">Miners</th><th>Kernels</th></tr></thead><tbody>
       ${payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount, 2)}</td><td class="num">${int(p.miners)}</td>
-        <td class="dim">${p.kernel ? `<a href="${explorerKernel(p.kernel)}" target="_blank" rel="noopener">${esc(short(p.kernel, 12, 12))}</a>` : '—'}</td></tr>`).join('')}
+        <td class="dim">${kernelCell(p)}</td></tr>`).join('')}
       </tbody></table></div>` : '<div class="empty">No payments yet</div>'}</section>`;
   };
+
+  // One kernel link, or for a run with several transactions a list of all of them with amounts.
+  const kernelLink = (k, a = 12, b = 12) => `<a href="${explorerKernel(k)}" target="_blank" rel="noopener" class="mono">${esc(short(k, a, b))}</a>`;
+  const kernelCell = (p) => {
+    if (p.txs.length > 1) {
+      return `<details class="kernels"><summary>${int(p.txs.length)} transactions</summary>
+        ${p.txs.map((t) => `<div>${kernelLink(t.kernel, 10, 10)} <span class="num">${beam(t.amount, 3)}</span></div>`).join('')}</details>`;
+    }
+    const k = p.txs.length ? p.txs[0].kernel : p.kernel;
+    return k ? kernelLink(k) : '—';
+  };
+
+  // Official download pages of the miners on the connect page; nothing is mirrored here.
+  const MINERS = [
+    { name: 'MXBM', url: 'https://git.maxnflaxl.dev/maxnflaxl/MXBM', what: 'open source (Apache-2.0), NVIDIA, AMD, Apple; built from source' },
+    { name: 'lolMiner', url: 'https://github.com/Lolliedieb/lolMiner-releases/releases', what: 'NVIDIA, AMD; Windows, Linux' },
+    { name: 'GMiner', url: 'https://github.com/develsoftware/GMinerRelease/releases', what: 'NVIDIA, AMD; Windows, Linux' },
+    { name: 'bumblebeam-miner', url: 'https://github.com/profinch/bumblebeam/releases', what: 'open source CPU miner, a reference tool rather than an earner' },
+  ];
 
   views.connect = async () => {
     const [stats, net] = await Promise.all([BB.pool('stats'), BB.network().catch(() => null)]);
@@ -389,7 +408,7 @@
               <div class="row"><label class="field" style="flex:1;min-width:240px">Wallet address<input id="addr" placeholder="paste your offline address" spellcheck="false" autocomplete="off"></label>
               <label class="field">Worker<input id="worker" value="rig1" maxlength="32" style="width:110px"></label></div>
               <div class="note" id="addr-note" hidden></div></div>
-            <div class="step"><h3>Pick a mode</h3><p>PPLNS shares every block the pool finds, in proportion to your shares. Solo pays you the whole block, only when your rig finds it. Both ${pctFee(stats.fee)} fee.</p>
+            <div class="step"><h3>Pick a mode</h3><p>PPLNS shares every block the pool finds, in proportion to your shares. Solo pays you the whole block, only when your rig finds it. Both ${pctFee(stats.fee)} fee.${stats.finderBonus ? ` In PPLNS the rig whose share finds a block also gets a <b>${pctFee(stats.finderBonus)} finder bonus</b> on top of its share.` : ''}</p>
               <div class="row" style="align-items:center">
                 <div class="seg" id="mode"><button class="on" data-v="pplns">PPLNS</button><button data-v="solo">Solo</button></div>
                 <div class="seg" id="tls"><button data-v="0">TCP</button><button class="on" data-v="1">TLS</button></div>
@@ -409,10 +428,17 @@
             <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
               ${beam(stats.blockReward, 1)} per block plus fees, ${pctFee(stats.fee)} pool fee.</p>
           </section>
+          <section class="panel" id="downloads"><div class="panel-head"><h2 class="panel-title">Get a miner from its official source</h2></div>
+            <div class="stack why">
+              ${MINERS.map((m) => `<div><a href="${m.url}" target="_blank" rel="noopener"><b>${m.name}</b></a> <span class="dim">· ${m.what}</span></div>`).join('')}
+              <div class="dim" style="font-size:12px">Only download miners from these pages. Copies on other sites and in chats are a common way to spread malware.</div>
+            </div>
+          </section>
           <section class="panel"><div class="panel-head"><h2 class="panel-title">Why BumbleBeam</h2></div>
             <div class="stack why">
               <div><b>Open source.</b> Server, share checks and payouts are public code, tested against the Beam core on real mainnet blocks.</div>
-              <div><b>Checkable.</b> Every block and payout links to the chain, and PPLNS rounds are published so you can recompute your share.</div>
+              <div><b>Checkable.</b> Every block and every payout transaction links to the chain, and PPLNS rounds are published so you can recompute your share.</div>
+              ${stats.finderBonus ? `<div><b>Finder bonus.</b> Find a block in PPLNS and ${pctFee(stats.finderBonus)} of it is yours on top of your share.</div>` : ''}
               <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no registration. Payouts carry only Beam's own network fee.</div>
               <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
