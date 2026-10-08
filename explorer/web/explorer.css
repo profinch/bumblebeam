@@ -24,3 +24,5 @@ tr.grp-sub td:first-child { padding-left: 18px; }
 td .kv { font-size: 11px; gap: 2px 10px; }
 .nowrap { white-space: nowrap; }
 table.peer-table { width: auto; min-width: 360px; }
+.copy { cursor: pointer; }
+.copy:hover { color: var(--accent); }
