@@ -124,6 +124,29 @@ interrupted payments automatically; without it they wait for an operator in `rev
 Then run the test suite against a throwaway database (`pool/server/tools/e2e.sh`, see its header)
 and a real miner against the TLS port: MXBM, lolMiner and GMiner all default to TLS for Beam.
 
+## 7b. Coinbase payouts (optional)
+
+Miners can be paid in the blocks themselves, with outputs they made and signed, so the pool never
+holds their money ([`tools/coinbase/`](../tools/coinbase/README.md)). It needs the patched node, a
+**mining wallet of its own** for the pool's share, and `bb-finalizer` next to the node.
+
+```sh
+# 1. the node: BeamMW/beam with tools/coinbase/beam-node-foreign-coinbase.patch applied (41 lines, see the README)
+# 2. a mining wallet: a fresh beam-wallet, its seed in /etc/bumblebeam/mining-wallet.seed (mode 600, owner beam);
+#    its owner key and miner key (export_owner_key, export_miner_key --subkey=1) go into beam-node.cfg
+#    as owner_key / miner_key, with mine_online=1, mine_online_foreign=1, mine_online_reserve=65536
+# 3. the finalizer, built against the node's build tree:
+BEAM_SRC=/opt/beam BEAM_BUILD=/opt/beam-build OUTDIR=/opt/bumblebeam /opt/bumblebeam/tools/coinbase/build.sh finalizer
+sudo cp /opt/bumblebeam/pool/deploy/bb-finalizer.service /etc/systemd/system/ && sudo systemctl enable --now bb-finalizer
+# 4. pool.toml: [coinbase] enabled = true (link_bind stays on loopback)
+```
+
+With coinbase payouts on, the pool confirms its blocks by its own node's chain (as the finalizer
+reports it), not by the wallet's UTXOs, so `verify_blocks_with_wallet` no longer applies to them.
+Payouts by transaction keep working for miners who log in with an address. `curl -s
+localhost:8080/api/coinbase` shows the finalizer's state; a miner sets up with `bb-coinbase`
+(release binary or `build.sh miner`) as the README describes.
+
 ## 8. Network and firewall
 
 Open to the world: 10000/tcp (node p2p, so the node is a full peer), 3333, 3334, 3443, 3444

@@ -47,6 +47,8 @@ pub fn router(api: Api) -> Router {
         .route("/api/payments", get(payments))
         .route("/api/network", get(network))
         .route("/api/health", get(health))
+        .route("/api/coinbase", get(coinbase_info))
+        .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
         .route("/api/miningboard", get(miningboard))
         .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
         .layer(CorsLayer::permissive())
@@ -85,7 +87,7 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
                     "pplnsWindow": cfg.pplns_window, "blockReward": height.map(|h| miner_reward_groth(h + 1)), "maturity": cfg.maturity,
                     "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host,
                     "minerPaysTxFee": cfg.miner_pays_tx_fee, "txFee": { "regular": s.cfg.wallet_api.tx_fee_groth, "shielded": s.cfg.wallet_api.shielded_fee_groth },
-                    "blockFeesTo": "pool",
+                    "blockFeesTo": "pool", "coinbase": s.coinbase.is_some(),
                     "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
                                "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
         "charts": { "hashrate": s.db.pool_chart(t, range(&q)).await? },
@@ -115,7 +117,9 @@ async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
 
 async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
     let address: String = address.chars().filter(|c| !c.is_whitespace()).collect();
-    if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric()) {
+    // coinbase accounts are "cb:" + hex, and case-insensitive
+    let address = if address.to_ascii_lowercase().starts_with("cb:") { address.to_ascii_lowercase() } else { address };
+    if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric() || c == ':') {
         return Ok(Json(json!({ "error": "not a Beam address" })));
     }
     let s = &api.shared;
@@ -167,6 +171,29 @@ async fn miningboard(State(api): State<Api>) -> R {
                                           "block_reward": beam(miner_reward_groth(h + 1)), "block_time": 60 })),
         "stratum": stratum,
     })))
+}
+
+async fn coinbase_info(State(api): State<Api>) -> R {
+    Ok(Json(crate::coinbase::info(&api.shared).await?))
+}
+
+async fn coinbase_upload(State(api): State<Api>, body: axum::body::Bytes) -> Response {
+    if body.len() > 2 << 20 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({ "error": "upload over 2 MB" }))).into_response();
+    }
+    let v: Value = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "body is not JSON" }))).into_response(),
+    };
+    match crate::coinbase::upload(&api.shared, &v).await {
+        Ok(res) => Json(res).into_response(),
+        Err((code, msg)) => {
+            if code >= 500 {
+                error!("coinbase upload: {msg}");
+            }
+            (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(json!({ "error": msg }))).into_response()
+        }
+    }
 }
 
 async fn health(State(api): State<Api>) -> R {

@@ -56,6 +56,8 @@ pub struct Shared {
     pub net_height: AtomicU64,
     pub started: Instant,
     pub http: reqwest::Client,
+    /// The link to bb-finalizer when coinbase payouts are enabled.
+    pub coinbase: Option<Arc<crate::coinbase::Link>>,
 }
 
 impl Shared {

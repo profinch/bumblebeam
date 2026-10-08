@@ -142,6 +142,23 @@ async fn chain_has(shared: &Arc<Shared>, height: i64, hash: &str) -> (Option<boo
     (None, "none")
 }
 
+/// The verdict from the wallet and the explorer alone (no coinbase mode). None = decide later.
+fn verdict_without_node(wallet_says: Option<bool>, chain_says: Option<bool>, long_overdue: bool, height: i64) -> (Option<&'static str>, &'static str) {
+    match (wallet_says, chain_says) {
+        (Some(true), Some(true)) => (Some("confirmed"), "wallet+explorer"),
+        (Some(true), None) => (Some("confirmed"), "wallet"),
+        (Some(true), Some(false)) => (Some("unverified"), "wallet says ours, explorer says another block"),
+        (Some(false), Some(false)) => (Some("orphaned"), "explorer: another block at this height, no coinbase in the wallet"),
+        (Some(false), Some(true)) => (Some("unverified"), "explorer says ours, no coinbase in the wallet (miner key?)"),
+        (Some(false), None) if long_overdue => (Some("unverified"), "no coinbase in the wallet 60 blocks past maturity"),
+        (Some(false), None) => {
+            info!(height, "coinbase not in the wallet yet, retrying");
+            (None, "")
+        }
+        (None, _) => (Some("unverified"), "no wallet verification configured"),
+    }
+}
+
 async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<()> {
     let Some(tip) = shared.tip_height() else { return Ok(()) };
     let maturity = shared.cfg.pool.maturity as i64;
@@ -154,9 +171,14 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
     }
     let lowest: i64 = rows[0].get(0);
 
+    // With coinbase payouts the pool's wallet only gets the remainder of a block, so the UTXO check
+    // does not apply; our node's chain, as the finalizer reports it, is the judge instead.
+    let coinbase_mode = shared.coinbase.is_some();
+    let chain_tip = if coinbase_mode { shared.db.chain_tip().await?.unwrap_or(0) } else { 0 };
+
     // The wallet's UTXO list is conclusive only once the wallet has itself reached the maturity
     // height of a block; it is loaded once per cycle and only when it can decide something.
-    let (wallet_height, utxos) = match wallet {
+    let (wallet_height, utxos) = match wallet.filter(|_| !coinbase_mode) {
         Some(w) => {
             let st = match w.status().await {
                 Ok(st) => st,
@@ -198,20 +220,30 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
         // a coinbase still missing long after maturity is not going to appear by itself
         let long_overdue = wallet_height >= height + maturity + 60;
 
-        let (status, by) = match (wallet_says, chain_says) {
-            (Some(true), Some(true)) => ("confirmed", "wallet+explorer"),
-            (Some(true), None) => ("confirmed", "wallet"),
-            (Some(true), Some(false)) => ("unverified", "wallet says ours, explorer says another block"),
-            (Some(false), Some(false)) => ("orphaned", "explorer: another block at this height, no coinbase in the wallet"),
-            (Some(false), Some(true)) => ("unverified", "explorer says ours, no coinbase in the wallet (miner key?)"),
-            (Some(false), None) if long_overdue => ("unverified", "no coinbase in the wallet 60 blocks past maturity"),
-            (Some(false), None) => {
-                info!(height, "coinbase not in the wallet yet, retrying");
+        // our own node's chain, through the finalizer: conclusive once it is past the block's maturity
+        let node_says = if coinbase_mode && chain_tip >= height + maturity && !hash.is_empty() {
+            shared.db.chain_header(height).await?.map(|h| h == hash)
+        } else {
+            None
+        };
+
+        let (status, by): (Option<&str>, &str) = match (node_says, wallet_says, chain_says) {
+            (Some(true), _, Some(false)) => (Some("unverified"), "our node says ours, explorer says another block"),
+            (Some(true), _, _) => (Some("confirmed"), "node"),
+            (Some(false), _, Some(true)) => (Some("unverified"), "our node says another block, explorer says ours"),
+            (Some(false), _, _) => (Some("orphaned"), "our node: another block at this height"),
+            (None, _, _) if coinbase_mode => {
+                if chain_tip > 0 && chain_tip < height + maturity {
+                    info!(height, chain_tip, "node chain not yet past this block's maturity, waits");
+                } else {
+                    info!(height, "no chain header from the finalizer for this height yet, waits");
+                }
                 continue;
             }
-            (None, _) => ("unverified", "no wallet verification configured"),
+            (None, w, c) => verdict_without_node(w, c, long_overdue, height),
         };
-        info!(height, %hash, ?wallet_says, ?chain_says, source, status, by, "block verdict");
+        let Some(status) = status else { continue };
+        info!(height, %hash, ?node_says, ?wallet_says, ?chain_says, source, status, by, "block verdict");
 
         let mut c = shared.db.client().await?;
         let tx = c.transaction().await?;
@@ -226,6 +258,12 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
                 &[&height],
             )
             .await?;
+        }
+        if coinbase_mode {
+            let settled = crate::db::cb_settle_block(&tx, height, status == "confirmed").await?;
+            if settled > 0 {
+                info!(height, settled, status, "coinbase payments of the block settled");
+            }
         }
         tx.commit().await?;
         match status {

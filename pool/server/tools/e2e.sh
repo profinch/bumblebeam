@@ -7,7 +7,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 URL=$(grep -E '^url_file' pool.test.toml | sed -E 's/.*= *"([^"]+)".*/\1/')
 DB=$(cat "$URL")
-psql "$DB" -q -c "DROP TABLE IF EXISTS shares, blocks, credits, miners, payments, share_events, hashrate_samples, meta CASCADE;" 2>&1 | grep -v NOTICE
+psql "$DB" -q -c "DROP TABLE IF EXISTS shares, blocks, credits, miners, payments, share_events, hashrate_samples, meta, coinbase_pairs, chain_headers CASCADE;" 2>&1 | grep -v NOTICE
 pkill -f 'bumblebeam-pool pool.test.toml' 2>/dev/null
 RUST_LOG=info nohup ./target/release/bumblebeam-pool pool.test.toml > /tmp/pool-e2e.log 2>&1 &
 sleep 2

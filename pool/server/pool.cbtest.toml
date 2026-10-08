@@ -1,32 +1,32 @@
-# throwaway config for tools/e2e.py: fake node on 18101 without TLS, test ports, test database
+# throwaway config for tools/e2e_coinbase.py: fake node on 19101 without TLS, a fake bb-finalizer on the
+# coinbase link, test ports, the test database
 [node]
-stratum_addr = "127.0.0.1:18101"
+stratum_addr = "127.0.0.1:19101"
 api_key = "e2e-test-key"
 tls = false
 sync_lag_blocks = 0                       # the test template is a historical mainnet header
 
 [stratum]
-pplns_port = 13333
-solo_port = 13334
+pplns_port = 14333
+solo_port = 14334
 nonce_prefix_bytes = 0
 
 [pool]
 fee_percent = 0.5
 solo_fee_percent = 0.5
 min_payout_groth = 10000000
-block_check_url = ""
 payout_interval_secs = 7200
 pplns_window = 2.0
 maturity = 240
 verify_blocks_with_wallet = false
 
+[coinbase]
+enabled = true
+link_bind = "127.0.0.1:13481"
+
 [http]
-bind = "127.0.0.1:18080"
+bind = "127.0.0.1:19080"
 web_dir = "../web"
 
 [database]
 url_file = "database.test.url"   # created by the test scripts next to this file
-
-[coinbase]
-enabled = true                            # tools/e2e_coinbase.py plays bb-finalizer on this link
-link_bind = "127.0.0.1:13480"

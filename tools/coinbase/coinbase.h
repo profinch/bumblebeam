@@ -12,6 +12,10 @@
 // Amounts come from a ladder of powers of two, so that a few pairs add up to any share of a block. What
 // a block can't pay to a miner in pairs, and the pool's fee and the transaction fees, go to one output
 // of the pool's own.
+//
+// The miner's account at the pool is a key derived from the miner key ("cb:" + public key in hex, used
+// as the stratum login), and every upload of pairs is signed with it, so nobody can put pairs into
+// someone else's stock.
 
 #pragma once
 
@@ -32,6 +36,9 @@ struct Pair
 
 	Amount get_Value() const { return m_Output.m_pPublic ? m_Output.m_pPublic->m_Value : 0; }
 	const Merkle::Hash& get_KernelID() const { return m_pKernel->get_ID(); }
+	Height get_MinHeight() const { return m_pKernel->m_Height.m_Min; }
+	// Last height the pair can be mined at (kernels have a lifespan after HF2).
+	Height get_MaxHeight() const;
 
 	std::string ToHex() const;
 	bool FromHex(const std::string&);
@@ -43,9 +50,10 @@ struct Pair
 Pair MakePair(Key::IKdf& coin, Key::Index subIdx, Key::IPKdf& tag, Amount value, uint64_t idx, Height hScheme,
 	Height hMinKernel = 0);
 
-// The pool's side, before a pair is accepted into the stock: everything that can be checked without the chain.
-// Whether its kernel is already in the chain is checked by the node when it finalizes the block.
-bool VerifyPair(const Pair&, Height hScheme, std::string& sErr);
+// The pool's side, before a pair is accepted into the stock: everything that can be checked without the chain,
+// for a pair that would go into the block at hBlock (the tip + 1). Whether its kernel is already in the chain
+// is checked by the node when it finalizes the block.
+bool VerifyPair(const Pair&, Height hBlock, std::string& sErr);
 
 // Powers of two from 2^shift groth: shift 20 is ~0.0105 BEAM, and 12 steps from it reach ~43 BEAM.
 struct Ladder
@@ -96,5 +104,46 @@ struct Allocator
 // kernel for the rest. poolCoin and poolTag are the pool wallet's keys, as for Block::Builder.
 Transaction::Ptr BuildCoinbaseTx(const Allocator&, const Coinbase&, Key::IKdf& poolCoin, Key::Index poolSubIdx,
 	Key::IPKdf& poolTag, Height h);
+
+// The same from pairs already chosen (the pool server allocates): pairs that fail VerifyPair at height h
+// are left out and their value stays in the pool's output; their indexes are returned in vDropped.
+Transaction::Ptr BuildCoinbaseTx(const std::vector<Pair>& vPairs, Amount total, Key::IKdf& poolCoin,
+	Key::Index poolSubIdx, Key::IPKdf& poolTag, Height h, std::vector<size_t>& vDropped);
+
+// ---- Keys ----
+
+// The wallet's master key from its seed phrase, as beam-wallet derives it.
+Key::IKdf::Ptr KdfFromSeedPhrase(const std::string& phrase, std::string& sErr);
+
+// The strings `beam-wallet export_miner_key --subkey=N` and `export_owner_key` print, decrypted with the
+// wallet's password. Null on failure.
+Key::IKdf::Ptr ImportMinerKey(const std::string&, const std::string& pass);
+Key::IPKdf::Ptr ImportOwnerKey(const std::string&, const std::string& pass);
+
+// Hash of the owner (view) key's public part: the same for the wallet's exported owner key and for the
+// master key derived from its seed, so the two can be compared in logs.
+std::string OwnerFingerprint(Key::IPKdf&);
+
+// ---- Identity ----
+
+// The miner's account at the pool: a key derived from the miner key, so it is recoverable from the
+// wallet's seed. The account string "cb:<public key, 66 hex>" is the stratum login.
+struct Identity
+{
+	ECC::Scalar::Native m_sk;
+	ECC::Point m_pk;
+
+	static Identity Derive(Key::IKdf& minerKey);
+	std::string get_Account() const;
+};
+
+bool ParseAccount(const std::string&, ECC::Point::Native&);
+std::string AccountFromPk(const ECC::Point&);
+
+// An upload is (account, unix time, pairs in order), signed with the identity key. Signature in hex.
+ECC::Hash::Value UploadHash(const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex);
+std::string SignUpload(const Identity&, uint64_t ts, const std::vector<std::string>& vPairsHex);
+bool VerifyUpload(const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
+	const std::string& sigHex);
 
 } // namespace bb::coinbase

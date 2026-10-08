@@ -1,0 +1,16 @@
+[Unit]
+Description=BumbleBeam block finalizer (coinbase payouts)
+After=network-online.target beam-node.service bumblebeam-pool.service
+Wants=network-online.target
+
+[Service]
+User=beam
+WorkingDirectory=/etc/bumblebeam
+# node = the pool's own beam-node p2p port; pool = [coinbase] link_bind of pool.toml;
+# seed_file = the mining wallet's seed phrase, mode 600, owned by beam (the node runs with its owner key)
+ExecStart=/opt/bumblebeam/bb-finalizer --node 127.0.0.1:10000 --pool 127.0.0.1:3480 --seed_file /etc/bumblebeam/mining-wallet.seed --subkey 1 --log_level=info
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
