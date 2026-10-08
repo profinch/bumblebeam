@@ -327,8 +327,11 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .legend-row b { color: var(--text); font-weight: 700; }
 .legend-row .n { color: var(--muted); margin-left: 8px; }
 .legend-row .p { color: var(--text-dim); text-align: right; }
-.bars-head { display: flex; justify-content: space-between; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
-.bars-head span:last-child { font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
+.bars-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+.bars-head > span:last-child { font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
+.bars-key { display: flex; gap: 14px; margin-left: auto; font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
+.bars-key span { display: inline-flex; align-items: center; gap: 5px; }
+.bars-key i { width: 9px; height: 9px; border-radius: 2px; opacity: 0.75; }
 .bars { width: 100%; height: 120px; display: block; }
 .bars text { font: 10px var(--font-mono); fill: var(--muted); }
 .bars .target { stroke: var(--accent); stroke-opacity: .6; }
