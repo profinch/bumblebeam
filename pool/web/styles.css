@@ -277,12 +277,15 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 .dd-list [role="option"].active { background: rgba(0, 246, 210, 0.12); color: var(--text); }
 .dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
-/* a thin accent bar for the list's scrollbar, no track, no arrows */
-.dd-list::-webkit-scrollbar { width: 4px; }
-.dd-list::-webkit-scrollbar-track, .dd-list::-webkit-scrollbar-corner { background: transparent; }
-.dd-list::-webkit-scrollbar-thumb { background: rgba(0, 246, 210, 0.45); border-radius: 2px; }
-.dd-list::-webkit-scrollbar-button { display: none; height: 0; }
-@supports (-moz-appearance: none) { .dd-list { scrollbar-width: thin; scrollbar-color: rgba(0, 246, 210, 0.45) transparent; } }
+/* scrolling boxes (wide tables, code, the card list): a thin accent bar, no track, no arrows */
+.dd-list::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .code pre::-webkit-scrollbar { width: 4px; height: 4px; }
+.dd-list::-webkit-scrollbar-track, .dd-list::-webkit-scrollbar-corner,
+.table-wrap::-webkit-scrollbar-track, .table-wrap::-webkit-scrollbar-corner,
+.code pre::-webkit-scrollbar-track, .code pre::-webkit-scrollbar-corner { background: transparent; }
+.dd-list::-webkit-scrollbar-thumb, .table-wrap::-webkit-scrollbar-thumb, .code pre::-webkit-scrollbar-thumb { background: rgba(0, 246, 210, 0.45); border-radius: 2px; }
+.table-wrap::-webkit-scrollbar-thumb:hover, .code pre::-webkit-scrollbar-thumb:hover { background: rgba(0, 246, 210, 0.7); }
+.dd-list::-webkit-scrollbar-button, .table-wrap::-webkit-scrollbar-button, .code pre::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports (-moz-appearance: none) { .dd-list, .table-wrap, .code pre { scrollbar-width: thin; scrollbar-color: rgba(0, 246, 210, 0.45) transparent; } }
 .dd-group { padding: 8px 10px 3px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
