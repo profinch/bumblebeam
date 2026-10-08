@@ -70,9 +70,10 @@ table.doc td, table.nested td { vertical-align: top; }
 .about-long { margin: 0 0 8px; line-height: 1.6; }
 .about-links { margin: 0; font: 12px var(--font-mono); }
 /* assets and DEX lists: fixed widths */
-#assets-table { table-layout: fixed; min-width: 960px; }
-#assets-table col.w-id { width: 70px; } #assets-table col.w-key { width: 160px; } #assets-table col.w-tick { width: 110px; }
-#assets-table col.w-sup { width: 230px; } #assets-table col.w-dec { width: 90px; } #assets-table col.w-dep { width: 130px; }
+/* sized for the longest name (28 characters), ticker and NTH_RATIO in the registry */
+#assets-table { table-layout: fixed; min-width: 1060px; }
+#assets-table col.w-id { width: 70px; } #assets-table col.w-key { width: 160px; } #assets-table col.w-tick { width: 90px; }
+#assets-table col.w-sup { width: 230px; } #assets-table col.w-dec { width: 120px; } #assets-table col.w-dep { width: 130px; }
 #dex-table { table-layout: fixed; min-width: 1000px; }
 #dex-table col.w-vol { width: 140px; } #dex-table col.w-res { width: 220px; } #dex-table col.w-rate { width: 120px; } #dex-table col.w-lp { width: 90px; }
 #assets-table td, #dex-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
