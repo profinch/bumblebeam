@@ -738,7 +738,7 @@
     ds.pools = dex.pools;
     const live = dex.pools.filter((x) => x.r1 || x.r2).length;
     const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
-    return `<div class="page-head"><h1 class="page-title">DEX pools</h1><div class="actions"><a class="btn ghost small" href="${contractHref(dex.cid)}">the DEX contract</a></div></div>
+    return `<div class="page-head"><h1 class="page-title">DEX pools</h1><div class="actions"><a class="btn ghost small" href="${contractHref(dex.cid)}">DEX contract</a></div></div>
       <div class="tiles">
         ${tile('Pools', int(dex.pools.length), 'pairs at a fee tier', 'accent')}
         ${tile('With liquidity', int(live), 'reserves on both sides')}
@@ -881,7 +881,7 @@
     const counts = b.names.reduce((m, x) => ((m[x.status] = (m[x.status] || 0) + 1), m), {});
     const forSale = b.names.filter((x) => x.price).length;
     const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
-    return `<div class="page-head"><h1 class="page-title">Names</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">the BANS contract</a></div></div>
+    return `<div class="page-head"><h1 class="page-title">Names</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">BANS contract</a></div></div>
       <div class="tiles">
         ${tile('Total', int(b.names.length), 'registered names', 'accent')}
         ${tile('Active', int(counts.Active || 0), 'not yet expired')}
