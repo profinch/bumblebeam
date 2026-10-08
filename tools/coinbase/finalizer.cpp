@@ -286,6 +286,25 @@ struct NodeLink
 	uint64_t m_FinSeq = 0;
 	uint32_t m_Finalizations = 0;
 
+	// the pool server's hello tells where it stopped scanning; wait for it a little before choosing a start
+	bool m_HelloDone = false;
+	io::Timer::Ptr m_pHelloTimer;
+
+	// pairs offered by the pool server are checked against the chain before the block is built: a kernel
+	// already there would make the node refuse the whole coinbase
+	struct Check
+	{
+		Height m_Height;
+		Amount m_Total;
+		uint64_t m_Seq;
+		std::vector<Pair> m_vPairs;
+		std::vector<bool> m_vInChain;
+		size_t m_Next = 0;
+		std::string m_Note;
+	};
+	std::unique_ptr<Check> m_pCheck;
+	bool m_Busy = false; // an answer is being prepared (pool request, kernel check); the next template waits
+
 	NodeLink(const Settings& s, PoolLink& p) :m_S(s), m_Pool(p)
 	{
 		m_pTimer = io::Timer::create(io::Reactor::get_Current());
@@ -295,6 +314,38 @@ struct NodeLink
 	{
 		BEAM_LOG_INFO() << "node: connecting to " << m_S.m_NodeAddr.str();
 		Connect(m_S.m_NodeAddr);
+		if (!m_HelloDone && !m_pHelloTimer)
+		{
+			m_pHelloTimer = io::Timer::create(io::Reactor::get_Current());
+			m_pHelloTimer->start(15000, false, [this]() {
+				if (!m_HelloDone)
+				{
+					BEAM_LOG_WARNING() << "pool link: no hello within 15 s, scanning from the tip minus " << m_S.m_Lookback;
+					OnHello(0);
+				}
+			});
+		}
+	}
+
+	// The pool server's answer to hello (or giving up on it): now the first scan height can be chosen.
+	void OnHello(Height hScannedByPool)
+	{
+		if (!m_HelloDone)
+		{
+			m_HelloDone = true;
+			m_hScannedFromPool = hScannedByPool;
+		}
+		if (m_HaveTip && !m_hScanned)
+			ChooseStart();
+	}
+
+	void ChooseStart()
+	{
+		Height h = m_Tip.get_Height();
+		Height h0 = (h > m_S.m_Lookback) ? (h - m_S.m_Lookback) : 0;
+		m_hScanned = std::max(h0, m_hScannedFromPool);
+		BEAM_LOG_INFO() << "node: tip " << h << ", scanning the chain from " << (m_hScanned + 1);
+		SyncHeaders();
 	}
 
 	void OnConnectedSecure() override
@@ -326,6 +377,8 @@ struct NodeLink
 		Reset();
 		m_HaveTip = false;
 		m_pPending.reset();
+		m_pCheck.reset();
+		m_Busy = false;
 		m_HdrsPending = false;
 		m_BodiesPending = false;
 		m_pTimer->start(1000, false, [this]() { Start(); });
@@ -337,13 +390,13 @@ struct NodeLink
 	{
 		m_Tip = msg.m_Description;
 		m_HaveTip = true;
-		Height h = m_Tip.get_Height();
 		if (!m_hScanned)
 		{
-			// first start: from where the pool server left off, or a little back from the tip
-			Height h0 = (h > m_S.m_Lookback) ? (h - m_S.m_Lookback) : 0;
-			m_hScanned = std::max(h0, m_hScannedFromPool);
-			BEAM_LOG_INFO() << "node: tip " << h << ", scanning the chain from " << (m_hScanned + 1);
+			// first start: from where the pool server left off (its hello), or a little back from the tip
+			if (!m_HelloDone)
+				return; // the hello or its timeout calls ChooseStart
+			ChooseStart();
+			return;
 		}
 		SyncHeaders();
 	}
@@ -421,20 +474,25 @@ struct NodeLink
 			m_Hashes[h] = hv;
 			jHdrs.push_back({ { "height", h }, { "hash", HashHex(hv) } });
 		}
-		if (ex.m_vStates.front().get_Height() > m_hScanned + 1)
-		{
-			// the pack didn't reach back to what we know (reorg deeper than the pack): ask further back
-			m_hScanned = ex.m_vStates.front().get_Height() - 1;
-			m_Hashes.erase(m_Hashes.lower_bound(ex.m_vStates.front().get_Height()), m_Hashes.end());
-			SyncHeaders();
-			return;
-		}
 		if (!jHdrs.empty())
 			m_Pool.Notify({ { "method", "headers" }, { "tip", m_Tip.get_Height() }, { "headers", jHdrs } });
 
 		// forget old hashes
 		while (m_Hashes.size() > 4096)
 			m_Hashes.erase(m_Hashes.begin());
+
+		const auto& first = ex.m_vStates.front();
+		if (first.get_Height() > m_hScanned + 1)
+		{
+			// the pack didn't reach back to what we know (a long gap, or a reorg deeper than the pack): the
+			// headers below it, down to the last scanned height
+			proto::GetHdrPack msg;
+			first.get_ID(msg.m_Top);
+			msg.m_Count = static_cast<uint32_t>(std::min<Height>(first.get_Height() - m_hScanned, 512));
+			Send(msg);
+			m_HdrsPending = true;
+			return;
+		}
 
 		AskBodies();
 	}
@@ -527,7 +585,7 @@ struct NodeLink
 
 	void FinalizeIfReady()
 	{
-		if (!m_pPending)
+		if (!m_pPending || m_Busy)
 			return;
 		if (m_pPending->m_Height > m_hScanned + 1)
 		{
@@ -544,6 +602,7 @@ struct NodeLink
 		const Rules& r = Rules::get();
 		Height h = msg.m_Height;
 		Amount total = r.get_Emission(h) + msg.m_Fees;
+		m_Busy = true;
 
 		if (!r.IsPastFork_<6>(h))
 		{
@@ -571,15 +630,68 @@ struct NodeLink
 							BEAM_LOG_WARNING() << "pool server sent a pair that doesn't parse";
 					}
 				}
-				SendCoinbase(h, total, vPairs, seq, szNote);
+				StartCheck(h, total, std::move(vPairs), seq, szNote);
 			}, m_S.m_PoolTimeoutMs);
+	}
+
+	// Asks the node for a proof of every offered kernel (pipelined); the answers come in order.
+	void StartCheck(Height h, Amount total, std::vector<Pair>&& vPairs, uint64_t seq, const char* szNote)
+	{
+		if (vPairs.empty())
+		{
+			SendCoinbase(h, total, std::vector<Pair>(), seq, szNote);
+			return;
+		}
+		auto pCheck = std::make_unique<Check>();
+		pCheck->m_Height = h;
+		pCheck->m_Total = total;
+		pCheck->m_Seq = seq;
+		pCheck->m_vPairs = std::move(vPairs);
+		pCheck->m_vInChain.assign(pCheck->m_vPairs.size(), false);
+		pCheck->m_Note = szNote;
+		for (const auto& p : pCheck->m_vPairs)
+		{
+			proto::GetProofKernel msg;
+			msg.m_ID = p.get_KernelID();
+			Send(msg);
+		}
+		m_pCheck = std::move(pCheck);
+	}
+
+	void OnMsg(proto::ProofKernel&& msg) override
+	{
+		if (!m_pCheck || (m_pCheck->m_Next >= m_pCheck->m_vPairs.size()))
+			return;
+		Check& c = *m_pCheck;
+		c.m_vInChain[c.m_Next++] = !msg.m_Proof.empty();
+		if (c.m_Next < c.m_vPairs.size())
+			return;
+
+		auto pCheck = std::move(m_pCheck);
+		std::vector<Pair> vGood;
+		json jSpent = json::array();
+		for (size_t i = 0; i < pCheck->m_vPairs.size(); i++)
+		{
+			if (pCheck->m_vInChain[i])
+				jSpent.push_back(HashHex(pCheck->m_vPairs[i].get_KernelID()));
+			else
+				vGood.push_back(std::move(pCheck->m_vPairs[i]));
+		}
+		if (!jSpent.empty())
+		{
+			BEAM_LOG_WARNING() << "node: " << jSpent.size() << " offered pair(s) already have their kernel in the chain, left out and reported";
+			m_Pool.Notify({ { "method", "spent" }, { "height", pCheck->m_Height }, { "kernels", jSpent } });
+		}
+		SendCoinbase(pCheck->m_Height, pCheck->m_Total, vGood, pCheck->m_Seq, pCheck->m_Note.c_str());
 	}
 
 	void SendCoinbase(Height h, Amount total, const std::vector<Pair>& vPairs, uint64_t seq, const char* szNote)
 	{
+		m_Busy = false;
 		if (seq != m_FinSeq)
 		{
 			BEAM_LOG_INFO() << "node: template for " << h << " superseded, not answered";
+			FinalizeIfReady();
 			return;
 		}
 		std::vector<size_t> vDropped;
@@ -627,6 +739,7 @@ struct NodeLink
 		// a fresh chain has no tip yet: pairs are then checked for block 1
 		Height hTip = m_HaveTip ? m_Tip.get_Height() : 0;
 		std::string account = req.value("account", "");
+		std::string domain = req.value("domain", "");
 		uint64_t ts = req.value("ts", 0ull);
 		std::string sig = req.value("signature", "");
 		std::vector<std::string> vHex;
@@ -635,7 +748,7 @@ struct NodeLink
 				if (j.is_string())
 					vHex.push_back(j.get<std::string>());
 
-		if (!VerifyUpload(account, ts, vHex, sig))
+		if (!VerifyUpload(domain, account, ts, vHex, sig))
 		{
 			m_Pool.Respond(req, { { "ok", false }, { "error", "bad signature for this account and upload" } });
 			return;
@@ -728,11 +841,11 @@ int main(int argc, char* argv[])
 			pool.Request({ { "method", "hello" }, { "version", g_Version }, { "tip", node.m_HaveTip ? node.m_Tip.get_Height() : 0 },
 				{ "scanned", node.m_hScanned } },
 				[&node](const json* pRes) {
+					Height h = 0;
 					if (pRes && (*pRes).count("scanned") && (*pRes)["scanned"].is_number_unsigned())
-					{
-						node.m_hScannedFromPool = (*pRes)["scanned"].get<Height>();
-						BEAM_LOG_INFO() << "pool link: hello, pool server scanned up to " << node.m_hScannedFromPool;
-					}
+						h = (*pRes)["scanned"].get<Height>();
+					BEAM_LOG_INFO() << "pool link: hello, pool server scanned up to " << h;
+					node.OnHello(h);
 				}, 5000);
 		};
 

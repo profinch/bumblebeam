@@ -207,6 +207,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             send(&mut wr, result(&id, -32003, "Login failed: this pool does not pay in the coinbase, use a Beam address")).await?;
                             return Ok(());
                         }
+                        // with coinbase payouts every template already pays the PPLNS accounts in its coinbase,
+                        // so a block cannot go whole to a solo finder
+                        if mode == Mode::Solo && shared.coinbase.is_some() {
+                            send(&mut wr, result(&id, -32003, "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port")).await?;
+                            return Ok(());
+                        }
                         worker = wk.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(32).collect();
                         if worker.is_empty() { worker = "default".into(); }
                         let kind_label = if kind == "coinbase" { kind.to_string() } else { format!("{kind}?") };

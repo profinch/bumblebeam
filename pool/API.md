@@ -170,14 +170,15 @@ tool derives from the wallet's miner key (66 hex characters, ending in `00` or `
 stratum login in place of an address. The miner uploads **pairs**, coinbase outputs with their
 kernels made and signed with its own keys; the pool verifies them through bb-finalizer and keeps them
 in stock; when the node asks for a block's coinbase, the pool picks pairs for what each account is
-owed (its balance plus its share of the block), and the block pays them. The pool never holds the
+owed (its balance, the credits of its blocks still confirming, and its share of this block), and the
+block pays them. The pool never holds the
 miner's keys, so it cannot spend these outputs. Blocks are then confirmed by the pool's own node, as
 the finalizer reports the chain (`verifiedBy: "node"`).
 
 `GET /api/coinbase`
 
 ```json
-{ "enabled": true, "height": 4070449,
+{ "enabled": true, "height": 4070449, "domain": "pool.bumblebeam.org",
   "ladder": { "shift": 20, "steps": 12, "unit": 1048576 },
   "maxPairsPerUpload": 256, "stockMaxPerAccount": 512, "kernelValidityBlocks": 43200, "expiryMarginBlocks": 100,
   "maxCoinbaseBytes": 65536, "accounts": 3, "stockPairs": 96, "minedPairs": 240,
@@ -189,7 +190,8 @@ Pair values are `unit × 2^k` groth for `k < steps` (0.0105 … 21.47 BEAM); the
 the pool stops offering it `expiryMarginBlocks` before that.
 
 `POST /api/coinbase/pairs`, body `{ "account": "cb:…", "ts": <unix seconds>, "pairs": ["<hex>", …], "signature": "<hex>" }`
-(`bb-coinbase` sends it). The signature is over the account, `ts` and the pairs, by the account key.
+(`bb-coinbase` sends it). The signature is over `domain` (from `GET /api/coinbase`, so it cannot be
+replayed to another pool), the account, `ts` and the pairs, by the account key.
 Answer:
 
 ```json
@@ -202,13 +204,22 @@ Errors come as `{ "error": "…" }` with 400 (shape, signature, ladder, expiry),
 
 ```json
 "coinbase": { "stock": [{ "value": 1048576, "count": 3 }], "stockPairs": 36, "stockValue": 12881756160,
-              "minedPairs": 108, "minedValue": 38645268480, "blocks": 4, "expiredPairs": 0, "expiresAt": 4113649 }
+              "minedPairs": 108, "minedValue": 38645268480, "blocks": 4, "expiredPairs": 0, "expiresAt": 4113649,
+              "spentElsewhere": 0 }
 ```
 
-and its payments have `kernel` of the form `coinbase@<height> <block hash>`: a payment per block,
-`pending` until the block confirms, then `completed`; `failed` if the block is orphaned, with the
-pairs back in stock. Such an account has no address, so the regular payout run skips it; what the
-blocks could not pay stays on its balance and goes into later blocks.
+and its payments have `kernel` of the form `coinbase@<height> <block hash>`: one payment per block
+and account. Its debit leaves the balance the moment the pool's node has the block, so the next
+blocks do not pay the same amount again; the payment is `pending` until the block confirms, then
+`completed`; if the block is orphaned it is `failed`, the debit is refunded and the pairs are back in
+stock. A balance can therefore be negative for a while (a block that had paid was orphaned): the next
+blocks work the advance off first, and a miner who leaves right after an orphan keeps at most that
+one block's share. `spentElsewhere` counts pairs whose kernel turned
+up in a block that is not the pool's (another pool on the same chain, or the miner spending its own
+pair): they are simply gone from the stock, no payment is made. Such an account has no address, so
+the regular payout run skips it, and `GET /api/payments` lists transactions only, not these block
+payments. Solo logins are refused while coinbase payouts are on: every template already pays the
+PPLNS accounts.
 
 ## Payment states
 

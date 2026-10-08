@@ -140,10 +140,11 @@ struct Identity
 bool ParseAccount(const std::string&, ECC::Point::Native&);
 std::string AccountFromPk(const ECC::Point&);
 
-// An upload is (account, unix time, pairs in order), signed with the identity key. Signature in hex.
-ECC::Hash::Value UploadHash(const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex);
-std::string SignUpload(const Identity&, uint64_t ts, const std::vector<std::string>& vPairsHex);
-bool VerifyUpload(const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
+// An upload is (pool domain, account, unix time, pairs in order), signed with the identity key, so it
+// cannot be replayed to another pool. Signature in hex.
+ECC::Hash::Value UploadHash(const std::string& domain, const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex);
+std::string SignUpload(const Identity&, const std::string& domain, uint64_t ts, const std::vector<std::string>& vPairsHex);
+bool VerifyUpload(const std::string& domain, const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
 	const std::string& sigHex);
 
 } // namespace bb::coinbase

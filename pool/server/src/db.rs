@@ -107,17 +107,19 @@ CREATE TABLE IF NOT EXISTS coinbase_pairs (
 CREATE INDEX IF NOT EXISTS cbp_miner_status ON coinbase_pairs(miner_id, status);
 CREATE INDEX IF NOT EXISTS cbp_status_mined ON coinbase_pairs(status, mined_height);
 CREATE TABLE IF NOT EXISTS chain_headers (height BIGINT PRIMARY KEY, hash TEXT NOT NULL, seen_at BIGINT NOT NULL);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS cb_height BIGINT;
+CREATE INDEX IF NOT EXISTS payments_cb_height ON payments(cb_height) WHERE cb_height IS NOT NULL;
 "#;
 
 /// Schema version. Older databases are migrated in `migrate`; one without a version is refused.
-pub const SCHEMA_VERSION: i32 = 5;
+pub const SCHEMA_VERSION: i32 = 6;
 
 /// Statements that bring a database from version `from` to `from + 1`.
 fn migration(from: i32) -> Option<&'static str> {
     match from {
         2 => Some("ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0"),
         3 => Some("ALTER TABLE payments ADD COLUMN IF NOT EXISTS accepted_at BIGINT"),
-        4 => Some(SCHEMA_COINBASE),
+        4 | 5 => Some(SCHEMA_COINBASE),
         _ => None,
     }
 }
@@ -426,7 +428,7 @@ impl Db {
             .query(
                 "SELECT ts, SUM(amount)::BIGINT, COUNT(*), MAX(kernel), COUNT(*) FILTER (WHERE status='completed'),
                         array_agg(kernel ORDER BY id) FILTER (WHERE kernel IS NOT NULL), array_agg(amount ORDER BY id) FILTER (WHERE kernel IS NOT NULL)
-                 FROM payments WHERE status <> 'failed' GROUP BY ts ORDER BY ts DESC LIMIT $1",
+                 FROM payments WHERE status <> 'failed' AND cb_height IS NULL GROUP BY ts ORDER BY ts DESC LIMIT $1",
                 &[&limit],
             )
             .await?;
@@ -558,21 +560,29 @@ impl Db {
         let c = self.client().await?;
         let st: Vec<String> = statuses.iter().map(|s| s.to_string()).collect();
         let rows = c
-            .query("SELECT p.tx_id, m.address, p.amount, p.fee, p.created_at, p.accepted_at FROM payments p JOIN miners m ON m.id=p.miner_id WHERE p.status = ANY($1) AND p.tx_id IS NOT NULL ORDER BY p.ts", &[&st])
+            .query("SELECT p.tx_id, m.address, p.amount, p.fee, p.created_at, p.accepted_at FROM payments p JOIN miners m ON m.id=p.miner_id WHERE p.status = ANY($1) AND p.tx_id IS NOT NULL AND p.cb_height IS NULL ORDER BY p.ts", &[&st])
             .await?;
         Ok(rows.iter().map(|r| PaymentRow { tx_id: r.get(0), address: r.get(1), amount: r.get(2), fee: r.get(3), created_at: r.get(4) }).collect())
     }
 
     // ---------- coinbase payouts ----------
 
-    /// Stores verified pairs. A kernel or commitment already known (the same pair uploaded twice, or a
-    /// pair made from the same coin) is skipped and reported by index.
-    pub async fn cb_add_pairs(&self, miner_id: i64, pairs: &[(usize, NewPair)], now: i64) -> Result<(u32, Vec<(usize, String)>)> {
-        let c = self.client().await?;
+    /// Stores verified pairs, up to `stock_max` in stock per account (checked under a lock on the
+    /// miner's row, so parallel uploads cannot exceed it). A kernel or commitment already known (the same
+    /// pair uploaded twice, or a pair made from the same coin) is skipped and reported by index.
+    pub async fn cb_add_pairs(&self, miner_id: i64, pairs: &[(usize, NewPair)], now: i64, stock_max: i64) -> Result<(u32, Vec<(usize, String)>)> {
+        let mut c = self.client().await?;
+        let tx = c.transaction().await?;
+        tx.execute("SELECT id FROM miners WHERE id=$1 FOR UPDATE", &[&miner_id]).await?;
+        let mut in_stock: i64 = tx.query_one("SELECT COUNT(*) FROM coinbase_pairs WHERE miner_id=$1 AND status='stock'", &[&miner_id]).await?.get(0);
         let mut accepted = 0u32;
         let mut rejected = Vec::new();
         for (idx, p) in pairs {
-            let n = c
+            if in_stock >= stock_max {
+                rejected.push((*idx, format!("stock is full ({stock_max} pairs)")));
+                continue;
+            }
+            let n = tx
                 .execute(
                     "INSERT INTO coinbase_pairs (miner_id, value, kernel, commitment, hex, size, min_height, max_height, created_at)
                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING",
@@ -581,10 +591,12 @@ impl Db {
                 .await?;
             if n == 1 {
                 accepted += 1;
+                in_stock += 1;
             } else {
                 rejected.push((*idx, "already in the stock (same kernel or commitment)".to_string()));
             }
         }
+        tx.commit().await?;
         Ok((accepted, rejected))
     }
 
@@ -606,52 +618,60 @@ impl Db {
         Ok(rows.iter().map(|r| StockPair { miner_id: r.get(0), value: r.get(1), size: r.get::<_, i32>(2) as i64, hex: r.get(3) }).collect())
     }
 
-    /// Pairs whose kernels are in the block at `height`: marked mined, summed per miner.
-    pub async fn cb_mark_mined(&self, kernels: &[String], height: i64, hash: &str) -> Result<Vec<(i64, i64, i64)>> {
+    /// A block the finalizer read, with the ids of its kernels. If the block is one of ours (in
+    /// `blocks` with this hash), the pairs found in it are `mined` and each account gets one `pending`
+    /// payment whose debit leaves the balance at once, so the next blocks do not pay the same amount
+    /// again. In a foreign block (the same chain, another pool, or a miner spending its own pair) they are
+    /// only `spent`. One transaction, and the scanned height moves with it. Returns what was paid.
+    pub async fn cb_block_mined(&self, height: i64, hash: &str, kernels: &[String], ts: i64) -> Result<(Vec<(i64, i64, i64)>, u64)> {
+        let mut c = self.client().await?;
+        let tx = c.transaction().await?;
+        let ours = tx.query_opt("SELECT 1 FROM blocks WHERE height=$1 AND hash=$2", &[&height, &hash]).await?.is_some();
+        let (paid, spent) = if kernels.is_empty() {
+            (Vec::new(), 0)
+        } else if ours {
+            (cb_pay_block(&tx, height, hash, kernels, ts).await?, 0)
+        } else {
+            let n = tx
+                .execute("UPDATE coinbase_pairs SET status='spent', mined_height=$2, mined_hash=$3 WHERE kernel = ANY($1) AND status='stock'", &[&kernels, &height, &hash])
+                .await?;
+            (Vec::new(), n)
+        };
+        tx.execute("INSERT INTO meta (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", &[&crate::coinbase::META_SCANNED, &height.to_string()]).await?;
+        tx.commit().await?;
+        Ok((paid, spent))
+    }
+
+    /// Our block was recorded after the finalizer had already read it (a race of a few hundred
+    /// milliseconds): the pairs it marked `spent` there are ours to pay.
+    pub async fn cb_adopt_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, hash: &str, ts: i64) -> Result<Vec<(i64, i64, i64)>> {
+        let rows = tx.query("SELECT kernel FROM coinbase_pairs WHERE status='spent' AND mined_height=$1 AND mined_hash=$2", &[&height, &hash]).await?;
+        let kernels: Vec<String> = rows.iter().map(|r| r.get(0)).collect();
         if kernels.is_empty() {
             return Ok(Vec::new());
         }
-        let c = self.client().await?;
-        let rows = c
-            .query(
-                "UPDATE coinbase_pairs SET status='mined', mined_height=$2, mined_hash=$3 WHERE kernel = ANY($1) AND status <> 'mined'
-                 RETURNING miner_id, value",
-                &[&kernels, &height, &hash],
-            )
-            .await?;
-        let mut per: std::collections::BTreeMap<i64, (i64, i64)> = Default::default();
-        for r in rows {
-            let e = per.entry(r.get(0)).or_default();
-            e.0 += r.get::<_, i64>(1);
-            e.1 += 1;
-        }
-        Ok(per.into_iter().map(|(m, (sum, n))| (m, sum, n)).collect())
+        tx.execute("UPDATE coinbase_pairs SET status='stock' WHERE kernel = ANY($1)", &[&kernels]).await?;
+        cb_pay_block(tx, height, hash, &kernels, ts).await
     }
 
-    /// One `pending` payment per miner for the pairs mined in a block; it completes when the block
-    /// confirms and fails when the block is orphaned (`cb_settle_block`). Idempotent per block and miner.
-    pub async fn cb_create_payments(&self, height: i64, hash: &str, paid: &[(i64, i64, i64)], ts: i64) -> Result<()> {
-        let c = self.client().await?;
-        for (miner_id, amount, _) in paid {
-            let tx_id = format!("cb:{height}:{miner_id}");
-            let kernel = format!("coinbase@{height} {hash}");
-            c.execute(
-                "INSERT INTO payments (ts, miner_id, amount, fee, debit, tx_id, kernel, status, created_at, accepted_at)
-                 VALUES ($1,$2,$3,0,$3,$4,$5,'pending',$1,$1) ON CONFLICT (tx_id) DO NOTHING",
-                &[&ts, miner_id, amount, &tx_id, &kernel],
-            )
-            .await?;
+    /// The finalizer found these kernels already in the chain while building a block: the pairs are
+    /// gone for us (spent elsewhere), whatever the earlier bookkeeping said.
+    pub async fn cb_spent_elsewhere(&self, kernels: &[String], height: i64) -> Result<u64> {
+        if kernels.is_empty() {
+            return Ok(0);
         }
-        Ok(())
+        let c = self.client().await?;
+        Ok(c.execute("UPDATE coinbase_pairs SET status='spent', mined_height=$2 WHERE kernel = ANY($1) AND status='stock'", &[&kernels, &height]).await?)
     }
 
-    /// The chain dropped everything from `height` on: pairs mined there are back in stock, their payments failed.
+    /// The chain dropped everything from `height` on: the pending coinbase payments of those blocks are
+    /// refunded and failed, their pairs are back in stock.
     pub async fn cb_rollback(&self, height: i64) -> Result<(u64, u64)> {
         let mut c = self.client().await?;
         let tx = c.transaction().await?;
-        let pairs = tx.execute("UPDATE coinbase_pairs SET status='stock', mined_height=NULL, mined_hash=NULL WHERE status='mined' AND mined_height >= $1", &[&height]).await?;
-        let pays = tx
-            .execute("UPDATE payments SET status='failed' WHERE tx_id LIKE 'cb:%' AND status='pending' AND split_part(tx_id, ':', 2)::BIGINT >= $1", &[&height])
+        let pays = cb_refund_pending(&tx, "p.cb_height >= $1", height).await?;
+        let pairs = tx
+            .execute("UPDATE coinbase_pairs SET status='stock', mined_height=NULL, mined_hash=NULL WHERE status IN ('mined','spent') AND mined_height >= $1", &[&height])
             .await?;
         tx.execute("DELETE FROM chain_headers WHERE height >= $1", &[&height]).await?;
         tx.commit().await?;
@@ -664,10 +684,18 @@ impl Db {
         Ok(c.execute("UPDATE coinbase_pairs SET status='expired' WHERE status='stock' AND max_height < $1 + $2", &[&height, &margin]).await?)
     }
 
-    /// Coinbase accounts and their balances (what earlier blocks still owe them).
+    /// Coinbase accounts with their balance and the credits of their blocks still confirming: together
+    /// what the pool owes them before the next block's share.
     pub async fn cb_accounts(&self) -> Result<Vec<(i64, i64)>> {
         let c = self.client().await?;
-        let rows = c.query("SELECT id, balance FROM miners WHERE address LIKE 'cb:%'", &[]).await?;
+        let rows = c
+            .query(
+                "SELECT m.id, m.balance + COALESCE((SELECT SUM(c.amount) FROM credits c JOIN blocks b ON b.height=c.block_height
+                                                   WHERE c.miner_id=m.id AND b.status='pending'), 0)::BIGINT
+                 FROM miners m WHERE m.address LIKE 'cb:%'",
+                &[],
+            )
+            .await?;
         Ok(rows.iter().map(|r| (r.get(0), r.get(1))).collect())
     }
 
@@ -693,7 +721,7 @@ impl Db {
                 "SELECT COUNT(*) FILTER (WHERE status='stock'), COALESCE(SUM(value) FILTER (WHERE status='stock'),0)::BIGINT,
                         COUNT(*) FILTER (WHERE status='mined'), COALESCE(SUM(value) FILTER (WHERE status='mined'),0)::BIGINT,
                         COUNT(DISTINCT mined_height) FILTER (WHERE status='mined'), COUNT(*) FILTER (WHERE status='expired'),
-                        MIN(max_height) FILTER (WHERE status='stock')
+                        MIN(max_height) FILTER (WHERE status='stock'), COUNT(*) FILTER (WHERE status='spent')
                  FROM coinbase_pairs WHERE miner_id=$1",
                 &[&miner_id],
             )
@@ -702,7 +730,7 @@ impl Db {
             "stock": stock.iter().map(|s| json!({ "value": s.get::<_, i64>(0), "count": s.get::<_, i64>(1) })).collect::<Vec<_>>(),
             "stockPairs": r.get::<_, i64>(0), "stockValue": r.get::<_, i64>(1),
             "minedPairs": r.get::<_, i64>(2), "minedValue": r.get::<_, i64>(3), "blocks": r.get::<_, i64>(4),
-            "expiredPairs": r.get::<_, i64>(5), "expiresAt": r.get::<_, Option<i64>>(6),
+            "expiredPairs": r.get::<_, i64>(5), "expiresAt": r.get::<_, Option<i64>>(6), "spentElsewhere": r.get::<_, i64>(7),
         }))
     }
 
@@ -741,20 +769,63 @@ impl Db {
     }
 }
 
-/// Settles the coinbase payments of a block inside the confirmation transaction: confirmed moves the
-/// debits to the balances and completes the payments, anything else fails them and frees the pairs.
-pub async fn cb_settle_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, confirmed: bool) -> Result<u64> {
-    let like = format!("cb:{height}:%");
-    if confirmed {
-        tx.execute(
-            "UPDATE miners m SET balance = m.balance - p.debit, paid = m.paid + p.amount FROM payments p WHERE p.miner_id = m.id AND p.tx_id LIKE $1 AND p.status='pending'",
-            &[&like],
+/// Pays the pairs of one of our blocks: pairs `mined`, one `pending` payment per account, the debit
+/// off the balance now. Idempotent: a payment that exists (same block hash and account) is not made twice.
+async fn cb_pay_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, hash: &str, kernels: &[String], ts: i64) -> Result<Vec<(i64, i64, i64)>> {
+    let rows = tx
+        .query(
+            "UPDATE coinbase_pairs SET status='mined', mined_height=$2, mined_hash=$3 WHERE kernel = ANY($1) AND status='stock' RETURNING miner_id, value",
+            &[&kernels, &height, &hash],
         )
         .await?;
-        Ok(tx.execute("UPDATE payments SET status='completed' WHERE tx_id LIKE $1 AND status='pending'", &[&like]).await?)
-    } else {
-        tx.execute("UPDATE coinbase_pairs SET status='stock', mined_height=NULL, mined_hash=NULL WHERE status='mined' AND mined_height=$1", &[&height]).await?;
-        Ok(tx.execute("UPDATE payments SET status='failed' WHERE tx_id LIKE $1 AND status='pending'", &[&like]).await?)
+    let mut per: std::collections::BTreeMap<i64, (i64, i64)> = Default::default();
+    for r in rows {
+        let e = per.entry(r.get(0)).or_default();
+        e.0 += r.get::<_, i64>(1);
+        e.1 += 1;
+    }
+    let mut paid = Vec::new();
+    for (miner_id, (amount, n)) in per {
+        let tx_id = format!("cb:{height}:{hash}:{miner_id}");
+        let kernel = format!("coinbase@{height} {hash}");
+        let inserted = tx
+            .execute(
+                "INSERT INTO payments (ts, miner_id, amount, fee, debit, tx_id, kernel, status, created_at, accepted_at, cb_height)
+                 VALUES ($1,$2,$3,0,$3,$4,$5,'pending',$1,$1,$6) ON CONFLICT (tx_id) DO NOTHING",
+                &[&ts, &miner_id, &amount, &tx_id, &kernel, &height],
+            )
+            .await?;
+        if inserted == 1 {
+            tx.execute("UPDATE miners SET balance = balance - $2, paid = paid + $3 WHERE id=$1", &[&miner_id, &amount, &amount]).await?;
+        }
+        paid.push((miner_id, amount, n));
+    }
+    Ok(paid)
+}
+
+/// Fails the pending coinbase payments selected by `cond` (over `payments p`, parameter $1) and gives
+/// their debits back. Returns how many.
+async fn cb_refund_pending<C: deadpool_postgres::GenericClient>(tx: &C, cond: &str, arg: i64) -> Result<u64> {
+    tx.execute(
+        &format!("UPDATE miners m SET balance = m.balance + p.debit, paid = m.paid - p.amount FROM payments p WHERE p.miner_id = m.id AND p.status='pending' AND {cond}"),
+        &[&arg],
+    )
+    .await?;
+    Ok(tx.execute(&format!("UPDATE payments p SET status='failed' WHERE p.status='pending' AND {cond}"), &[&arg]).await?)
+}
+
+/// Settles the coinbase payments of a block inside the verdict's transaction. `confirmed` completes
+/// them (the debit already left the balance when the block was read); `orphaned` refunds and fails
+/// them and frees the pairs; any other verdict leaves them pending for a later one.
+pub async fn cb_settle_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, status: &str) -> Result<u64> {
+    match status {
+        "confirmed" => Ok(tx.execute("UPDATE payments SET status='completed' WHERE cb_height=$1 AND status='pending'", &[&height]).await?),
+        "orphaned" => {
+            let n = cb_refund_pending(tx, "p.cb_height = $1", height).await?;
+            tx.execute("UPDATE coinbase_pairs SET status='stock', mined_height=NULL, mined_hash=NULL WHERE status IN ('mined','spent') AND mined_height=$1", &[&height]).await?;
+            Ok(n)
+        }
+        _ => Ok(0),
     }
 }
 

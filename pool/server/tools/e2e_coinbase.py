@@ -7,14 +7,14 @@ the block's kernels and the chain's headers. Expects: pairs stored and listed pe
 to pay what the account is owed, a pending coinbase payment once the kernels are in the chain, and the
 block confirmed by the node's chain with the payment completed and the balance settled.
 
-usage: e2e_coinbase.py <vectors/mainnet_headers.json> --db <postgres url> [--node-port 19101 --pool 127.0.0.1:14333 --api http://127.0.0.1:19080 --link 127.0.0.1:13481]
+usage: e2e_coinbase.py <vectors/mainnet_headers.json> --db <postgres url> [--node-port 19102 --pool 127.0.0.1:14333 --api http://127.0.0.1:19080 --link 127.0.0.1:13481]
 """
 import argparse, json, socket, subprocess, sys, threading, time, urllib.request, urllib.error
 
 ap = argparse.ArgumentParser()
 ap.add_argument("vectors")
 ap.add_argument("--db", required=True)
-ap.add_argument("--node-port", type=int, default=19101)
+ap.add_argument("--node-port", type=int, default=19102)
 ap.add_argument("--pool", default="127.0.0.1:14333")
 ap.add_argument("--api", default="http://127.0.0.1:19080")
 ap.add_argument("--link", default="127.0.0.1:13481")
@@ -114,7 +114,7 @@ r2 = json.loads(f2.readline()); print("bad account login:", r2["code"]); assert 
 def serve_verify(results, ok=True, error=None):
     req = fin_read()
     assert req["method"] == "verify", req
-    assert req["account"] == ACCOUNT and req["signature"] == "00ff", req
+    assert req["account"] == ACCOUNT and req["signature"] == "00ff" and req["domain"], req
     assert not ok or len(req["pairs"]) == len(results), req
     out = {"id": req["id"], "ok": ok, "tip": H - 1}
     if ok: out["results"] = results
@@ -186,16 +186,32 @@ assert blocks["blocks"][0]["height"] == H and blocks["blocks"][0]["status"] == "
 # ---- the finalizer sees the block: our two kernels are in it ----
 fin_send({"method": "headers", "tip": H, "headers": [{"height": H - 1, "hash": "ee" * 32}, {"height": H, "hash": HASH_H.upper()}]})
 fin_send({"method": "mined", "height": H, "hash": HASH_H, "kernels": [KA.upper(), "f0" * 32, KB]})
-fin_send({"id": 4, "method": "ping"}); time.sleep(1.0)  # no answer expected for ping from the pool: just a flush delay
+time.sleep(1.0)
 m, _ = api(f"/api/miners/{ACCOUNT}")
-print("after mined:", m["coinbase"]["minedPairs"], m["coinbase"]["minedValue"], m["coinbase"]["blocks"], m["payments"])
+print("after mined:", m["coinbase"]["minedPairs"], m["coinbase"]["minedValue"], m["coinbase"]["blocks"], "balance", m["balance"], "paid", m["paid"], m["payments"])
 assert m["coinbase"]["minedPairs"] == 2 and m["coinbase"]["minedValue"] == 9 * UNIT and m["coinbase"]["stockPairs"] == 0
 assert len(m["payments"]) == 1 and m["payments"][0]["status"] == "pending" and m["payments"][0]["amount"] == 9 * UNIT
 assert m["payments"][0]["kernel"].startswith(f"coinbase@{H} ")
+assert m["balance"] == 0 and m["paid"] == 9 * UNIT, "the debit must leave the balance when the block is read, not when it confirms"
 info, _ = api("/api/coinbase"); assert info["finalizer"]["scanned"] == H and info["minedPairs"] == 2
 
+# ---- the next block, before the first one confirms: the old balance must not be paid again ----
+t = threading.Thread(target=lambda: serve_verify([pair_ok(UNIT, "c3" * 32, "02" + "33" * 32), pair_ok(UNIT, "c4" * 32, "02" + "34" * 32)]))
+t.start(); up4, code = api("/api/coinbase/pairs", {**body, "pairs": ["c3" * 249, "c4" * 249]}); t.join(); assert code == 200 and up4["accepted"] == 2, (code, up4)
+fin_send({"id": 5, "method": "coinbase", "height": H + 1, "fees": 0, "total": total})
+r = fin_read(); print("next block's coinbase:", r["paid"], r["offers"])
+# owed = balance 0 + this block's PPLNS share (the account has the only share) -> both small pairs fit; the 9 units are not offered again
+assert r["paid"] == 2 * UNIT and r["offers"] == [{"amount": 2 * UNIT, "miner": 1}], r
+# a pair spent in a block that is not ours (another pool on the same chain, or the miner itself) is just gone
+fin_send({"method": "mined", "height": H + 1, "hash": "ab" * 32, "kernels": ["c3" * 32]}); time.sleep(0.8)
+m, _ = api(f"/api/miners/{ACCOUNT}"); print("foreign block:", m["coinbase"]["spentElsewhere"], "stock", m["coinbase"]["stockPairs"], "payments", len(m["payments"]), "balance", m["balance"])
+assert m["coinbase"]["spentElsewhere"] == 1 and m["coinbase"]["stockPairs"] == 1 and len(m["payments"]) == 1 and m["balance"] == 0
+# the finalizer saw a stock pair's kernel in the chain while building: out of the stock too
+fin_send({"method": "spent", "height": H + 2, "kernels": ["c4" * 32]}); time.sleep(0.8)
+m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["spentElsewhere"] == 2 and m["coinbase"]["stockPairs"] == 0
+
 # ---- the chain grows past maturity, with our hash at H; the node issues a new template ----
-fin_send({"method": "headers", "tip": H + 240, "headers": [{"height": h, "hash": f"{h:064x}"} for h in range(H + 1, H + 241)]})
+fin_send({"method": "headers", "tip": H + 240, "headers": [{"height": h, "hash": f"{h:064x}" if h != H + 1 else "ab" * 32} for h in range(H + 1, H + 241)]})
 state["node_out"].write((json.dumps({"jsonrpc": "2.0", "id": "8", "method": "job", "input": "1" + hdr["input"][1:], "difficulty": hdr["difficulty"], "height": H + 242}) + "\n").encode())
 print("waiting for the confirmation cycle (up to 80 s)...")
 deadline = time.time() + 80
@@ -209,10 +225,12 @@ assert b["status"] == "confirmed" and b["verifiedBy"] == "node"
 m, _ = api(f"/api/miners/{ACCOUNT}")
 print("settled: balance", m["balance"], "paid", m["paid"], "payment", m["payments"][0]["status"])
 assert m["payments"][0]["status"] == "completed"
-assert m["paid"] == 9 * UNIT and m["balance"] == 2487500000, m   # 9 units owed + 2487500000 credit - 9 units paid
+assert m["paid"] == 9 * UNIT and m["balance"] == 2487500000, m   # the block's credit lands; the 9 units left the balance when the block was read
 
-# ---- a reorg that drops the block: pairs come back, the payment fails ----
-# (on a fresh pending block; here it is already confirmed, so only the stock side is exercised)
+# ---- a rollback below a block that is already confirmed changes nothing; above it, nothing is pending ----
 fin_send({"method": "rollback", "height": H + 300}); time.sleep(0.5)
-m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["minedPairs"] == 2
+m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["minedPairs"] == 2 and m["balance"] == 2487500000
+# the payments page lists transactions only, not coinbase payments
+pp, _ = api("/api/payments"); assert pp["payments"] == [], pp
+
 print("E2E COINBASE OK")
