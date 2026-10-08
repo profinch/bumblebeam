@@ -22,3 +22,5 @@ tr.grp-sub td:first-child { padding-left: 18px; }
 .doc-kernel + .doc-kernel { margin-top: 14px; }
 .peers { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--text-dim); }
 td .kv { font-size: 11px; gap: 2px 10px; }
+.nowrap { white-space: nowrap; }
+table.peer-table { width: auto; min-width: 360px; }

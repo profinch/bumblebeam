@@ -38,6 +38,14 @@
     return `${Math.floor(s / 86400)}d ago`;
   }
   const utc = (ts) => (ts ? new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—');
+  // date and time in the viewer's time zone, e.g. "2026-10-08 04:12:33 BST"; UTC goes in a title
+  const TZ = (() => { try { return (new Intl.DateTimeFormat('en-GB', { timeZoneName: 'short' }).formatToParts(new Date()).find((x) => x.type === 'timeZoneName') || {}).value || ''; } catch (e) { return ''; } })();
+  function local(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000), z = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}${TZ ? ` ${TZ}` : ''}`;
+  }
+  const when = (ts) => `<span title="${esc(utc(ts))}">${esc(local(ts))}</span>`;
   const tile = (k, v, s = '', cls = '') => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   const blockHref = (h) => `/block/${Math.round(Number(h) || 0)}`;
   const kernelHref = (k) => `/kernel/${hex(k)}`;
@@ -103,8 +111,20 @@
     const v = (c) => (c && typeof c === 'object' ? c.value : c);
     const list = rows.map((r) => { const m = meta(v(r[5])); return { aid: num(v(r[0])), owner: hex(v(r[1])), deposit: num(v(r[2])), supply: num(v(r[3])),
       lock: num(v(r[4])), name: m.N || '', ticker: m.SN || '', unit: m.UN || '', metaText: typeof v(r[5]) === 'string' ? v(r[5]).slice(0, 2000) : '' }; }).filter((a) => a.aid != null);
-    assetIndex = { at: Date.now(), list, byId: new Map(list.map((a) => [a.aid, a])) };
+    assetIndex = { at: Date.now(), h: num(t && t.h), list, byId: new Map(list.map((a) => [a.aid, a])) };
     return assetIndex;
+  }
+  // BEAM itself (asset 0) is not in the API's asset list. Issued so far by the emission schedule:
+  // 100 BEAM a block in year one, 50 in years two to five, then halving every four years
+  // (miners and treasury together); 262,800,000 at most. Every amount on Beam, BEAM and assets
+  // alike, is an integer count of 10^-8 units, so all of them have 8 decimals.
+  const DECIMALS = 8, MAX_BEAM = 262800000;
+  function beamIssued(h) {
+    if (!h) return null;
+    const Y = 525600, C = 4 * Y;
+    let total = Math.min(h, Y) * 100, from = Y, per = 50;
+    while (from < h && per >= 1e-8) { total += Math.min(h - from, C) * per; from += C; per /= 2; }
+    return Math.round(total * GROTH);
   }
   const assetName = (aid) => (aid === 0 ? 'BEAM' : (assetIndex && assetIndex.byId.get(aid) && (assetIndex.byId.get(aid).ticker || assetIndex.byId.get(aid).name)) || `asset #${aid}`);
   const assetHref = (aid) => `/asset/${Math.round(Number(aid) || 0)}`;
@@ -172,6 +192,60 @@
     return `<section class="panel"><div class="panel-head"><h2 class="panel-title">${esc(title)}</h2></div>${body}
       ${pager && more != null ? `<div class="more"><button class="btn ghost" data-pager="${esc(pager)}" data-hmax="${more}" data-body="${id}" data-title="${esc(title)}">Load older</button></div>` : ''}</section>`;
   }
+  // Contracts found by kind in the contract list (their IDs could change with an upgrade).
+  let contractIx = null;
+  async function contractsByKind() {
+    if (contractIx && Date.now() - contractIx.at < 600000) return contractIx;
+    const t = await get('contracts');
+    const rows = isCell(t) && Array.isArray(t.value) ? t.value.slice(1) : [];
+    const v = (c) => (isCell(c) ? c.value : c);
+    const list = rows.map((r) => ({ cid: hex(v(r[0]), 64), kind: typeof r[1] === 'string' ? r[1] : '', locked: isCell(r[3]) && Array.isArray(r[3].value) ? r[3].value : [] }));
+    contractIx = { at: Date.now(), list };
+    return contractIx;
+  }
+  const findKind = async (re) => ((await contractsByKind()).list.find((c) => re.test(c.kind)) || {}).cid || '';
+  const stateOf = (cid) => get(`contract?id=${cid}&nMaxTxs=0&funds_locked=0&assets_owned=0&ver_info=0`);
+  const rowsOf = (t) => (isCell(t) && Array.isArray(t.value) ? t.value.slice(1).filter(Array.isArray) : []);
+  const cv = (c) => (isCell(c) ? c.value : c);
+
+  let dexCache = null;
+  async function dexPools() {
+    if (dexCache && Date.now() - dexCache.at < 60000) return dexCache;
+    const cid = await findKind(/^DEX\b/);
+    if (!cid) return { at: Date.now(), cid: '', pools: [] };
+    const d = await stateOf(cid);
+    const pools = rowsOf(d && d.State && d.State.Pools).map((r) => ({
+      a1: num(cv(r[0])), a2: num(cv(r[1])), vol: typeof r[2] === 'string' ? r[2] : '', lp: num(cv(r[3])),
+      r1: num(String(cv(r[4]))), r2: num(String(cv(r[5]))), lpSupply: num(String(cv(r[6]))), rate12: num(cv(r[7])), rate21: num(cv(r[8])),
+    })).filter((x) => x.a1 != null && x.a2 != null);
+    dexCache = { at: Date.now(), cid, pools };
+    return dexCache;
+  }
+  const FEE_TIER = { Low: '0.05%', Medium: '0.3%', High: '1%' };
+  function poolRows(pools) {
+    return pools.map((x) => `<tr><td><a href="${assetHref(x.a1)}">${esc(assetName(x.a1))}</a> / <a href="${assetHref(x.a2)}">${esc(assetName(x.a2))}</a></td>
+      <td class="dim">${esc(x.vol)}${FEE_TIER[x.vol] ? ` · ${FEE_TIER[x.vol]}` : ''}</td>
+      <td class="num">${amount(x.r1)} <span class="dim">${esc(assetName(x.a1))}</span></td><td class="num">${amount(x.r2)} <span class="dim">${esc(assetName(x.a2))}</span></td>
+      <td class="num">${x.rate12 != null ? `${esc(x.rate12.toLocaleString('en-US', { maximumSignificantDigits: 6 }))}` : '—'}</td>
+      <td>${x.lp != null ? `<a href="${assetHref(x.lp)}">${esc(assetName(x.lp))}</a>` : '—'}</td></tr>`).join('');
+  }
+  const poolTable = (pools) => `<div class="table-wrap"><table><thead><tr><th>Pair</th><th>Volatility · fee</th><th class="num">Reserve 1</th><th class="num">Reserve 2</th><th class="num">Rate 1:2</th><th>LP token</th></tr></thead><tbody>${poolRows(pools)}</tbody></table></div>`;
+
+  let bansCache = null;
+  async function bansNames() {
+    if (bansCache && Date.now() - bansCache.at < 120000) return bansCache;
+    const cid = await findKind(/^Bans\b/);
+    if (!cid) return { at: Date.now(), cid: '', h: null, names: [] };
+    const d = await stateOf(cid);
+    const names = rowsOf(d && d.State && d.State.Domains).map((r) => ({
+      name: typeof r[0] === 'string' ? r[0].slice(0, 64) : '', owner: hex(cv(r[1]), 80), exp: num(cv(r[2])),
+      status: typeof r[3] === 'string' && r[3] ? r[3] : 'Active',
+      price: Array.isArray(r[4]) && r[4].length === 2 ? { aid: num(cv(r[4][0])), amount: num(String(cv(r[4][1]))) } : null,
+    })).filter((x) => x.name);
+    bansCache = { at: Date.now(), cid, h: num(d && d.h), names };
+    return bansCache;
+  }
+
   // the "load older" buttons on asset and contract pages
   view.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-pager]');
@@ -196,7 +270,7 @@
   const views = {};
 
   function hdrRows(rows) {
-    return rows.map((b) => `<tr><td><a href="${blockHref(b.height)}">${int(b.height)}</a></td><td class="dim">${ago(b.ts)}</td>
+    return rows.map((b) => `<tr><td><a href="${blockHref(b.height)}">${int(b.height)}</a></td><td class="dim nowrap">${when(b.ts)}</td><td class="dim">${ago(b.ts)}</td>
       <td class="mono dim"><a href="${blockHref(b.height)}">${esc(short(b.hash))}</a></td><td class="num">${diff(b.difficulty)}</td>
       <td class="num">${int(b.txs)}</td><td class="num">${int(b.outputs)} / ${int(b.inputs)}</td><td class="num dim">${b.fee ? beam(b.fee, 6) : '—'}</td></tr>`).join('');
   }
@@ -213,7 +287,7 @@
         ${tile('Shielded outputs 24h', int(st.shielded24h), `${int(st.shieldedTotal)} in total`)}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span>Outputs / inputs are Mimblewimble UTXOs</span></div></div>
-        ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Age</th><th>Hash</th><th class="num">Difficulty</th><th class="num">Txs</th><th class="num">Out / in</th><th class="num">Fees</th></tr></thead>
+        ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Time</th><th>Age</th><th>Hash</th><th class="num">Difficulty</th><th class="num">Txs</th><th class="num">Out / in</th><th class="num">Fees</th></tr></thead>
         <tbody id="hdr-body">${hdrRows(rows)}</tbody></table></div>
         ${last && last.height > 1 ? `<div class="more"><button class="btn ghost" id="more-hdrs" data-before="${last.height - 1}">Load older blocks</button></div>` : ''}`
         : '<div class="empty">No blocks yet: the node is still syncing headers</div>'}
@@ -256,7 +330,7 @@
     return `<div class="page-head"><h1 class="page-title">Block ${int(b.height)}</h1>
         <div class="actions pager">${b.height > 0 ? `<a class="btn ghost small" href="${blockHref(b.height - 1)}">← ${int(b.height - 1)}</a>` : ''}<a class="btn ghost small" href="${blockHref(b.height + 1)}">${int(b.height + 1)} →</a></div></div>
       <div class="tiles">
-        ${tile('Mined', ago(b.ts), esc(utc(b.ts)))}
+        ${tile('Mined', esc(local(b.ts)).replace(' ', '<br>'), `${esc(ago(b.ts))} · ${esc(utc(b.ts))}`)}
         ${tile('Difficulty', diff(b.difficulty))}
         ${tile('Reward', beam(b.subsidy, 2), coinbase && coinbase !== b.subsidy ? `coinbase ${beam(coinbase, 4)}` : '', 'accent')}
         ${tile('Fees', beam(fees, 6))}
@@ -298,7 +372,7 @@
     return `<div class="page-head"><h1 class="page-title">Kernel</h1></div>
       <section class="panel"><dl class="kv">
         <dt>Kernel ID</dt><dd>${esc(k)}</dd>
-        <dt>In block</dt><dd><a href="${blockHref(b.height)}">${int(b.height)}</a> · ${esc(ago(b.ts))} · ${esc(utc(b.ts))}</dd>
+        <dt>In block</dt><dd><a href="${blockHref(b.height)}">${int(b.height)}</a> · ${when(b.ts)} · ${esc(ago(b.ts))}</dd>
         <dt>Fee</dt><dd>${kern.fee ? beam(kern.fee, 8) : '0'}</dd>
         <dt>Valid heights</dt><dd>${int(kern.min)} – ${int(kern.max)}</dd>
       </dl><p class="hint" style="margin:14px 0 0">A kernel proves a transaction happened; Beam keeps amounts and parties private, so there is nothing more to show.</p></section>
@@ -310,21 +384,25 @@
   views.assets = async (filter) => {
     const ix = await assets();
     const q = String(filter || '').toLowerCase();
-    const list = q ? ix.list.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : ix.list;
+    const beamRow = { aid: 0, name: 'Beam', ticker: 'BEAM', unit: 'BEAM', supply: beamIssued(ix.h), deposit: null, owner: '', native: true };
+    const all = [beamRow, ...ix.list];
+    const list = q ? all.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : all;
     const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td><td>${esc(a.ticker)}</td>
-      <td class="num">${amount(a.supply)}</td><td class="num dim">${amount(a.deposit)}</td><td class="mono dim" title="${esc(a.owner)}">${esc(short(a.owner, 8, 6))}</td></tr>`).join('');
+      <td class="num">${amount(a.supply)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${DECIMALS}</td>
+      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td><td class="mono dim" title="${esc(a.owner)}">${a.native ? '—' : esc(short(a.owner, 8, 6))}</td></tr>`).join('');
     return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${int(list.length)} of ${int(ix.list.length)}</span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${int(list.length)} of ${int(all.length)}</span></div></div>
       <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
-      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Ticker</th><th class="num">Supply</th><th class="num">Deposit (BEAM)</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
+      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
   };
 
   views.asset = async (arg) => {
     if (!/^\d{1,10}$/.test(arg || '')) return notFound(`Asset ${String(arg || '').slice(0, 40)}`);
     const aid = Number(arg);
-    if (aid === 0) return `<div class="page-head"><h1 class="page-title">BEAM</h1></div><div class="panel empty">Asset 0 is BEAM itself. <a href="/assets">All assets</a></div>`;
+    if (aid === 0) return beamView();
     const pager = `asset?id=${aid}&nMaxOps=${ASSET_PAGE}`;
-    const [d, ix] = await Promise.all([get(pager), assets().catch(() => null)]);
+    const [d, ix, dex] = await Promise.all([get(pager), assets().catch(() => null), dexPools().catch(() => null)]);
+    const pools = dex ? dex.pools.filter((x) => (x.a1 === aid || x.a2 === aid || x.lp === aid) && (x.r1 || x.r2)) : [];
     const hist = d && d['Asset history'], a = ix && ix.byId.get(aid);
     if (!a && !(isCell(hist) && Array.isArray(hist.value) && hist.value.length > 1)) return notFound(`Asset ${aid}`);
     const m = a ? meta(a.metaText) : {};
@@ -334,8 +412,10 @@
         ${tile('Asset ID', `#${int(aid)}`, esc(a && a.ticker ? a.ticker : ''), 'accent')}
         ${tile('Supply', a ? amount(a.supply) : '—', esc(a && a.unit ? a.unit : ''))}
         ${tile('Deposit', a ? `${amount(a.deposit)} BEAM` : '—', 'locked by the issuer')}
+        ${tile('Decimals', String(DECIMALS), 'amounts in 10⁻⁸ units, as BEAM')}
         ${tile('Lock height', a && a.lock ? `<a href="${blockHref(a.lock)}">${int(a.lock)}</a>` : '—')}
       </div>
+      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}
       ${a ? `<section class="panel"><dl class="kv"><dt>Owner key</dt><dd>${esc(a.owner) || '—'}</dd>${Object.entries(m).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>` : ''}
       ${sections}`;
   };
@@ -369,12 +449,70 @@
       ${keys.map((k) => section(k, d[k], k === 'Calls history' ? pager : null)).join('')}`;
   };
 
+  async function beamView() {
+    const [ix, cs, dex, st] = await Promise.all([assets().catch(() => null), contractsByKind().catch(() => null), dexPools().catch(() => null), get('status').catch(() => null)]);
+    const h = (st && num(st.height)) || (ix && ix.h);
+    const issued = beamIssued(h);
+    const locked = cs ? cs.list.reduce((sum, c) => sum + c.locked.filter((r) => Array.isArray(r) && num(cv(r[0])) === 0).reduce((t, r) => t + (num(String(cv(r[1]))) || 0), 0), 0) : null;
+    const pools = dex ? dex.pools.filter((x) => (x.a1 === 0 || x.a2 === 0) && (x.r1 || x.r2)) : [];
+    return `<div class="page-head"><h1 class="page-title">Beam</h1><div class="actions"><a class="btn ghost small" href="/assets">all assets</a></div></div>
+      <div class="tiles">
+        ${tile('Asset ID', '#0', 'BEAM, the native coin', 'accent')}
+        ${tile('Issued', amount(issued), `of ${int(MAX_BEAM)} max, by the emission schedule`)}
+        ${tile('Decimals', String(DECIMALS), '1 BEAM = 10⁸ groth')}
+        ${tile('Locked in contracts', locked != null ? amount(locked) : '—', 'DEX, DAO, Nephrite and the rest')}
+      </div>
+      <section class="panel"><p class="hint" style="margin:0">BEAM is emitted with every block: 100 a block in the first year, 50 in years two to five, then half
+        as much every four years, shared between the miner and, until year five, the treasury. Balances are private; what contracts hold is public.</p></section>
+      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools with BEAM</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}`;
+  }
+
+  views.dex = async () => {
+    const [dex] = await Promise.all([dexPools(), assets().catch(() => null)]);
+    if (!dex.cid) return notFound('The DEX contract');
+    const live = dex.pools.filter((x) => x.r1 || x.r2).sort((x, y) => (y.a1 === 0 ? y.r1 : 0) - (x.a1 === 0 ? x.r1 : 0));
+    return `<div class="page-head"><h1 class="page-title">DEX pools</h1><div class="actions"><a class="btn ghost small" href="${contractHref(dex.cid)}">the DEX contract</a></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span>${int(live.length)} with liquidity, ${int(dex.pools.length - live.length)} empty</span></div></div>
+      <p class="hint">Beam's on-chain DEX: each pool holds two assets at a fee tier (Low 0.05%, Medium 0.3%, High 1%). Rates are as the contract reports them.</p>
+      ${live.length ? poolTable(live) : '<div class="empty">No pools with liquidity</div>'}</section>`;
+  };
+
+  let namesAll = false;
+  view.addEventListener('click', (e) => { if (e.target.closest('[data-names-all]')) { namesAll = !namesAll; render(false); } });
+  views.names = async (filter) => {
+    const [b, st] = await Promise.all([bansNames(), get('status').catch(() => null)]);
+    if (!b.cid) return notFound('The name service contract');
+    const tip = (st && num(st.height)) || b.h;
+    const q = String(filter || '').toLowerCase();
+    const showAll = q || namesAll;
+    const order = { Active: 0, 'On Hold': 1, Expired: 2 };
+    const list = b.names.filter((x) => (q ? x.name.toLowerCase().includes(q) : showAll || x.status !== 'Expired'))
+      .sort((x, y) => (order[x.status] ?? 3) - (order[y.status] ?? 3) || x.name.localeCompare(y.name));
+    const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
+    const expires = (x) => (x.exp ? `<a href="${blockHref(x.exp)}">${int(x.exp)}</a>${tip ? ` <span class="dim">≈ ${esc(local(Date.now() / 1000 + (x.exp - tip) * 60).slice(0, 10))}</span>` : ''}` : '—');
+    const rows = list.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${badge(x.status)}</td><td class="num">${expires(x)}</td>
+      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : ''}</td><td class="mono dim" title="${esc(x.owner)}">${esc(short(x.owner, 8, 6))}</td></tr>`).join('');
+    const counts = b.names.reduce((m, x) => ((m[x.status] = (m[x.status] || 0) + 1), m), {});
+    return `<div class="page-head"><h1 class="page-title">${q ? `Names matching “${esc(filter)}”` : 'Names'}</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">the BANS contract</a></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Beam Anonymous Name Service</h2>
+        <div class="panel-meta"><span>Active <b>${int(counts.Active || 0)}</b></span><span>On hold <b>${int(counts['On Hold'] || 0)}</b></span><span>Expired <b>${int(counts.Expired || 0)}</b></span>
+          ${q ? '' : `<button type="button" class="btn ghost small" data-names-all>${showAll ? 'hide expired' : 'show expired'}</button>`}</div></div>
+      <p class="hint">Names registered in BANS, owned by a key and renewed by period. Expiry dates are estimated from one block a minute.</p>
+      ${rows ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th class="num">Expires at block</th><th class="num">For sale</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No names match</div>'}</section>`;
+  };
+
   views.peers = async () => {
     const list = await get('peers');
-    const peers = Array.isArray(list) ? list.filter((p) => typeof p === 'string').map((p) => p.slice(0, 80)) : [];
+    const peers = (Array.isArray(list) ? list : []).filter((p) => typeof p === 'string').map((p) => {
+      const m = p.slice(0, 80).match(/^\[?([^\]]+?)\]?:(\d+)$/);
+      return m ? { ip: m[1], port: Number(m[2]) } : { ip: p.slice(0, 80), port: null };
+    });
+    const key = (ip) => (/^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip.split('.').map((n) => n.padStart(3, '0')).join('.') : `z${ip}`);
+    peers.sort((x, y) => key(x.ip).localeCompare(key(y.ip)) || (x.port || 0) - (y.port || 0));
     return `<div class="page-head"><h1 class="page-title">Peers</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Nodes our node knows</h2><div class="panel-meta"><span>${int(peers.length)}</span></div></div>
-      ${peers.length ? `<div class="peers">${peers.map((p) => `<span class="mono">${esc(p)}</span>`).join('')}</div>` : '<div class="empty">No peers</div>'}</section>`;
+      ${peers.length ? `<div class="table-wrap"><table class="peer-table"><thead><tr><th>#</th><th>IP address</th><th class="num">Port</th></tr></thead><tbody>
+        ${peers.map((x, i) => `<tr><td class="dim">${i + 1}</td><td class="mono">${esc(x.ip)}</td><td class="num mono">${x.port != null ? int(x.port).replace(/,/g, '') : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No peers</div>'}</section>`;
   };
 
   views.notfound = async () => notFound('This page');
@@ -411,8 +549,11 @@
     if (q.length >= 2 && q.length <= 60) {
       try {
         const ix = await assets(), l = q.toLowerCase();
+        if (l === 'beam') return assetHref(0);
         const exact = ix.list.filter((x) => [x.ticker, x.unit, x.name].some((y) => y && y.toLowerCase() === l));
         if (exact.length === 1) return assetHref(exact[0].aid);
+        const b = await bansNames().catch(() => null);
+        if (b && b.names.some((x) => x.name.toLowerCase() === l)) return `/names/${encodeURIComponent(q)}`;
         return `/assets/${encodeURIComponent(q)}`;
       } catch (e) { return null; }
     }
@@ -426,7 +567,7 @@
     const [route, ...rest] = p.split('/');
     let arg = null;
     try { arg = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch (e) { return { route: 'notfound', arg: null }; }
-    if (['assets', 'contracts', 'peers'].includes(route)) return { route, arg };
+    if (['assets', 'contracts', 'peers', 'dex', 'names'].includes(route)) return { route, arg };
     return { route: ['block', 'kernel', 'asset', 'contract'].includes(route) && arg ? route : 'notfound', arg };
   }
   function go(path) {
@@ -438,7 +579,7 @@
   async function render(scrollTop = true) {
     const { route, arg } = parse();
     const my = ++seq;
-    document.querySelectorAll('#main-nav a[data-route]').forEach((a) => a.classList.toggle('active', a.dataset.route === route || (['block', 'kernel', 'peers'].includes(route) && a.dataset.route === 'home') || (route === 'asset' && a.dataset.route === 'assets') || (route === 'contract' && a.dataset.route === 'contracts')));
+    document.querySelectorAll('#main-nav a[data-route]').forEach((a) => a.classList.toggle('active', a.dataset.route === route || (['block', 'kernel', 'peers'].includes(route) && a.dataset.route === 'home') || (route === 'asset' && a.dataset.route === 'assets') || (route === 'names' && a.dataset.route === 'names') || (route === 'dex' && a.dataset.route === 'dex') || (route === 'contract' && a.dataset.route === 'contracts')));
     if (scrollTop && !view.innerHTML) view.innerHTML = '<div class="empty">Loading…</div>';
     try {
       const html = await views[route](arg);
