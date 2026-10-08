@@ -165,6 +165,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
                                       GPG-checked) and the explorer's contract parser shader
   containers/pool/                    builds bumblebeam-pool from this repository at BUMBLEBEAM_REF
   containers/pool-web/                builds the pool UI (pool/web) at BUMBLEBEAM_REF, nginx
+  containers/explorer-api/            builds the API and MCP server (api/server.js) at BUMBLEBEAM_REF, Node
   containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
   containers/nginx/, containers/certbot/
   beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
@@ -185,6 +186,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 | `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
 | `pool-web` | `bumblebeam` | `127.0.0.1:8091`; the pool's pages, so UI releases never restart the pool |
 | `explorer-node` | `bumblebeam` | nothing; syncs from `beam-node`, API `8888` stays inside |
+| `explorer-api` | `bumblebeam` | nothing; `/v1` and `/mcp` reach it through explorer-web |
 | `explorer-web` | `bumblebeam` | `127.0.0.1:8090`; proxies GET `/api/*` to explorer-node, rate-limited |
 | `nginx` | host network | `80`, `443`, Cloudflare addresses only (host firewall) |
 | `certbot` | default | nothing |

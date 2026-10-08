@@ -1014,6 +1014,96 @@
         ${peers.map((x, i) => `<tr><td class="dim">${i + 1}</td><td class="mono">${esc(x.ip)}</td><td class="num mono">${x.port != null ? int(x.port).replace(/,/g, '') : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No peers</div>'}</section>`;
   };
 
+  const API_DOC_RAW = 'https://raw.githubusercontent.com/profinch/bumblebeam/main/explorer/API.md';
+  const API_DOC_PAGE = 'https://github.com/profinch/bumblebeam/blob/main/explorer/API.md';
+  let apiDoc = null; // { text, at }
+
+  // Inline Markdown: code spans first, everything else escaped, then **bold** and [links](url).
+  // Relative links resolve against the file on GitHub; only https links are kept.
+  function mdInline(raw) {
+    return raw.split(/(`[^`]+`)/).map((t) => {
+      if (/^`[^`]+`$/.test(t)) return `<code>${esc(t.slice(1, -1))}</code>`;
+      return esc(t)
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, text, href) => {
+          let url;
+          try { url = new URL(href.replace(/&amp;/g, '&'), API_DOC_PAGE); } catch (e) { return text; }
+          return url.protocol === 'https:' ? `<a href="${esc(url.href)}" target="_blank" rel="noopener">${text}</a>` : text;
+        });
+    }).join('');
+  }
+
+  // The Markdown that API.md uses: headings, fenced code, tables, lists, paragraphs.
+  function mdRender(src) {
+    const lines = src.replace(/\r\n?/g, '\n').split('\n');
+    const out = [];
+    let para = [];
+    const flush = () => { if (para.length) out.push(`<p>${mdInline(para.join(' '))}</p>`); para = []; };
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => mdInline(c.trim()));
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^```/.test(l)) {
+        flush();
+        const code = [];
+        while (++i < lines.length && !/^```/.test(lines[i])) code.push(lines[i]);
+        out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+      } else if (/^#{1,4}\s/.test(l)) {
+        flush();
+        const n = l.match(/^#+/)[0].length;
+        out.push(`<h${n + 1}>${mdInline(l.replace(/^#+\s+/, ''))}</h${n + 1}>`);
+      } else if (/^\|/.test(l)) {
+        flush();
+        const rows = [];
+        for (; i < lines.length && /^\|/.test(lines[i]); i++) rows.push(lines[i]);
+        i--;
+        const body = rows.slice(/^\|?[\s:|-]+$/.test(rows[1] || '') ? 2 : 1);
+        out.push(`<div class="table-wrap"><table><thead><tr>${cells(rows[0]).map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${
+          body.map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      } else if (/^\s*([-*]|\d+\.)\s/.test(l)) {
+        flush();
+        const ordered = /^\s*\d+\./.test(l), items = [];
+        for (; i < lines.length; i++) {
+          const m = lines[i].match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
+          if (m) items.push(m[1]);
+          else if (/^\s+\S/.test(lines[i]) && items.length) items[items.length - 1] += ` ${lines[i].trim()}`;
+          else break;
+        }
+        i--;
+        const tag = ordered ? 'ol' : 'ul';
+        out.push(`<${tag}>${items.map((x) => `<li>${mdInline(x)}</li>`).join('')}</${tag}>`);
+      } else if (!l.trim()) {
+        flush();
+      } else {
+        para.push(l.trim());
+      }
+    }
+    flush();
+    return out.join('\n');
+  }
+
+  views.api = async () => {
+    if (!apiDoc || Date.now() - apiDoc.at > 600000) {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      try {
+        const r = await fetch(API_DOC_RAW, { signal: ctl.signal, cache: 'no-cache' });
+        if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+        apiDoc = { text: (await r.text()).slice(0, 200000), at: Date.now() };
+      } catch (e) {
+        if (!apiDoc) {
+          return `<div class="page-head"><h1 class="page-title">API</h1></div>
+            <div class="panel empty err">Could not load the API description from GitHub. Read it at <a href="${API_DOC_PAGE}" target="_blank" rel="noopener">github.com</a>.</div>`;
+        }
+      } finally {
+        clearTimeout(t);
+      }
+    }
+    return `<div class="page-head"><h1 class="page-title">API</h1>
+        <div class="actions"><a class="btn ghost" href="${API_DOC_PAGE}" target="_blank" rel="noopener">View on GitHub</a></div></div>
+      <section class="panel md">${mdRender(apiDoc.text)}</section>`;
+  };
+
+
   views.notfound = async () => notFound('This page');
 
   // ---------- status: footer pill and a banner while the node catches up ----------
@@ -1066,7 +1156,7 @@
     const [route, ...rest] = p.split('/');
     let arg = null;
     try { arg = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch (e) { return { route: 'notfound', arg: null }; }
-    if (['assets', 'contracts', 'peers', 'dex', 'names'].includes(route)) return { route, arg };
+    if (['assets', 'contracts', 'peers', 'dex', 'names', 'api'].includes(route)) return { route, arg };
     return { route: ['block', 'kernel', 'asset', 'contract'].includes(route) && arg ? route : 'notfound', arg };
   }
   function go(path) {
@@ -1150,7 +1240,10 @@
   window.addEventListener('keydown', (e) => {
     const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#search-input').focus(); }
-    else if (e.key === 'Escape' && t === $('#search-input')) t.blur();
+    // Esc in a search box: clear it (the results follow), and leave it once it is empty
+    else if (e.key === 'Escape' && t && t.tagName === 'INPUT' && (t.id === 'search-input' || t.classList.contains('names-q'))) {
+      if (t.value) { t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); } else t.blur();
+    }
   });
   // The latest blocks refresh every 30 s unless older ones were loaded.
   setInterval(() => {

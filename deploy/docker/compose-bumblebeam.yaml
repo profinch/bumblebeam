@@ -61,6 +61,24 @@ services:
     networks:
       - bumblebeam
 
+  # The BumbleBeam API (/v1, plain JSON for bots) and the MCP server (/mcp, for agents), over
+  # explorer-node and the pool; explorer-web proxies both. Published nowhere.
+  explorer-api:
+    image: bumblebeam-explorer-api
+    container_name: explorer-api
+    hostname: explorer-api
+    build:
+      context: ./containers/explorer-api
+      args:
+        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+    restart: unless-stopped
+    environment:
+      EXPLORER_URL: http://explorer-node:8888
+      POOL_URL: http://pool:8080
+      PUBLIC_URL: https://explorer.bumblebeam.org
+    networks:
+      - bumblebeam
+
   # explorer.bumblebeam.org: the explorer UI and a read-only proxy to explorer-node's API.
   explorer-web:
     image: bumblebeam-explorer-web
