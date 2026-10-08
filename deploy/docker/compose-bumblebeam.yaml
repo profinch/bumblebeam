@@ -46,6 +46,23 @@ services:
     networks:
       - bumblebeam
 
+  # explorer.bumblebeam.org: the explorer UI and a read-only proxy to explorer-node's API.
+  explorer-web:
+    image: bumblebeam-explorer-web
+    container_name: explorer-web
+    hostname: explorer-web
+    build:
+      context: ./containers/explorer-web
+      args:
+        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8080"             # for the host nginx
+    depends_on:
+      - explorer-node
+    networks:
+      - bumblebeam
+
   # Payouts. Anyone who can reach 10001 can spend the wallet: it is on its own
   # internal network, published nowhere, and only answers the pool's address.
   wallet-api:
