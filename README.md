@@ -16,7 +16,7 @@ oracle and test vectors.
 | [`oracle/`](oracle) | BeamHash III verification and difficulty checks, tested against the Beam core and real mainnet blocks | **done** (step 1) |
 | [`vectors/`](vectors) | Test vectors: real mainnet headers, the core's difficulty decisions, full solution sets from the reference solver | **done** (step 1) |
 | [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
-| [`api`](api) | BumbleBeam API: plain JSON for bots at explorer.bumblebeam.org/v1 ([docs](explorer/API.md), OpenAPI) and an MCP server for agents at explorer.bumblebeam.org/mcp, over our explorer node and the pool | **done** |
+| [`api`](api) | BumbleBeam API: plain JSON for bots at explorer.bumblebeam.org/v1 ([docs](explorer/API.md), OpenAPI) and MCP servers for agents at explorer.bumblebeam.org/mcp (chain) and pool.bumblebeam.org/mcp (mining) | **done** |
 | [`skills`](skills) | Agent skills for the explorer and the pool | **done** |
 | [`explorer/web`](explorer/web) | Block explorer on our own explorer-node: blocks, kernels, confidential assets, contracts with decoded state and calls, peers. explorer.bumblebeam.org | **done** |
 | [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Served by the pool server; shows labelled demo data when opened without one | **done** |

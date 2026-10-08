@@ -209,7 +209,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 | `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
 | `pool-web` | `bumblebeam` | `127.0.0.1:8091`; the pool's pages, so UI releases never restart the pool |
 | `explorer-node` | `bumblebeam` | nothing; syncs from `beam-node`, API `8888` stays inside |
-| `explorer-api` | `bumblebeam` | nothing; `/v1` and `/mcp` reach it through explorer-web |
+| `explorer-api` | `bumblebeam` | nothing; `/v1` and `/mcp` reach it through explorer-web, the pool's `/mcp` through pool-web |
 | `explorer-web` | `bumblebeam` | `127.0.0.1:8090`; proxies GET `/api/*` to explorer-node, rate-limited |
 | `nginx` | host network | `80`, `443`, Cloudflare addresses only (host firewall) |
 | `certbot` | default | nothing |

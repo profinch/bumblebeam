@@ -8,7 +8,7 @@ There are three ways in:
 | | what | for |
 |---|---|---|
 | `/v1/…` | plain JSON, documented below; OpenAPI at [`/v1/openapi.json`](https://explorer.bumblebeam.org/v1/openapi.json) | bots and scripts |
-| `/mcp` | an MCP server (Streamable HTTP) with tools for the explorer and the pool | AI agents |
+| `/mcp` | an MCP server (Streamable HTTP) with tools for the chain | AI agents |
 | `/api/…` | Beam's own explorer-node API, passed through unchanged | anything built for explorer-node |
 
 Beam is private by design: there are no addresses, balances or transfer amounts on the chain.
@@ -63,8 +63,8 @@ blocks = requests.get("https://explorer.bumblebeam.org/v1/blocks", params={"limi
 
 ## MCP for agents
 
-`https://explorer.bumblebeam.org/mcp` (also at `https://pool.bumblebeam.org/mcp`, the same server) speaks MCP over Streamable HTTP (stateless, JSON
-responses, protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
+`https://explorer.bumblebeam.org/mcp` speaks MCP over Streamable HTTP (stateless, JSON responses,
+protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
 
 | tool | what it answers |
 |---|---|
@@ -80,17 +80,13 @@ responses, protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
 | `explorer_names` | BANS names with status and dates |
 | `explorer_contracts` | deployed contracts |
 | `explorer_contract` | one contract's state and calls |
-| `pool_stats` | pool hashrate, miners, blocks, fees |
-| `pool_blocks` | blocks the pool found |
-| `pool_miner` | one miner by payout address |
-| `pool_miners` | top miners by hashrate |
-| `pool_payments` | payout runs |
-| `pool_network` | Beam network and every Beam pool |
-| `pool_health` | whether the pool is up and has work |
 
 ```sh
-claude mcp add --transport http bumblebeam https://explorer.bumblebeam.org/mcp
+claude mcp add --transport http bumblebeam-explorer https://explorer.bumblebeam.org/mcp
 ```
+
+Mining on BumbleBeam has its own MCP server, `https://pool.bumblebeam.org/mcp`, described in
+[`pool/API.md`](../pool/API.md).
 
 Other clients take the same URL as a remote (HTTP) MCP server. Skills that teach an agent the API
 without MCP are in [`skills/`](../skills).

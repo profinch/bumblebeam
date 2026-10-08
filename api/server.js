@@ -474,7 +474,22 @@ const TOOLS = [
   ['pool_health', 'Whether the BumbleBeam pool is up and has work from its node.', {}, () => pool('health')],
 ].map(([name, description, properties, run, required]) => ({ name, description, inputSchema: { type: 'object', properties, ...(required ? { required } : {}), additionalProperties: false }, run, annotations: { readOnlyHint: true, openWorldHint: true } }));
 
-async function mcp(msg) {
+// two MCP servers on one process: the explorer's (/mcp) knows the chain, the pool's (/mcp/pool,
+// served as pool.bumblebeam.org/mcp) knows mining on BumbleBeam
+const MCP_SERVERS = {
+  explorer: {
+    tools: TOOLS.filter((t) => t.name.startsWith('explorer_')),
+    info: { name: 'bumblebeam-explorer', title: 'BumbleBeam Explorer: the Beam blockchain', version: VERSION },
+    instructions: 'Read-only tools for the Beam (BEAM) blockchain via BumbleBeam\'s own archival explorer node. Beam is private: no addresses, balances or transfer amounts are on the chain; blocks, kernels, assets, contracts, DEX pools and BANS names are. For mining on BumbleBeam use https://pool.bumblebeam.org/mcp.',
+  },
+  pool: {
+    tools: TOOLS.filter((t) => t.name.startsWith('pool_')),
+    info: { name: 'bumblebeam-pool', title: 'BumbleBeam Pool: Beam mining', version: VERSION },
+    instructions: 'Read-only tools for the BumbleBeam mining pool for Beam (BEAM, BeamHash III, PPLNS): pool and network stats, blocks the pool found, a miner by payout address (hashrate, balances, workers, payments), payouts, health. Hashrate is in Sol/s, amounts in BEAM. For the blockchain itself use https://explorer.bumblebeam.org/mcp.',
+  },
+};
+
+async function mcp(msg, server = MCP_SERVERS.explorer) {
   const reply = (result) => ({ jsonrpc: '2.0', id: msg.id, result });
   const fail = (code, message) => ({ jsonrpc: '2.0', id: msg.id ?? null, error: { code, message } });
   if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return fail(-32600, 'invalid request');
@@ -483,14 +498,13 @@ async function mcp(msg) {
     case 'initialize': {
       const asked = msg.params && msg.params.protocolVersion;
       return reply({ protocolVersion: MCP_PROTOCOLS.includes(asked) ? asked : MCP_PROTOCOLS[0], capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'bumblebeam', title: 'BumbleBeam: Beam explorer and mining pool', version: VERSION },
-        instructions: 'Read-only tools for the Beam (BEAM) blockchain via BumbleBeam\'s own explorer node, and for the BumbleBeam mining pool. Beam is private: no addresses, balances or transfer amounts are on the chain; blocks, kernels, assets, contracts, DEX pools and BANS names are.' });
+        serverInfo: server.info, instructions: server.instructions });
     }
     case 'notifications/initialized': case 'notifications/cancelled': return null;
     case 'ping': return reply({});
-    case 'tools/list': return reply({ tools: TOOLS.map(({ run, ...t }) => t) });
+    case 'tools/list': return reply({ tools: server.tools.map(({ run, ...t }) => t) });
     case 'tools/call': {
-      const tool = TOOLS.find((t) => t.name === (msg.params && msg.params.name));
+      const tool = server.tools.find((t) => t.name === (msg.params && msg.params.name));
       if (!tool) return fail(-32602, `unknown tool ${msg.params && msg.params.name}`);
       try {
         const out = await tool.run((msg.params && msg.params.arguments) || {});
@@ -537,7 +551,8 @@ function send(res, status, body, extra = {}) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
-    if (url.pathname === '/mcp') {
+    if (url.pathname === '/mcp' || url.pathname === '/mcp/pool') {
+      const server = url.pathname === '/mcp/pool' ? MCP_SERVERS.pool : MCP_SERVERS.explorer;
       if (req.method === 'OPTIONS') return send(res, 204, {}, { 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Mcp-Protocol-Version, Mcp-Session-Id, Accept' });
       if (req.method !== 'POST') return send(res, 405, { error: 'POST JSON-RPC to /mcp (Streamable HTTP, stateless)' }, { Allow: 'POST' });
       let body = '';
@@ -545,10 +560,10 @@ const server = http.createServer(async (req, res) => {
       let msg;
       try { msg = JSON.parse(body); } catch (e) { return send(res, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
       if (Array.isArray(msg)) {
-        const out = (await Promise.all(msg.map(mcp))).filter(Boolean);
+        const out = (await Promise.all(msg.map((m) => mcp(m, server)))).filter(Boolean);
         return out.length ? send(res, 200, out) : (res.writeHead(202), res.end());
       }
-      const out = await mcp(msg);
+      const out = await mcp(msg, server);
       return out ? send(res, 200, out) : (res.writeHead(202), res.end());
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'GET only' });
