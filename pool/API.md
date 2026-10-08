@@ -248,3 +248,14 @@ Beam, so the TLS ports are the ones most miners land on; the certificate is self
 do not verify it. Share difficulty is per worker (vardiff), aimed at about one share every ten
 seconds, starting at 64. The pool assigns each connection a nonce prefix so no two rigs search the
 same nonces. The server is `pool/server` (Rust).
+
+## MCP for agents
+
+`https://pool.bumblebeam.org/mcp` is an MCP server (Streamable HTTP) with read-only tools for the
+pool (`pool_stats`, `pool_blocks`, `pool_miner`, `pool_miners`, `pool_payments`, `pool_network`,
+`pool_health`) and for the Beam chain through our explorer node. It is the same server as
+`https://explorer.bumblebeam.org/mcp`, described in [`explorer/API.md`](../explorer/API.md).
+
+```sh
+claude mcp add --transport http bumblebeam https://pool.bumblebeam.org/mcp
+```

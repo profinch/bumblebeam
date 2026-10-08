@@ -6,8 +6,9 @@ description: Check the BumbleBeam mining pool for Beam (BEAM) - pool hashrate, m
 # BumbleBeam Pool
 
 Open-source PPLNS and SOLO pool for Beam's BeamHash III, 0.5% fee. Site
-`https://pool.bumblebeam.org`, JSON API under `https://pool.bumblebeam.org/api/`, no key. If the
-`bumblebeam` MCP server is connected, its `pool_*` tools do the same.
+`https://pool.bumblebeam.org`, JSON API under `https://pool.bumblebeam.org/api/`, no key. The MCP
+server at `https://pool.bumblebeam.org/mcp` (the same as explorer.bumblebeam.org/mcp) has `pool_*`
+tools that do the same.
 
 ## Endpoints
 
