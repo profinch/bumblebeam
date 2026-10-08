@@ -6,7 +6,7 @@ endpoints are `GET`. Nothing public links an address to a hashrate or a balance 
 (`*`). The UI treats every field as untrusted: numbers are coerced, strings are length-capped and
 escaped before they reach the page, so a field with HTML in it is shown as text, never rendered.
 
-## `GET /api/stats?range=24h`
+## `GET /api/stats?range=24h&mode=`
 
 The pool at a glance. The top-level fields follow the **open-ethereum-pool** shape, so the Beam
 Explorer's existing `open-eth` adapter (`BeamMW/BeamExplorer`, `backend/src/mining/adapters.ts`)
@@ -23,6 +23,12 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0, "minPayout": 10000000, "payoutScheme": "PPLNS",
               "pplnsWindow": 2.0, "blockReward": 2500000000, "maturity": 240, "payoutInterval": 7200 },
   "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]] },
+  "modes": {
+    "pplns": { "hashrate": 5180.2, "miners": 39, "workers": 94, "blocks24h": 30, "lastBlockFound": 1791321278,
+               "series": [[1791234000, 5011.7]] },
+    "solo":  { "hashrate": 50.2, "miners": 2, "workers": 3, "blocks24h": 1, "lastBlockFound": 1791290000,
+               "series": [[1791234000, 48.1]] }
+  },
   "blocks24h": 31, "effort24h": 0.94
 }
 ```
@@ -49,7 +55,11 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 - `payoutInterval` is the seconds between payout runs.
 - `charts.hashrate` is `[unix seconds, Sol/s]` pairs. `?range=24h` (default), `7d` or `30d` picks
   the span: one point per minute, per hour or per four hours, each the average over its interval.
-  Samples are kept for 31 days.
+  Samples are kept for 31 days. `?mode=pplns` or `?mode=solo` draws one mode's hashrate; without it
+  the chart is both together.
+- `modes` splits the pool into its PPLNS side and its solo side, as two pools: hashrate, miners and
+  workers over the last 10 minutes, blocks in 24 hours, the last block, and `series`, hourly averages
+  over 24 hours for a sparkline.
 
 ## `GET /api/blocks?limit=50&before=<height>`
 
@@ -73,7 +83,7 @@ the wallet's coinbase can confirm a block; the explorer alone never does.
 repeat the same page of blocks in the open-ethereum-pool shape, so the Beam Explorer's `open-eth`
 adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
 
-## `GET /api/miners?limit=50`
+## `GET /api/miners?limit=50&mode=`
 
 Miners by current hashrate, **without addresses**. Beam is a private chain and the pool keeps it
 that way: nothing in the public API links a hashrate to a wallet. A miner's own page is reachable
@@ -81,8 +91,11 @@ only through `/api/miners/<address>`, and offline addresses are long enough that
 guessed.
 
 ```json
-{ "miners": [{ "hashrate": 52.1, "hashrate24h": 50.7, "workers": 2, "lastShare": 1791321590 }] }
+{ "miners": [{ "hashrate": 52.1, "hashrate24h": 50.7, "workers": 2, "lastShare": 1791321590, "modes": ["pplns"] }] }
 ```
+
+`modes` lists the modes the miner sent shares in over the last 10 minutes (`pplns`, `solo`, or both).
+`?mode=pplns` or `?mode=solo` keeps only that mode's miners, with that mode's hashrate.
 
 ## `GET /api/miners/<address>?range=24h`
 
@@ -90,7 +103,7 @@ guessed.
 { "address": "…", "hashrate": 52.1, "hashrate24h": 50.7, "balance": 812345678,
   "immature": 125000000, "paid": 12500000000, "lastShare": 1791321590,
   "workers": [{ "name": "rig1", "hashrate": 52.1, "hashrate24h": 50.7, "lastShare": 1791321590,
-                "online": true, "stale": 0.012, "rejected": 0.001 }],
+                "online": true, "stale": 0.012, "rejected": 0.001, "modes": ["pplns"] }],
   "charts": { "hashrate": [[1791300000, 49.8]] },
   "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }],
   "addressType": "offline", "coinbase": null }
@@ -255,10 +268,10 @@ same nonces. The server is `pool/server` (Rust).
 
 | tool | what it answers |
 |---|---|
-| `pool_stats` | pool hashrate, miners, workers, blocks in 24h, effort, fee, chart |
+| `pool_stats` | pool hashrate, miners, workers, blocks in 24h, effort, fee, PPLNS and solo split, chart and its peak; `mode` for one mode's chart |
 | `pool_blocks` | blocks the pool found, with status and finder |
-| `pool_miner` | one miner by payout address: hashrate, balances, workers, payments, blocks |
-| `pool_miners` | top miners by hashrate |
+| `pool_miner` | one miner by payout address: hashrate and its peak, balances, workers and their modes, payments, blocks |
+| `pool_miners` | top miners by hashrate with their modes; `mode` for PPLNS or solo only |
 | `pool_payments` | payout runs |
 | `pool_network` | Beam network and every Beam pool |
 | `pool_health` | whether the pool is up and has work |
