@@ -401,7 +401,7 @@
       <td class="num">${amount(a.supply)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${DECIMALS}</td>
       <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td><td class="mono dim" title="${esc(a.owner)}">${a.native ? '—' : esc(short(a.owner, 8, 6))}</td></tr>`).join('');
     return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${int(list.length)} of ${int(all.length)}</span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${q ? `Matching <b>${int(list.length)}</b> of ` : 'Assets '}<b>${int(all.length)}</b></span></div></div>
       <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
       ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
   };
@@ -434,7 +434,7 @@
     const [t] = await Promise.all([get('contracts'), assets().catch(() => null)]);
     const n = isCell(t) && Array.isArray(t.value) ? t.value.length - 1 : 0;
     return `<div class="page-head"><h1 class="page-title">Contracts</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span>${int(Math.max(0, n))}</span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span>Contracts <b>${int(Math.max(0, n))}</b></span></div></div>
       <p class="hint">Beam's smart contracts (shaders): DApps such as the DEX, DAO vaults and the Nephrite stablecoin, with the funds they hold.</p>
       ${table(t)}</section>`;
   };
@@ -482,7 +482,7 @@
     if (!dex.cid) return notFound('The DEX contract');
     const live = dex.pools.filter((x) => x.r1 || x.r2).sort((x, y) => (y.a1 === 0 ? y.r1 : 0) - (x.a1 === 0 ? x.r1 : 0));
     return `<div class="page-head"><h1 class="page-title">DEX pools</h1><div class="actions"><a class="btn ghost small" href="${contractHref(dex.cid)}">the DEX contract</a></div></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span>${int(live.length)} with liquidity, ${int(dex.pools.length - live.length)} empty</span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span>With liquidity <b>${int(live.length)}</b></span><span>Empty <b>${int(dex.pools.length - live.length)}</b></span></div></div>
       <p class="hint">Beam's on-chain DEX: each pool holds two assets at a fee tier (Low 0.05%, Medium 0.3%, High 1%). Rates are as the contract reports them.</p>
       ${live.length ? poolTable(live) : '<div class="empty">No pools with liquidity</div>'}</section>`;
   };
@@ -520,7 +520,7 @@
     const key = (ip) => (/^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip.split('.').map((n) => n.padStart(3, '0')).join('.') : `z${ip}`);
     peers.sort((x, y) => key(x.ip).localeCompare(key(y.ip)) || (x.port || 0) - (y.port || 0));
     return `<div class="page-head"><h1 class="page-title">Peers</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Nodes our node knows</h2><div class="panel-meta"><span>${int(peers.length)}</span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Nodes our node knows</h2><div class="panel-meta"><span>Peers <b>${int(peers.length)}</b></span></div></div>
       ${peers.length ? `<div class="table-wrap"><table class="peer-table"><thead><tr><th>#</th><th>IP address</th><th class="num">Port</th></tr></thead><tbody>
         ${peers.map((x, i) => `<tr><td class="dim">${i + 1}</td><td class="mono">${esc(x.ip)}</td><td class="num mono">${x.port != null ? int(x.port).replace(/,/g, '') : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No peers</div>'}</section>`;
   };
