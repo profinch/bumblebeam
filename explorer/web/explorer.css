@@ -1,0 +1,11 @@
+/* BumbleBeam Explorer: additions to the pool's styles.css */
+.hash { font-family: var(--font-mono); word-break: break-all; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font: 12px var(--font-mono); }
+.kv dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding-top: 2px; }
+.kv dd { margin: 0; min-width: 0; word-break: break-all; color: var(--text-dim); }
+tr.hit td { background: rgba(0, 246, 210, 0.1); }
+.pager { display: flex; gap: 8px; }
+@media (max-width: 560px) {
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+  .kv dd { margin-bottom: 8px; }
+}
