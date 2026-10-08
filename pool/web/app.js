@@ -136,19 +136,18 @@
     for (let i = 1; i < bs.length; i++) if (bs[i].ts > now - 3600) gaps.push(bs[i].ts - bs[i - 1].ts);
     if (gaps.length < 3) return '';
     const avg = gaps.reduce((s, g) => s + g, 0) / gaps.length;
-    const W = 1000, H = 120, B = 16, max = Math.max(120, ...gaps) * 1.05;
+    const W = 1000, H = 104, B = 0, max = Math.max(120, ...gaps) * 1.05;
     const bw = (W - 20) / gaps.length, ty = ((1 - 60 / max) * (H - B)).toFixed(1);
     const bars = gaps.map((g, i) => {
       const h = Math.max(2, (g / max) * (H - B)), col = g <= 60 ? '#00f6d2' : g <= 90 ? '#f4ce4a' : '#f25f5b';
       return `<rect x="${(10 + i * bw + 1).toFixed(1)}" y="${(H - B - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${col}" fill-opacity="0.75"/>`;
     }).join('');
     const key = [['#00f6d2', '≤ 60s'], ['#f4ce4a', '60–90s'], ['#f25f5b', '> 90s']]
-      .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('');
+      .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('') + '<span><i class="line"></i>60s target</span>';
     return `<div class="bars-head"><span>Block times (past hour)</span><span class="bars-key">${key}</span><span>avg ${fix(avg, 1)}s</span></div>
       <svg class="bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Seconds between blocks over the past hour">${bars}
-        <line class="target" x1="10" x2="${W - 10}" y1="${ty}" y2="${ty}" vector-effect="non-scaling-stroke"/>
-        <text x="${W - 10}" y="${+ty - 4}" text-anchor="end">60s target</text>
-        <text x="10" y="${H - 3}">1h ago</text><text x="${W - 10}" y="${H - 3}" text-anchor="end">now</text></svg>`;
+        <line class="target" x1="10" x2="${W - 10}" y1="${ty}" y2="${ty}" vector-effect="non-scaling-stroke"/></svg>
+      <div class="bars-foot"><span>1h ago</span><span>now</span></div>`;
   }
 
   // ---------- shared pieces ----------
