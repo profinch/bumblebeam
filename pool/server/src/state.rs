@@ -71,6 +71,16 @@ impl Shared {
     }
 }
 
+/// A Beam address shortened for logs: offline addresses are hundreds of characters long, and the
+/// full one is in the database. `Short(&address)` prints the first 10 and the last 6.
+pub struct Short<'a>(pub &'a str);
+impl std::fmt::Display for Short<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let a = self.0;
+        if a.len() > 20 && a.is_ascii() { write!(f, "{}…{}", &a[..10], &a[a.len() - 6..]) } else { f.write_str(a) }
+    }
+}
+
 pub fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }

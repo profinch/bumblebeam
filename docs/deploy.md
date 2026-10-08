@@ -326,7 +326,11 @@ the running node, use `up -d --no-deps <service>`.
 
 ### D8. Operations
 
-- Status: `sudo docker ps`; logs: `sudo docker logs -f beam-node|wallet-api|bumblebeam-pool`.
+- Status: `sudo docker ps`; logs: `sudo docker logs -f beam-node|wallet-api|bumblebeam-pool`. The
+  pool logs to the host journal, so its history survives rebuilds:
+  `sudo journalctl CONTAINER_NAME=bumblebeam-pool --since "2 hours ago"`. Each miner connection
+  leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
+  shares, and why it ended); addresses are shortened in logs.
 - Pool update: build with the new `BUMBLEBEAM_REF`, then `up -d pool`. Schema migrations run on
   start.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`

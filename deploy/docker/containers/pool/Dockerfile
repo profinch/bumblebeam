@@ -19,5 +19,5 @@ COPY --from=build /src/pool/server/target/release/bumblebeam-pool /usr/local/bin
 COPY --from=build /src/pool/web /opt/bumblebeam/web
 USER beam
 WORKDIR /etc/bumblebeam
-ENV RUST_LOG=info
+ENV RUST_LOG=info,tokio_postgres=warn
 ENTRYPOINT ["bumblebeam-pool", "/etc/bumblebeam/pool.toml"]

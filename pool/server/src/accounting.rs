@@ -60,7 +60,7 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
         Mode::Solo => {
             let amount = (reward as f64 * (1.0 - shared.cfg.pool.solo_fee_percent / 100.0)).floor() as i64;
             tx.execute("INSERT INTO credits (block_height, miner_id, amount) VALUES ($1,$2,$3)", &[&height, &sub.miner_id, &amount]).await?;
-            info!(height, miner = %sub.address, amount, "solo block credited");
+            info!(height, miner = %crate::state::Short(&sub.address), amount, "solo block credited");
         }
         Mode::Pplns => {
             // the window in seconds is window / pool hashrate; look back six times that, at least an hour

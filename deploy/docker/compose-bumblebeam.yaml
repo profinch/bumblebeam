@@ -124,6 +124,13 @@ services:
       - /data/bumblebeam/pool:/etc/bumblebeam:ro
     ulimits:
       nofile: 65536
+    # The host's journal keeps the pool's log across container rebuilds (docker's json-file log
+    # goes away with the container): journalctl CONTAINER_NAME=bumblebeam-pool --since ...
+    # `docker logs bumblebeam-pool` still works.
+    logging:
+      driver: journald
+      options:
+        tag: bumblebeam-pool
     depends_on:
       postgres:
         condition: service_healthy
