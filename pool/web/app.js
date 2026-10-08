@@ -200,9 +200,17 @@
 
   function poolsTable(stats, net, { meta = true } = {}) {
     if (!net || !net.ok) return '<section class="panel"><div class="empty err">Network data unavailable</div></section>';
-    const rows = net.pools.map((p) => ({ ...p, ours: false }));
-    rows.push({ id: 'bumblebeam', name: 'BumbleBeam', scheme: stats.scheme, fee: stats.fee, hashrate: stats.hashrate, miners: stats.minersTotal,
-      workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series: stats.chart.filter((_, i) => i % 6 === 0), ours: true });
+    // other sites list BumbleBeam too (from /api/miningboard): ours come from the pool itself,
+    // PPLNS and solo as two pools, the way 2Miners shows its solo side
+    const rows = net.pools.filter((p) => p.id !== 'bumblebeam' && p.name !== 'BumbleBeam').map((p) => ({ ...p, ours: false }));
+    if (stats.modes) {
+      const own = (m, name, scheme, fee) => ({ id: `bumblebeam-${m}`, name, scheme, fee, hashrate: stats.modes[m].hashrate, miners: stats.modes[m].miners,
+        workers: stats.modes[m].workers, blocks24h: stats.modes[m].blocks24h, lastTs: stats.modes[m].lastBlockFound, series: stats.modes[m].series, ours: true });
+      rows.push(own('pplns', 'BumbleBeam', stats.scheme, stats.fee), own('solo', 'BumbleBeam (Solo)', 'SOLO', stats.soloFee));
+    } else {
+      rows.push({ id: 'bumblebeam', name: 'BumbleBeam', scheme: stats.scheme, fee: stats.fee, hashrate: stats.hashrate, miners: stats.minersTotal,
+        workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series: stats.chart.filter((_, i) => i % 6 === 0), ours: true });
+    }
     rows.sort((a, b) => b.hashrate - a.hashrate);
     const total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>`;
@@ -220,13 +228,39 @@
       </tbody></table></div></section>`;
   }
 
-  // ---------- chart range (24h / 7d / 30d), remembered per viewer ----------
+  // ---------- viewer settings ----------
+  // Kept in cookies on this site for a year (chart range and mode, filters, your address, the
+  // start page form). Settings from older versions are moved over from localStorage once.
+  const prefs = {
+    get(k) {
+      const m = document.cookie.match(new RegExp(`(?:^|; )${k.replace(/\./g, '\\.')}=([^;]*)`));
+      if (m) { try { return decodeURIComponent(m[1]); } catch (e) { return ''; } }
+      try {
+        const v = localStorage.getItem(k);
+        if (v != null) { prefs.set(k, v); localStorage.removeItem(k); return v; }
+      } catch (e) { /* storage may be blocked */ }
+      return '';
+    },
+    set(k, v) {
+      document.cookie = `${k}=${encodeURIComponent(v)}; path=/; max-age=31536000; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
+    },
+    del(k) {
+      document.cookie = `${k}=; path=/; max-age=0; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
+      try { localStorage.removeItem(k); } catch (e) { /* storage may be blocked */ }
+    },
+  };
+
+  // ---------- chart range (24h / 7d / 30d) and pool mode (PPLNS / Solo) ----------
   const RANGE_KEY = 'bb.chartRange';
   function chartRange() {
-    let r = '';
-    try { r = localStorage.getItem(RANGE_KEY) || ''; } catch (e) { /* storage may be blocked */ }
+    const r = prefs.get(RANGE_KEY);
     return RANGES[r] ? r : '24h';
   }
+  const MODES = { pplns: 'Pool', solo: 'Solo' };
+  const MODE_KEY = 'bb.chartMode';
+  const chartMode = () => (prefs.get(MODE_KEY) === 'solo' ? 'solo' : 'pplns');
+  const modeSwitch = (cur, attr = 'data-chart-mode', label = 'Chart mode', modes = MODES) => `<div class="seg range" role="group" aria-label="${label}">${Object.keys(modes).map((k) =>
+    `<button type="button" ${attr}="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${modes[k]}</button>`).join('')}</div>`;
   const rangeSwitch = (cur) => `<div class="seg range" role="group" aria-label="Chart range">${Object.keys(RANGES).map((k) =>
     `<button type="button" data-range="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${RANGES[k].label}</button>`).join('')}</div>`;
 
@@ -234,8 +268,8 @@
   const views = {};
 
   views.dashboard = async () => {
-    const range = chartRange();
-    const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
+    const range = chartRange(), cmode = chartMode();
+    const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}&mode=${cmode}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
     const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
     const expectedPerDay = share != null ? share * 1440 : null;
     return `
@@ -249,8 +283,8 @@
         ${tile('Min payout', beam(stats.minPayout, 2), `every ${dur(stats.payoutInterval)}, after ${int(stats.maturity)} confirmations`)}
       </div>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">Pool hashrate</h2><div class="panel-meta">${netMeta(net)}${rangeSwitch(range)}</div></div>
-        ${areaChart(stats.chart, { title: 'Pool hashrate', range })}
+        <div class="panel-head"><h2 class="panel-title">${cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate'}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
+        ${areaChart(stats.chart, { title: cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate', range })}
       </section>
       <section class="panel">
         <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="/blocks">all blocks →</a></div></div>
@@ -319,23 +353,31 @@
 
   views.miners = async (arg) => {
     if (arg) return minerView(arg);
-    const [{ miners }, stats] = await Promise.all([BB.pool('miners?limit=50'), BB.pool('stats')]);
+    const mm = MINERS_MODES[prefs.get(MINERS_MODE_KEY)] ? prefs.get(MINERS_MODE_KEY) : 'all';
+    const [{ miners }, stats] = await Promise.all([BB.pool(`miners?limit=50${mm === 'all' ? '' : `&mode=${mm}`}`), BB.pool('stats')]);
     const top = miners.length ? miners[0].hashrate || 1 : 1;
+    const ms = stats.modes, total = mm !== 'all' && ms ? ms[mm].hashrate : stats.hashrate;
+    const counts = ms ? `<span>Pool: <b>${int(ms.pplns.miners)}</b> · ${hr(ms.pplns.hashrate)}</span><span>Solo: <b>${int(ms.solo.miners)}</b> · ${hr(ms.solo.hashrate)}</span>`
+      : `<span>Total: <b>${int(stats.minersTotal)}</b></span><span>Pool: <b>${hr(stats.hashrate)}</b></span>`;
     return `<div class="page-head"><h1 class="page-title">Miners</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Miners by hashrate</h2><div class="panel-meta"><span>Total: <b>${int(stats.minersTotal)}</b></span><span>Pool: <b>${hr(stats.hashrate)}</b></span></div></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Miners by hashrate</h2><div class="panel-meta">${counts}${modeSwitch(mm, 'data-miners-mode', 'Miners mode', MINERS_MODES)}</div></div>
       <p class="hint">Beam is a private chain, so the pool does not list wallet addresses. Your own pool stats open only with your payout address: hashrate, what the pool still owes you, and past payouts. Wallet balances are never visible, not to the pool either.</p>
-      ${miners.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Hashrate</th><th class="num">24h avg</th><th class="num">Share</th><th class="num">Workers</th><th class="num">Last share</th></tr></thead><tbody>
+      ${miners.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Hashrate</th><th>Mode</th><th class="num">24h avg</th><th class="num">Share</th><th class="num">Workers</th><th class="num">Last share</th></tr></thead><tbody>
       ${miners.map((m, i) => `<tr><td class="dim">${i + 1}</td>
         <td>${hr(m.hashrate)}<div class="bar accent"><i style="width:${Math.min(100, (m.hashrate / top) * 100).toFixed(1)}%"></i></div></td>
-        <td class="num">${hr(m.hashrate24h)}</td><td class="num">${pct(stats.hashrate ? m.hashrate / stats.hashrate : null, 2)}</td>
+        <td>${modesBadges(m.modes)}</td>
+        <td class="num">${hr(m.hashrate24h)}</td><td class="num">${pct(total ? m.hashrate / total : null, 2)}</td>
         <td class="num">${int(m.workers)}</td><td class="num dim">${ago(m.lastShare)}</td></tr>`).join('')}
-      </tbody></table></div>` : '<div class="empty">No miners yet</div>'}</section>`;
+      </tbody></table></div>` : `<div class="empty">${mm === 'solo' ? 'No solo miners right now' : mm === 'pplns' ? 'No PPLNS miners right now' : 'No miners yet'}</div>`}</section>`;
   };
+  const MINERS_MODES = { all: 'All', pplns: 'Pool', solo: 'Solo' };
+  const MINERS_MODE_KEY = 'bb.minersMode';
+  const modesBadges = (modes) => (modes && modes.length ? modes.map(modeBadge).join(' ') : '<span class="dim">—</span>');
 
   const MY_KEY = 'bb.myAddress';
-  function rememberAddress(a) { try { localStorage.setItem(MY_KEY, a); } catch (e) { /* storage may be blocked */ } setMyLink(); }
-  function forgetAddress() { try { localStorage.removeItem(MY_KEY); } catch (e) { /* storage may be blocked */ } setMyLink(); }
-  function myAddress() { try { return localStorage.getItem(MY_KEY) || ''; } catch (e) { return ''; } }
+  function rememberAddress(a) { prefs.set(MY_KEY, a); setMyLink(); }
+  function forgetAddress() { prefs.del(MY_KEY); setMyLink(); }
+  function myAddress() { return prefs.get(MY_KEY); }
   function setMyLink() {
     const a = $('#nav-my'), addr = myAddress();
     a.hidden = !addr;
@@ -370,8 +412,8 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers</h2></div>
-          ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
-          ${m.workers.map((w) => `<tr><td><span class="dot ${w.online ? '' : 'off'}"></span></td><td>${esc(w.name)}</td><td class="num">${hr(w.hashrate)}</td><td class="num">${hr(w.hashrate24h)}</td>
+          ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th>Mode</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
+          ${m.workers.map((w) => `<tr><td><span class="dot ${w.online ? '' : 'off'}"></span></td><td>${esc(w.name)}</td><td>${modesBadges(w.modes)}</td><td class="num">${hr(w.hashrate)}</td><td class="num">${hr(w.hashrate24h)}</td>
             <td class="num dim">${pct(w.stale, 1)}</td><td class="num" style="color:${w.rejected > 0.01 ? 'var(--color-red)' : 'var(--muted)'}">${pct(w.rejected, 1)}</td><td class="num dim">${ago(w.lastShare)}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No workers</div>'}
         </section>
@@ -560,14 +602,23 @@
     if (!ctx) return;
     const host = ctx.dataset.host, netHash = Number(ctx.dataset.net), fee = Number(ctx.dataset.fee) / 100, reward = Number(ctx.dataset.reward) / BB.GROTH;
     const [pPplns, pSolo, pPplnsTls, pSoloTls] = (ctx.dataset.ports || '3333,3334,3443,3444').split(',').map(Number);
-    const state = { mode: 'pplns', tls: '1' };
-    const seg = (id, key) => $(id).addEventListener('click', (e) => {
-      const b = e.target.closest('button');
-      if (!b) return;
-      state[key] = b.dataset.v;
-      [...$(id).children].forEach((x) => x.classList.toggle('on', x === b));
-      render();
-    });
+    // the form is remembered: mode, TLS, address, worker, card and hashrate
+    const state = { mode: prefs.get('bb.mode') === 'solo' ? 'solo' : 'pplns', tls: prefs.get('bb.tls') === '0' ? '0' : '1' };
+    const seg = (id, key) => {
+      const mark = () => [...$(id).children].forEach((x) => x.classList.toggle('on', x.dataset.v === state[key]));
+      mark();
+      $(id).addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        state[key] = b.dataset.v;
+        prefs.set(`bb.${key}`, state[key]);
+        mark();
+        render();
+      });
+    };
+    if (prefs.get('bb.addr')) $('#addr').value = prefs.get('bb.addr');
+    if (prefs.get('bb.worker')) $('#worker').value = prefs.get('bb.worker');
+    if (prefs.get('bb.sols')) $('#sols').value = prefs.get('bb.sols');
     function render() {
       const port = state.mode === 'solo' ? (state.tls === '1' ? pSoloTls : pSolo) : (state.tls === '1' ? pPplnsTls : pPplns);
       const addr = cleanAddress($('#addr').value), worker = $('#worker').value.trim().replace(/[^\w-]/g, '') || 'rig1';
@@ -580,7 +631,7 @@
         ['lolMiner', `lolMiner --algo BEAM-III --pool ${host}:${port} --user ${user}${tlsFlag ? ' --tls on' : ''}`],
         ['GMiner', `miner --algo beamhashIII --server ${host}:${port} --user ${user}${tlsFlag ? ' --ssl 1' : ''}`],
       ];
-      $('#cmds').innerHTML = cmds.map(([n, c]) => `<div><div class="dim mono" style="font-size:10px;margin-bottom:4px">${n}</div><div class="code"><pre>${esc(c)}</pre><button class="btn small" data-copy="${esc(c)}">copy</button></div></div>`).join('');
+      $('#cmds').innerHTML = cmds.map(([n, c]) => `<div><div class="dim mono" style="font-size:10px;margin-bottom:4px">${n}</div><div class="code"><pre>${c.split(/ (?=--)/).map((a) => `<span class="arg">${esc(a)}</span>`).join(' ')}</pre><button class="btn small" data-copy="${esc(c)}">copy</button></div></div>`).join('');
       const hint = addressHint(addr), note = $('#addr-note');
       note.hidden = !hint;
       if (hint) { note.textContent = hint.text; note.className = `note ${hint.cls}`; }
@@ -597,10 +648,12 @@
     }
     seg('#mode', 'mode');
     seg('#tls', 'tls');
-    $('#addr').addEventListener('input', render);
-    $('#worker').addEventListener('input', render);
-    const card = dropdown($('#card'), (v) => { if (v) $('#sols').value = v; calc(); });
-    $('#sols').addEventListener('input', () => { card.set(''); calc(); });
+    $('#addr').addEventListener('input', () => { prefs.set('bb.addr', cleanAddress($('#addr').value)); render(); });
+    $('#worker').addEventListener('input', () => { prefs.set('bb.worker', $('#worker').value.trim()); render(); });
+    const keepCalc = () => { prefs.set('bb.card', $('#card').dataset.value || ''); prefs.set('bb.sols', $('#sols').value); };
+    const card = dropdown($('#card'), (v) => { if (v) $('#sols').value = v; keepCalc(); calc(); });
+    if (prefs.get('bb.card') || prefs.get('bb.sols')) card.set(prefs.get('bb.card'));
+    $('#sols').addEventListener('input', () => { card.set(''); keepCalc(); calc(); });
     render();
     calc();
   }
@@ -699,8 +752,13 @@
   view.addEventListener('click', (e) => {
     const b = e.target.closest('[data-range]');
     if (!b || !RANGES[b.dataset.range]) return;
-    try { localStorage.setItem(RANGE_KEY, b.dataset.range); } catch (err) { /* storage may be blocked */ }
+    prefs.set(RANGE_KEY, b.dataset.range);
     render(false);
+  });
+  view.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-chart-mode]'), m = e.target.closest('[data-miners-mode]');
+    if (c && MODES[c.dataset.chartMode]) { prefs.set(MODE_KEY, c.dataset.chartMode); render(false); }
+    if (m && MINERS_MODES[m.dataset.minersMode]) { prefs.set(MINERS_MODE_KEY, m.dataset.minersMode); render(false); }
   });
 
   // Copy buttons, on every page. The Clipboard API exists only on https and some in-app

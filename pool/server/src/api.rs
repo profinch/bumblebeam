@@ -59,6 +59,15 @@ fn range(q: &HashMap<String, String>) -> crate::db::ChartRange {
     crate::db::ChartRange::parse(q.get("range").map(String::as_str))
 }
 
+/// `mode=pplns|solo` narrows charts and lists to one mode; anything else means both.
+fn mode(q: &HashMap<String, String>) -> Option<&'static str> {
+    match q.get("mode").map(String::as_str) {
+        Some("pplns") => Some("pplns"),
+        Some("solo") => Some("solo"),
+        _ => None,
+    }
+}
+
 fn limit(q: &HashMap<String, String>, default: i64, max: i64) -> i64 {
     q.get("limit").and_then(|v| v.parse().ok()).unwrap_or(default).clamp(1, max)
 }
@@ -90,7 +99,8 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
                     "blockFeesTo": "pool", "coinbase": s.coinbase.is_some(),
                     "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
                                "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
-        "charts": { "hashrate": s.db.pool_chart(t, range(&q)).await? },
+        "charts": { "hashrate": s.db.pool_chart(t, range(&q), mode(&q).unwrap_or("pool")).await? },
+        "modes": s.db.mode_stats(t).await?,
         "blocks24h": blocks24h, "effort24h": effort24h,
         "connectedWorkers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed),
     })))
@@ -112,7 +122,7 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
 }
 
 async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
-    Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now()).await? })))
+    Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now(), mode(&q)).await? })))
 }
 
 async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
