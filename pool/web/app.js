@@ -422,10 +422,10 @@
           <section class="panel" id="calc"><div class="panel-head"><h2 class="panel-title">Calculator</h2><div class="panel-meta"><span>live network</span></div></div>
             <div class="row">
               <label class="field" style="flex:1">Your hashrate, Sol/s<input id="sols" type="number" min="0" step="1" value="52"></label>
-              <label class="field">Card<select id="card"><option value="52">RTX 3090 · 52</option><option value="46.5">RTX 3080 · 46.5</option><option value="34">RTX 3070 · 34</option><option value="">custom</option></select></label>
+              <label class="field">Card<select id="card"><optgroup label="NVIDIA"><option value="85">RTX 4090 · 85</option><option value="78">RTX 5080 (MXBM) · 78</option><option value="57">RTX 4070 Ti Super · 57</option><option value="54">RTX 3080 Ti · 54</option><option value="52" selected>RTX 3090 · 52</option><option value="47">RTX 4070 Super · 47</option><option value="47">RTX 4070 · 47</option><option value="46.5">RTX 3080 · 46.5</option><option value="35">RTX 3070 Ti · 35</option><option value="34">RTX 3070 · 34</option><option value="32.5">RTX 3060 Ti · 32.5</option><option value="26">RTX 5060 Ti · 26</option><option value="22">RTX 3060 · 22</option></optgroup><optgroup label="AMD"><option value="36">RX 6800 XT · 36</option><option value="33">RX 6900 XT · 33</option></optgroup><option value="">custom</option></select></label>
             </div>
             <div class="calc-out" id="calc-out"></div>
-            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
+            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement), in Sol/s; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
               ${beam(stats.blockReward, 1)} per block plus fees, ${pctFee(stats.fee)} pool fee.</p>
           </section>
           <section class="panel" id="downloads"><div class="panel-head"><h2 class="panel-title">Get a miner from its official source</h2></div>
