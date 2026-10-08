@@ -75,6 +75,11 @@ def connect(hostport):
 fin = connect(a.link); fin.settimeout(30)
 ff = fin.makefile("rwb", buffering=0)
 def fin_send(obj): ff.write((json.dumps(obj) + "\n").encode())
+def fin_ack(obj):
+    # a report the pool must acknowledge, as the finalizer sends it
+    obj = {**obj, "id": 90000 + fin_ack.n}; fin_ack.n += 1
+    fin_send(obj); r = fin_read(); assert r.get("id") == obj["id"] and r.get("ok") is True, r
+fin_ack.n = 0
 def fin_read():
     line = ff.readline()
     assert line, "link closed"
@@ -139,16 +144,20 @@ assert code == 200 and up["accepted"] == 2 and up["stockPairs"] == 2 and len(up[
 errs = {r["index"]: r["error"] for r in up["rejected"]}
 assert "signature" in errs[2] and "ladder" in errs[3] and "expires" in errs[4]
 
-# the same pairs again: duplicates
+# the same pairs again: duplicates (uploads are gated to one a second)
+time.sleep(1.2)
 t = threading.Thread(target=lambda: serve_verify([pair_ok(8 * UNIT, KA, "02" + "11" * 32), pair_ok(UNIT, KB, "02" + "22" * 32)]))
 t.start(); up2, code = api("/api/coinbase/pairs", {**body, "pairs": pairs[:2]}); t.join()
 print("duplicate upload:", code, up2["accepted"], up2["rejected"][0]["error"][:30]); assert code == 200 and up2["accepted"] == 0 and len(up2["rejected"]) == 2
 
 # a bad signature according to the finalizer
+time.sleep(1.2)
 t = threading.Thread(target=lambda: serve_verify([], ok=False, error="bad signature for this account and upload"))
 t.start(); up3, code = api("/api/coinbase/pairs", {**body, "pairs": ["ff" * 10]}); t.join()
 print("bad signature:", code, up3); assert code == 400 and "signature" in up3["error"]
 
+# a second upload within a second is refused
+up5, code = api("/api/coinbase/pairs", {**body, "pairs": ["ff" * 10]}); assert code == 429, (code, up5)
 # shape checks need no finalizer
 _, code = api("/api/coinbase/pairs", {**body, "account": "cb:zz"}); assert code == 400
 _, code = api("/api/coinbase/pairs", {**body, "pairs": ["abc"]}); assert code == 400
@@ -165,8 +174,10 @@ fin_send({"id": 2, "method": "coinbase", "height": H, "fees": 0, "total": total}
 r = fin_read(); print("coinbase:", r["paid"], r["poolValue"], r["offers"], len(r["pairs"]))
 assert r["ok"] and r["pairs"] == [pairs[0], pairs[1]] and r["paid"] == 9 * UNIT and r["poolValue"] == total - 9 * UNIT
 
-# owed only what is in stock: with a smaller balance just the small pair fits
+# owed only what is in stock: with a smaller balance just the small pair fits (the allocation of a
+# height is cached for 5 s, so wait it out)
 psql(f"UPDATE miners SET balance = {2 * UNIT} WHERE address = '{ACCOUNT}'")
+time.sleep(5.2)
 fin_send({"id": 3, "method": "coinbase", "height": H, "fees": 0, "total": total})
 r = fin_read(); assert r["pairs"] == [pairs[1]] and r["paid"] == UNIT, r
 psql(f"UPDATE miners SET balance = {9 * UNIT} WHERE address = '{ACCOUNT}'")
@@ -185,8 +196,7 @@ assert blocks["blocks"][0]["height"] == H and blocks["blocks"][0]["status"] == "
 
 # ---- the finalizer sees the block: our two kernels are in it ----
 fin_send({"method": "headers", "tip": H, "headers": [{"height": H - 1, "hash": "ee" * 32}, {"height": H, "hash": HASH_H.upper()}]})
-fin_send({"method": "mined", "height": H, "hash": HASH_H, "kernels": [KA.upper(), "f0" * 32, KB]})
-time.sleep(1.0)
+fin_ack({"method": "mined", "height": H, "hash": HASH_H, "kernels": [KA.upper(), "f0" * 32, KB]})
 m, _ = api(f"/api/miners/{ACCOUNT}")
 print("after mined:", m["coinbase"]["minedPairs"], m["coinbase"]["minedValue"], m["coinbase"]["blocks"], "balance", m["balance"], "paid", m["paid"], m["payments"])
 assert m["coinbase"]["minedPairs"] == 2 and m["coinbase"]["minedValue"] == 9 * UNIT and m["coinbase"]["stockPairs"] == 0
@@ -195,7 +205,19 @@ assert m["payments"][0]["kernel"].startswith(f"coinbase@{H} ")
 assert m["balance"] == 0 and m["paid"] == 9 * UNIT, "the debit must leave the balance when the block is read, not when it confirms"
 info, _ = api("/api/coinbase"); assert info["finalizer"]["scanned"] == H and info["minedPairs"] == 2
 
+# ---- a reorg drops our block while its payment is pending: refunded and failed, pairs back in stock ----
+fin_send({"method": "headers", "tip": H, "headers": [{"height": H, "hash": "dd" * 32}]}); time.sleep(0.8)
+m, _ = api(f"/api/miners/{ACCOUNT}")
+print("after reorg:", "balance", m["balance"], "paid", m["paid"], "stock", m["coinbase"]["stockPairs"], "payments", [p["status"] for p in m["payments"]])
+assert m["balance"] == 9 * UNIT and m["paid"] == 0 and m["coinbase"]["stockPairs"] == 2 and m["payments"] == []  # failed payments are not listed
+# the chain switches back to our block: read again, paid again (the failed row is revived)
+fin_send({"method": "headers", "tip": H, "headers": [{"height": H, "hash": HASH_H}]}); time.sleep(0.5)
+fin_ack({"method": "mined", "height": H, "hash": HASH_H, "kernels": [KA, KB]})
+m, _ = api(f"/api/miners/{ACCOUNT}")
+assert m["balance"] == 0 and m["paid"] == 9 * UNIT and m["coinbase"]["stockPairs"] == 0 and [p["status"] for p in m["payments"]] == ["pending"], m
+
 # ---- the next block, before the first one confirms: the old balance must not be paid again ----
+time.sleep(1.2)
 t = threading.Thread(target=lambda: serve_verify([pair_ok(UNIT, "c3" * 32, "02" + "33" * 32), pair_ok(UNIT, "c4" * 32, "02" + "34" * 32)]))
 t.start(); up4, code = api("/api/coinbase/pairs", {**body, "pairs": ["c3" * 249, "c4" * 249]}); t.join(); assert code == 200 and up4["accepted"] == 2, (code, up4)
 fin_send({"id": 5, "method": "coinbase", "height": H + 1, "fees": 0, "total": total})
@@ -206,30 +228,36 @@ assert r["paid"] == 2 * UNIT and r["offers"] == [{"amount": 2 * UNIT, "miner": 1
 fin_send({"method": "mined", "height": H + 1, "hash": "ab" * 32, "kernels": ["c3" * 32]}); time.sleep(0.8)
 m, _ = api(f"/api/miners/{ACCOUNT}"); print("foreign block:", m["coinbase"]["spentElsewhere"], "stock", m["coinbase"]["stockPairs"], "payments", len(m["payments"]), "balance", m["balance"])
 assert m["coinbase"]["spentElsewhere"] == 1 and m["coinbase"]["stockPairs"] == 1 and len(m["payments"]) == 1 and m["balance"] == 0
-# the finalizer saw a stock pair's kernel in the chain while building: out of the stock too
-fin_send({"method": "spent", "height": H + 2, "kernels": ["c4" * 32]}); time.sleep(0.8)
-m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["spentElsewhere"] == 2 and m["coinbase"]["stockPairs"] == 0
+# the finalizer saw a stock pair's kernel in the chain while building: in a block of ours whose
+# `mined` report was lost (recorded here by hand), so it is paid; a kernel in a foreign block is just gone
+psql(f"INSERT INTO blocks (height, hash, ts, miner_id, worker, mode, reward, net_difficulty, status) VALUES ({H + 5}, '{'55' * 32}', {int(time.time())}, 1, 'e2e', 'pplns', 2500000000, 1, 'pending')")
+fin_ack({"method": "spent", "height": H + 6, "kernels": [{"kernel": "c4" * 32, "height": H + 5}]})
+m, _ = api(f"/api/miners/{ACCOUNT}")
+print("late-read block:", "balance", m["balance"], "paid", m["paid"], [ (p["status"], p["amount"]) for p in m["payments"]])
+assert m["coinbase"]["spentElsewhere"] == 1 and m["coinbase"]["stockPairs"] == 0 and m["coinbase"]["minedPairs"] == 3
+assert m["balance"] == -UNIT and m["paid"] == 10 * UNIT and sorted(p["amount"] for p in m["payments"]) == [UNIT, 9 * UNIT]
 
 # ---- the chain grows past maturity, with our hash at H; the node issues a new template ----
-fin_send({"method": "headers", "tip": H + 240, "headers": [{"height": h, "hash": f"{h:064x}" if h != H + 1 else "ab" * 32} for h in range(H + 1, H + 241)]})
-state["node_out"].write((json.dumps({"jsonrpc": "2.0", "id": "8", "method": "job", "input": "1" + hdr["input"][1:], "difficulty": hdr["difficulty"], "height": H + 242}) + "\n").encode())
+fin_send({"method": "headers", "tip": H + 245, "headers": [{"height": h, "hash": {H + 1: "ab" * 32, H + 5: "55" * 32}.get(h, f"{h:064x}")} for h in range(H + 1, H + 246)]})
+state["node_out"].write((json.dumps({"jsonrpc": "2.0", "id": "8", "method": "job", "input": "1" + hdr["input"][1:], "difficulty": hdr["difficulty"], "height": H + 247}) + "\n").encode())
 print("waiting for the confirmation cycle (up to 80 s)...")
 deadline = time.time() + 80
 while time.time() < deadline:
     blocks, _ = api("/api/blocks")
-    if blocks["blocks"][0]["status"] != "pending":
+    if all(b["status"] != "pending" for b in blocks["blocks"]):
         break
     time.sleep(2)
-b = blocks["blocks"][0]; print("verdict:", b["status"], b["verifiedBy"])
-assert b["status"] == "confirmed" and b["verifiedBy"] == "node"
+print("verdicts:", [(b["height"], b["status"], b["verifiedBy"]) for b in blocks["blocks"]])
+assert all(b["status"] == "confirmed" and b["verifiedBy"] == "node" for b in blocks["blocks"])
 m, _ = api(f"/api/miners/{ACCOUNT}")
-print("settled: balance", m["balance"], "paid", m["paid"], "payment", m["payments"][0]["status"])
-assert m["payments"][0]["status"] == "completed"
-assert m["paid"] == 9 * UNIT and m["balance"] == 2487500000, m   # the block's credit lands; the 9 units left the balance when the block was read
+print("settled: balance", m["balance"], "paid", m["paid"], "payments", [p["status"] for p in m["payments"]])
+assert all(p["status"] == "completed" for p in m["payments"])
+# block H's credit lands (the hand-made block H+5 has no credits); 10 units left the balance when the blocks were read
+assert m["paid"] == 10 * UNIT and m["balance"] == 2487500000 - UNIT, m
 
 # ---- a rollback below a block that is already confirmed changes nothing; above it, nothing is pending ----
 fin_send({"method": "rollback", "height": H + 300}); time.sleep(0.5)
-m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["minedPairs"] == 2 and m["balance"] == 2487500000
+m, _ = api(f"/api/miners/{ACCOUNT}"); assert m["coinbase"]["minedPairs"] == 3 and m["balance"] == 2487500000 - UNIT
 # the payments page lists transactions only, not coinbase payments
 pp, _ = api("/api/payments"); assert pp["payments"] == [], pp
 
