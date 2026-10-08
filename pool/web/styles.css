@@ -339,3 +339,7 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   .top-row .cta-top { display: inline-flex; order: 1; margin-left: auto; padding: 6px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
   .main-nav a.nav-cta { display: none; }
 }
+
+/* copy buttons keep one width for "copy", "copied" and "failed" (monospace, 7ch), so the text
+   next to them does not jump */
+.btn[data-copy] { flex: none; justify-content: center; min-width: calc(7ch + 18px); }

@@ -594,7 +594,7 @@
     const b = e.target.closest('[data-copy]');
     if (!b) return;
     const text = b.dataset.copy;
-    const done = (ok) => { b.textContent = ok ? 'copied' : 'copy failed'; setTimeout(() => (b.textContent = 'copy'), 1500); };
+    const done = (ok) => { b.textContent = ok ? 'copied' : 'failed'; setTimeout(() => (b.textContent = 'copy'), 1500); };
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), () => done(copyFallback(text)));
     else done(copyFallback(text));
   });
