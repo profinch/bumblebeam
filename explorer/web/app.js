@@ -163,6 +163,13 @@
     return `<span class="amt ${sign === '-' ? 'neg' : sign === '+' ? 'pos' : ''}">${sign}${(n / (scale || 1)).toLocaleString('en-US', { maximumFractionDigits: digits })}</span>`;
   }
   const amountOf = (v, aid) => amount(v, scaleOf(aid));
+  // tiles have little room: whole numbers with two decimals at most
+  function amountTile(v, scale = GROTH) {
+    const n = num(String(v ?? '').replace(/^[+-]/, ''));
+    if (n == null) return '—';
+    const x = n / (scale || 1);
+    return `<span class="amt">${x.toLocaleString('en-US', { maximumFractionDigits: x >= 1 ? 2 : Math.min(12, Math.ceil(Math.log10(scale || 1))) })}</span>`;
+  }
   const safeUrl = (u) => (typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u) ? u : '');
   function metaLinks(m) {
     return [['Site', m.OPT_SITE_URL], ['Docs', m.OPT_PDF_URL]].map(([l, u]) => safeUrl(u) && `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${l}</a>`).filter(Boolean).join(' · ');
@@ -446,21 +453,58 @@
 
   const ASSET_PAGE = 50, CALLS_PAGE = 50;
 
+  // Assets: the whole list is one API table, so search, filter and sorting run in the page.
+  const as = { q: '', described: false, sort: 'aid', dir: 1, all: [] };
+  function assetsFiltered() {
+    // "#39" is an asset ID; a key is searched from 6 characters on, so short numbers don't match keys
+    const raw = as.q.trim().toLowerCase(), byId = /^#\d+$/.test(raw), q = raw.replace(/^#/, '');
+    const hit = (a) => (byId ? String(a.aid) === q
+      : [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q)) || String(a.aid) === q || (q.length >= 6 && a.owner && a.owner.includes(q)));
+    const rows = as.all.filter((a) => (!q || hit(a))
+      && (!as.described || a.native || meta(a.metaText).OPT_SHORT_DESC || meta(a.metaText).OPT_LONG_DESC));
+    const key = { aid: (a) => a.aid, name: (a) => (a.name || '').toLowerCase(), ticker: (a) => (a.ticker || '').toLowerCase(), supply: (a) => (a.supply || 0) / scaleOf(a.aid) }[as.sort];
+    return rows.sort((x, y) => { const a = key(x), b = key(y); return (a < b ? -1 : a > b ? 1 : x.aid - y.aid) * as.dir; });
+  }
+  function assetsBody() {
+    const rows = assetsFiltered();
+    $('#assets-body').innerHTML = rows.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td class="name-cell"><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td>
+      <td>${a.native ? '<span class="dim">—</span>' : copyHash(a.owner)}</td><td class="name-cell">${esc(a.ticker)}</td>
+      <td class="num">${amountOf(a.supply, a.aid)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${a.native ? DECIMALS : esc(decimalsOf(a).text)}</td>
+      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">No assets match</td></tr>';
+    $('#assets-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(as.all.length)}`;
+    $('#assets-described').classList.toggle('on', as.described);
+    document.querySelectorAll('#assets-table th[data-sort]').forEach((th) => { th.dataset.dir = th.dataset.sort === as.sort ? (as.dir > 0 ? '▲' : '▼') : ''; });
+  }
   views.assets = async (filter) => {
     const ix = await assets();
-    const q = String(filter || '').toLowerCase();
-    const beamRow = { aid: 0, name: 'Beam', ticker: 'BEAM', unit: 'BEAM', supply: beamIssued(ix.h), deposit: null, owner: '', native: true };
-    const all = [beamRow, ...ix.list];
-    const list = q ? all.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : all;
-    const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td>
-      <td>${a.native ? '<span class="dim">—</span>' : copyHash(a.owner)}</td><td>${esc(a.ticker)}</td>
-      <td class="num">${amountOf(a.supply, a.aid)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${a.native ? DECIMALS : esc(decimalsOf(a).text)}</td>
-      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td></tr>`).join('');
-    return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${q ? `Matching <b>${int(list.length)}</b> of ` : 'Assets '}<b>${int(all.length)}</b></span></div></div>
-      <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
-      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Owner key</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
+    as.all = [{ aid: 0, name: 'Beam', ticker: 'BEAM', unit: 'BEAM', supply: beamIssued(ix.h), deposit: null, owner: '', native: true, metaText: '' }, ...ix.list];
+    if (filter != null) as.q = String(filter);
+    const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
+    return `<div class="page-head"><h1 class="page-title">Assets</h1></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span id="assets-count"></span></div></div>
+        <div class="names-tools">
+          <input id="assets-q" class="names-q" placeholder="Search by name, ticker, ID or owner key…" autocomplete="off" spellcheck="false" aria-label="Search assets" value="${esc(as.q)}">
+          <div class="seg"><button type="button" id="assets-described">With description</button></div>
+        </div>
+        <div class="table-wrap"><table id="assets-table"><colgroup><col class="w-id"><col><col class="w-key"><col class="w-tick"><col class="w-sup"><col class="w-dec"><col class="w-dep"></colgroup>
+          <thead><tr>${th('aid', 'ID')}${th('name', 'Name')}<th>Owner key</th>${th('ticker', 'Ticker')}${th('supply', 'Supply', 'num')}<th class="num">Decimals</th><th class="num">Deposit (BEAM)</th></tr></thead>
+          <tbody id="assets-body"></tbody></table></div>
+        <p class="hint" style="margin:12px 0 0">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public. Click a key to copy it.</p></section>`;
   };
+  function bindAssets() {
+    const q = $('#assets-q');
+    if (!q) return;
+    assetsBody();
+    q.addEventListener('input', () => { as.q = q.value; assetsBody(); });
+    $('#assets-described').addEventListener('click', () => { as.described = !as.described; assetsBody(); });
+    $('#assets-table thead').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-sort]');
+      if (!th) return;
+      as.dir = as.sort === th.dataset.sort ? -as.dir : (th.dataset.sort === 'supply' ? -1 : 1);
+      as.sort = th.dataset.sort;
+      assetsBody();
+    });
+  }
 
   // The asset's own description from its metadata: logo, short and long text, links; the other
   // metadata fields underneath.
@@ -468,7 +512,7 @@
   function assetAbout(a, m) {
     const logo = safeUrl(m.OPT_LOGO_URL), links = metaLinks(m);
     const rest = Object.entries(m).filter(([k]) => !SHOWN.has(k));
-    return `<section class="panel"><div class="asset-about">${logo ? `<img class="asset-logo" src="${esc(logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+    return `<section class="panel"><div class="asset-about">${logo ? `<img class="asset-logo" src="${esc(logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
       <div>${m.OPT_SHORT_DESC ? `<p class="about-short">${esc(m.OPT_SHORT_DESC)}</p>` : ''}${m.OPT_LONG_DESC && m.OPT_LONG_DESC !== m.OPT_SHORT_DESC ? `<p class="hint about-long">${esc(m.OPT_LONG_DESC)}</p>` : ''}
         ${links ? `<p class="about-links">${links}</p>` : ''}${!m.OPT_SHORT_DESC && !m.OPT_LONG_DESC && !links ? '<p class="hint" style="margin:0">The issuer gave no description.</p>' : ''}</div></div>
       <dl class="kv" style="margin-top:14px"><dt>Owner key</dt><dd>${a.owner ? `<span class="mono copy" data-copy="${esc(a.owner)}">${esc(a.owner)}</span>` : '—'}</dd>
@@ -489,7 +533,7 @@
     return `<div class="page-head"><h1 class="page-title">${esc((a && (a.name || a.ticker)) || `Asset #${aid}`)}</h1><div class="actions"><a class="btn ghost small" href="/assets">all assets</a></div></div>
       <div class="tiles">
         ${tile('Asset ID', `#${int(aid)}`, esc(a && a.ticker ? a.ticker : ''), 'accent')}
-        ${tile('Supply', a ? amountOf(a.supply, aid) : '—', esc(a && a.unit ? a.unit : ''))}
+        ${tile('Supply', a ? amountTile(a.supply, scaleOf(aid)) : '—', esc(a && a.unit ? a.unit : ''))}
         ${tile('Deposit', a ? `${amount(a.deposit)} BEAM` : '—', 'locked by the issuer')}
         ${tile('Decimals', esc(decimalsOf(a).text), esc(decimalsOf(a).note))}
         ${tile('Lock height', a && a.lock ? `<a href="${blockHref(a.lock)}">${int(a.lock)}</a>` : '—')}
@@ -564,7 +608,7 @@
         ${tile('Contracts', int(cs.list.length), 'deployed on Beam', 'accent')}
         ${tile('Known kinds', int(named), 'decoded by the explorer parser')}
         ${tile('Holding funds', int(withFunds), 'with assets locked inside')}
-        ${tile('BEAM locked', amount(cs.list.reduce((s, c) => s + c.beam, 0)), 'across all contracts')}
+        ${tile('BEAM locked', amountTile(cs.list.reduce((s, c) => s + c.beam, 0)), 'across all contracts')}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span id="contracts-count"></span></div></div>
         <div class="names-tools">
@@ -646,7 +690,7 @@
         ${tile('Kind', k.name ? esc(k.name) : copyHash(k.shader), k.name ? (k.shader ? 'wrapper around a shader' : 'decoded by Beam\'s explorer parser') : 'shader hash, not decoded', 'accent')}
         ${tile('Deployed', deployed != null ? `<a href="${blockHref(deployed)}">${int(deployed)}</a>` : '—', t ? esc(local(t)) : '')}
         ${tile('Versions', int(versions.length), versions.length > 1 ? 'upgraded since deployment' : 'as deployed')}
-        ${tile('BEAM locked', amount(beamLocked), 'held by the contract')}
+        ${tile('BEAM locked', amountTile(beamLocked), 'held by the contract')}
       </div>
       <section class="panel"><p class="hint" style="margin:0 0 12px">${esc(about)}</p>
         <dl class="kv"><dt>Contract ID</dt><dd><span class="mono copy" data-copy="${esc(cid)}">${esc(cid)}</span></dd>
@@ -663,24 +707,70 @@
     return `<div class="page-head"><h1 class="page-title">Beam</h1><div class="actions"><a class="btn ghost small" href="/assets">all assets</a></div></div>
       <div class="tiles">
         ${tile('Asset ID', '#0', 'BEAM, the native coin', 'accent')}
-        ${tile('Issued', amount(issued), `of ${int(MAX_BEAM)} max, by the emission schedule`)}
+        ${tile('Issued', amountTile(issued), `of ${int(MAX_BEAM)} max, by the emission schedule`)}
         ${tile('Decimals', String(DECIMALS), '1 BEAM = 10⁸ groth')}
-        ${tile('Locked in contracts', locked != null ? amount(locked) : '—', 'DEX, DAO, Nephrite and the rest')}
+        ${tile('Locked in contracts', locked != null ? amountTile(locked) : '—', 'DEX, DAO, Nephrite and the rest')}
       </div>
       <section class="panel"><p class="hint" style="margin:0">BEAM is emitted with every block: 100 a block in the first year, 50 in years two to five, then half
         as much every four years, shared between the miner and, until year five, the treasury. Balances are private; what contracts hold is public.</p></section>
       ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools with BEAM</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}`;
   }
 
+  const ds = { q: '', tier: 'All', empty: false, sort: 'r1', dir: -1, pools: [] };
+  function dexFiltered() {
+    const q = ds.q.trim().toLowerCase();
+    const names = (x) => [assetName(x.a1), assetName(x.a2), assetName(x.lp)].map((n) => n.toLowerCase());
+    const rows = ds.pools.filter((x) => (ds.empty || x.r1 || x.r2) && (ds.tier === 'All' || x.vol === ds.tier) && (!q || names(x).some((n) => n.includes(q)) || `${names(x)[0]}/${names(x)[1]}`.includes(q.replace(/\s+/g, '')) || [x.a1, x.a2].map(String).includes(q.replace(/^#/, ''))));
+    const key = { pair: (x) => `${assetName(x.a1)}/${assetName(x.a2)}`.toLowerCase(), r1: (x) => (x.r1 || 0) / scaleOf(x.a1), r2: (x) => (x.r2 || 0) / scaleOf(x.a2), rate: (x) => x.rate12 ?? -1 }[ds.sort];
+    return rows.sort((x, y) => { const a = key(x), b = key(y); return (a < b ? -1 : a > b ? 1 : 0) * ds.dir; });
+  }
+  function dexBody() {
+    const rows = dexFiltered();
+    $('#dex-body').innerHTML = poolRows(rows) || '<tr><td colspan="6" class="empty">No pools match</td></tr>';
+    $('#dex-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(ds.pools.length)}`;
+    document.querySelectorAll('#dex-tier [data-tier]').forEach((b) => b.classList.toggle('on', b.dataset.tier === ds.tier));
+    $('#dex-empty').classList.toggle('on', ds.empty);
+    document.querySelectorAll('#dex-table th[data-sort]').forEach((th) => { th.dataset.dir = th.dataset.sort === ds.sort ? (ds.dir > 0 ? '▲' : '▼') : ''; });
+  }
   views.dex = async () => {
     const [dex] = await Promise.all([dexPools(), assets().catch(() => null)]);
     if (!dex.cid) return notFound('The DEX contract');
-    const live = dex.pools.filter((x) => x.r1 || x.r2).sort((x, y) => (y.a1 === 0 ? y.r1 : 0) - (x.a1 === 0 ? x.r1 : 0));
+    ds.pools = dex.pools;
+    const live = dex.pools.filter((x) => x.r1 || x.r2).length;
+    const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
     return `<div class="page-head"><h1 class="page-title">DEX pools</h1><div class="actions"><a class="btn ghost small" href="${contractHref(dex.cid)}">the DEX contract</a></div></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span>With liquidity <b>${int(live.length)}</b></span><span>Empty <b>${int(dex.pools.length - live.length)}</b></span></div></div>
-      <p class="hint">Beam's on-chain DEX: each pool holds two assets at a fee tier (Low 0.05%, Medium 0.3%, High 1%). Rates are as the contract reports them.</p>
-      ${live.length ? poolTable(live) : '<div class="empty">No pools with liquidity</div>'}</section>`;
+      <div class="tiles">
+        ${tile('Pools', int(dex.pools.length), 'pairs at a fee tier', 'accent')}
+        ${tile('With liquidity', int(live), 'reserves on both sides')}
+        ${tile('Empty', int(dex.pools.length - live), 'created, no liquidity now')}
+        ${tile('BEAM in pools', amountTile(dex.pools.reduce((t, x) => t + (x.a1 === 0 ? x.r1 || 0 : 0) + (x.a2 === 0 ? x.r2 || 0 : 0), 0)), 'one side of the BEAM pairs')}
+      </div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span id="dex-count"></span></div></div>
+        <div class="names-tools">
+          <input id="dex-q" class="names-q" placeholder="Search by asset, pair (beam/nph) or asset ID…" autocomplete="off" spellcheck="false" aria-label="Search pools" value="${esc(ds.q)}">
+          <div class="seg" id="dex-tier" role="group" aria-label="Fee tier">${['All', 'Low', 'Medium', 'High'].map((t) => `<button type="button" data-tier="${t}">${t === 'All' ? 'All' : `${t} ${FEE_TIER[t]}`}</button>`).join('')}</div>
+          <div class="seg"><button type="button" id="dex-empty">Show empty</button></div>
+        </div>
+        <div class="table-wrap"><table id="dex-table"><colgroup><col><col class="w-vol"><col class="w-res"><col class="w-res"><col class="w-rate"><col class="w-lp"></colgroup>
+          <thead><tr>${th('pair', 'Pair')}<th>Volatility · fee</th>${th('r1', 'Reserve 1', 'num')}${th('r2', 'Reserve 2', 'num')}${th('rate', 'Rate 1:2', 'num')}<th>LP token</th></tr></thead>
+          <tbody id="dex-body"></tbody></table></div>
+        <p class="hint" style="margin:12px 0 0">Beam's on-chain DEX: each pool holds two assets at a fee tier (Low 0.05%, Medium 0.3%, High 1%). Rates are as the contract reports them.</p></section>`;
   };
+  function bindDex() {
+    const q = $('#dex-q');
+    if (!q) return;
+    dexBody();
+    q.addEventListener('input', () => { ds.q = q.value; dexBody(); });
+    $('#dex-tier').addEventListener('click', (e) => { const b = e.target.closest('[data-tier]'); if (b) { ds.tier = b.dataset.tier; dexBody(); } });
+    $('#dex-empty').addEventListener('click', () => { ds.empty = !ds.empty; dexBody(); });
+    $('#dex-table thead').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-sort]');
+      if (!th) return;
+      ds.dir = ds.sort === th.dataset.sort ? -ds.dir : (th.dataset.sort === 'pair' ? 1 : -1);
+      ds.sort = th.dataset.sort;
+      dexBody();
+    });
+  }
 
   // When each name was registered is not in the contract state, only in its call history: the
   // latest Register call per name. Loaded after the table shows (about 0.4 MB, cached).
@@ -922,6 +1012,8 @@
       if (route === 'home') bindHome();
       if (route === 'names') bindNames();
       if (route === 'contracts') bindContracts();
+      if (route === 'assets') bindAssets();
+      if (route === 'dex') bindDex();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
       if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
