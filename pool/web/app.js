@@ -57,8 +57,9 @@
 
   const axis = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(v >= 1e4 ? 1 : 2)}k` : v.toFixed(v < 10 ? 1 : 0));
   // Explorer-style area chart: axis on the right, grid in both directions, the current value marked
-  // by a dotted guide and a pill on the axis. `label` formats axis values and the pill.
-  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h' } = {}) {
+  // by a dotted guide and a pill on the axis. `label` formats axis values and the pill; `peak`
+  // also marks the highest point of the period.
+  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h', peak = false } = {}) {
     const span = RANGES[range] || RANGES['24h'];
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
@@ -84,6 +85,14 @@
     const last = series[series.length - 1][1], ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const pillText = label(last), pw = pillText.length * 7.2 + 12;
     const id = `g${Math.random().toString(36).slice(2, 8)}`;
+    let peakMark = '';
+    if (peak) {
+      const top = series.reduce((a, b) => (b[1] > a[1] ? b : a));
+      const px = x(top[0]), py = y(top[1]);
+      const anchor = px > W - R - 90 ? 'end' : px < L + 90 ? 'start' : 'middle';
+      peakMark = `<circle class="peak" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="${color}"/>
+      <text class="peak-text" x="${px.toFixed(1)}" y="${(py - 9).toFixed(1)}" text-anchor="${anchor}">max ${esc(label(top[1]))}</text>`;
+    }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
       ${grid}
@@ -91,6 +100,7 @@
       <path d="M${line} L${x(t1).toFixed(1)},${y(0)} L${x(t0).toFixed(1)},${y(0)} Z" fill="url(#${id})"/>
       <path d="M${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
       <line class="now" x1="${L}" x2="${W - R}" y1="${y(last).toFixed(1)}" y2="${y(last).toFixed(1)}" vector-effect="non-scaling-stroke"/>
+      ${peakMark}
       <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="${color}"/>
       <text class="pill-text" x="${W - R + 4 + pw / 2}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${esc(pillText)}</text>
     </svg>`;
@@ -350,7 +360,7 @@
         ${tile('Paid in blocks', int(m.coinbase.blocks), `${int(m.coinbase.minedPairs)} outputs, ${beam(m.coinbase.minedValue, 2)}`)}
         ${tile('Stock expires', m.coinbase.expiresAt ? `#${int(m.coinbase.expiresAt)}` : '—', m.coinbase.expiredPairs ? `${int(m.coinbase.expiredPairs)} pairs expired unspent` : 'pairs live 30 days; top-up renews them')}
       </div></section>` : ''}
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range })}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers</h2></div>
           ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
