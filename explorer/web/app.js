@@ -344,20 +344,58 @@
   const views = {};
 
   function hdrRows(rows) {
-    return rows.map((b) => `<tr><td><a href="${blockHref(b.height)}">${int(b.height)}</a></td><td class="dim">${when(b.ts)}</td><td class="dim">${ago(b.ts)}</td>
+    return rows.map((b) => `<tr class="${ours.map.has(b.height) ? 'ours' : ''}"><td>${heightLink(b.height)}</td><td class="dim">${when(b.ts)}</td><td class="dim">${ago(b.ts)}</td>
       <td class="mono dim"><a href="${blockHref(b.height)}">${esc(short(b.hash))}</a></td><td class="num">${diff(b.difficulty)}</td>
       <td class="num">${int(b.txs)}</td><td class="num">${int(b.outputs || 0)} / ${int(b.inputs || 0)}${b.shOut || b.shIn ? `<div class="dim small">shielded ${int(b.shOut || 0)} / ${int(b.shIn || 0)}</div>` : ''}</td>
       <td class="num">${b.calls ? `<span class="badge solo">${int(b.calls)}</span>` : '<span class="dim">—</span>'}</td><td class="num dim">${b.fee ? beam(b.fee, 6) : '—'}</td></tr>`).join('');
   }
 
+  // Blocks found by our pool, from the pool's API (it allows any origin): height -> { mode, status }.
+  // Refreshed at most once a minute; without the pool the explorer just shows no marks.
+  const POOL_API = 'https://pool.bumblebeam.org/api';
+  const ours = { map: new Map(), at: 0, loading: null };
+  function ourBlocks() {
+    if (Date.now() - ours.at < 60000) return Promise.resolve(ours.map);
+    if (!ours.loading) {
+      ours.loading = fetch(`${POOL_API}/blocks?limit=500`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        const m = new Map();
+        for (const b of (d && Array.isArray(d.blocks) ? d.blocks : [])) {
+          const h = num(b.height);
+          if (h != null && b.status !== 'orphaned') m.set(h, { mode: b.mode === 'solo' ? 'solo' : 'PPLNS', status: String(b.status || '') });
+        }
+        ours.map = m;
+        ours.at = Date.now();
+      }).catch(() => { ours.at = Date.now(); }).finally(() => { ours.loading = null; });
+    }
+    return ours.loading.then(() => ours.map);
+  }
+  const ourTitle = (o) => `Found by the BumbleBeam pool · ${o.mode}`;
+  const heightLink = (h) => {
+    const o = ours.map.get(h);
+    return o ? `<a class="badge ok ours-h" href="${blockHref(h)}" title="${esc(ourTitle(o))}">${int(h)}</a>` : `<a href="${blockHref(h)}">${int(h)}</a>`;
+  };
+
   // Blocks: the latest ones, more on request; search and filters run over what is loaded, and a
   // height typed in and Enter opens that block.
-  const bk = { q: '', tx: false, calls: false, sh: false, fees: false, rows: [], next: null, tip: null, looked: new Map(), timer: null };
-  const bkFiltering = () => bk.q.trim() || bk.tx || bk.calls || bk.sh || bk.fees;
+  const bk = { q: '', tx: false, calls: false, sh: false, fees: false, ours: false, rows: [], next: null, tip: null, looked: new Map(), timer: null };
+  const bkFiltering = () => bk.q.trim() || bk.tx || bk.calls || bk.sh || bk.fees || bk.ours;
   function blocksFiltered() {
     const q = bk.q.trim().toLowerCase().replace(/,/g, '');
-    return bk.rows.filter((b) => (!q || String(b.height).includes(q) || (b.hash && b.hash.startsWith(q)))
+    // "Our pool" lists every block the pool found, loaded or not; the others are fetched one by one
+    const base = bk.ours ? [...ours.map.keys()].sort((a, b) => b - a).map((h) => bk.rows.find((r) => r.height === h) || bk.looked.get(h)).filter((r) => r && r !== 'loading') : bk.rows;
+    return base.filter((b) => (!q || String(b.height).includes(q) || (b.hash && b.hash.startsWith(q)))
       && (!bk.tx || b.txs > 1) && (!bk.calls || b.calls > 0) && (!bk.sh || b.shOut || b.shIn) && (!bk.fees || b.fee > 0));
+  }
+  async function loadOurs() {
+    const missing = [...ours.map.keys()].filter((h) => !bk.rows.some((r) => r.height === h) && !bk.looked.has(h)).sort((a, b) => b - a);
+    for (let i = 0; i < missing.length; i += 4) {
+      await Promise.all(missing.slice(i, i + 4).map(async (h) => {
+        bk.looked.set(h, 'loading');
+        try { bk.looked.set(h, normHdrs(await get(`hdrs?hMax=${h}&nMax=1`), 1).find((b) => b.height === h) || null); } catch (e) { bk.looked.delete(h); }
+      }));
+      if (!bk.ours || !$('#hdr-body')) return;
+      blocksBody();
+    }
   }
   // a height that is not loaded is fetched from the node and shown on its own
   function lookupHeight(h) {
@@ -382,21 +420,23 @@
         else note = `Block ${int(height)} is not on the chain we know.`;
       }
     } else if (q && !rows.length && /^[0-9a-f]+$/i.test(q)) note = 'No loaded block matches. A hash is searched among loaded blocks only; Beam\'s API has no lookup by block hash.';
+    else if (bk.ours && !ours.map.size) note = 'The BumbleBeam pool has not found a block yet.';
+    else if (bk.ours && [...bk.looked.values()].includes('loading')) note = 'Loading the pool\'s blocks…';
     $('#hdr-body').innerHTML = hdrRows(rows) + (note ? `<tr><td colspan="9" class="empty">${esc(note)}</td></tr>` : '')
       || '<tr><td colspan="9" class="empty">No loaded block matches the filters; load older blocks to search further back</td></tr>';
     const oldest = bk.rows.length ? bk.rows[bk.rows.length - 1].height : null;
     $('#blocks-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(bk.rows.length)} loaded${oldest ? ` · back to ${int(oldest)}` : ''}`;
-    [['#bk-tx', bk.tx], ['#bk-calls', bk.calls], ['#bk-sh', bk.sh], ['#bk-fees', bk.fees]].forEach(([id, on]) => $(id).classList.toggle('on', on));
+    [['#bk-tx', bk.tx], ['#bk-calls', bk.calls], ['#bk-sh', bk.sh], ['#bk-fees', bk.fees], ['#bk-ours', bk.ours]].forEach(([id, on]) => $(id).classList.toggle('on', on));
     // while something is typed, a height is looked up directly, so loading more would change nothing
     const btn = $('#more-hdrs');
     if (btn) {
-      btn.parentElement.style.display = bk.q.trim() ? 'none' : '';
+      btn.parentElement.style.display = bk.q.trim() || bk.ours ? 'none' : '';
       if (!btn.disabled) btn.textContent = bkFiltering() ? 'Load 200 older blocks' : 'Load older blocks';
     }
   }
 
   views.home = async () => {
-    const st = normStatus(await get('status'));
+    const [st] = await Promise.all([get('status').then(normStatus), ourBlocks()]);
     bk.tip = st.height;
     const fresh = st.height ? normHdrs(await get(`hdrs?hMax=${st.height}&nMax=${PAGE}`)) : [];
     // keep what was loaded and searched while new blocks come in (auto-refresh)
@@ -417,7 +457,7 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span id="blocks-count"></span></div></div>
         ${bk.rows.length ? `<div class="names-tools">
           <input id="bk-q" class="names-q" placeholder="Any height, or a hash among loaded blocks…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
-          <div class="seg"><button type="button" id="bk-tx">With transactions</button><button type="button" id="bk-calls">Contract calls</button><button type="button" id="bk-sh">Shielded</button><button type="button" id="bk-fees">With fees</button></div>
+          <div class="seg"><button type="button" id="bk-tx">With transactions</button><button type="button" id="bk-calls">Contract calls</button><button type="button" id="bk-sh">Shielded</button><button type="button" id="bk-fees">With fees</button><button type="button" id="bk-ours" title="Blocks found by the BumbleBeam pool">Our pool${ours.map.size ? ` · ${int(ours.map.size)}` : ''}</button></div>
         </div>
         <div class="table-wrap"><table id="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-a"><col><col class="w-d"><col class="w-tx"><col class="w-io"><col class="w-c"><col class="w-f"></colgroup>
           <thead><tr><th>Height</th><th>Time</th><th>Age</th><th>Hash</th><th class="num">Difficulty</th><th class="num">Txs</th><th class="num">Out / in</th><th class="num">Calls</th><th class="num">Fees</th></tr></thead>
@@ -437,7 +477,12 @@
       const h = q.value.trim().replace(/[,\s]/g, '');
       if (e.key === 'Enter' && /^\d{1,10}$/.test(h)) { e.preventDefault(); bk.q = ''; go(blockHref(h)); }
     });
-    [['#bk-tx', 'tx'], ['#bk-calls', 'calls'], ['#bk-sh', 'sh'], ['#bk-fees', 'fees']].forEach(([id, k]) => $(id).addEventListener('click', () => { bk[k] = !bk[k]; blocksBody(); }));
+    [['#bk-tx', 'tx'], ['#bk-calls', 'calls'], ['#bk-sh', 'sh'], ['#bk-fees', 'fees'], ['#bk-ours', 'ours']].forEach(([id, k]) => $(id).addEventListener('click', () => {
+      bk[k] = !bk[k];
+      blocksBody();
+      if (k === 'ours' && bk.ours) loadOurs();
+    }));
+    if (bk.ours) loadOurs();
     const btn = $('#more-hdrs');
     if (!btn) return;
     btn.addEventListener('click', async () => {
@@ -474,7 +519,9 @@
       <td>${o.coinbase ? '<span class="badge ok">coinbase</span>' : '<span class="dim">confidential</span>'}</td>
       <td class="num">${o.coinbase && o.value != null ? beam(o.value, 4) : '—'}</td><td class="num dim">${o.maturity ? int(o.maturity) : '—'}</td>
       <td class="num">${o.spent ? `<a href="${blockHref(o.spent)}">${int(o.spent)}</a>` : '<span class="dim">unspent</span>'}</td></tr>`).join('');
-    return `<div class="page-head"><h1 class="page-title">Block ${int(b.height)}</h1>
+    await ourBlocks();
+    const our = ours.map.get(b.height);
+    return `<div class="page-head"><h1 class="page-title">Block ${int(b.height)}${our ? ` <span class="badge ok ours-tag" title="${esc(ourTitle(our))}">BumbleBeam · ${esc(our.mode)}</span>` : ''}</h1>
         <div class="actions pager">${b.height > 0 ? `<a class="btn ghost small" href="${blockHref(b.height - 1)}">← ${int(b.height - 1)}</a>` : ''}<a class="btn ghost small" href="${blockHref(b.height + 1)}">${int(b.height + 1)} →</a></div></div>
       <div class="tiles">
         ${tile('Mined', esc(local(b.ts)).replace(' ', '<br>'), `${esc(ago(b.ts))} · ${esc(utc(b.ts))}`)}
