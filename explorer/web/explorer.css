@@ -91,3 +91,6 @@ table.doc td, table.nested td { vertical-align: top; }
 .badge.ours-h { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 1px 6px; margin: -2px 0 -2px -6px; text-decoration: none; }
 .badge.ours-h:hover { background: rgba(0, 246, 210, 0.2); }
 .ours-tag { vertical-align: middle; margin-left: 8px; }
+/* filter buttons: never break a label, wrap whole buttons onto the next line instead */
+.names-tools .seg { flex-wrap: wrap; }
+.names-tools .seg button { white-space: nowrap; }

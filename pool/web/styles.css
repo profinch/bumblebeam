@@ -248,7 +248,7 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   .code pre .arg { overflow-wrap: anywhere; }
 }
 /* thumb-sized range switch on touch screens */
-@media (pointer: coarse) { .seg button { padding: 8px 12px; } }
+@media (pointer: coarse) { .seg.range button { padding: 8px 12px; } }
 .seg { display: inline-flex; gap: 4px; }
 .seg button, .pill {
   font: 700 11px var(--font-mono); letter-spacing: 0.02em; padding: 5px 10px; cursor: pointer;
