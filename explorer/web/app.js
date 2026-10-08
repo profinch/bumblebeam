@@ -384,10 +384,15 @@
     } else if (q && !rows.length && /^[0-9a-f]+$/i.test(q)) note = 'No loaded block matches. A hash is searched among loaded blocks only; Beam\'s API has no lookup by block hash.';
     $('#hdr-body').innerHTML = hdrRows(rows) + (note ? `<tr><td colspan="9" class="empty">${esc(note)}</td></tr>` : '')
       || '<tr><td colspan="9" class="empty">No loaded block matches the filters; load older blocks to search further back</td></tr>';
-    $('#blocks-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(bk.rows.length)} loaded`;
+    const oldest = bk.rows.length ? bk.rows[bk.rows.length - 1].height : null;
+    $('#blocks-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(bk.rows.length)} loaded${oldest ? ` · back to ${int(oldest)}` : ''}`;
     [['#bk-tx', bk.tx], ['#bk-calls', bk.calls], ['#bk-sh', bk.sh], ['#bk-fees', bk.fees]].forEach(([id, on]) => $(id).classList.toggle('on', on));
+    // while something is typed, a height is looked up directly, so loading more would change nothing
     const btn = $('#more-hdrs');
-    if (btn) btn.textContent = bkFiltering() ? 'Load 200 older blocks' : 'Load older blocks';
+    if (btn) {
+      btn.parentElement.style.display = bk.q.trim() ? 'none' : '';
+      if (!btn.disabled) btn.textContent = bkFiltering() ? 'Load 200 older blocks' : 'Load older blocks';
+    }
   }
 
   views.home = async () => {
