@@ -306,6 +306,14 @@ Telegram notices go out when `/data/docker/.env` has `TELEGRAM_BOT_TOKEN` and `T
    `chmod 600`, git-ignored). Write it there yourself.
 4. `sudo docker compose -f compose-bumblebeam.yaml up -d certbot nginx`.
 
+Stratum TLS uses the same certificate (`*.example.org` covers the stratum name). The pool runs as
+uid 10001 and reads its certificate at start, so
+[`deploy/host/pool-tls-sync.sh`](../deploy/host/pool-tls-sync.sh) copies the live certificate and
+key into `/data/bumblebeam/pool/tls/` when they changed and restarts the pool; install it as
+`/usr/local/sbin/pool-tls-sync.sh` with `pool-tls-sync.service` and `pool-tls-sync.timer` (daily
+04:30 UTC, after the renewal) and `systemctl enable --now pool-tls-sync.timer`. The pool restarts
+only on a real renewal; miners reconnect.
+
 [`bumblebeam.conf`](../deploy/docker/containers/nginx/conf/bumblebeam.conf) serves the pool on
 `pool.bumblebeam.org`, the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
 and `www` to the pool.

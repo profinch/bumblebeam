@@ -1,0 +1,7 @@
+[Unit]
+Description=Copy the Let's Encrypt certificate to the pool's stratum TLS and restart the pool on change
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pool-tls-sync.sh
