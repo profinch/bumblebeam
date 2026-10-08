@@ -65,7 +65,11 @@
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
     // phones get a narrower canvas, so the labels are not scaled down to nothing
-    const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, R = narrow ? 84 : 96, T = 16, B = 30;
+    // the right margin holds the axis, the current value's pill and, right of it, the peak
+    const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 7.2 + 12;
+    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.9;
+    const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
+    const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + pw + 6 + ptw + 4) : 0);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
@@ -85,19 +89,15 @@
         : `${MONTHS[d.getMonth()]} ${d.getDate()}${range === '7d' ? ` ${String(d.getHours()).padStart(2, '0')}:00` : ''}`;
       grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === xTicks ? 'end' : 'middle'}">${when}</text>`;
     }
-    const last = series[series.length - 1][1], ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
-    const pillText = label(last), pw = pillText.length * 7.2 + 12;
+    const ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const id = `g${Math.random().toString(36).slice(2, 8)}`;
-    // the peak: the same guide and pill as the current value, the pill only outlined (dashed);
-    // with tenths, kept clear of the current value's pill
+    // the peak: the same guide as the current value, its value in plain text to the right of the
+    // current value's pill, so the two never overlap
     let peakMark = '';
     if (peak) {
-      const top = Math.max(...series.map((p) => p[1]));
-      const py = y(top), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ppw = pText.length * 5.9 + 8;
-      const pillY = Math.max(T + 9, Math.min(py, ly - 20));
+      const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
       peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
-      <rect class="peak-pill" x="${W - R + 4.5}" y="${(pillY - 8.5).toFixed(1)}" width="${(ppw - 1).toFixed(0)}" height="17" rx="3" stroke="${color}" vector-effect="non-scaling-stroke"/>
-      <text class="peak-text" x="${W - R + 4 + ppw / 2}" y="${(pillY + 4).toFixed(1)}" text-anchor="middle" fill="${color}">${esc(pText)}</text>`;
+      <text class="peak-text" x="${(W - R + 4 + pw + 6).toFixed(1)}" y="${(ty + 4).toFixed(1)}" fill="${color}">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
