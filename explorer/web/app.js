@@ -114,7 +114,7 @@
   function meta(text) {
     const out = {};
     if (typeof text !== 'string' || !text.startsWith('STD:')) return out;
-    for (const kv of text.slice(4).split(';')) { const i = kv.indexOf('='); if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1).slice(0, 200); }
+    for (const kv of text.slice(4).split(';')) { const i = kv.indexOf('='); if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1).slice(0, 1000); }
     return out;
   }
   async function assets() {
@@ -122,7 +122,7 @@
     const t = await get('assets');
     const rows = t && Array.isArray(t.value) ? t.value.slice(1) : [];
     const v = (c) => (c && typeof c === 'object' ? c.value : c);
-    const list = rows.map((r) => { const m = meta(v(r[5])); return { aid: num(v(r[0])), owner: hex(v(r[1])), deposit: num(v(r[2])), supply: num(v(r[3])),
+    const list = rows.map((r) => { const m = meta(v(r[5])); return { aid: num(v(r[0])), owner: hex(v(r[1])), deposit: num(v(r[2])), supply: num(v(r[3])), ratio: m.NTH_RATIO != null ? num(m.NTH_RATIO) : null,
       lock: num(v(r[4])), name: m.N || '', ticker: m.SN || '', unit: m.UN || '', metaText: typeof v(r[5]) === 'string' ? v(r[5]).slice(0, 2000) : '' }; }).filter((a) => a.aid != null);
     assetIndex = { at: Date.now(), h: num(t && t.h), list, byId: new Map(list.map((a) => [a.aid, a])) };
     return assetIndex;
@@ -132,6 +132,20 @@
   // (miners and treasury together); 262,800,000 at most. Every amount on Beam, BEAM and assets
   // alike, is an integer count of 10^-8 units, so all of them have 8 decimals.
   const DECIMALS = 8, MAX_BEAM = 262800000;
+  // An asset's precision is its metadata's NTH_RATIO (smallest units per unit); without one, Beam
+  // wallets use 10^8 like BEAM. Every amount of an asset is scaled by its own ratio.
+  function scaleOf(aid) {
+    if (aid == null || aid === 0) return GROTH;
+    const a = assetIndex && assetIndex.byId.get(aid);
+    return a && a.ratio > 0 ? a.ratio : GROTH;
+  }
+  function decimalsOf(a) {
+    if (!a || a.ratio == null) return { text: String(DECIMALS), note: 'Beam default, no NTH_RATIO' };
+    if (a.ratio === 0) return { text: '—', note: 'NTH_RATIO is 0' };
+    const d = Math.log10(a.ratio);
+    if (Number.isInteger(d)) return { text: String(d), note: `NTH_RATIO ${int(a.ratio)}` };
+    return { text: `1/${int(a.ratio)}`, note: 'NTH_RATIO is not a power of ten' };
+  }
   function beamIssued(h) {
     if (!h) return null;
     const Y = 525600, C = 4 * Y;
@@ -142,19 +156,32 @@
   const assetName = (aid) => (aid === 0 ? 'BEAM' : (assetIndex && assetIndex.byId.get(aid) && (assetIndex.byId.get(aid).ticker || assetIndex.byId.get(aid).name)) || `asset #${aid}`);
   const assetHref = (aid) => `/asset/${Math.round(Number(aid) || 0)}`;
   const contractHref = (cid) => `/contract/${hex(cid, 64)}`;
-  function amount(v) {
+  function amount(v, scale = GROTH) {
     const s = String(v ?? ''), sign = /^[+-]/.test(s) ? s[0] : '', n = num(s.replace(/^[+-]/, ''));
     if (n == null) return esc(s.slice(0, 60));
-    return `<span class="amt ${sign === '-' ? 'neg' : sign === '+' ? 'pos' : ''}">${sign}${(n / GROTH).toLocaleString('en-US', { maximumFractionDigits: 8 })}</span>`;
+    const digits = Math.min(12, Math.max(0, Math.ceil(Math.log10(scale || 1))));
+    return `<span class="amt ${sign === '-' ? 'neg' : sign === '+' ? 'pos' : ''}">${sign}${(n / (scale || 1)).toLocaleString('en-US', { maximumFractionDigits: digits })}</span>`;
+  }
+  const amountOf = (v, aid) => amount(v, scaleOf(aid));
+  const safeUrl = (u) => (typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u) ? u : '');
+  function metaLinks(m) {
+    return [['Site', m.OPT_SITE_URL], ['Docs', m.OPT_PDF_URL]].map(([l, u]) => safeUrl(u) && `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${l}</a>`).filter(Boolean).join(' · ');
+  }
+  // an asset's metadata in a table: name and ticker, the short description, and the long one with
+  // links behind more / less
+  function metaCell(m) {
+    const name = `${esc(m.N || m.SN)}${m.SN && m.N && m.SN !== m.N ? ` <span class="dim">${esc(m.SN)}</span>` : ''}`;
+    const links = metaLinks(m), long = m.OPT_LONG_DESC && m.OPT_LONG_DESC !== m.OPT_SHORT_DESC ? m.OPT_LONG_DESC : '';
+    return `<div class="meta-cell"><div>${name}</div>${m.OPT_SHORT_DESC ? `<div class="dim small wrap">${esc(m.OPT_SHORT_DESC)}</div>` : ''}${long || links ? `<div class="meta-long wrap" hidden>${long ? `<div>${esc(long)}</div>` : ''}${links ? `<div class="small">${links}</div>` : ''}</div><button type="button" class="link-btn" data-more>more</button>` : ''}</div>`;
   }
   const isCell = (x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.type === 'string' && 'value' in x;
-  function cell(c, colHead = '') {
+  function cell(c, colHead = '', scale = GROTH) {
     if (c == null || c === '') return '';
     if (typeof c === 'number') return /height/i.test(colHead) && Number.isInteger(c) && c >= 0 ? `<a href="${blockHref(c)}">${int(c)}</a>` : esc(c.toLocaleString('en-US', { maximumFractionDigits: 8 }));
     if (typeof c === 'boolean') return c ? 'yes' : 'no';
     if (typeof c === 'string') {
       const m = meta(c);
-      if (m.N || m.SN) return `<span title="${esc(c.slice(0, 2000))}">${esc(m.N || m.SN)}${m.SN && m.N ? ` <span class="dim">${esc(m.SN)}</span>` : ''}</span>`;
+      if (m.N || m.SN) return metaCell(m);
       return esc(c.slice(0, 2000));
     }
     if (Array.isArray(c)) return c.every(Array.isArray) ? table({ value: c }, true) : c.map((x) => cell(x, colHead)).join(', ');
@@ -162,7 +189,7 @@
       const v = c.value;
       switch (c.type) {
         case 'aid': { const a = num(v); return a == null ? '' : `<a href="${assetHref(a)}">${esc(assetName(a))}</a>`; }
-        case 'amount': return amount(v);
+        case 'amount': return amount(v, scale);
         case 'blob': return copyHash(hex(v, 200));
         case 'cid': { const h = hex(v, 64); return h ? `<a class="mono" href="${contractHref(h)}" title="${esc(h)}">${esc(short(h))}</a>` : ''; }
         case 'height': { const h = num(v); return h == null ? '' : `<a href="${blockHref(h)}">${int(h)}</a>`; }
@@ -181,12 +208,13 @@
   }
   const isHead = (row) => Array.isArray(row) && row.length && row.every((x) => isCell(x) && x.type === 'th');
   // table rows; a group is one call and its sub-calls, drawn as one block of rows
+  // the scale for a row's amounts: the asset named in the same row, if any
+  const rowScale = (r) => { const a = Array.isArray(r) ? r.find((c) => isCell(c) && c.type === 'aid') : null; return a ? scaleOf(num(a.value)) : GROTH; };
   function bodyRows(rows, heads) {
+    const tr = (r, cls = '') => { const cells = Array.isArray(r) ? r : [r], sc = rowScale(cells); return `<tr${cls ? ` class="${cls}"` : ''}>${cells.map((c, j) => `<td>${cell(c, heads[j], sc)}</td>`).join('')}</tr>`; };
     return rows.map((row) => {
-      if (isCell(row) && row.type === 'group' && Array.isArray(row.value)) {
-        return row.value.map((r, i) => `<tr class="${i ? 'grp-sub' : 'grp-first'}">${(Array.isArray(r) ? r : [r]).map((c, j) => `<td>${cell(c, heads[j])}</td>`).join('')}</tr>`).join('');
-      }
-      return `<tr>${(Array.isArray(row) ? row : [row]).map((c, j) => `<td>${cell(c, heads[j])}</td>`).join('')}</tr>`;
+      if (isCell(row) && row.type === 'group' && Array.isArray(row.value)) return row.value.map((r, i) => tr(r, i ? 'grp-sub' : 'grp-first')).join('');
+      return tr(row);
     }).join('');
   }
   function table(t, nested = false, bodyId = '') {
@@ -238,7 +266,7 @@
   function poolRows(pools) {
     return pools.map((x) => `<tr><td><a href="${assetHref(x.a1)}">${esc(assetName(x.a1))}</a> / <a href="${assetHref(x.a2)}">${esc(assetName(x.a2))}</a></td>
       <td class="dim">${esc(x.vol)}${FEE_TIER[x.vol] ? ` · ${FEE_TIER[x.vol]}` : ''}</td>
-      <td class="num">${amount(x.r1)} <span class="dim">${esc(assetName(x.a1))}</span></td><td class="num">${amount(x.r2)} <span class="dim">${esc(assetName(x.a2))}</span></td>
+      <td class="num">${amountOf(x.r1, x.a1)} <span class="dim">${esc(assetName(x.a1))}</span></td><td class="num">${amountOf(x.r2, x.a2)} <span class="dim">${esc(assetName(x.a2))}</span></td>
       <td class="num">${x.rate12 != null ? `${esc(x.rate12.toLocaleString('en-US', { maximumSignificantDigits: 6 }))}` : '—'}</td>
       <td>${x.lp != null ? `<a href="${assetHref(x.lp)}">${esc(assetName(x.lp))}</a>` : '—'}</td></tr>`).join('');
   }
@@ -258,6 +286,16 @@
     bansCache = { at: Date.now(), cid, h: num(d && d.h), names };
     return bansCache;
   }
+
+  // more / less on long asset descriptions
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-more]');
+    if (!b) return;
+    const box = b.parentElement.querySelector('.meta-long');
+    if (!box) return;
+    box.hidden = !box.hidden;
+    b.textContent = box.hidden ? 'more' : 'less';
+  });
 
   // the "load older" buttons on asset and contract pages
   view.addEventListener('click', async (e) => {
@@ -402,13 +440,26 @@
     const list = q ? all.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : all;
     const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td>
       <td>${a.native ? '<span class="dim">—</span>' : copyHash(a.owner)}</td><td>${esc(a.ticker)}</td>
-      <td class="num">${amount(a.supply)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${DECIMALS}</td>
+      <td class="num">${amountOf(a.supply, a.aid)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${a.native ? DECIMALS : esc(decimalsOf(a).text)}</td>
       <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td></tr>`).join('');
     return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${q ? `Matching <b>${int(list.length)}</b> of ` : 'Assets '}<b>${int(all.length)}</b></span></div></div>
       <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
       ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Owner key</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
   };
+
+  // The asset's own description from its metadata: logo, short and long text, links; the other
+  // metadata fields underneath.
+  const SHOWN = new Set(['OPT_SHORT_DESC', 'OPT_LONG_DESC', 'OPT_SITE_URL', 'OPT_PDF_URL', 'OPT_LOGO_URL', 'OPT_FAVICON_URL']);
+  function assetAbout(a, m) {
+    const logo = safeUrl(m.OPT_LOGO_URL), links = metaLinks(m);
+    const rest = Object.entries(m).filter(([k]) => !SHOWN.has(k));
+    return `<section class="panel"><div class="asset-about">${logo ? `<img class="asset-logo" src="${esc(logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+      <div>${m.OPT_SHORT_DESC ? `<p class="about-short">${esc(m.OPT_SHORT_DESC)}</p>` : ''}${m.OPT_LONG_DESC && m.OPT_LONG_DESC !== m.OPT_SHORT_DESC ? `<p class="hint about-long">${esc(m.OPT_LONG_DESC)}</p>` : ''}
+        ${links ? `<p class="about-links">${links}</p>` : ''}${!m.OPT_SHORT_DESC && !m.OPT_LONG_DESC && !links ? '<p class="hint" style="margin:0">The issuer gave no description.</p>' : ''}</div></div>
+      <dl class="kv" style="margin-top:14px"><dt>Owner key</dt><dd>${a.owner ? `<span class="mono copy" data-copy="${esc(a.owner)}">${esc(a.owner)}</span>` : '—'}</dd>
+        ${rest.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>`;
+  }
 
   views.asset = async (arg) => {
     if (!/^\d{1,10}$/.test(arg || '')) return notFound(`Asset ${String(arg || '').slice(0, 40)}`);
@@ -424,13 +475,13 @@
     return `<div class="page-head"><h1 class="page-title">${esc((a && (a.name || a.ticker)) || `Asset #${aid}`)}</h1><div class="actions"><a class="btn ghost small" href="/assets">all assets</a></div></div>
       <div class="tiles">
         ${tile('Asset ID', `#${int(aid)}`, esc(a && a.ticker ? a.ticker : ''), 'accent')}
-        ${tile('Supply', a ? amount(a.supply) : '—', esc(a && a.unit ? a.unit : ''))}
+        ${tile('Supply', a ? amountOf(a.supply, aid) : '—', esc(a && a.unit ? a.unit : ''))}
         ${tile('Deposit', a ? `${amount(a.deposit)} BEAM` : '—', 'locked by the issuer')}
-        ${tile('Decimals', String(DECIMALS), 'amounts in 10⁻⁸ units, as BEAM')}
+        ${tile('Decimals', esc(decimalsOf(a).text), esc(decimalsOf(a).note))}
         ${tile('Lock height', a && a.lock ? `<a href="${blockHref(a.lock)}">${int(a.lock)}</a>` : '—')}
       </div>
       ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}
-      ${a ? `<section class="panel"><dl class="kv"><dt>Owner key</dt><dd>${esc(a.owner) || '—'}</dd>${Object.entries(m).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>` : ''}
+      ${a ? assetAbout(a, m) : ''}
       ${sections}`;
   };
 
@@ -471,8 +522,8 @@
   }
   function contractsBody() {
     const rows = contractsFiltered();
-    const fund = (x) => `${amount(x.amount)} <a href="${assetHref(x.aid)}" class="dim">${esc(assetName(x.aid))}</a>`;
-    const own = (x) => `<a href="${assetHref(x.aid)}">${esc((x.meta && (x.meta.SN || x.meta.N)) || assetName(x.aid))}</a> <span class="dim">${amount(x.emission)}</span>`;
+    const fund = (x) => `${amountOf(x.amount, x.aid)} <a href="${assetHref(x.aid)}" class="dim">${esc(assetName(x.aid))}</a>`;
+    const own = (x) => `<a href="${assetHref(x.aid)}">${esc((x.meta && (x.meta.SN || x.meta.N)) || assetName(x.aid))}</a> <span class="dim">${amountOf(x.emission, x.aid)}</span>`;
     $('#contracts-body').innerHTML = rows.map((c) => {
       const open = cs.open.has(c.cid), more = Math.max(c.locked.length, c.owned.length) - 1;
       return `<tr class="${open ? 'open' : ''}"><td><a class="mono" href="${contractHref(c.cid)}">${esc(short(c.cid))}</a></td>
@@ -535,24 +586,58 @@
     });
   }
 
+  // What each known kind of contract is, for the description block on its page.
+  const KIND_INFO = [
+    [/^DEX\b/, 'Beam\'s on-chain exchange (AMM): liquidity pools of asset pairs at three fee tiers. Calls add and withdraw liquidity and trade; the state lists every pool with its reserves.'],
+    [/^Nephrite\b/, 'A stablecoin protocol: users lock BEAM as collateral in troves and mint the Nph token against it; a stability pool absorbs liquidations. Prices come from the oracle.'],
+    [/^DaoVault\b/, 'The Beam DAO\'s treasury vault: protocol fees from other contracts (DEX, Nephrite, BANS) are deposited here.'],
+    [/^DaoCore/, 'The core of the Beam DAO: it issued the BeamX governance token and runs its distribution.'],
+    [/^DaoVote\b/, 'Beam DAO governance: proposals and votes, weighted by staked BeamX.'],
+    [/^DaoAccumulator\b/, 'A Beam DAO farming contract: liquidity locked here earns BeamX rewards over time.'],
+    [/^Oracle/, 'A price oracle: providers feed prices, and other contracts (Nephrite, BANS) read them.'],
+    [/^Bans\b/, 'BANS, the Beam Anonymous Name Service: names registered to a key for a period, renewed, transferred and sold. See the Names page.'],
+    [/^VaultAnon\b/, 'An anonymous vault: it holds funds for a key until the owner withdraws them (BANS pays name sellers through it).'],
+    [/^Faucet/, 'A faucet: it hands out small amounts of an asset to anyone, within a limit per period.'],
+    [/Gallery/, 'The Beam Gallery: an NFT art gallery where artists publish artworks and collectors buy and sell them.'],
+    [/^BlackHole\b/, 'A black hole: what is sent here can never be withdrawn, a provable burn.'],
+    [/^Minter\b/, 'An asset minter: it issues confidential assets on behalf of their owners.'],
+    [/^upgradable/, 'An upgradable wrapper: the contract\'s code can be replaced by its admins, after a delay, while its ID and funds stay.'],
+  ];
+  function kindOf(k) {
+    if (typeof k === 'string') return { name: k.slice(0, 80), shader: '' };
+    if (k && typeof k === 'object' && typeof k.Wrapper === 'string') return { name: k.Wrapper.slice(0, 40), shader: hex(cv(k.subtype), 64) };
+    return { name: '', shader: hex(cv(k), 64) };
+  }
+
   views.contract = async (arg) => {
     const cid = hex(arg, 64);
     if (cid.length !== 64) return notFound(`Contract ${String(arg || '').slice(0, 80)}`);
     const pager = `contract?id=${cid}&nMaxTxs=${CALLS_PAGE}&state=0&assets_owned=0&funds_locked=0&ver_info=0`;
-    const [d] = await Promise.all([get(`contract?id=${cid}&nMaxTxs=${CALLS_PAGE}`), assets().catch(() => null)]);
+    const [d, , st] = await Promise.all([get(`contract?id=${cid}&nMaxTxs=${CALLS_PAGE}`), assets().catch(() => null), get('status').catch(() => null)]);
     const ver = d && d['Version History'];
     const versions = isCell(ver) && Array.isArray(ver.value) ? ver.value.slice(1) : [];
     if (!versions.length) return notFound(`Contract ${short(cid)}`);
     const first = versions[versions.length - 1], deployed = num(isCell(first[0]) ? first[0].value : first[0]);
+    if (st && num(st.height)) await heightClock(num(st.height)).catch(() => null);
+    const k = kindOf(d.kind);
+    const about = (KIND_INFO.find(([re]) => re.test(k.name)) || [])[1]
+      || 'A contract whose kind the explorer\'s parser does not know, so its state and calls are shown as the node reports them.';
+    const lockedT = d['Locked Funds'];
+    const beamLocked = rowsOf(lockedT).filter((r) => num(cv(r[0])) === 0).reduce((t, r) => t + (num(String(cv(r[1]))) || 0), 0);
     const order = ['State', 'Locked Funds', 'Owned assets', 'Version History', 'Calls history'];
-    const keys = Object.keys(d).filter((k) => !['h', 'kind'].includes(k)).sort((x, y) => (order.indexOf(x) + 99) % 99 - (order.indexOf(y) + 99) % 99);
-    return `<div class="page-head"><h1 class="page-title">${esc(typeof d.kind === 'string' ? d.kind.slice(0, 80) : 'Contract')}</h1><div class="actions"><a class="btn ghost small" href="/contracts">all contracts</a></div></div>
+    const keys = Object.keys(d).filter((x) => !['h', 'kind'].includes(x)).sort((x, y) => (order.indexOf(x) + 99) % 99 - (order.indexOf(y) + 99) % 99);
+    const t = deployed != null ? timeAt(deployed) : null;
+    return `<div class="page-head"><h1 class="page-title">${esc(k.name || 'Contract')}</h1><div class="actions"><a class="btn ghost small" href="/contracts">all contracts</a></div></div>
       <div class="tiles">
-        ${tile('Kind', esc(typeof d.kind === 'string' ? d.kind.slice(0, 80) : 'unknown'), 'decoded by Beam\'s explorer parser', 'accent')}
-        ${tile('Deployed', deployed != null ? `<a href="${blockHref(deployed)}">${int(deployed)}</a>` : '—', `${int(versions.length)} version${versions.length === 1 ? '' : 's'}`)}
+        ${tile('Kind', k.name ? esc(k.name) : copyHash(k.shader), k.name ? (k.shader ? 'wrapper around a shader' : 'decoded by Beam\'s explorer parser') : 'shader hash, not decoded', 'accent')}
+        ${tile('Deployed', deployed != null ? `<a href="${blockHref(deployed)}">${int(deployed)}</a>` : '—', t ? esc(local(t)) : '')}
+        ${tile('Versions', int(versions.length), versions.length > 1 ? 'upgraded since deployment' : 'as deployed')}
+        ${tile('BEAM locked', amount(beamLocked), 'held by the contract')}
       </div>
-      <section class="panel"><dl class="kv"><dt>Contract ID</dt><dd>${esc(cid)}</dd></dl></section>
-      ${keys.map((k) => section(k, d[k], k === 'Calls history' ? pager : null)).join('')}`;
+      <section class="panel"><p class="hint" style="margin:0 0 12px">${esc(about)}</p>
+        <dl class="kv"><dt>Contract ID</dt><dd><span class="mono copy" data-copy="${esc(cid)}">${esc(cid)}</span></dd>
+        ${k.shader ? `<dt>Shader</dt><dd><span class="mono copy" data-copy="${esc(k.shader)}">${esc(k.shader)}</span></dd>` : ''}</dl></section>
+      ${keys.map((x) => section(x, d[x], x === 'Calls history' ? pager : null)).join('')}`;
   };
 
   async function beamView() {
@@ -669,7 +754,7 @@
       <td class="num">${heightCell(x.reg, ns.regsLoaded ? '' : '…')}</td>
       <td class="num">${heightCell(x.exp)}</td>
       <td>${badge(x.status)}${x.price ? ' <span class="badge solo">for sale</span>' : ''}</td>
-      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td></tr>`).join('')
+      <td class="num">${x.price ? `${amountOf(x.price.amount, x.price.aid)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td></tr>`).join('')
       || '<tr><td colspan="6" class="empty">No names match</td></tr>';
     $('#names-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(ns.list.length)}`;
     $('#names-page').textContent = `Page ${ns.page + 1} of ${pages}`;
