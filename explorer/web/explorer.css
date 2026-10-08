@@ -55,3 +55,16 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 #contracts-table td, #contracts-table .stack-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #contracts-table .stack-line + .stack-line { margin-top: 4px; }
 #contracts-table tr.open td { background: rgba(255, 255, 255, 0.02); }
+/* asset metadata: description cells with more / less, the asset page's about block */
+table.doc td, table.nested td { vertical-align: top; }
+.meta-cell .wrap, .wrap { white-space: normal; }
+.meta-cell { max-width: 520px; }
+.meta-long { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+.meta-long .small { margin-top: 4px; }
+.link-btn { margin-top: 4px; padding: 0; background: none; border: 0; color: var(--accent); font: 11px var(--font-mono); cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.asset-about { display: flex; gap: 16px; align-items: flex-start; }
+.asset-logo { width: 48px; height: 48px; flex: none; object-fit: contain; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
+.about-short { margin: 0 0 6px; font-size: 14px; color: var(--text); }
+.about-long { margin: 0 0 8px; line-height: 1.6; }
+.about-links { margin: 0; font: 12px var(--font-mono); }
