@@ -425,6 +425,6 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 /* chart labels stay readable over the bars */
 .bars text { paint-order: stroke; stroke: rgba(4, 37, 72, 0.85); stroke-width: 3px; stroke-linejoin: round; }
 /* documentation tables wrap their text: no sideways scrolling on the API pages */
-.md table td, .md table th { white-space: normal; overflow-wrap: anywhere; }
-.md table td code { white-space: nowrap; }
-@media (max-width: 700px) { .md table td code { white-space: normal; overflow-wrap: anywhere; } }
+.md table td, .md table th { white-space: normal; overflow-wrap: break-word; }
+/* code in tables breaks only where the renderer allows it (after / ? & =), never mid-word */
+.md table td code { white-space: normal; overflow-wrap: normal; }
