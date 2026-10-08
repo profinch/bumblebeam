@@ -574,11 +574,29 @@
     render(false);
   });
 
-  // Copy buttons, on every page.
+  // Copy buttons, on every page. The Clipboard API exists only on https and some in-app
+  // browsers refuse it, so fall back to selecting a hidden textarea and execCommand('copy').
+  function copyFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
   view.addEventListener('click', (e) => {
     const b = e.target.closest('[data-copy]');
-    if (!b || !navigator.clipboard) return;
-    navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = 'copied'; setTimeout(() => (b.textContent = 'copy'), 1200); }, () => {});
+    if (!b) return;
+    const text = b.dataset.copy;
+    const done = (ok) => { b.textContent = ok ? 'copied' : 'copy failed'; setTimeout(() => (b.textContent = 'copy'), 1500); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), () => done(copyFallback(text)));
+    else done(copyFallback(text));
   });
 
   // ---------- routing ----------
