@@ -173,6 +173,8 @@
     if (!el) return;
     let net = null;
     try { net = await BB.network(); } catch (e) { net = null; }
+    // pages that never ask the pool (API docs, not found) learn whether it is up here
+    if (!BB.mode) await BB.pool('stats').catch(() => null);
     const live = BB.mode === 'live';
     el.className = `pill-status ${live ? '' : BB.mode === 'demo' ? 'demo' : 'off'}`;
     txt.textContent = `${live ? 'pool live' : BB.mode === 'demo' ? 'demo' : 'offline'}${net && net.ok && net.height ? ` · ${int(net.height)}` : ''}`;
