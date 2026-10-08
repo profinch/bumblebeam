@@ -179,7 +179,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
         wr.write_all(format!("{v}\n").as_bytes()).await?;
         Ok(())
     }
-    fn result(id: &str, code: i64, desc: &str) -> Value {
+    fn result(id: &Value, code: i64, desc: &str) -> Value {
         json!({ "jsonrpc": "2.0", "id": id, "method": "result", "code": code, "description": desc })
     }
 
@@ -191,9 +191,11 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 if line.trim().is_empty() { continue; }
                 let msg: Value = match serde_json::from_str(&line) {
                     Ok(v) => v,
-                    Err(_) => { send(&mut wr, result("", -32000, "message corrupted")).await?; continue; }
+                    Err(_) => { send(&mut wr, result(&json!(""), -32000, "message corrupted")).await?; continue; }
                 };
-                let id = msg["id"].as_str().unwrap_or("").to_string();
+                // answered with the id exactly as sent: Beam miners use strings, other clients (NiceHash) may send numbers
+                let id = msg.get("id").filter(|v| v.is_string() || v.is_number()).cloned().unwrap_or_else(|| json!(""));
+                let id_str = match &id { Value::String(s) => s.clone(), v => v.to_string() };
                 match msg["method"].as_str().unwrap_or("") {
                     "login" => {
                         let key = msg["api_key"].as_str().unwrap_or("").trim();
@@ -240,7 +242,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                     }
                     "solution" => {
                         if address.is_empty() { send(&mut wr, result(&id, -32003, "login first")).await?; continue; }
-                        let Some(pos) = jobs.iter().position(|j| j.id == id) else {
+                        let Some(pos) = jobs.iter().position(|j| j.id == id_str) else {
                             send(&mut wr, result(&id, 3, "stale: job expired")).await?;
                             continue;
                         };
