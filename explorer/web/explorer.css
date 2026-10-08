@@ -12,9 +12,10 @@ tr.hit td { background: rgba(0, 246, 210, 0.1); }
 /* the API's documents: tables, nested tables, groups of calls */
 table.nested { width: auto; font-size: 11px; }
 table.nested td { padding: 2px 10px 2px 0; border: 0; }
-tr.grp-first td { border-top: 1px solid var(--border); }
-tr.grp-sub td { border-top: 0; color: var(--text-dim); }
-tr.grp-sub td:first-child { padding-left: 18px; }
+tr.grp-first > td { border-top: 1px solid var(--border); }
+tr.grp-sub > td { border-top: 0; color: var(--text-dim); }
+/* only the row's own cells: a nested table inside (Funds, Arguments) keeps its own layout */
+tr.grp-sub > td:first-child { padding-left: 18px; }
 .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amt.neg { color: var(--color-red); }
 .amt.pos { color: var(--accent); }
