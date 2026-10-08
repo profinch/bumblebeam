@@ -411,3 +411,4 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 /* documentation tables wrap their text: no sideways scrolling on the API pages */
 .md table td, .md table th { white-space: normal; overflow-wrap: anywhere; }
 .md table td code { white-space: nowrap; }
+@media (max-width: 700px) { .md table td code { white-space: normal; overflow-wrap: anywhere; } }
