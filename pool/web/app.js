@@ -96,7 +96,8 @@
     let peakMark = '';
     if (peak) {
       const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
-      peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
+      // the guide runs on to the text, under the current value's pill (drawn after it)
+      peakMark = `<line class="now" x1="${L}" x2="${(W - R + 4 + pw + 3).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
       <text class="peak-text" x="${(W - R + 4 + pw + 6).toFixed(1)}" y="${(ty + 4).toFixed(1)}" style="fill:${color}">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
