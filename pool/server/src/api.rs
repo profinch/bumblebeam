@@ -47,6 +47,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/payments", get(payments))
         .route("/api/network", get(network))
         .route("/api/health", get(health))
+        .route("/api/miningboard", get(miningboard))
         .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
         .layer(CorsLayer::permissive())
         .with_state(api)
@@ -130,6 +131,36 @@ async fn payments(State(api): State<Api>, Query(q): Query<HashMap<String, String
 
 async fn network(State(api): State<Api>) -> R {
     Ok(Json(api.net.data.read().await.clone()))
+}
+
+/// The pool in MiningBoard's `miningboard-pool-v1` shape (miningboard.com/pools/submit.md).
+/// Beam's hashrate is in Sol/s, which is what MiningBoard compares against for Beam.
+async fn miningboard(State(api): State<Api>) -> R {
+    let s = &api.shared;
+    let t = now();
+    let iso = |ts: i64| chrono::DateTime::from_timestamp(ts, 0).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+    let (miners, workers) = s.db.pool_counts(t).await?;
+    let (blocks24h, _) = s.db.blocks_24h(t).await?;
+    let job = s.current_job();
+    let height = job.as_ref().map(|j| j.height.saturating_sub(1));
+    let net = api.net.data.read().await.clone();
+    let (cfg, st) = (&s.cfg.pool, &s.cfg.stratum);
+    let beam = |groth: u64| groth as f64 / 1e8;
+    let stratum: Vec<Value> = [(st.pplns_port, false, "PPLNS"), (st.pplns_tls_port, true, "PPLNS"), (st.solo_port, false, "SOLO"), (st.solo_tls_port, true, "SOLO")]
+        .into_iter()
+        .filter(|(port, ..)| *port != 0)
+        .map(|(port, tls, mode)| json!({ "url": format!("stratum+{}://{}:{port}", if tls { "ssl" } else { "tcp" }, cfg.public_host), "tls": tls, "mode": mode }))
+        .collect();
+    Ok(Json(json!({
+        "spec": "miningboard-pool-v1", "coin": "BEAM", "algorithm": "BeamHash III", "updated_at": iso(t),
+        "pool": { "hashrate": s.db.pool_hashrate(t).await?, "miners": miners, "workers": workers, "blocks_24h": blocks24h,
+                  "last_block_at": s.db.last_block_ts(None, None).await?.and_then(iso), "fee_percent": cfg.fee_percent,
+                  "payout_scheme": "PPLNS", "min_payout": beam(cfg.min_payout_groth) },
+        "network": height.map(|h| json!({ "hashrate": net["hashrate"].as_f64(), "height": h,
+                                          "difficulty": job.as_ref().map(|j| pow::difficulty_to_double(j.net_packed)),
+                                          "block_reward": beam(miner_reward_groth(h + 1)), "block_time": 60 })),
+        "stratum": stratum,
+    })))
 }
 
 async fn health(State(api): State<Api>) -> R {

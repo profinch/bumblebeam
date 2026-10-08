@@ -125,6 +125,20 @@ back to the explorer directly when this endpoint is absent.
               "lastTs": 1791327800, "series": [[1791300000, 45031.5]] }] }
 ```
 
+## `GET /api/miningboard`
+
+The pool in MiningBoard's `miningboard-pool-v1` format ([spec](https://miningboard.com/pools/submit.md)),
+which the directory polls every 5 minutes. Hashrates are in Sol/s, Beam's unit, and amounts are in
+BEAM, not groth. `network` is null while the pool has no block template.
+
+```json
+{ "spec": "miningboard-pool-v1", "coin": "BEAM", "algorithm": "BeamHash III", "updated_at": "2026-10-08T03:10:00Z",
+  "pool": { "hashrate": 46.6, "miners": 1, "workers": 2, "blocks_24h": 0, "last_block_at": null,
+            "fee_percent": 0.5, "payout_scheme": "PPLNS", "min_payout": 1.0 },
+  "network": { "hashrate": 52786.0, "height": 4070449, "difficulty": 2926199.5, "block_reward": 25.0, "block_time": 60 },
+  "stratum": [{ "url": "stratum+tcp://stratum.bumblebeam.org:3333", "tls": false, "mode": "PPLNS" }] }
+```
+
 ## Payout addresses
 
 Beam transactions are interactive. A **regular** wallet address expires (24 hours by default) and
