@@ -452,6 +452,17 @@ function index() {
 const MCP_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const str = (description) => ({ type: 'string', description });
 const intp = (description) => ({ type: 'integer', description });
+const query = (o) => {
+  const q = new URLSearchParams(Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString();
+  return q ? `?${q}` : '';
+};
+// the highest point of a pool or miner chart, so an agent need not scan the series
+function withPeak(out, range) {
+  const series = out && out.charts && Array.isArray(out.charts.hashrate) ? out.charts.hashrate : [];
+  if (!series.length) return out;
+  const [ts, hashrate] = series.reduce((a, b) => (b[1] > a[1] ? b : a));
+  return { ...out, peak: { range: range || '24h', hashrate: Math.round(hashrate * 10) / 10, timestamp: ts, time: new Date(ts * 1000).toISOString() } };
+}
 const TOOLS = [
   ['explorer_status', 'Beam chain tip as seen by BumbleBeam\'s own node: height, hash, time, peers, shielded output counts.', {}, () => v1Status()],
   ['explorer_search', 'Resolve anything: a block height, kernel ID, contract ID, asset number (#7), asset name or ticker, or a BANS name.', { q: str('what to look up') }, (a) => v1Search(new URLSearchParams({ q: a.q || '' })), ['q']],
@@ -465,10 +476,10 @@ const TOOLS = [
   ['explorer_names', 'BANS (Beam Anonymous Name Service) names: owner key, status, registration and expiry heights and dates, sale price.', { q: str('optional name filter'), status: str('optional active, on_hold or expired'), for_sale: { type: 'boolean', description: 'only names listed for sale' } }, (a) => v1Names(new URLSearchParams({ q: a.q || '', status: a.status || '', ...(a.for_sale ? { for_sale: '1' } : {}) }))],
   ['explorer_contracts', 'Deployed Beam contracts: kind (when Beam\'s parser knows it), shader hash, deployment height, locked funds, owned assets.', { q: str('optional filter by kind, ID or shader'), kind: str('optional kind prefix, e.g. DEX') }, (a) => v1Contracts(new URLSearchParams({ q: a.q || '', kind: a.kind || '' }))],
   ['explorer_contract', 'One contract by ID: decoded state, locked funds, owned assets, versions and recent calls.', { id: str('contract ID, 64 hex characters'), calls: intp('how many recent calls, 1-500 (default 20)') }, (a) => v1Contract(String(a.id || ''), new URLSearchParams(a.calls ? { calls: String(a.calls) } : {})), ['id']],
-  ['pool_stats', 'BumbleBeam pool statistics: hashrate (Sol/s), miners, workers, blocks in 24h, effort, fee, payout settings and the hashrate chart.', { range: str('optional chart range: 24h, 7d or 30d') }, (a) => pool(`stats${a.range ? `?range=${encodeURIComponent(a.range)}` : ''}`)],
+  ['pool_stats', 'BumbleBeam pool statistics: hashrate (Sol/s), miners, workers, blocks in 24h, effort, fee, payout settings, PPLNS and solo split in `modes`, the hashrate chart and its `peak` over the range.', { range: str('optional chart range: 24h, 7d or 30d'), mode: str('optional chart of one mode: pplns (the pool) or solo; both by default') }, async (a) => withPeak(await pool(`stats${query({ range: a.range, mode: a.mode })}`), a.range)],
   ['pool_blocks', 'Blocks found by the BumbleBeam pool, newest first, with status, confirmations, effort and finder.', { limit: intp('how many, 1-500 (default 50)'), before: intp('only blocks below this height') }, (a) => pool(`blocks?limit=${clampLimit(a.limit, 50, 500)}${a.before ? `&before=${Number(a.before)}` : ''}`)],
-  ['pool_miner', 'One miner on the BumbleBeam pool by payout address: hashrate, unpaid and immature balance, paid total, workers, payments, blocks found.', { address: str('the miner\'s Beam payout address'), range: str('optional chart range: 24h, 7d or 30d') }, (a) => pool(`miners/${encodeURIComponent(String(a.address || '').replace(/\s+/g, ''))}${a.range ? `?range=${encodeURIComponent(a.range)}` : ''}`), ['address']],
-  ['pool_miners', 'Top miners on the BumbleBeam pool by hashrate (no addresses: Beam is private).', { limit: intp('how many, 1-500 (default 50)') }, (a) => pool(`miners?limit=${clampLimit(a.limit, 50, 500)}`)],
+  ['pool_miner', 'One miner on the BumbleBeam pool by payout address: hashrate and its peak over the range, unpaid and immature balance, paid total, workers with their modes (pplns, solo), payments, blocks found.', { address: str('the miner\'s Beam payout address'), range: str('optional chart range: 24h, 7d or 30d') }, async (a) => withPeak(await pool(`miners/${encodeURIComponent(String(a.address || '').replace(/\s+/g, ''))}${query({ range: a.range })}`), a.range), ['address']],
+  ['pool_miners', 'Top miners on the BumbleBeam pool by hashrate, with the modes they mine in (no addresses: Beam is private).', { limit: intp('how many, 1-500 (default 50)'), mode: str('optional: pplns or solo only') }, (a) => pool(`miners${query({ limit: clampLimit(a.limit, 50, 500), mode: a.mode })}`)],
   ['pool_payments', 'Payout runs of the BumbleBeam pool with amounts and kernels.', { limit: intp('how many, 1-500 (default 50)') }, (a) => pool(`payments?limit=${clampLimit(a.limit, 50, 500)}`)],
   ['pool_network', 'Beam network numbers and every Beam mining pool with hashrate and blocks in 24h, as the pool sees them.', {}, () => pool('network')],
   ['pool_health', 'Whether the BumbleBeam pool is up and has work from its node.', {}, () => pool('health')],
