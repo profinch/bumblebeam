@@ -490,10 +490,58 @@
       ${live.length ? poolTable(live) : '<div class="empty">No pools with liquidity</div>'}</section>`;
   };
 
+  // When each name was registered is not in the contract state, only in its call history: the
+  // latest Register call per name. Loaded after the table shows (about 0.4 MB, cached).
+  let bansRegs = null;
+  async function bansRegistrations(cid) {
+    if (bansRegs && bansRegs.cid === cid && Date.now() - bansRegs.at < 600000) return bansRegs.map;
+    const map = new Map();
+    let hMax = null;
+    for (let i = 0; i < 20; i++) {
+      const d = await get(`contract?id=${cid}&nMaxTxs=100000&state=0&assets_owned=0&funds_locked=0&ver_info=0${hMax != null ? `&hMax=${hMax}` : ''}`, 60000);
+      const t = d && d['Calls history'];
+      for (const g of rowsOrGroups(t)) {
+        const first = isCell(g) && g.type === 'group' && Array.isArray(g.value) ? g.value[0] : g;
+        if (!Array.isArray(first) || first[3] !== 'Register') continue;
+        const h = num(cv(first[0])), name = first[4] && typeof first[4].name === 'string' ? first[4].name : '';
+        if (h != null && name && !(map.get(name) > h)) map.set(name, h);
+      }
+      hMax = t && t.more ? num(t.more.hMax) : null;
+      if (hMax == null) break;
+    }
+    bansRegs = { cid, at: Date.now(), map };
+    return map;
+  }
+  const rowsOrGroups = (t) => (isCell(t) && Array.isArray(t.value) ? t.value.slice(1) : []);
+
+  // Block height -> time: real timestamps of a dozen blocks across the chain, interpolated between
+  // them (a flat minute a block drifts by days over millions of blocks); ahead of the tip, a minute a block.
+  let anchors = null;
+  async function heightClock(tip) {
+    if (anchors && anchors.tip >= tip - 1000) return anchors;
+    const step = Math.max(50000, Math.ceil(tip / 12 / 50000) * 50000);
+    const hs = []; for (let h = step; h < tip; h += step) hs.push(h); hs.push(tip);
+    const pts = (await Promise.all(hs.map((h) => get(`hdrs?hMax=${h}&nMax=1`).then((t) => normHdrs(t)[0]).catch(() => null))))
+      .filter((r) => r && r.ts).map((r) => [r.height, r.ts]).sort((a, b) => a[0] - b[0]);
+    anchors = { tip, pts };
+    return anchors;
+  }
+  function timeAt(h) {
+    const pts = anchors && anchors.pts;
+    if (!h || !pts || !pts.length) return null;
+    const last = pts[pts.length - 1];
+    if (h >= last[0]) return last[1] + (h - last[0]) * 60;
+    if (h <= pts[0][0]) return pts[0][1] - (pts[0][0] - h) * 60;
+    for (let i = 1; i < pts.length; i++) {
+      if (h <= pts[i][0]) { const [h0, t0] = pts[i - 1], [h1, t1] = pts[i]; return t0 + ((h - h0) / (h1 - h0)) * (t1 - t0); }
+    }
+    return null;
+  }
+
   // BANS: the whole registry is one contract-state table, so search, filters, sorting and paging
   // all run in the page; only the table body is redrawn while typing.
   const NAMES_PAGE = 50;
-  const ns = { q: '', status: 'All', sale: false, sort: 'name', dir: 1, page: 0, tip: null, list: [] };
+  const ns = { q: '', status: 'All', sale: false, sort: 'name', dir: 1, page: 0, tip: null, list: [], cid: '', regsLoaded: false };
   const STATUS_ORDER = { Active: 0, 'On Hold': 1, Expired: 2 };
   function namesFiltered() {
     const q = ns.q.trim().toLowerCase();
@@ -501,6 +549,7 @@
     const key = {
       name: (x) => x.name.toLowerCase(),
       exp: (x) => x.exp || 0,
+      reg: (x) => x.reg || 0,
       status: (x) => STATUS_ORDER[x.status] ?? 3,
       price: (x) => (x.price ? (x.price.aid === 0 ? x.price.amount : x.price.amount + 1e18) : Infinity),
     }[ns.sort];
@@ -508,20 +557,27 @@
   }
   function relHeight(h) {
     if (!h || !ns.tip) return '';
-    const s = (h - ns.tip) * 60, a = Math.abs(s);
+    const at = timeAt(h), s = at ? at - Date.now() / 1000 : (h - ns.tip) * 60, a = Math.abs(s);
     const t = a < 3600 ? `${Math.round(a / 60)}m` : a < 86400 ? `${Math.round(a / 3600)}h` : a < 86400 * 365 ? `${Math.round(a / 86400)}d` : `${(a / 86400 / 365).toFixed(1)}y`;
     return s >= 0 ? `in ${t}` : `${t} ago`;
+  }
+  // a height with its relative time and date (from the anchors, else a minute a block)
+  function heightCell(h, pending = '') {
+    if (!h) return pending ? `<span class="dim">${pending}</span>` : '—';
+    const t = timeAt(h) || (ns.tip ? Date.now() / 1000 + (h - ns.tip) * 60 : null);
+    return `<a href="${blockHref(h)}">${int(h)}</a><div class="dim small">${esc(relHeight(h))}${t ? ` · ${esc(local(t).slice(0, 10))}` : ''}</div>`;
   }
   function namesBody() {
     const rows = namesFiltered(), pages = Math.max(1, Math.ceil(rows.length / NAMES_PAGE));
     ns.page = Math.min(ns.page, pages - 1);
     const slice = rows.slice(ns.page * NAMES_PAGE, (ns.page + 1) * NAMES_PAGE);
     const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
-    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${copyHash(x.owner)}</td>
-      <td class="num">${x.exp ? `<a href="${blockHref(x.exp)}">${int(x.exp)}</a><div class="dim small">${esc(relHeight(x.exp))}${ns.tip ? ` · ${esc(local(Date.now() / 1000 + (x.exp - ns.tip) * 60).slice(0, 10))}` : ''}</div>` : '—'}</td>
+    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono">${esc(x.name)}</td>
+      <td class="num">${heightCell(x.reg, ns.regsLoaded ? '' : '…')}</td>
+      <td class="num">${heightCell(x.exp)}</td>
       <td>${badge(x.status)}${x.price ? ' <span class="badge solo">for sale</span>' : ''}</td>
-      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td></tr>`).join('')
-      || '<tr><td colspan="5" class="empty">No names match</td></tr>';
+      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td><td>${copyHash(x.owner)}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="empty">No names match</td></tr>';
     $('#names-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(ns.list.length)}`;
     $('#names-page').textContent = `Page ${ns.page + 1} of ${pages}`;
     $('#names-prev').disabled = ns.page === 0;
@@ -535,7 +591,10 @@
     const [b, st] = await Promise.all([bansNames(), get('status').catch(() => null)]);
     if (!b.cid) return notFound('The name service contract');
     ns.list = b.names;
+    ns.cid = b.cid;
     ns.tip = (st && num(st.height)) || b.h;
+    ns.regsLoaded = !!(bansRegs && bansRegs.cid === b.cid);
+    if (ns.regsLoaded) ns.list.forEach((x) => { x.reg = bansRegs.map.get(x.name) || null; });
     if (filter != null) { ns.q = String(filter); ns.status = 'All'; ns.sale = false; ns.page = 0; }
     const counts = b.names.reduce((m, x) => ((m[x.status] = (m[x.status] || 0) + 1), m), {});
     const forSale = b.names.filter((x) => x.price).length;
@@ -555,15 +614,21 @@
           <div class="seg"><button type="button" id="names-sale">For sale only</button></div>
           <div class="names-pager"><button type="button" class="btn ghost small" id="names-prev">‹ Prev</button><span class="dim" id="names-page"></span><button type="button" class="btn ghost small" id="names-next">Next ›</button></div>
         </div>
-        <div class="table-wrap"><table id="names-table"><thead><tr>${th('name', 'Name')}<th>Owner key</th>${th('exp', 'Expires at block', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}</tr></thead>
+        <div class="table-wrap"><table id="names-table"><thead><tr>${th('name', 'Name')}${th('reg', 'Registered', 'num')}${th('exp', 'Expires', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}<th>Owner key</th></tr></thead>
         <tbody id="names-body"></tbody></table></div>
-        <p class="hint" style="margin:12px 0 0">Expiry dates are estimated from one block a minute. Click a key to copy it.</p></section>`;
+        <p class="hint" style="margin:12px 0 0">Registration is the latest Register call for the name. Dates of past blocks come from block times; future expiry dates assume a block a minute. Click a key to copy it.</p></section>`;
   };
 
   function bindNames() {
     const q = $('#names-q');
     if (!q) return;
     namesBody();
+    // registrations and block times arrive after the table; redraw when they do
+    Promise.all([bansRegistrations(ns.cid), ns.tip ? heightClock(ns.tip) : null]).then(([map]) => {
+      ns.list.forEach((x) => { x.reg = map.get(x.name) || null; });
+      ns.regsLoaded = true;
+      if ($('#names-body')) namesBody();
+    }).catch(() => { ns.regsLoaded = true; if ($('#names-body')) namesBody(); });
     q.addEventListener('input', () => { ns.q = q.value; ns.page = 0; namesBody(); });
     $('#names-filter').addEventListener('click', (e) => { const b = e.target.closest('[data-status]'); if (b) { ns.status = b.dataset.status; ns.page = 0; namesBody(); } });
     $('#names-sale').addEventListener('click', () => { ns.sale = !ns.sale; ns.page = 0; namesBody(); });
