@@ -314,6 +314,7 @@
 
   const MY_KEY = 'bb.myAddress';
   function rememberAddress(a) { try { localStorage.setItem(MY_KEY, a); } catch (e) { /* storage may be blocked */ } setMyLink(); }
+  function forgetAddress() { try { localStorage.removeItem(MY_KEY); } catch (e) { /* storage may be blocked */ } setMyLink(); }
   function myAddress() { try { return localStorage.getItem(MY_KEY) || ''; } catch (e) { return ''; } }
   function setMyLink() {
     const a = $('#nav-my'), addr = myAddress();
@@ -325,7 +326,10 @@
     address = cleanAddress(address);
     const range = chartRange();
     const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}?range=${range}`), BB.pool('stats')]);
-    rememberAddress(m.address || address);
+    // "My stats" is for an address that has mined here (sent a share), not for any lookup.
+    const addr = m.address || address;
+    if (m.lastShare != null) rememberAddress(addr);
+    else if (addr === myAddress()) forgetAddress();
     const toPayout = stats.minPayout ? Math.min(1, m.balance / stats.minPayout) : null;
     return `<div class="page-head"><h1 class="page-title">Miner</h1><div class="actions"><a class="btn ghost" href="/miners">← all miners</a></div></div>
       <div class="panel addr"><span>${esc(m.address || address)}</span><button class="btn small" data-copy="${esc(m.address || address)}">copy</button></div>
