@@ -164,6 +164,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
   containers/pool/                    builds bumblebeam-pool from this repository at BUMBLEBEAM_REF
+  containers/pool-web/                builds the pool UI (pool/web) at BUMBLEBEAM_REF, nginx
   containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
   containers/nginx/, containers/certbot/
   beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
@@ -182,6 +183,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 | `wallet-api` | `bumblebeam` + internal `bumblebeam-wallet`, fixed `172.30.1.2` | nothing; answers only the pool's `172.30.1.10` |
 | `postgres` | `bumblebeam` | nothing |
 | `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
+| `pool-web` | `bumblebeam` | `127.0.0.1:8091`; the pool's pages, so UI releases never restart the pool |
 | `explorer-node` | `bumblebeam` | nothing; syncs from `beam-node`, API `8888` stays inside |
 | `explorer-web` | `bumblebeam` | `127.0.0.1:8090`; proxies GET `/api/*` to explorer-node, rate-limited |
 | `nginx` | host network | `80`, `443`, Cloudflare addresses only (host firewall) |
@@ -315,7 +317,7 @@ key into `/data/bumblebeam/pool/tls/` when they changed and restarts the pool; i
 only on a real renewal; miners reconnect.
 
 [`bumblebeam.conf`](../deploy/docker/containers/nginx/conf/bumblebeam.conf) serves the pool on
-`pool.bumblebeam.org`, the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
+`pool.bumblebeam.org` (`/api/*` from the pool, the pages from `pool-web`), the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
 and `www` to the pool.
 
 The explorer: copy `explorer-node.cfg.example` to `/data/bumblebeam/explorer/explorer-node.cfg`
@@ -331,8 +333,10 @@ the running node, use `up -d --no-deps <service>`.
   `sudo journalctl CONTAINER_NAME=bumblebeam-pool --since "2 hours ago"`. Each miner connection
   leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
   shares, and why it ended); addresses are shortened in logs.
-- Pool update: build with the new `BUMBLEBEAM_REF`, then `up -d pool`. Schema migrations run on
-  start.
+- Pool update: build with the new `BUMBLEBEAM_REF`, then `up -d --no-deps pool`. Schema migrations
+  run on start. Restarting the pool drops every miner connection (miners reconnect), so a change
+  to `pool/web` only needs `pool-web` rebuilt, and a change to the shared `styles.css` `pool-web`
+  and `explorer-web`.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
   (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and

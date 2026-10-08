@@ -28,7 +28,10 @@
   const int = (n) => (n == null ? '—' : Math.round(n).toLocaleString('en-US'));
   const beam = (g, d = 4) => (g == null ? '—' : `${(g / GROTH).toLocaleString('en-US', { maximumFractionDigits: d })} BEAM`);
   const diff = (d) => (d == null ? '—' : d >= 1e6 ? `${(d / 1e6).toFixed(2)}M` : int(d));
-  const short = (s, a = 10, b = 8) => (s && s.length > a + b + 1 ? `${s.slice(0, a)}…${s.slice(-b)}` : s || '—');
+  // every hash, key and ID is shortened the same way, on both sites: first 8 … last 8
+  const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-8)}` : s || '—');
+  // a shortened value that is not a link copies its full form on click
+  const copyHash = (h) => (h ? `<span class="mono dim copy" data-copy="${esc(h)}">${esc(short(h))}</span>` : '—');
   function ago(ts) {
     if (!ts) return '—';
     const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
@@ -160,8 +163,8 @@
       switch (c.type) {
         case 'aid': { const a = num(v); return a == null ? '' : `<a href="${assetHref(a)}">${esc(assetName(a))}</a>`; }
         case 'amount': return amount(v);
-        case 'blob': { const h = hex(v, 200); return `<span class="mono dim" title="${esc(h)}">${esc(short(h, 8, 6))}</span>`; }
-        case 'cid': { const h = hex(v, 64); return h ? `<a class="mono" href="${contractHref(h)}" title="${esc(h)}">${esc(short(h, 8, 6))}</a>` : ''; }
+        case 'blob': return copyHash(hex(v, 200));
+        case 'cid': { const h = hex(v, 64); return h ? `<a class="mono" href="${contractHref(h)}" title="${esc(h)}">${esc(short(h))}</a>` : ''; }
         case 'height': { const h = num(v); return h == null ? '' : `<a href="${blockHref(h)}">${int(h)}</a>`; }
         case 'time': return esc(utc(num(v)));
         case 'table': return table(c, true);
@@ -327,13 +330,13 @@
     const withExtra = b.kernels.filter((k) => Object.keys(k.extra).length);
     if (withExtra.length) await assets().catch(() => null);
     const calls = withExtra.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Contract calls and other kernel data</h2></div>
-      ${withExtra.map((k) => `<div class="doc-kernel"><div class="dim mono" style="font-size:11px;margin:4px 0 6px">kernel <a href="${kernelHref(k.id)}">${esc(short(k.id, 16, 12))}</a></div>
+      ${withExtra.map((k) => `<div class="doc-kernel"><div class="dim mono" style="font-size:11px;margin:4px 0 6px">kernel <a href="${kernelHref(k.id)}">${esc(short(k.id))}</a></div>
         ${Object.entries(k.extra).map(([name, v]) => (isCell(v) && v.type === 'table' ? table(v) : `<dl class="kv"><dt>${esc(name)}</dt><dd>${cell(v, name)}</dd></dl>`)).join('')}</div>`).join('')}</section>` : '';
     const coinbase = b.outputs.filter((o) => o.coinbase).reduce((s, o) => s + (o.value || 0), 0);
-    const kRows = b.kernels.map((k) => `<tr class="${k.id && k.id === hit ? 'hit' : ''}"><td class="mono"><a href="${kernelHref(k.id)}">${esc(short(k.id, 16, 12))}</a></td>
+    const kRows = b.kernels.map((k) => `<tr class="${k.id && k.id === hit ? 'hit' : ''}"><td class="mono"><a href="${kernelHref(k.id)}">${esc(short(k.id))}</a></td>
       <td class="num">${k.fee ? beam(k.fee, 8) : '0'}</td><td class="num dim">${int(k.min)}</td><td class="num dim">${int(k.max)}</td><td>${Object.keys(k.extra).length ? '<span class="badge solo">contract</span>' : ''}</td></tr>`).join('');
-    const iRows = b.inputs.map((i) => `<tr><td class="mono dim">${esc(short(i.commitment, 16, 12))}</td><td class="num">${i.height ? `<a href="${blockHref(i.height)}">${int(i.height)}</a>` : '—'}</td></tr>`).join('');
-    const oRows = b.outputs.map((o) => `<tr><td class="mono dim">${esc(short(o.commitment, 16, 12))}</td>
+    const iRows = b.inputs.map((i) => `<tr><td>${copyHash(i.commitment)}</td><td class="num">${i.height ? `<a href="${blockHref(i.height)}">${int(i.height)}</a>` : '—'}</td></tr>`).join('');
+    const oRows = b.outputs.map((o) => `<tr><td>${copyHash(o.commitment)}</td>
       <td>${o.coinbase ? '<span class="badge ok">coinbase</span>' : '<span class="dim">confidential</span>'}</td>
       <td class="num">${o.coinbase && o.value != null ? beam(o.value, 4) : '—'}</td><td class="num dim">${o.maturity ? int(o.maturity) : '—'}</td>
       <td class="num">${o.spent ? `<a href="${blockHref(o.spent)}">${int(o.spent)}</a>` : '<span class="dim">unspent</span>'}</td></tr>`).join('');
@@ -399,7 +402,7 @@
     const list = q ? all.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : all;
     const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td><td>${esc(a.ticker)}</td>
       <td class="num">${amount(a.supply)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${DECIMALS}</td>
-      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td><td class="mono dim" title="${esc(a.owner)}">${a.native ? '—' : esc(short(a.owner, 8, 6))}</td></tr>`).join('');
+      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td><td>${a.native ? '—' : copyHash(a.owner)}</td></tr>`).join('');
     return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${q ? `Matching <b>${int(list.length)}</b> of ` : 'Assets '}<b>${int(all.length)}</b></span></div></div>
       <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
@@ -501,7 +504,7 @@
     const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
     const expires = (x) => (x.exp ? `<a href="${blockHref(x.exp)}">${int(x.exp)}</a>${tip ? ` <span class="dim">≈ ${esc(local(Date.now() / 1000 + (x.exp - tip) * 60).slice(0, 10))}</span>` : ''}` : '—');
     const rows = list.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${badge(x.status)}</td><td class="num">${expires(x)}</td>
-      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : ''}</td><td class="mono dim" title="${esc(x.owner)}">${esc(short(x.owner, 8, 6))}</td></tr>`).join('');
+      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : ''}</td><td>${copyHash(x.owner)}</td></tr>`).join('');
     const counts = b.names.reduce((m, x) => ((m[x.status] = (m[x.status] || 0) + 1), m), {});
     return `<div class="page-head"><h1 class="page-title">${q ? `Names matching “${esc(filter)}”` : 'Names'}</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">the BANS contract</a></div></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Beam Anonymous Name Service</h2>
@@ -602,6 +605,37 @@
     }
     setStatus();
   }
+
+  // click-to-copy for shortened hashes: the full value goes to the clipboard and the text says
+  // "copied" for a moment, at the same width so the table does not move
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).then(() => true, () => copyFallback(text));
+    return Promise.resolve(copyFallback(text));
+  }
+  function copyFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  view.addEventListener('click', (e) => {
+    const el = e.target.closest('.copy[data-copy]');
+    if (!el || el.dataset.busy) return;
+    const label = el.textContent;
+    el.dataset.busy = '1';
+    el.style.display = 'inline-block';
+    el.style.minWidth = `${el.getBoundingClientRect().width}px`;
+    copyText(el.dataset.copy).then((ok) => {
+      el.textContent = ok ? 'copied' : 'failed';
+      setTimeout(() => { el.textContent = label; el.style.minWidth = ''; el.style.display = ''; delete el.dataset.busy; }, 1200);
+    });
+  });
 
   window.addEventListener('popstate', () => render(true));
   document.addEventListener('click', (e) => {

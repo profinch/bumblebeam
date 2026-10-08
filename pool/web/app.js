@@ -35,7 +35,8 @@
     if (sec % 3600 === 0) return `${sec / 3600} h`;
     return `${(sec / 3600).toFixed(1)} h`;
   }
-  const short = (s, a = 8, b = 6) => (s && s.length > a + b + 1 ? `${s.slice(0, a)}…${s.slice(-b)}` : s || '—');
+  // every hash, key and ID is shortened the same way, on both sites: first 8 … last 8
+  const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-8)}` : s || '—');
   const pct = (x, d = 1) => (x == null || !isFinite(x) ? '—' : `${(x * 100).toFixed(d)}%`);
   const effortColor = (e) => (e == null ? 'inherit' : e > 1.5 ? 'var(--color-red)' : e < 0.7 ? 'var(--accent)' : 'inherit');
   const explorerBlock = (h) => `https://explorer.beam.mw/#/explorer/block/${Math.round(Number(h) || 0)}`;
@@ -378,11 +379,11 @@
   };
 
   // One kernel link, or for a run with several transactions a list of all of them with amounts.
-  const kernelLink = (k, a = 12, b = 12) => `<a href="${explorerKernel(k)}" target="_blank" rel="noopener" class="mono">${esc(short(k, a, b))}</a>`;
+  const kernelLink = (k) => `<a href="${explorerKernel(k)}" target="_blank" rel="noopener" class="mono">${esc(short(k))}</a>`;
   const kernelCell = (p) => {
     if (p.txs.length > 1) {
       return `<details class="kernels"><summary>${int(p.txs.length)} transactions</summary>
-        ${p.txs.map((t) => `<div>${kernelLink(t.kernel, 10, 10)} <span class="num">${beam(t.amount, 3)}</span></div>`).join('')}</details>`;
+        ${p.txs.map((t) => `<div>${kernelLink(t.kernel)} <span class="num">${beam(t.amount, 3)}</span></div>`).join('')}</details>`;
     }
     const k = p.txs.length ? p.txs[0].kernel : p.kernel;
     return k ? kernelLink(k) : '—';

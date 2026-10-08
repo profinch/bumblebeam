@@ -46,6 +46,21 @@ services:
     networks:
       - bumblebeam
 
+  # pool.bumblebeam.org's pages, apart from the pool, so UI releases leave stratum alone.
+  pool-web:
+    image: bumblebeam-pool-web
+    container_name: pool-web
+    hostname: pool-web
+    build:
+      context: ./containers/pool-web
+      args:
+        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8091:8080"             # for the host nginx
+    networks:
+      - bumblebeam
+
   # explorer.bumblebeam.org: the explorer UI and a read-only proxy to explorer-node's API.
   explorer-web:
     image: bumblebeam-explorer-web
