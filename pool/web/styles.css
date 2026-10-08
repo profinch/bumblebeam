@@ -270,6 +270,8 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   max-height: 300px; overflow-y: auto; color-scheme: dark;
   background: var(--field-bg); border: 1px solid rgba(0, 246, 210, 0.5); border-top: 0; border-radius: 0 0 6px 6px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  /* the shadow only below and beside: above, it fell on the button and drew a seam */
+  clip-path: inset(0 -40px -40px -40px);
 }
 .dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 .dd-list [role="option"].active { background: rgba(0, 246, 210, 0.12); color: var(--text); }
