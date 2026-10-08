@@ -67,7 +67,7 @@
     // phones get a narrower canvas, so the labels are not scaled down to nothing
     // the right margin holds the axis, the current value's pill and, right of it, the peak
     const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 7.2 + 12;
-    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.9;
+    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
     const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + pw + 6 + ptw + 4) : 0);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
@@ -97,7 +97,7 @@
     if (peak) {
       const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
       // the guide runs on to the text, under the current value's pill (drawn after it)
-      peakMark = `<line class="now" x1="${L}" x2="${(W - 2 - ptw - 4).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
+      peakMark = `<line class="now" x1="${L}" x2="${(W - 2 - ptw - 3).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
       <text class="peak-text" x="${W - 2}" y="${ty.toFixed(1)}" text-anchor="end" dominant-baseline="central">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
