@@ -44,3 +44,14 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 #names-table col.w-key { width: 160px; }
 #names-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #names-table td .small { white-space: nowrap; }
+/* contracts: fixed widths, everything top-aligned, a +N toggle opens a row's asset lists */
+#contracts-table { table-layout: fixed; min-width: 1080px; }
+#contracts-table td { vertical-align: top; }
+#contracts-table col.w-cid { width: 170px; }
+#contracts-table col.w-kind { width: 220px; }
+#contracts-table col.w-dep { width: 120px; }
+#contracts-table col.w-fund { width: 260px; }
+#contracts-table col.w-more { width: 70px; }
+#contracts-table td, #contracts-table .stack-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#contracts-table .stack-line + .stack-line { margin-top: 4px; }
+#contracts-table tr.open td { background: rgba(255, 255, 255, 0.02); }
