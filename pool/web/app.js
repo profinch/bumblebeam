@@ -97,7 +97,7 @@
     if (peak) {
       const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
       peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
-      <text class="peak-text" x="${(W - R + 4 + pw + 6).toFixed(1)}" y="${(ty + 4).toFixed(1)}" fill="${color}">${esc(pText)}</text>`;
+      <text class="peak-text" x="${(W - R + 4 + pw + 6).toFixed(1)}" y="${(ty + 4).toFixed(1)}" style="fill:${color}">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
