@@ -42,7 +42,8 @@
   const blockHref = (h) => `/block/${Math.round(Number(h) || 0)}`;
   const kernelHref = (k) => `/kernel/${hex(k)}`;
 
-  async function get(path, timeoutMs = 10000) {
+  // explorer-node answers one request at a time and slowly while it syncs, so wait long enough
+  async function get(path, timeoutMs = 25000) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
@@ -97,7 +98,7 @@
   }
   async function assets() {
     if (assetIndex && Date.now() - assetIndex.at < 600000) return assetIndex;
-    const t = await get('assets', 15000);
+    const t = await get('assets');
     const rows = t && Array.isArray(t.value) ? t.value.slice(1) : [];
     const v = (c) => (c && typeof c === 'object' ? c.value : c);
     const list = rows.map((r) => { const m = meta(v(r[5])); return { aid: num(v(r[0])), owner: hex(v(r[1])), deposit: num(v(r[2])), supply: num(v(r[3])),
@@ -178,7 +179,7 @@
     btn.disabled = true;
     btn.textContent = 'Loading…';
     try {
-      const d = await get(`${btn.dataset.pager}&hMax=${Number(btn.dataset.hmax)}`, 20000);
+      const d = await get(`${btn.dataset.pager}&hMax=${Number(btn.dataset.hmax)}`);
       const t = d && d[btn.dataset.title];
       const rows = isCell(t) && Array.isArray(t.value) ? t.value : [];
       const heads = isHead(rows[0]) ? rows[0].map((h) => String(h.value)) : [];
@@ -323,7 +324,7 @@
     const aid = Number(arg);
     if (aid === 0) return `<div class="page-head"><h1 class="page-title">BEAM</h1></div><div class="panel empty">Asset 0 is BEAM itself. <a href="/assets">All assets</a></div>`;
     const pager = `asset?id=${aid}&nMaxOps=${ASSET_PAGE}`;
-    const [d, ix] = await Promise.all([get(pager, 20000), assets().catch(() => null)]);
+    const [d, ix] = await Promise.all([get(pager), assets().catch(() => null)]);
     const hist = d && d['Asset history'], a = ix && ix.byId.get(aid);
     if (!a && !(isCell(hist) && Array.isArray(hist.value) && hist.value.length > 1)) return notFound(`Asset ${aid}`);
     const m = a ? meta(a.metaText) : {};
@@ -340,7 +341,7 @@
   };
 
   views.contracts = async () => {
-    const [t] = await Promise.all([get('contracts', 20000), assets().catch(() => null)]);
+    const [t] = await Promise.all([get('contracts'), assets().catch(() => null)]);
     const n = isCell(t) && Array.isArray(t.value) ? t.value.length - 1 : 0;
     return `<div class="page-head"><h1 class="page-title">Contracts</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span>${int(Math.max(0, n))}</span></div></div>
@@ -352,7 +353,7 @@
     const cid = hex(arg, 64);
     if (cid.length !== 64) return notFound(`Contract ${String(arg || '').slice(0, 80)}`);
     const pager = `contract?id=${cid}&nMaxTxs=${CALLS_PAGE}&state=0&assets_owned=0&funds_locked=0&ver_info=0`;
-    const [d] = await Promise.all([get(`contract?id=${cid}&nMaxTxs=${CALLS_PAGE}`, 20000), assets().catch(() => null)]);
+    const [d] = await Promise.all([get(`contract?id=${cid}&nMaxTxs=${CALLS_PAGE}`), assets().catch(() => null)]);
     const ver = d && d['Version History'];
     const versions = isCell(ver) && Array.isArray(ver.value) ? ver.value.slice(1) : [];
     if (!versions.length) return notFound(`Contract ${short(cid)}`);
@@ -381,7 +382,7 @@
   // ---------- status: footer pill and a banner while the node catches up ----------
   async function setStatus() {
     let st = null;
-    try { st = normStatus(await get('status', 6000)); } catch (e) { st = null; }
+    try { st = normStatus(await get('status')); } catch (e) { st = null; }
     const pill = $('#foot-status'), txt = $('#foot-status-text'), banner = $('#sync-banner');
     const behind = st && st.ts ? Date.now() / 1000 - st.ts > 600 : true;
     pill.className = `pill-status ${!st ? 'off' : behind ? 'demo' : ''}`;
