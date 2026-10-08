@@ -400,13 +400,14 @@
     const beamRow = { aid: 0, name: 'Beam', ticker: 'BEAM', unit: 'BEAM', supply: beamIssued(ix.h), deposit: null, owner: '', native: true };
     const all = [beamRow, ...ix.list];
     const list = q ? all.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : all;
-    const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td><td>${esc(a.ticker)}</td>
+    const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td>
+      <td>${a.native ? '<span class="dim">—</span>' : copyHash(a.owner)}</td><td>${esc(a.ticker)}</td>
       <td class="num">${amount(a.supply)}${a.native ? ' <span class="dim">issued</span>' : ''}</td><td class="num dim">${DECIMALS}</td>
-      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td><td>${a.native ? '—' : copyHash(a.owner)}</td></tr>`).join('');
+      <td class="num dim">${a.native ? 'native coin' : amount(a.deposit)}</td></tr>`).join('');
     return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${q ? `Matching <b>${int(list.length)}</b> of ` : 'Assets '}<b>${int(all.length)}</b></span></div></div>
       <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
-      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
+      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Owner key</th><th>Ticker</th><th class="num">Supply</th><th class="num">Decimals</th><th class="num">Deposit (BEAM)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
   };
 
   views.asset = async (arg) => {
@@ -433,14 +434,106 @@
       ${sections}`;
   };
 
+  // Contracts: the list is one API table, so search, filters and sorting run in the page. A cell
+  // with more than one asset shows the first and a +N toggle that opens the whole row.
+  const cs = { q: '', known: false, funds: false, sort: 'deployed', dir: -1, open: new Set(), list: [], tip: null };
+  function contractRows(t) {
+    return rowsOf(t).map((r) => {
+      const k = r[1];
+      let kind = '', shader = '';
+      if (typeof k === 'string') kind = k.slice(0, 80);
+      else if (k && typeof k === 'object' && typeof k.Wrapper === 'string') { kind = k.Wrapper.slice(0, 40); shader = hex(cv(k.subtype), 64); }
+      else shader = hex(cv(k), 64);
+      const locked = rowsOf({ type: 'table', value: [[], ...(isCell(r[3]) && Array.isArray(r[3].value) ? r[3].value : [])] })
+        .map((x) => ({ aid: num(cv(x[0])), amount: num(String(cv(x[1]))) })).filter((x) => x.aid != null);
+      const owned = rowsOf({ type: 'table', value: [[], ...(isCell(r[4]) && Array.isArray(r[4].value) ? r[4].value : [])] })
+        .map((x) => ({ aid: num(cv(x[0])), meta: meta(cv(x[1])), emission: num(String(cv(x[2]))) })).filter((x) => x.aid != null);
+      return { cid: hex(cv(r[0]), 64), kind, shader, deployed: num(cv(r[2])), locked, owned, beam: locked.filter((x) => x.aid === 0).reduce((s, x) => s + (x.amount || 0), 0) };
+    }).filter((c) => c.cid);
+  }
+  function contractsFiltered() {
+    const q = cs.q.trim().toLowerCase();
+    const hit = (c) => !q || c.cid.includes(q) || c.kind.toLowerCase().includes(q) || c.shader.includes(q)
+      || [...c.locked, ...c.owned].some((x) => assetName(x.aid).toLowerCase().includes(q) || (x.meta && [x.meta.N, x.meta.SN].some((y) => y && y.toLowerCase().includes(q))));
+    const rows = cs.list.filter((c) => hit(c) && (!cs.known || (c.kind && !c.shader)) && (!cs.funds || c.locked.length));
+    const key = { kind: (c) => (c.kind || `~${c.shader}`).toLowerCase(), deployed: (c) => c.deployed || 0, beam: (c) => c.beam }[cs.sort];
+    return rows.sort((a, b) => { const ka = key(a), kb = key(b); return (ka < kb ? -1 : ka > kb ? 1 : 0) * cs.dir; });
+  }
+  function pastHeight(h) {
+    if (!h) return '—';
+    const t = timeAt(h);
+    return `<a href="${blockHref(h)}">${int(h)}</a>${t ? `<div class="dim small">${esc(local(t).slice(0, 10))}</div>` : ''}`;
+  }
+  function stack(items, open, draw) {
+    if (!items.length) return '<span class="dim">—</span>';
+    const shown = open ? items : items.slice(0, 1);
+    return shown.map((x) => `<div class="stack-line">${draw(x)}</div>`).join('');
+  }
+  function contractsBody() {
+    const rows = contractsFiltered();
+    const fund = (x) => `${amount(x.amount)} <a href="${assetHref(x.aid)}" class="dim">${esc(assetName(x.aid))}</a>`;
+    const own = (x) => `<a href="${assetHref(x.aid)}">${esc((x.meta && (x.meta.SN || x.meta.N)) || assetName(x.aid))}</a> <span class="dim">${amount(x.emission)}</span>`;
+    $('#contracts-body').innerHTML = rows.map((c) => {
+      const open = cs.open.has(c.cid), more = Math.max(c.locked.length, c.owned.length) - 1;
+      return `<tr class="${open ? 'open' : ''}"><td><a class="mono" href="${contractHref(c.cid)}">${esc(short(c.cid))}</a></td>
+        <td>${c.kind ? esc(c.kind) : '<span class="dim">unknown shader</span>'}${c.shader ? `<div>${copyHash(c.shader)}</div>` : ''}</td>
+        <td class="num">${pastHeight(c.deployed)}</td>
+        <td class="num">${stack(c.locked, open, fund)}</td>
+        <td>${stack(c.owned, open, own)}</td>
+        <td class="num">${more > 0 ? `<button type="button" class="btn ghost small" data-open="${c.cid}">${open ? 'less' : `+${more}`}</button>` : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty">No contracts match</td></tr>';
+    $('#contracts-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(cs.list.length)}`;
+    $('#contracts-known').classList.toggle('on', cs.known);
+    $('#contracts-funds').classList.toggle('on', cs.funds);
+    document.querySelectorAll('#contracts-table th[data-sort]').forEach((th) => { th.dataset.dir = th.dataset.sort === cs.sort ? (cs.dir > 0 ? '▲' : '▼') : ''; });
+  }
+
   views.contracts = async () => {
-    const [t] = await Promise.all([get('contracts'), assets().catch(() => null)]);
-    const n = isCell(t) && Array.isArray(t.value) ? t.value.length - 1 : 0;
+    const [t, st] = await Promise.all([get('contracts'), get('status').catch(() => null), assets().catch(() => null)]);
+    cs.list = contractRows(t);
+    cs.tip = st && num(st.height);
+    const named = cs.list.filter((c) => c.kind && !c.shader).length, withFunds = cs.list.filter((c) => c.locked.length).length;
+    const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
     return `<div class="page-head"><h1 class="page-title">Contracts</h1></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span>Contracts <b>${int(Math.max(0, n))}</b></span></div></div>
-      <p class="hint">Beam's smart contracts (shaders): DApps such as the DEX, DAO vaults and the Nephrite stablecoin, with the funds they hold.</p>
-      ${table(t)}</section>`;
+      <div class="tiles">
+        ${tile('Contracts', int(cs.list.length), 'deployed on Beam', 'accent')}
+        ${tile('Known kinds', int(named), 'decoded by the explorer parser')}
+        ${tile('Holding funds', int(withFunds), 'with assets locked inside')}
+        ${tile('BEAM locked', amount(cs.list.reduce((s, c) => s + c.beam, 0)), 'across all contracts')}
+      </div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span id="contracts-count"></span></div></div>
+        <div class="names-tools">
+          <input id="contracts-q" class="names-q" placeholder="Search by kind, contract ID or asset…" autocomplete="off" spellcheck="false" aria-label="Search contracts" value="${esc(cs.q)}">
+          <div class="seg"><button type="button" id="contracts-known">Known kinds</button><button type="button" id="contracts-funds">Holding funds</button></div>
+        </div>
+        <div class="table-wrap"><table id="contracts-table"><colgroup><col class="w-cid"><col class="w-kind"><col class="w-dep"><col class="w-fund"><col><col class="w-more"></colgroup>
+          <thead><tr><th>Contract</th>${th('kind', 'Kind')}${th('deployed', 'Deployed', 'num')}${th('beam', 'Locked funds', 'num')}<th>Owned assets</th><th></th></tr></thead>
+          <tbody id="contracts-body"></tbody></table></div>
+        <p class="hint" style="margin:12px 0 0">Beam's smart contracts (shaders). Kinds the explorer's parser knows are named; the others show their shader hash, click it to copy. Locked funds sort by the BEAM held.</p></section>`;
   };
+
+  function bindContracts() {
+    const q = $('#contracts-q');
+    if (!q) return;
+    contractsBody();
+    if (cs.tip) heightClock(cs.tip).then(() => { if ($('#contracts-body')) contractsBody(); }).catch(() => {});
+    q.addEventListener('input', () => { cs.q = q.value; contractsBody(); });
+    $('#contracts-known').addEventListener('click', () => { cs.known = !cs.known; contractsBody(); });
+    $('#contracts-funds').addEventListener('click', () => { cs.funds = !cs.funds; contractsBody(); });
+    $('#contracts-table thead').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-sort]');
+      if (!th) return;
+      cs.dir = cs.sort === th.dataset.sort ? -cs.dir : (th.dataset.sort === 'kind' ? 1 : -1);
+      cs.sort = th.dataset.sort;
+      contractsBody();
+    });
+    $('#contracts-body').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-open]');
+      if (!b) return;
+      if (cs.open.has(b.dataset.open)) cs.open.delete(b.dataset.open); else cs.open.add(b.dataset.open);
+      contractsBody();
+    });
+  }
 
   views.contract = async (arg) => {
     const cid = hex(arg, 64);
@@ -572,11 +665,11 @@
     ns.page = Math.min(ns.page, pages - 1);
     const slice = rows.slice(ns.page * NAMES_PAGE, (ns.page + 1) * NAMES_PAGE);
     const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
-    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono name-cell">${esc(x.name)}</td>
+    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono name-cell">${esc(x.name)}</td><td>${copyHash(x.owner)}</td>
       <td class="num">${heightCell(x.reg, ns.regsLoaded ? '' : '…')}</td>
       <td class="num">${heightCell(x.exp)}</td>
       <td>${badge(x.status)}${x.price ? ' <span class="badge solo">for sale</span>' : ''}</td>
-      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td><td>${copyHash(x.owner)}</td></tr>`).join('')
+      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td></tr>`).join('')
       || '<tr><td colspan="6" class="empty">No names match</td></tr>';
     $('#names-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(ns.list.length)}`;
     $('#names-page').textContent = `Page ${ns.page + 1} of ${pages}`;
@@ -614,7 +707,7 @@
           <div class="seg"><button type="button" id="names-sale">For sale only</button></div>
           <div class="names-pager"><button type="button" class="btn ghost small" id="names-prev">‹ Prev</button><span class="dim" id="names-page"></span><button type="button" class="btn ghost small" id="names-next">Next ›</button></div>
         </div>
-        <div class="table-wrap"><table id="names-table"><colgroup><col><col class="w-h"><col class="w-h"><col class="w-st"><col class="w-pr"><col class="w-key"></colgroup><thead><tr>${th('name', 'Name')}${th('reg', 'Registered', 'num')}${th('exp', 'Expires', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}<th>Owner key</th></tr></thead>
+        <div class="table-wrap"><table id="names-table"><colgroup><col><col class="w-key"><col class="w-h"><col class="w-h"><col class="w-st"><col class="w-pr"></colgroup><thead><tr>${th('name', 'Name')}<th>Owner key</th>${th('reg', 'Registered', 'num')}${th('exp', 'Expires', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}</tr></thead>
         <tbody id="names-body"></tbody></table></div>
         <p class="hint" style="margin:12px 0 0">Registration is the latest Register call for the name. Dates of past blocks come from block times; future expiry dates assume a block a minute. Click a key to copy it.</p></section>`;
   };
@@ -729,6 +822,7 @@
       view.innerHTML = html;
       if (route === 'home') bindHome();
       if (route === 'names') bindNames();
+      if (route === 'contracts') bindContracts();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
       if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
