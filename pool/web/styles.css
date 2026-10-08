@@ -23,6 +23,8 @@
   --muted2: rgba(255, 255, 255, 0.4);
   --border: rgba(255, 255, 255, 0.1);
   --border-dim: rgba(255, 255, 255, 0.06);
+  /* form fields and the card list share one opaque fill, so they match wherever they sit */
+  --field-bg: #193b55;
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace;
@@ -245,7 +247,7 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .field { display: flex; flex-direction: column; gap: 6px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .field input {
   height: 36px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
+  background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
 }
 .field input:focus { border-color: rgba(0, 246, 210, 0.5); outline: none; }
 /* the card list (a listbox in place of a native select): one opaque fill for the button and the
@@ -255,7 +257,7 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .dd-btn {
   width: 100%; height: 36px; padding: 0 30px 0 10px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: #193b55 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+  background: var(--field-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
   border: 1px solid var(--border); border-radius: 6px;
 }
 .dd-btn:focus-visible { outline: none; border-color: rgba(0, 246, 210, 0.5); }
@@ -266,12 +268,18 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .dd-list {
   position: absolute; left: 0; right: 0; top: calc(100% - 1px); z-index: 30; margin: 0; padding: 2px 0 6px; list-style: none;
   max-height: 300px; overflow-y: auto; color-scheme: dark;
-  background: #193b55; border: 1px solid rgba(0, 246, 210, 0.5); border-top: 0; border-radius: 0 0 6px 6px;
+  background: var(--field-bg); border: 1px solid rgba(0, 246, 210, 0.5); border-top: 0; border-radius: 0 0 6px 6px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 }
-.dd-list [role="option"] { padding: 7px 10px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 .dd-list [role="option"].active { background: rgba(0, 246, 210, 0.12); color: var(--text); }
 .dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
+/* a thin accent bar for the list's scrollbar, no track, no arrows */
+.dd-list::-webkit-scrollbar { width: 4px; }
+.dd-list::-webkit-scrollbar-track, .dd-list::-webkit-scrollbar-corner { background: transparent; }
+.dd-list::-webkit-scrollbar-thumb { background: rgba(0, 246, 210, 0.45); border-radius: 2px; }
+.dd-list::-webkit-scrollbar-button { display: none; height: 0; }
+@supports (-moz-appearance: none) { .dd-list { scrollbar-width: thin; scrollbar-color: rgba(0, 246, 210, 0.45) transparent; } }
 .dd-group { padding: 8px 10px 3px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
