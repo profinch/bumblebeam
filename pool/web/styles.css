@@ -289,6 +289,16 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 @media (max-width: 1080px) {
   .grid2 { grid-template-columns: 1fr; }
   .donut-wrap { grid-template-columns: 1fr; justify-items: center; }
+}
+/* One header for the pool and the explorer, so switching sites does not move it. On one row
+   (wide screens) the brand and the search have the same sizes on both: the brand is as wide as
+   "BumbleBeam Explorer", the search width depends on the window only, leaving room for the
+   pool's longest menu (with My stats). Narrower, the header wraps: menu and search get rows. */
+@media (min-width: 1181px) {
+  .brand { flex: none; width: 236px; }
+  .search { flex: none; width: clamp(160px, calc(min(100vw - 2 * var(--page-padding-x), var(--page-width)) - 960px), 380px); }
+}
+@media (max-width: 1180px) {
   .top-row { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
   .search { order: 3; flex: 1 1 100%; }
   /* the menu takes its own full-width row and fits, no sideways scroll */
