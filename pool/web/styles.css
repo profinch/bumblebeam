@@ -242,6 +242,13 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 }
 .code pre { margin: 0; flex: 1; white-space: pre; }
 .code .btn { flex: none; }
+/* phones: commands wrap instead of hiding behind a sideways scroll, copy goes under them */
+@media (max-width: 480px) {
+  .code { flex-wrap: wrap; justify-content: flex-end; }
+  .code pre { flex-basis: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+/* thumb-sized range switch on touch screens */
+@media (pointer: coarse) { .seg button { padding: 8px 12px; } }
 .seg { display: inline-flex; gap: 4px; }
 .seg button, .pill {
   font: 700 11px var(--font-mono); letter-spacing: 0.02em; padding: 5px 10px; cursor: pointer;
@@ -322,11 +329,12 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .donut { width: 180px; height: 180px; display: block; }
 .donut .total { font: 700 26px var(--font-mono); fill: var(--text); }
 .donut .sub { font: 10px var(--font-mono); fill: var(--muted); letter-spacing: 0.06em; }
-.legend-rows { display: grid; gap: 10px; font: 12px var(--font-mono); }
-.legend-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; }
+/* one grid for all rows, sized by content: pool, blocks and share stay next to each other */
+.legend-rows { display: grid; grid-template-columns: 10px auto auto auto; justify-content: start; align-items: center; gap: 10px 14px; font: 12px var(--font-mono); }
+.legend-row { display: contents; }
 .legend-row i { width: 10px; height: 10px; border-radius: 2px; display: block; }
 .legend-row b { color: var(--text); font-weight: 700; }
-.legend-row .n { color: var(--muted); margin-left: 8px; }
+.legend-row .n { color: var(--muted); text-align: right; }
 .legend-row .p { color: var(--text-dim); text-align: right; }
 .bars-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
 .bars-head > span:last-child { font-weight: 400; letter-spacing: 0.02em; text-transform: none; }

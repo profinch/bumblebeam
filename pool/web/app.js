@@ -55,6 +55,7 @@
     return `<svg class="spark" viewBox="0 0 90 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
+  const NARROW = window.matchMedia('(max-width: 700px)');
   const axis = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(v >= 1e4 ? 1 : 2)}k` : v.toFixed(v < 10 ? 1 : 0));
   // Explorer-style area chart: axis on the right, grid in both directions, the current value marked
   // by a dotted guide and a pill on the axis. `label` formats axis values and the pill; `peak`
@@ -63,24 +64,26 @@
     const span = RANGES[range] || RANGES['24h'];
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
-    const W = 1000, H = 260, L = 14, R = 96, T = 16, B = 30;
+    // phones get a narrower canvas, so the labels are not scaled down to nothing
+    const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, R = narrow ? 84 : 96, T = 16, B = 30;
+    const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
     const x = (t) => L + ((t - t0) / (t1 - t0 || 1)) * (W - L - R);
     const y = (v) => T + (1 - v / max) * (H - T - B);
     const line = series.map((p) => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' L');
     let grid = '';
-    for (let i = 1; i <= 5; i++) {
-      const v = (max / 5) * i, yy = y(v).toFixed(1);
+    for (let i = 1; i <= yTicks; i++) {
+      const v = (max / yTicks) * i, yy = y(v).toFixed(1);
       grid += `<line class="grid" x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}"/><text x="${W - R + 10}" y="${+yy + 4}">${label(v)}</text>`;
     }
-    for (let i = 0; i <= 6; i++) {
-      const t = t0 + ((t1 - t0) / 6) * i, xx = x(t).toFixed(1);
+    for (let i = 0; i <= xTicks; i++) {
+      const t = t0 + ((t1 - t0) / xTicks) * i, xx = x(t).toFixed(1);
       const d = new Date(t * 1000);
-      if (i > 0 && i < 6) grid += `<line class="grid" x1="${xx}" x2="${xx}" y1="${T}" y2="${H - B}"/>`;
+      if (i > 0 && i < xTicks) grid += `<line class="grid" x1="${xx}" x2="${xx}" y1="${T}" y2="${H - B}"/>`;
       const when = range === '24h' ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
         : `${MONTHS[d.getMonth()]} ${d.getDate()}${range === '7d' ? ` ${String(d.getHours()).padStart(2, '0')}:00` : ''}`;
-      grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 6 ? 'end' : 'middle'}">${when}</text>`;
+      grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === xTicks ? 'end' : 'middle'}">${when}</text>`;
     }
     const last = series[series.length - 1][1], ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const pillText = label(last), pw = pillText.length * 7.2 + 12;
@@ -128,7 +131,7 @@
     return `<div class="donut-wrap">
       <svg class="donut" viewBox="0 0 180 180" role="img" aria-label="Blocks in the last 24 hours by pool">${arcs}
         <text class="total" x="90" y="90" text-anchor="middle">${int(total)}</text><text class="sub" x="90" y="108" text-anchor="middle">past 24h</text></svg>
-      <div class="legend-rows">${rows.map((row) => `<div class="legend-row"><i style="background:${row.color}"></i><span><b>${esc(row.name)}</b><span class="n">${int(row.n)}</span></span><span class="p">${pct(row.n / total, 1)}</span></div>`).join('')}</div>
+      <div class="legend-rows">${rows.map((row) => `<div class="legend-row"><i style="background:${row.color}"></i><b>${esc(row.name)}</b><span class="n">${int(row.n)}</span><span class="p">${pct(row.n / total, 1)}</span></div>`).join('')}</div>
     </div>`;
   }
 
@@ -766,6 +769,8 @@
   }
 
   window.addEventListener('popstate', () => render(true));
+  // charts are drawn for the screen width: redraw when a phone turns or a window crosses 700px
+  NARROW.addEventListener('change', () => { if (view.querySelector('.chart')) render(false); });
   // Links inside the app change the path without a reload; new tabs, modified clicks and
   // external links behave as usual.
   document.addEventListener('click', (e) => {
