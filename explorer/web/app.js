@@ -98,11 +98,13 @@
   }
   // /hdrs?hMax=<height>&nMax=<count> answers a table, newest first: a header row, then
   // [height, hash, time, difficulty, fee, txs, outputs, inputs, ...], each cell a plain value or {type, value}.
-  function normHdrs(t) {
-    const rows = t && Array.isArray(t.value) ? t.value.slice(1, PAGE + 1) : [];
+  // columns: height, hash, time, difficulty, fee, txs, MW outputs, MW inputs, shielded outputs,
+  // shielded inputs, contract calls
+  function normHdrs(t, limit = PAGE) {
+    const rows = t && Array.isArray(t.value) ? t.value.slice(1, limit + 1) : [];
     const v = (c) => (c && typeof c === 'object' ? c.value : c);
     return rows.map((r) => ({ height: num(v(r[0])), hash: hex(v(r[1])), ts: num(v(r[2])), difficulty: num(v(r[3])), fee: num(v(r[4])),
-      txs: num(v(r[5])), outputs: num(v(r[6])), inputs: num(v(r[7])) })).filter((r) => r.height != null);
+      txs: num(v(r[5])), outputs: num(v(r[6])), inputs: num(v(r[7])), shOut: num(v(r[8])), shIn: num(v(r[9])), calls: num(v(r[10])) })).filter((r) => r.height != null);
   }
 
   // ---------- the API's typed documents ----------
@@ -342,44 +344,89 @@
   const views = {};
 
   function hdrRows(rows) {
-    return rows.map((b) => `<tr><td><a href="${blockHref(b.height)}">${int(b.height)}</a></td><td class="dim nowrap">${when(b.ts)}</td><td class="dim">${ago(b.ts)}</td>
+    return rows.map((b) => `<tr><td><a href="${blockHref(b.height)}">${int(b.height)}</a></td><td class="dim">${when(b.ts)}</td><td class="dim">${ago(b.ts)}</td>
       <td class="mono dim"><a href="${blockHref(b.height)}">${esc(short(b.hash))}</a></td><td class="num">${diff(b.difficulty)}</td>
-      <td class="num">${int(b.txs)}</td><td class="num">${int(b.outputs)} / ${int(b.inputs)}</td><td class="num dim">${b.fee ? beam(b.fee, 6) : '—'}</td></tr>`).join('');
+      <td class="num">${int(b.txs)}</td><td class="num">${int(b.outputs || 0)} / ${int(b.inputs || 0)}${b.shOut || b.shIn ? `<div class="dim small">shielded ${int(b.shOut || 0)} / ${int(b.shIn || 0)}</div>` : ''}</td>
+      <td class="num">${b.calls ? `<span class="badge solo">${int(b.calls)}</span>` : '<span class="dim">—</span>'}</td><td class="num dim">${b.fee ? beam(b.fee, 6) : '—'}</td></tr>`).join('');
+  }
+
+  // Blocks: the latest ones, more on request; search and filters run over what is loaded, and a
+  // height typed in and Enter opens that block.
+  const bk = { q: '', tx: false, calls: false, sh: false, fees: false, rows: [], next: null };
+  const bkFiltering = () => bk.q.trim() || bk.tx || bk.calls || bk.sh || bk.fees;
+  function blocksFiltered() {
+    const q = bk.q.trim().toLowerCase().replace(/,/g, '');
+    return bk.rows.filter((b) => (!q || String(b.height).includes(q) || (b.hash && b.hash.startsWith(q)))
+      && (!bk.tx || b.txs > 1) && (!bk.calls || b.calls > 0) && (!bk.sh || b.shOut || b.shIn) && (!bk.fees || b.fee > 0));
+  }
+  function blocksBody() {
+    const rows = blocksFiltered();
+    $('#hdr-body').innerHTML = hdrRows(rows) || '<tr><td colspan="9" class="empty">No loaded block matches; load older blocks or open a height with Enter</td></tr>';
+    $('#blocks-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(bk.rows.length)} loaded`;
+    [['#bk-tx', bk.tx], ['#bk-calls', bk.calls], ['#bk-sh', bk.sh], ['#bk-fees', bk.fees]].forEach(([id, on]) => $(id).classList.toggle('on', on));
+    const btn = $('#more-hdrs');
+    if (btn) btn.textContent = bkFiltering() ? 'Load 200 older blocks' : 'Load older blocks';
   }
 
   views.home = async () => {
     const st = normStatus(await get('status'));
-    const rows = st.height ? normHdrs(await get(`hdrs?hMax=${st.height}&nMax=${PAGE}`)) : [];
-    const last = rows[rows.length - 1];
+    const fresh = st.height ? normHdrs(await get(`hdrs?hMax=${st.height}&nMax=${PAGE}`)) : [];
+    // keep what was loaded and searched while new blocks come in (auto-refresh)
+    if (bk.rows.length && bkFiltering()) {
+      const top = bk.rows[0].height;
+      bk.rows = [...fresh.filter((b) => b.height > top), ...bk.rows];
+    } else {
+      bk.rows = fresh;
+      bk.next = fresh.length ? fresh[fresh.length - 1].height - 1 : null;
+    }
     return `<div class="page-head"><h1 class="page-title">Beam blocks</h1></div>
       <div class="tiles">
         ${tile('Height', int(st.height), st.ts ? `last block ${ago(st.ts)}` : '', 'accent')}
-        ${tile('Difficulty', diff(rows[0] && rows[0].difficulty))}
+        ${tile('Difficulty', diff(fresh[0] && fresh[0].difficulty))}
         ${tile('Peers', `<a href="/peers">${int(st.peers)}</a>`, 'connected to our node')}
         ${tile('Shielded outputs 24h', int(st.shielded24h), `${int(st.shieldedTotal)} in total`)}
       </div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span>Outputs / inputs are Mimblewimble UTXOs</span></div></div>
-        ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Time</th><th>Age</th><th>Hash</th><th class="num">Difficulty</th><th class="num">Txs</th><th class="num">Out / in</th><th class="num">Fees</th></tr></thead>
-        <tbody id="hdr-body">${hdrRows(rows)}</tbody></table></div>
-        ${last && last.height > 1 ? `<div class="more"><button class="btn ghost" id="more-hdrs" data-before="${last.height - 1}">Load older blocks</button></div>` : ''}`
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span id="blocks-count"></span></div></div>
+        ${bk.rows.length ? `<div class="names-tools">
+          <input id="bk-q" class="names-q" placeholder="Height or hash; Enter opens a height…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
+          <div class="seg"><button type="button" id="bk-tx">With transactions</button><button type="button" id="bk-calls">Contract calls</button><button type="button" id="bk-sh">Shielded</button><button type="button" id="bk-fees">With fees</button></div>
+        </div>
+        <div class="table-wrap"><table id="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-a"><col><col class="w-d"><col class="w-tx"><col class="w-io"><col class="w-c"><col class="w-f"></colgroup>
+          <thead><tr><th>Height</th><th>Time</th><th>Age</th><th>Hash</th><th class="num">Difficulty</th><th class="num">Txs</th><th class="num">Out / in</th><th class="num">Calls</th><th class="num">Fees</th></tr></thead>
+        <tbody id="hdr-body"></tbody></table></div>
+        ${bk.next && bk.next > 0 ? '<div class="more"><button class="btn ghost" id="more-hdrs">Load older blocks</button></div>' : ''}
+        <p class="hint" style="margin:12px 0 0">Outputs / inputs are Mimblewimble UTXOs; shielded ones are Lelantus. Calls count contract invocations. Search and filters work on the blocks loaded so far.</p>`
         : '<div class="empty">No blocks yet: the node is still syncing headers</div>'}
       </section>`;
   };
 
   function bindHome() {
+    const q = $('#bk-q');
+    if (!q) return;
+    blocksBody();
+    q.addEventListener('input', () => { bk.q = q.value; blocksBody(); });
+    q.addEventListener('keydown', (e) => {
+      const h = q.value.trim().replace(/[,\s]/g, '');
+      if (e.key === 'Enter' && /^\d{1,10}$/.test(h)) { e.preventDefault(); bk.q = ''; go(blockHref(h)); }
+    });
+    [['#bk-tx', 'tx'], ['#bk-calls', 'calls'], ['#bk-sh', 'sh'], ['#bk-fees', 'fees']].forEach(([id, k]) => $(id).addEventListener('click', () => { bk[k] = !bk[k]; blocksBody(); }));
     const btn = $('#more-hdrs');
     if (!btn) return;
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Loading…';
       try {
-        const rows = normHdrs(await get(`hdrs?hMax=${Number(btn.dataset.before) || 1}&nMax=${PAGE}`));
-        $('#hdr-body').insertAdjacentHTML('beforeend', hdrRows(rows));
+        const n = bkFiltering() ? 200 : PAGE;
+        const rows = normHdrs(await get(`hdrs?hMax=${bk.next}&nMax=${n}`), n);
+        bk.rows.push(...rows);
         const last = rows[rows.length - 1];
-        if (!last || last.height <= 1) btn.remove();
-        else { btn.dataset.before = String(last.height - 1); btn.disabled = false; btn.textContent = 'Load older blocks'; }
+        bk.next = last ? last.height - 1 : 0;
+        btn.disabled = false;
+        if (!last || bk.next <= 0) btn.remove();
+        blocksBody();
       } catch (e) {
         btn.textContent = 'Could not load';
+        btn.disabled = false;
       }
     });
   }
@@ -1079,7 +1126,8 @@
   });
   // The latest blocks refresh every 30 s unless older ones were loaded.
   setInterval(() => {
-    if (document.hidden || parse().route !== 'home' || ($('#hdr-body') && $('#hdr-body').children.length > PAGE)) return;
+    // the block list refreshes unless older blocks were loaded without a search to keep up with
+    if (document.hidden || parse().route !== 'home' || (bk.rows.length > PAGE && !bkFiltering())) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
     render(false);
   }, 30000);

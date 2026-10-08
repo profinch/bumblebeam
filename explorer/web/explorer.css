@@ -79,3 +79,9 @@ table.doc td, table.nested td { vertical-align: top; }
 #assets-table td, #dex-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* nested documents scroll inside their panel instead of running past it */
 .doc-obj { overflow-x: auto; }
+/* blocks list: fixed widths */
+#blocks-table { table-layout: fixed; min-width: 1100px; }
+#blocks-table col.w-h { width: 110px; } #blocks-table col.w-t { width: 200px; } #blocks-table col.w-a { width: 90px; }
+#blocks-table col.w-d { width: 90px; } #blocks-table col.w-tx { width: 60px; } #blocks-table col.w-io { width: 140px; }
+#blocks-table col.w-c { width: 70px; } #blocks-table col.w-f { width: 130px; }
+#blocks-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
