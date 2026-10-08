@@ -41,11 +41,15 @@ impl ChartRange {
     }
 }
 
-/// Hashrate chart for one scope (`pool` or `m:<miner id>`), averaged per bucket. Samples are taken
+/// Hashrate chart for one scope (`pool`, a mode `pplns` or `solo`, or `m:<miner id>`), averaged per bucket. Samples are taken
 /// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
 /// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
 async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
     let (span, bucket) = range.window();
+    chart_window(c, scope, now, span, bucket).await
+}
+
+async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i64, bucket: i64) -> Result<Vec<Value>> {
     let from = (now - span) / bucket * bucket + bucket;
     let rows = c
         .query(
@@ -357,21 +361,24 @@ impl Db {
         Ok((row.get(0), row.get(1)))
     }
 
-    pub async fn top_miners(&self, limit: i64, now: i64) -> Result<Vec<Value>> {
+    /// Miners with shares in the last 10 minutes, by hashrate; `mode` keeps one mode's shares only.
+    pub async fn top_miners(&self, limit: i64, now: i64, mode: Option<&str>) -> Result<Vec<Value>> {
         let c = self.client().await?;
         let rows = c
             .query(
-                "WITH recent AS (SELECT miner_id, SUM(difficulty)/600.0 AS hr, COUNT(DISTINCT worker) AS workers, MAX(ts) AS last_share
-                                 FROM shares WHERE ts > $1 GROUP BY miner_id),
-                      day AS (SELECT miner_id, SUM(difficulty)/86400.0 AS hr24 FROM shares WHERE ts > $2 GROUP BY miner_id)
-                 SELECT r.hr::FLOAT8, d.hr24::FLOAT8, r.workers, r.last_share FROM recent r LEFT JOIN day d USING (miner_id)
+                "WITH recent AS (SELECT miner_id, SUM(difficulty)/600.0 AS hr, COUNT(DISTINCT worker) AS workers, MAX(ts) AS last_share,
+                                        ARRAY_AGG(DISTINCT mode ORDER BY mode) AS modes
+                                 FROM shares WHERE ts > $1 AND ($4::TEXT IS NULL OR mode = $4) GROUP BY miner_id),
+                      day AS (SELECT miner_id, SUM(difficulty)/86400.0 AS hr24 FROM shares WHERE ts > $2 AND ($4::TEXT IS NULL OR mode = $4) GROUP BY miner_id)
+                 SELECT r.hr::FLOAT8, d.hr24::FLOAT8, r.workers, r.last_share, r.modes FROM recent r LEFT JOIN day d USING (miner_id)
                  ORDER BY r.hr DESC LIMIT $3",
-                &[&(now - 600), &(now - 86400), &limit],
+                &[&(now - 600), &(now - 86400), &limit, &mode],
             )
             .await?;
         Ok(rows
             .iter()
-            .map(|r| json!({ "hashrate": r.get::<_, f64>(0), "hashrate24h": r.get::<_, Option<f64>>(1), "workers": r.get::<_, i64>(2), "lastShare": r.get::<_, i64>(3) }))
+            .map(|r| json!({ "hashrate": r.get::<_, f64>(0), "hashrate24h": r.get::<_, Option<f64>>(1), "workers": r.get::<_, i64>(2), "lastShare": r.get::<_, i64>(3),
+                             "modes": r.get::<_, Vec<String>>(4) }))
             .collect())
     }
 
@@ -389,9 +396,9 @@ impl Db {
         let workers = c
             .query(
                 "WITH s AS (SELECT worker, COALESCE(SUM(difficulty) FILTER (WHERE ts > $2),0)::FLOAT8/600.0 AS hr, SUM(difficulty)::FLOAT8/86400.0 AS hr24,
-                                   MAX(ts) AS last, COUNT(*) AS n FROM shares WHERE miner_id=$1 AND ts > $3 GROUP BY worker),
+                                   MAX(ts) AS last, COUNT(*) AS n, ARRAY_AGG(DISTINCT mode ORDER BY mode) AS modes FROM shares WHERE miner_id=$1 AND ts > $3 GROUP BY worker),
                       e AS (SELECT worker, SUM(stale) AS stale, SUM(rejected) AS rejected FROM share_events WHERE miner_id=$1 AND ts > $3 GROUP BY worker)
-                 SELECT s.worker, s.hr, s.hr24, s.last, s.n, COALESCE(e.stale,0)::BIGINT, COALESCE(e.rejected,0)::BIGINT FROM s LEFT JOIN e USING (worker) ORDER BY s.hr DESC",
+                 SELECT s.worker, s.hr, s.hr24, s.last, s.n, COALESCE(e.stale,0)::BIGINT, COALESCE(e.rejected,0)::BIGINT, s.modes FROM s LEFT JOIN e USING (worker) ORDER BY s.hr DESC",
                 &[&id, &(now - 600), &(now - 86400)],
             )
             .await?;
@@ -411,7 +418,8 @@ impl Db {
                 let rejected: i64 = w.get(6);
                 let total = (n + stale + rejected).max(1) as f64;
                 json!({ "name": w.get::<_, String>(0), "hashrate": w.get::<_, f64>(1), "hashrate24h": w.get::<_, f64>(2),
-                        "lastShare": last, "online": now - last < 300, "stale": stale as f64 / total, "rejected": rejected as f64 / total })
+                        "lastShare": last, "online": now - last < 300, "stale": stale as f64 / total, "rejected": rejected as f64 / total,
+                        "modes": w.get::<_, Vec<String>>(7) })
             }).collect::<Vec<_>>(),
             "charts": { "hashrate": chart },
             "payments": payments.iter().map(|p| json!({ "ts": p.get::<_, i64>(0), "amount": p.get::<_, i64>(1), "fee": p.get::<_, i64>(2),
@@ -446,15 +454,39 @@ impl Db {
             .collect())
     }
 
-    pub async fn pool_chart(&self, now: i64, range: ChartRange) -> Result<Vec<Value>> {
+    /// `scope` is `pool` (both modes), `pplns` or `solo`.
+    pub async fn pool_chart(&self, now: i64, range: ChartRange, scope: &str) -> Result<Vec<Value>> {
         let c = self.client().await?;
-        chart(&c, "pool", now, range).await
+        chart(&c, scope, now, range).await
+    }
+
+    /// The pool split by mode, as two pools: hashrate, miners and workers over the last 10
+    /// minutes, blocks in 24 h, the last block, and an hourly 24 h series for sparklines.
+    pub async fn mode_stats(&self, now: i64) -> Result<Value> {
+        let c = self.client().await?;
+        let mut out = serde_json::Map::new();
+        for mode in ["pplns", "solo"] {
+            let sh = c
+                .query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/600.0, COUNT(DISTINCT miner_id), COUNT(DISTINCT (miner_id, worker)) FROM shares WHERE mode=$1 AND ts > $2",
+                           &[&mode, &(now - 600)])
+                .await?;
+            let bl = c
+                .query_one("SELECT COUNT(*) FILTER (WHERE ts > $2), MAX(ts) FROM blocks WHERE mode=$1 AND status <> 'orphaned'", &[&mode, &(now - 86400)])
+                .await?;
+            out.insert(mode.into(), json!({
+                "hashrate": sh.get::<_, f64>(0), "miners": sh.get::<_, i64>(1), "workers": sh.get::<_, i64>(2),
+                "blocks24h": bl.get::<_, i64>(0), "lastBlockFound": bl.get::<_, Option<i64>>(1),
+                "series": chart_window(&c, mode, now, 86400, 3600).await?,
+            }));
+        }
+        Ok(Value::Object(out))
     }
 
     /// One sample per minute for the pool and for every miner active in the last ten minutes.
     pub async fn sample_hashrates(&self, now: i64) -> Result<()> {
         let c = self.client().await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'pool', COALESCE(SUM(difficulty),0)/600.0 FROM shares WHERE ts > $2", &[&now, &(now - 600)]).await?;
+        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, mode, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY mode", &[&now, &(now - 600)]).await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id", &[&now, &(now - 600)]).await?;
         c.execute("DELETE FROM hashrate_samples WHERE ts < $1", &[&(now - ChartRange::KEEP_SECS)]).await?;
         c.execute("DELETE FROM shares WHERE ts < $1", &[&(now - 7 * 86400)]).await?;

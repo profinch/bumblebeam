@@ -242,10 +242,12 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 }
 .code pre { margin: 0; flex: 1; white-space: pre; }
 .code .btn { flex: none; }
+.code pre .arg { display: inline-block; max-width: 100%; }
 /* phones: commands wrap instead of hiding behind a sideways scroll, copy goes under them */
 @media (max-width: 480px) {
   .code { flex-wrap: wrap; justify-content: flex-end; }
-  .code pre { flex-basis: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .code pre { flex-basis: 100%; white-space: pre-wrap; }
+  .code pre .arg { overflow-wrap: anywhere; }
 }
 /* thumb-sized range switch on touch screens */
 @media (pointer: coarse) { .seg button { padding: 8px 12px; } }

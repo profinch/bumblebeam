@@ -165,8 +165,15 @@ const BB = (() => {
       },
       chart: series(r.charts && r.charts.hashrate),
       blocks24h: num(r.blocks24h), effort24h: num(r.effort24h),
+      // PPLNS and solo as two pools; null from servers that do not split them
+      modes: r.modes && r.modes.pplns && r.modes.solo ? Object.fromEntries(['pplns', 'solo'].map((k) => {
+        const m = r.modes[k];
+        return [k, { hashrate: num(m.hashrate) || 0, miners: num(m.miners) || 0, workers: num(m.workers) || 0, blocks24h: num(m.blocks24h) || 0,
+          lastBlockFound: num(m.lastBlockFound), series: series(m.series) }];
+      })) : null,
     };
   }
+  const normModes = (v) => (Array.isArray(v) ? v.filter((x) => x === 'pplns' || x === 'solo') : []);
   const normBlock = (b) => ({
     height: num(b.height) || 0, hash: str(b.hash, 64), ts: num(b.ts), reward: num(b.reward) || 0, fees: num(b.fees) || 0,
     effort: num(b.effort), status: STATUS.includes(b.status) ? b.status : 'pending', confirmations: num(b.confirmations) || 0,
@@ -174,10 +181,11 @@ const BB = (() => {
   });
   const normMinerRow = (m) => ({
     hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), workers: num(m.workers) || 0, lastShare: num(m.lastShare),
+    modes: normModes(m.modes),
   });
   const normWorker = (w) => ({
     name: str(w.name, 64), hashrate: num(w.hashrate) || 0, hashrate24h: num(w.hashrate24h), lastShare: num(w.lastShare), online: !!w.online,
-    stale: num(w.stale), rejected: num(w.rejected),
+    stale: num(w.stale), rejected: num(w.rejected), modes: normModes(w.modes),
   });
   const normPayment = (p) => ({
     ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 96), status: str(p.status, 16),
