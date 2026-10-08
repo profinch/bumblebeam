@@ -761,7 +761,10 @@
   window.addEventListener('keydown', (e) => {
     const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#search-input').focus(); }
-    else if (e.key === 'Escape' && t === $('#search-input')) t.blur();
+    // Esc in a search box: clear it (the results follow), and leave it once it is empty
+    else if (e.key === 'Escape' && t && t.tagName === 'INPUT' && (t.id === 'search-input' || t.classList.contains('names-q'))) {
+      if (t.value) { t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); } else t.blur();
+    }
   });
   // Live refresh every 30 s, except where the user is typing or has loaded more rows.
   setInterval(() => {
