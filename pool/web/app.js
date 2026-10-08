@@ -483,7 +483,7 @@
           <div class="steps">
             <div class="step"><h3>Get an offline Beam address</h3>
               <p>In any Beam wallet open <b>Receive</b> and choose an <b>offline</b> (permanent) address. A regular address expires and
-                needs your wallet online to receive, so payouts to it fail while the wallet is closed.${stats.coinbase ? ` Or skip the address: with <a href="https://github.com/profinch/bumblebeam/tree/main/tools/coinbase" target="_blank" rel="noopener">bb-coinbase</a> you are <b>paid in the blocks themselves</b>, to outputs you made, and log in with your <code>cb:…</code> account.` : ''}</p>
+                needs your wallet online to receive, so payouts to it fail while the wallet is closed.${stats.coinbase ? ` Or skip the address: with <a href="https://github.com/profinch/bumblebeam/tree/main/tools/coinbase" target="_blank" rel="noopener">bb-coinbase</a> you are <b>paid in the blocks themselves</b>, to outputs you made, and log in with your <code>cb:…</code> account.` : ''}${stats.nodeAddr ? ` Your wallet can use our node: <code>${esc(stats.nodeAddr)}</code>.` : ''}</p>
               <div class="row"><label class="field" style="flex:1;min-width:240px">Wallet address<input id="addr" placeholder="paste your offline address" spellcheck="false" autocomplete="off"></label>
               <label class="field">Worker<input id="worker" value="rig1" maxlength="32" style="width:110px"></label></div>
               <div class="note" id="addr-note" hidden></div></div>

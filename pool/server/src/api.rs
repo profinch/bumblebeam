@@ -94,7 +94,7 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
         "name": cfg.name,
         "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "minPayout": cfg.min_payout_groth, "payoutScheme": "PPLNS", "finderBonus": cfg.finder_bonus_percent,
                     "pplnsWindow": cfg.pplns_window, "blockReward": height.map(|h| miner_reward_groth(h + 1)), "maturity": cfg.maturity,
-                    "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host,
+                    "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host, "nodeAddr": cfg.public_node,
                     "minerPaysTxFee": cfg.miner_pays_tx_fee, "txFee": { "regular": s.cfg.wallet_api.tx_fee_groth, "shielded": s.cfg.wallet_api.shielded_fee_groth },
                     "blockFeesTo": "pool", "coinbase": s.coinbase.is_some(),
                     "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
