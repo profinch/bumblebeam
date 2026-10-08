@@ -20,7 +20,7 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   "stats": { "lastBlockFound": 1791321278, "roundShares": 10342912 },
   "nodes": [{ "name": "beam-node-1", "height": "4068710", "difficulty": "2719891.5",
               "networkhashps": "45570", "lastBeat": "1791321596" }],
-  "config": { "fee": 0.5, "soloFee": 0.5, "minPayout": 10000000, "payoutScheme": "PPLNS",
+  "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0, "minPayout": 10000000, "payoutScheme": "PPLNS",
               "pplnsWindow": 2.0, "blockReward": 2500000000, "maturity": 240, "payoutInterval": 7200 },
   "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]] },
   "blocks24h": 31, "effort24h": 0.94
@@ -31,6 +31,9 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   `pplnsTls`, `soloTls`) tell the UI where miners connect; `connectedWorkers` counts open stratum connections; `nodes[0].connected` says
   whether the pool currently has a block template from its node.
 - `fee` and `soloFee` are percentages. The pool's fee is **0.5%** on both PPLNS and solo rewards.
+- `finderBonus` is the percentage of a PPLNS block, after the fee, credited to the miner whose share
+  found it, on top of that miner's PPLNS part; the rest of the pot is shared as usual. It is written
+  as a separate credit for the block. 0 means no bonus; solo already pays the finder the whole block.
 - `minerPaysTxFee` and `txFee`: Beam's network fee comes out of each payout. A payout to an
   offline, max-privacy or public-offline address is a shielded transaction and costs about
   0.01 BEAM; to a regular address about 0.00001 BEAM. The wallet is asked for the exact fee
@@ -103,9 +106,11 @@ miner can tell a broken kernel from a slow connection.
 ## `GET /api/payments?limit=50`
 
 Pool payouts, newest first, one row per payout run: `{ "payments": [{ "ts", "amount", "miners",
-"kernel", "status" }] }`. Beam pays each miner in its own transaction, so a run has one kernel per
-miner; the row shows the latest, and a miner's own page lists the kernel of each payment to them.
-Failed payments are refunded to the balance and not listed.
+"kernel", "status", "txs": [{ "kernel", "amount" }] }] }`. Beam pays each miner in its own
+transaction, so a run has one kernel per miner: `txs` lists every one that has a kernel, with its
+amount and without the address, so each payout can be looked up on the chain. `kernel` is the latest,
+kept for older clients. A miner's own page lists the kernel of each payment to them. Failed payments
+are refunded to the balance and not listed.
 
 ## `GET /api/health`
 

@@ -96,6 +96,10 @@ pub struct PoolCfg {
     /// Public stratum host shown in the UI
     #[serde(default)]
     pub public_host: String,
+    /// Share of a PPLNS block's reward, after the fee, that goes to the miner whose share found it,
+    /// on top of that miner's PPLNS part. 0 disables.
+    #[serde(default)]
+    pub finder_bonus_percent: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -147,6 +151,7 @@ impl Config {
         anyhow::ensure!(cfg.stratum.nonce_prefix_bytes <= 6, "nonce_prefix_bytes must be 0..6");
         anyhow::ensure!((0.0..100.0).contains(&cfg.pool.fee_percent) && (0.0..100.0).contains(&cfg.pool.solo_fee_percent), "fee_percent must be in 0..100");
         anyhow::ensure!(cfg.pool.pplns_window > 0.0, "pplns_window must be positive");
+        anyhow::ensure!((0.0..=10.0).contains(&cfg.pool.finder_bonus_percent), "finder_bonus_percent must be in 0..10");
         anyhow::ensure!(cfg.pool.maturity >= 240, "maturity must be at least 240: Beam's coinbase matures after 240 blocks, paying earlier would spend other funds of the wallet");
         anyhow::ensure!(
             cfg.pool.min_payout_groth > cfg.wallet_api.shielded_fee_groth.max(cfg.wallet_api.tx_fee_groth),
