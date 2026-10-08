@@ -191,8 +191,20 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 if line.trim().is_empty() { continue; }
                 let msg: Value = match serde_json::from_str(&line) {
                     Ok(v) => v,
-                    Err(_) => { send(&mut wr, result(&json!(""), -32000, "message corrupted")).await?; continue; }
+                    Err(_) => {
+                        if address.is_empty() {
+                            info!(peer = %sess.peer, line = %line.chars().take(120).collect::<String>(), "not JSON before login");
+                        }
+                        send(&mut wr, result(&json!(""), -32000, "message corrupted")).await?;
+                        continue;
+                    }
                 };
+                if address.is_empty() {
+                    // what a client sends before it is logged in, without the values: tells why an unknown
+                    // client (a rental service's checker) fails to log in
+                    let fields: Vec<&str> = msg.as_object().map(|o| o.keys().map(|k| k.as_str()).collect()).unwrap_or_default();
+                    info!(peer = %sess.peer, method = %msg["method"], ?fields, id = %msg["id"], "message before login");
+                }
                 // answered with the id exactly as sent: Beam miners use strings, other clients (NiceHash) may send numbers
                 let id = msg.get("id").filter(|v| v.is_string() || v.is_number()).cloned().unwrap_or_else(|| json!(""));
                 let id_str = match &id { Value::String(s) => s.clone(), v => v.to_string() };
