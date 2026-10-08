@@ -476,7 +476,7 @@
     $('#contracts-body').innerHTML = rows.map((c) => {
       const open = cs.open.has(c.cid), more = Math.max(c.locked.length, c.owned.length) - 1;
       return `<tr class="${open ? 'open' : ''}"><td><a class="mono" href="${contractHref(c.cid)}">${esc(short(c.cid))}</a></td>
-        <td>${c.kind ? esc(c.kind) : '<span class="dim">unknown shader</span>'}${c.shader ? `<div>${copyHash(c.shader)}</div>` : ''}</td>
+        <td>${c.kind ? `${esc(c.kind)}${c.shader ? `<div>${copyHash(c.shader)}</div>` : ''}` : copyHash(c.shader)}</td>
         <td class="num">${pastHeight(c.deployed)}</td>
         <td class="num">${stack(c.locked, open, fund)}</td>
         <td>${stack(c.owned, open, own)}</td>
@@ -509,7 +509,7 @@
         <div class="table-wrap"><table id="contracts-table"><colgroup><col class="w-cid"><col class="w-kind"><col class="w-dep"><col class="w-fund"><col><col class="w-more"></colgroup>
           <thead><tr><th>Contract</th>${th('kind', 'Kind')}${th('deployed', 'Deployed', 'num')}${th('beam', 'Locked funds', 'num')}<th>Owned assets</th><th></th></tr></thead>
           <tbody id="contracts-body"></tbody></table></div>
-        <p class="hint" style="margin:12px 0 0">Beam's smart contracts (shaders). Kinds the explorer's parser knows are named; the others show their shader hash, click it to copy. Locked funds sort by the BEAM held.</p></section>`;
+        <p class="hint" style="margin:12px 0 0">Beam's smart contracts (shaders). Kinds the explorer's parser knows are named; the others show their shader hash (click to copy). Locked funds sort by the BEAM held.</p></section>`;
   };
 
   function bindContracts() {
