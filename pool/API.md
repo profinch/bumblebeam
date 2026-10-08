@@ -97,7 +97,7 @@ guessed.
 `modes` lists the modes the miner sent shares in over the last 10 minutes (`pplns`, `solo`, or both).
 `?mode=pplns` or `?mode=solo` keeps only that mode's miners, with that mode's hashrate.
 
-## `GET /api/miners/<address>?range=24h`
+## `GET /api/miners/<address>?range=24h&mode=`
 
 ```json
 { "address": "…", "hashrate": 52.1, "hashrate24h": 50.7, "balance": 812345678,
@@ -113,6 +113,9 @@ guessed.
 set only for `cb:` accounts (see [coinbase payouts](#coinbase-payouts)).
 
 `charts.hashrate` takes `?range=` as in `/api/stats`; minutes without shares count as zero.
+`?mode=pplns` or `?mode=solo` narrows `hashrate`, `hashrate24h`, `workers` and the chart to that
+mode's shares; balances and payments are the miner's whole account either way. `modes` lists the
+modes the miner mined in over 24 hours.
 `blocksFound` and `blocks24h` count the blocks this miner's shares found (orphans not counted),
 `lastBlockAt` is the latest one's time, and `blocks` lists the 10 most recent in the `/api/blocks`
 shape, orphans included.

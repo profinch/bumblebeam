@@ -93,7 +93,7 @@
     let peakMark = '';
     if (peak) {
       const top = Math.max(...series.map((p) => p[1]));
-      const py = y(top), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ppw = pText.length * 7.2 + 12;
+      const py = y(top), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ppw = pText.length * 5.9 + 8;
       const pillY = Math.max(T + 9, Math.min(py, ly - 20));
       peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
       <rect class="peak-pill" x="${W - R + 4.5}" y="${(pillY - 8.5).toFixed(1)}" width="${(ppw - 1).toFixed(0)}" height="17" rx="3" stroke="${color}" vector-effect="non-scaling-stroke"/>
@@ -371,7 +371,7 @@
       </tbody></table></div>` : `<div class="empty">${mm === 'solo' ? 'No solo miners right now' : mm === 'pplns' ? 'No PPLNS miners right now' : 'No miners yet'}</div>`}</section>`;
   };
   const MINERS_MODES = { all: 'All', pplns: 'Pool', solo: 'Solo' };
-  const MINERS_MODE_KEY = 'bb.minersMode';
+  const MINERS_MODE_KEY = 'bb.minersMode', MINER_MODE_KEY = 'bb.minerMode';
   const modesBadges = (modes) => (modes && modes.length ? modes.map(modeBadge).join(' ') : '<span class="dim">—</span>');
 
   const MY_KEY = 'bb.myAddress';
@@ -386,8 +386,9 @@
 
   async function minerView(address) {
     address = cleanAddress(address);
-    const range = chartRange();
-    const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}?range=${range}`), BB.pool('stats')]);
+    const range = chartRange(), mm = MINERS_MODES[prefs.get(MINER_MODE_KEY)] ? prefs.get(MINER_MODE_KEY) : 'all';
+    const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}?range=${range}${mm === 'all' ? '' : `&mode=${mm}`}`), BB.pool('stats')]);
+    const modeNote = mm === 'all' ? '' : ` · ${mm === 'solo' ? 'solo' : 'PPLNS'}`;
     // "My stats" is for an address that has mined here (sent a share), not for any lookup.
     const addr = m.address || address;
     if (m.lastShare != null) rememberAddress(addr);
@@ -396,7 +397,7 @@
     return `<div class="page-head"><h1 class="page-title">Miner</h1><div class="actions"><a class="btn ghost" href="/miners">← all miners</a></div></div>
       <div class="panel addr"><span>${esc(m.address || address)}</span><button class="btn small" data-copy="${esc(m.address || address)}">copy</button></div>
       <div class="tiles">
-        ${tile('Hashrate', hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
+        ${tile(`Hashrate${modeNote}`, hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
         ${m.coinbase ? (m.balance < 0 ? tile('Advance', beam(-m.balance), 'a block that paid you was orphaned; the next blocks work it off') : tile('Unpaid', beam(m.balance), 'goes into the next blocks the pool finds')) : tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.immature), 'blocks still confirming')}
         ${tile('Paid', beam(m.paid, 2), m.coinbase ? 'in the blocks themselves, to your own outputs' : undefined)}
@@ -409,9 +410,9 @@
         ${tile('Paid in blocks', int(m.coinbase.blocks), `${int(m.coinbase.minedPairs)} outputs, ${beam(m.coinbase.minedValue, 2)}`)}
         ${tile('Stock expires', m.coinbase.expiresAt ? `#${int(m.coinbase.expiresAt)}` : '—', m.coinbase.expiredPairs ? `${int(m.coinbase.expiredPairs)} pairs expired unspent` : 'pairs live 30 days; top-up renews them')}
       </div></section>` : ''}
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true })}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate${modeNote}</h2><div class="panel-meta">${modeSwitch(mm, 'data-miner-mode', 'Miner mode', MINERS_MODES)}${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true })}</section>
       <div class="grid2">
-        <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers</h2></div>
+        <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers${modeNote}</h2></div>
           ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th>Mode</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
           ${m.workers.map((w) => `<tr><td><span class="dot ${w.online ? '' : 'off'}"></span></td><td>${esc(w.name)}</td><td>${modesBadges(w.modes)}</td><td class="num">${hr(w.hashrate)}</td><td class="num">${hr(w.hashrate24h)}</td>
             <td class="num dim">${pct(w.stale, 1)}</td><td class="num" style="color:${w.rejected > 0.01 ? 'var(--color-red)' : 'var(--muted)'}">${pct(w.rejected, 1)}</td><td class="num dim">${ago(w.lastShare)}</td></tr>`).join('')}
@@ -756,7 +757,8 @@
     render(false);
   });
   view.addEventListener('click', (e) => {
-    const c = e.target.closest('[data-chart-mode]'), m = e.target.closest('[data-miners-mode]');
+    const c = e.target.closest('[data-chart-mode]'), m = e.target.closest('[data-miners-mode]'), one = e.target.closest('[data-miner-mode]');
+    if (one && MINERS_MODES[one.dataset.minerMode]) { prefs.set(MINER_MODE_KEY, one.dataset.minerMode); render(false); }
     if (c && MODES[c.dataset.chartMode]) { prefs.set(MODE_KEY, c.dataset.chartMode); render(false); }
     if (m && MINERS_MODES[m.dataset.minersMode]) { prefs.set(MINERS_MODE_KEY, m.dataset.minersMode); render(false); }
   });

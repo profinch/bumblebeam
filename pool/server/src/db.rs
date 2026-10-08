@@ -41,7 +41,8 @@ impl ChartRange {
     }
 }
 
-/// Hashrate chart for one scope (`pool`, a mode `pplns` or `solo`, or `m:<miner id>`), averaged per bucket. Samples are taken
+/// Hashrate chart for one scope (`pool`, a mode `pplns` or `solo`, `m:<miner id>`, or
+/// `m:<miner id>:<mode>`), averaged per bucket. Samples are taken
 /// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
 /// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
 async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
@@ -382,13 +383,18 @@ impl Db {
             .collect())
     }
 
-    pub async fn miner(&self, address: &str, now: i64, range: ChartRange) -> Result<Option<Value>> {
+    /// A miner's page; `mode` narrows hashrate, workers and the chart to PPLNS or solo shares.
+    pub async fn miner(&self, address: &str, now: i64, range: ChartRange, mode: Option<&str>) -> Result<Option<Value>> {
         let c = self.client().await?;
         let Some(m) = c.query_opt("SELECT id, balance, paid, last_share, TRIM(TRAILING '?' FROM address_type) FROM miners WHERE address=$1", &[&address]).await? else { return Ok(None) };
         let id: i64 = m.get(0);
         let last_share: Option<i64> = c.query_one("SELECT GREATEST($2, (SELECT MAX(ts) FROM shares WHERE miner_id=$1))", &[&id, &m.get::<_, Option<i64>>(3)]).await?.get(0);
-        let hr: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/600.0 FROM shares WHERE miner_id=$1 AND ts > $2", &[&id, &(now - 600)]).await?.get(0);
-        let hr24: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/86400.0 FROM shares WHERE miner_id=$1 AND ts > $2", &[&id, &(now - 86400)]).await?.get(0);
+        let hr: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/600.0 FROM shares WHERE miner_id=$1 AND ts > $2 AND ($3::TEXT IS NULL OR mode = $3)", &[&id, &(now - 600), &mode]).await?.get(0);
+        let hr24: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/86400.0 FROM shares WHERE miner_id=$1 AND ts > $2 AND ($3::TEXT IS NULL OR mode = $3)", &[&id, &(now - 86400), &mode]).await?.get(0);
+        let modes: Vec<String> = c
+            .query_one("SELECT COALESCE(ARRAY_AGG(DISTINCT mode ORDER BY mode), '{}') FROM shares WHERE miner_id=$1 AND ts > $2", &[&id, &(now - 86400)])
+            .await?
+            .get(0);
         let immature: i64 = c
             .query_one("SELECT COALESCE(SUM(c.amount),0)::BIGINT FROM credits c JOIN blocks b ON b.height=c.block_height WHERE c.miner_id=$1 AND b.status IN ('pending','unverified')", &[&id])
             .await?
@@ -396,20 +402,22 @@ impl Db {
         let workers = c
             .query(
                 "WITH s AS (SELECT worker, COALESCE(SUM(difficulty) FILTER (WHERE ts > $2),0)::FLOAT8/600.0 AS hr, SUM(difficulty)::FLOAT8/86400.0 AS hr24,
-                                   MAX(ts) AS last, COUNT(*) AS n, ARRAY_AGG(DISTINCT mode ORDER BY mode) AS modes FROM shares WHERE miner_id=$1 AND ts > $3 GROUP BY worker),
+                                   MAX(ts) AS last, COUNT(*) AS n, ARRAY_AGG(DISTINCT mode ORDER BY mode) AS modes FROM shares
+                            WHERE miner_id=$1 AND ts > $3 AND ($4::TEXT IS NULL OR mode = $4) GROUP BY worker),
                       e AS (SELECT worker, SUM(stale) AS stale, SUM(rejected) AS rejected FROM share_events WHERE miner_id=$1 AND ts > $3 GROUP BY worker)
                  SELECT s.worker, s.hr, s.hr24, s.last, s.n, COALESCE(e.stale,0)::BIGINT, COALESCE(e.rejected,0)::BIGINT, s.modes FROM s LEFT JOIN e USING (worker) ORDER BY s.hr DESC",
-                &[&id, &(now - 600), &(now - 86400)],
+                &[&id, &(now - 600), &(now - 86400), &mode],
             )
             .await?;
-        let chart = chart(&c, &format!("m:{id}"), now, range).await?;
+        let scope = match mode { Some(m) => format!("m:{id}:{m}"), None => format!("m:{id}") };
+        let chart = chart(&c, &scope, now, range).await?;
         let payments = c
             .query("SELECT ts, amount, fee, kernel, status FROM payments WHERE miner_id=$1 AND status <> 'failed' ORDER BY ts DESC LIMIT 50", &[&id])
             .await?;
         let coinbase = if address.starts_with("cb:") { Some(self.cb_summary(id).await?) } else { None };
         Ok(Some(json!({
             "address": address, "addressType": m.get::<_, Option<String>>(4), "coinbase": coinbase,
-            "hashrate": hr, "hashrate24h": hr24,
+            "hashrate": hr, "hashrate24h": hr24, "modes": modes,
             "balance": m.get::<_, i64>(1), "immature": immature, "paid": m.get::<_, i64>(2), "lastShare": last_share,
             "workers": workers.iter().map(|w| {
                 let last: i64 = w.get(3);
@@ -488,6 +496,7 @@ impl Db {
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'pool', COALESCE(SUM(difficulty),0)/600.0 FROM shares WHERE ts > $2", &[&now, &(now - 600)]).await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, mode, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY mode", &[&now, &(now - 600)]).await?;
         c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id", &[&now, &(now - 600)]).await?;
+        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id || ':' || mode, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id, mode", &[&now, &(now - 600)]).await?;
         c.execute("DELETE FROM hashrate_samples WHERE ts < $1", &[&(now - ChartRange::KEEP_SECS)]).await?;
         c.execute("DELETE FROM shares WHERE ts < $1", &[&(now - 7 * 86400)]).await?;
         c.execute("DELETE FROM share_events WHERE ts < $1", &[&(now - 7 * 86400)]).await?;

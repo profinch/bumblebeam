@@ -134,7 +134,7 @@ async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Qu
     }
     let s = &api.shared;
     let found = s.db.miner_blocks(&address, now(), 10, s.cfg.pool.maturity as i64, s.tip_height().map(|h| h as i64)).await?;
-    let mut v = match s.db.miner(&address, now(), range(&q)).await? {
+    let mut v = match s.db.miner(&address, now(), range(&q), mode(&q)).await? {
         Some(v) => v,
         None => json!({ "address": address, "hashrate": 0, "hashrate24h": 0, "balance": 0, "immature": 0, "paid": 0,
                         "lastShare": null, "workers": [], "charts": { "hashrate": [] }, "payments": [] }),
