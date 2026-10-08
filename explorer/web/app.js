@@ -490,29 +490,93 @@
       ${live.length ? poolTable(live) : '<div class="empty">No pools with liquidity</div>'}</section>`;
   };
 
-  let namesAll = false;
-  view.addEventListener('click', (e) => { if (e.target.closest('[data-names-all]')) { namesAll = !namesAll; render(false); } });
+  // BANS: the whole registry is one contract-state table, so search, filters, sorting and paging
+  // all run in the page; only the table body is redrawn while typing.
+  const NAMES_PAGE = 50;
+  const ns = { q: '', status: 'All', sale: false, sort: 'name', dir: 1, page: 0, tip: null, list: [] };
+  const STATUS_ORDER = { Active: 0, 'On Hold': 1, Expired: 2 };
+  function namesFiltered() {
+    const q = ns.q.trim().toLowerCase();
+    const rows = ns.list.filter((x) => (!q || x.name.toLowerCase().includes(q)) && (ns.status === 'All' || x.status === ns.status) && (!ns.sale || x.price));
+    const key = {
+      name: (x) => x.name.toLowerCase(),
+      exp: (x) => x.exp || 0,
+      status: (x) => STATUS_ORDER[x.status] ?? 3,
+      price: (x) => (x.price ? (x.price.aid === 0 ? x.price.amount : x.price.amount + 1e18) : Infinity),
+    }[ns.sort];
+    return rows.sort((a, b) => { const ka = key(a), kb = key(b); return (ka < kb ? -1 : ka > kb ? 1 : a.name.localeCompare(b.name)) * ns.dir; });
+  }
+  function relHeight(h) {
+    if (!h || !ns.tip) return '';
+    const s = (h - ns.tip) * 60, a = Math.abs(s);
+    const t = a < 3600 ? `${Math.round(a / 60)}m` : a < 86400 ? `${Math.round(a / 3600)}h` : a < 86400 * 365 ? `${Math.round(a / 86400)}d` : `${(a / 86400 / 365).toFixed(1)}y`;
+    return s >= 0 ? `in ${t}` : `${t} ago`;
+  }
+  function namesBody() {
+    const rows = namesFiltered(), pages = Math.max(1, Math.ceil(rows.length / NAMES_PAGE));
+    ns.page = Math.min(ns.page, pages - 1);
+    const slice = rows.slice(ns.page * NAMES_PAGE, (ns.page + 1) * NAMES_PAGE);
+    const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
+    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${copyHash(x.owner)}</td>
+      <td class="num">${x.exp ? `<a href="${blockHref(x.exp)}">${int(x.exp)}</a><div class="dim small">${esc(relHeight(x.exp))}${ns.tip ? ` · ${esc(local(Date.now() / 1000 + (x.exp - ns.tip) * 60).slice(0, 10))}` : ''}</div>` : '—'}</td>
+      <td>${badge(x.status)}${x.price ? ' <span class="badge solo">for sale</span>' : ''}</td>
+      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : '<span class="dim">—</span>'}</td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">No names match</td></tr>';
+    $('#names-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(ns.list.length)}`;
+    $('#names-page').textContent = `Page ${ns.page + 1} of ${pages}`;
+    $('#names-prev').disabled = ns.page === 0;
+    $('#names-next').disabled = ns.page >= pages - 1;
+    document.querySelectorAll('#names-filter [data-status]').forEach((b) => b.classList.toggle('on', b.dataset.status === ns.status));
+    $('#names-sale').classList.toggle('on', ns.sale);
+    document.querySelectorAll('#names-table th[data-sort]').forEach((th) => { th.dataset.dir = th.dataset.sort === ns.sort ? (ns.dir > 0 ? '▲' : '▼') : ''; });
+  }
+
   views.names = async (filter) => {
     const [b, st] = await Promise.all([bansNames(), get('status').catch(() => null)]);
     if (!b.cid) return notFound('The name service contract');
-    const tip = (st && num(st.height)) || b.h;
-    const q = String(filter || '').toLowerCase();
-    const showAll = q || namesAll;
-    const order = { Active: 0, 'On Hold': 1, Expired: 2 };
-    const list = b.names.filter((x) => (q ? x.name.toLowerCase().includes(q) : showAll || x.status !== 'Expired'))
-      .sort((x, y) => (order[x.status] ?? 3) - (order[y.status] ?? 3) || x.name.localeCompare(y.name));
-    const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
-    const expires = (x) => (x.exp ? `<a href="${blockHref(x.exp)}">${int(x.exp)}</a>${tip ? ` <span class="dim">≈ ${esc(local(Date.now() / 1000 + (x.exp - tip) * 60).slice(0, 10))}</span>` : ''}` : '—');
-    const rows = list.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${badge(x.status)}</td><td class="num">${expires(x)}</td>
-      <td class="num">${x.price ? `${amount(x.price.amount)} <span class="dim">${esc(assetName(x.price.aid))}</span>` : ''}</td><td>${copyHash(x.owner)}</td></tr>`).join('');
+    ns.list = b.names;
+    ns.tip = (st && num(st.height)) || b.h;
+    if (filter != null) { ns.q = String(filter); ns.status = 'All'; ns.sale = false; ns.page = 0; }
     const counts = b.names.reduce((m, x) => ((m[x.status] = (m[x.status] || 0) + 1), m), {});
-    return `<div class="page-head"><h1 class="page-title">${q ? `Names matching “${esc(filter)}”` : 'Names'}</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">the BANS contract</a></div></div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Beam Anonymous Name Service</h2>
-        <div class="panel-meta"><span>Active <b>${int(counts.Active || 0)}</b></span><span>On hold <b>${int(counts['On Hold'] || 0)}</b></span><span>Expired <b>${int(counts.Expired || 0)}</b></span>
-          ${q ? '' : `<button type="button" class="btn ghost small" data-names-all>${showAll ? 'hide expired' : 'show expired'}</button>`}</div></div>
-      <p class="hint">Names registered in BANS, owned by a key and renewed by period. Expiry dates are estimated from one block a minute.</p>
-      ${rows ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th class="num">Expires at block</th><th class="num">For sale</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No names match</div>'}</section>`;
+    const forSale = b.names.filter((x) => x.price).length;
+    const th = (key, label, cls = '') => `<th class="${cls} sortable" data-sort="${key}">${label}</th>`;
+    return `<div class="page-head"><h1 class="page-title">Names</h1><div class="actions"><a class="btn ghost small" href="${contractHref(b.cid)}">the BANS contract</a></div></div>
+      <div class="tiles">
+        ${tile('Total', int(b.names.length), 'registered names', 'accent')}
+        ${tile('Active', int(counts.Active || 0), 'not yet expired')}
+        ${tile('On hold', int(counts['On Hold'] || 0), 'grace period after expiry')}
+        ${tile('Expired', int(counts.Expired || 0), 'past the expiry height')}
+        ${tile('For sale', int(forSale), 'listed with a price')}
+      </div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Beam Anonymous Name Service</h2><div class="panel-meta"><span id="names-count"></span></div></div>
+        <div class="names-tools">
+          <input id="names-q" class="names-q" placeholder="Search by name…" autocomplete="off" spellcheck="false" aria-label="Search names" value="${esc(ns.q)}">
+          <div class="seg" id="names-filter" role="group" aria-label="Status">${['All', 'Active', 'On Hold', 'Expired'].map((s) => `<button type="button" data-status="${s}">${s === 'On Hold' ? 'On hold' : s}</button>`).join('')}</div>
+          <div class="seg"><button type="button" id="names-sale">For sale only</button></div>
+          <div class="names-pager"><button type="button" class="btn ghost small" id="names-prev">‹ Prev</button><span class="dim" id="names-page"></span><button type="button" class="btn ghost small" id="names-next">Next ›</button></div>
+        </div>
+        <div class="table-wrap"><table id="names-table"><thead><tr>${th('name', 'Name')}<th>Owner key</th>${th('exp', 'Expires at block', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}</tr></thead>
+        <tbody id="names-body"></tbody></table></div>
+        <p class="hint" style="margin:12px 0 0">Expiry dates are estimated from one block a minute. Click a key to copy it.</p></section>`;
   };
+
+  function bindNames() {
+    const q = $('#names-q');
+    if (!q) return;
+    namesBody();
+    q.addEventListener('input', () => { ns.q = q.value; ns.page = 0; namesBody(); });
+    $('#names-filter').addEventListener('click', (e) => { const b = e.target.closest('[data-status]'); if (b) { ns.status = b.dataset.status; ns.page = 0; namesBody(); } });
+    $('#names-sale').addEventListener('click', () => { ns.sale = !ns.sale; ns.page = 0; namesBody(); });
+    $('#names-prev').addEventListener('click', () => { ns.page -= 1; namesBody(); });
+    $('#names-next').addEventListener('click', () => { ns.page += 1; namesBody(); });
+    $('#names-table thead').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-sort]');
+      if (!th) return;
+      ns.dir = ns.sort === th.dataset.sort ? -ns.dir : 1;
+      ns.sort = th.dataset.sort;
+      namesBody();
+    });
+  }
 
   views.peers = async () => {
     const list = await get('peers');
@@ -599,6 +663,7 @@
       if (my !== seq) return;
       view.innerHTML = html;
       if (route === 'home') bindHome();
+      if (route === 'names') bindNames();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
       if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
