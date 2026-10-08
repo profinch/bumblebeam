@@ -3,17 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BumbleBeam Pool - community PoW pool for BEAM</title>
-<meta name="description" content="BumbleBeam Pool: an open-source, community-run BeamHash III mining pool for Beam (BEAM)">
+<title>BumbleBeam Explorer - Beam block explorer</title>
+<meta name="description" content="BumbleBeam Explorer: an open-source block explorer for Beam (BEAM), served from our own archival node">
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<!-- the v=dev query becomes the commit hash in the Docker build, so a release never mixes cached and new files -->
+<!-- styles.css is the pool's, copied in by the image build; the v=dev query becomes the commit hash -->
 <link rel="stylesheet" href="/styles.css?v=dev">
+<link rel="stylesheet" href="/explorer.css?v=dev">
 </head>
 <body>
 <header class="top">
   <div class="top-row">
-    <a class="brand" href="/" aria-label="BumbleBeam Pool, home">
+    <a class="brand" href="/" aria-label="BumbleBeam Explorer, home">
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
         <defs>
           <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient>
@@ -31,43 +32,32 @@
           <circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/>
         </g>
       </svg>
-      <span class="word">Bumble<b>Beam</b> <i class="sub-word">Pool</i></span>
+      <span class="word">Bumble<b>Beam</b> <i class="sub-word">Explorer</i></span>
     </a>
-    <a class="btn cta-top" href="/connect" data-route="connect">Start mining</a>
     <form class="search" id="search" role="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      <input id="search-input" placeholder="Your payout address" title="Your payout address: hashrate, unpaid balance and payouts" autocomplete="off" spellcheck="false" aria-label="Your payout address, to open your hashrate, unpaid balance and payouts">
+      <input id="search-input" placeholder="Block height or kernel ID" autocomplete="off" spellcheck="false" aria-label="Block height or kernel ID">
       <kbd id="search-kbd" title="Press / to search">/</kbd>
     </form>
     <nav class="main-nav" id="main-nav" aria-label="Main">
-      <a href="/" data-route="dashboard">Pool</a>
-      <a href="/network" data-route="network">Network</a>
-      <a href="/blocks" data-route="blocks">Blocks</a>
-      <a href="/miners" data-route="miners">Miners</a>
-      <a href="/" data-route="my" id="nav-my" hidden>My stats</a>
-      <a href="/payments" data-route="payments">Payments</a>
-      <a href="/connect" data-route="connect" class="nav-cta">Start mining</a>
+      <a href="/" data-route="home">Blocks</a>
+      <a href="https://pool.bumblebeam.org">Pool</a>
     </nav>
   </div>
 </header>
 
-<div class="demo-banner" id="demo-banner" hidden>
-  <b>Demo data.</b> The pool server is not running yet, so the pool's own numbers below are generated.
-  Network numbers and the other pools are live from the Beam Explorer.
-</div>
+<div class="demo-banner" id="sync-banner" hidden></div>
 
 <main id="view"></main>
 
 <footer class="foot">
   <a href="https://github.com/profinch/bumblebeam" target="_blank" rel="noopener">GitHub</a>
-  <a href="/api">API</a>
+  <a href="https://pool.bumblebeam.org">Pool</a>
   <a href="https://beam.mw" target="_blank" rel="noopener">Beam</a>
-  <a href="https://explorer.beam.mw" target="_blank" rel="noopener">Explorer</a>
-  <span class="dim">Apache-2.0 · community PoW pool for BEAM</span>
+  <span class="dim">Apache-2.0 · data from our own archival node</span>
   <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
 </footer>
 
-<script src="/data.js?v=dev"></script>
 <script src="/app.js?v=dev"></script>
 </body>
 </html>

@@ -40,8 +40,10 @@ body::before {
   background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%);
 }
 html, body { margin: 0; padding: 0; }
-/* the colour past the page's ends (overscroll) is the gradient's last one */
-html { background: #0a5a80; }
+/* the colour past the page's ends (overscroll) is the gradient's last one. The scrollbar is
+   always there, so a short page (a loading view, the explorer while it syncs) is as wide as a
+   long one and the centred header does not shift between pages or between the two sites. */
+html { background: #0a5a80; overflow-y: scroll; }
 body {
   min-height: 100vh;
   display: flex; flex-direction: column;
@@ -289,6 +291,16 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 @media (max-width: 1080px) {
   .grid2 { grid-template-columns: 1fr; }
   .donut-wrap { grid-template-columns: 1fr; justify-items: center; }
+}
+/* One header for the pool and the explorer, so switching sites does not move it. On one row
+   (wide screens) the brand and the search have the same sizes on both: the brand is as wide as
+   "BumbleBeam Explorer", the search width depends on the window only, leaving room for the
+   pool's longest menu (with My stats). Narrower, the header wraps: menu and search get rows. */
+@media (min-width: 1181px) {
+  .brand { flex: none; width: 236px; }
+  .search { flex: none; width: clamp(160px, calc(min(100vw - 2 * var(--page-padding-x), var(--page-width)) - 960px), 380px); }
+}
+@media (max-width: 1180px) {
   .top-row { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
   .search { order: 3; flex: 1 1 100%; }
   /* the menu takes its own full-width row and fits, no sideways scroll */
@@ -343,3 +355,6 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 /* copy buttons keep one width for "copy", "copied" and "failed" (monospace, 7ch), so the text
    next to them does not jump */
 .btn[data-copy] { flex: none; justify-content: center; min-width: calc(7ch + 18px); }
+
+/* the product name after the logo: "BumbleBeam Pool", "BumbleBeam Explorer" */
+.word .sub-word { font-style: normal; font-weight: 400; color: var(--muted); font-size: 0.8em; margin-left: 4px; }
