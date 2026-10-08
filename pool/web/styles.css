@@ -243,19 +243,36 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .seg button.on, .pill.on { color: var(--accent); border-color: rgba(0, 246, 210, 0.6); background: rgba(0, 246, 210, 0.15); }
 .pill { cursor: default; }
 .field { display: flex; flex-direction: column; gap: 6px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.field input, .field select {
+.field input {
   height: 36px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
   background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
 }
-.field input:focus, .field select:focus { border-color: rgba(0, 246, 210, 0.5); outline: none; }
-/* the select in the page's style: own arrow, and a dark list (browsers draw options with
-   system colours, which made the white text vanish on a white list) */
-.field select {
-  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px; color-scheme: dark;
-  background: var(--surface2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+.field input:focus { border-color: rgba(0, 246, 210, 0.5); outline: none; }
+/* the card list (a listbox in place of a native select): one opaque fill for the button and the
+   open list, so that, opened, they read as one shape: the button's bottom corners square, the
+   list's round */
+.dd { position: relative; min-width: 190px; }
+.dd-btn {
+  width: 100%; height: 36px; padding: 0 30px 0 10px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
+  background: #193b55 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+  border: 1px solid var(--border); border-radius: 6px;
 }
-.field select option, .field select optgroup { background: #0a2f52; color: var(--text); font: 13px var(--font-mono); }
-.field select optgroup { color: var(--muted); font-weight: 700; }
+.dd-btn:focus-visible { outline: none; border-color: rgba(0, 246, 210, 0.5); }
+.dd.open .dd-btn {
+  border-color: rgba(0, 246, 210, 0.5); border-bottom-color: transparent; border-radius: 6px 6px 0 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+.dd-list {
+  position: absolute; left: 0; right: 0; top: calc(100% - 1px); z-index: 30; margin: 0; padding: 2px 0 6px; list-style: none;
+  max-height: 300px; overflow-y: auto; color-scheme: dark;
+  background: #193b55; border: 1px solid rgba(0, 246, 210, 0.5); border-top: 0; border-radius: 0 0 6px 6px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+.dd-list [role="option"] { padding: 7px 10px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.dd-list [role="option"].active { background: rgba(0, 246, 210, 0.12); color: var(--text); }
+.dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
+.dd-group { padding: 8px 10px 3px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
 

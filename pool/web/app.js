@@ -422,7 +422,7 @@
           <section class="panel" id="calc"><div class="panel-head"><h2 class="panel-title">Calculator</h2><div class="panel-meta"><span>live network</span></div></div>
             <div class="row">
               <label class="field" style="flex:1">Your hashrate, Sol/s<input id="sols" type="number" min="0" step="1" value="52"></label>
-              <label class="field">Card<select id="card"><optgroup label="NVIDIA"><option value="85">RTX 4090 · 85</option><option value="78">RTX 5080 (MXBM) · 78</option><option value="57">RTX 4070 Ti Super · 57</option><option value="54">RTX 3080 Ti · 54</option><option value="52" selected>RTX 3090 · 52</option><option value="47">RTX 4070 Super · 47</option><option value="47">RTX 4070 · 47</option><option value="46.5">RTX 3080 · 46.5</option><option value="35">RTX 3070 Ti · 35</option><option value="34">RTX 3070 · 34</option><option value="32.5">RTX 3060 Ti · 32.5</option><option value="26">RTX 5060 Ti · 26</option><option value="22">RTX 3060 · 22</option></optgroup><optgroup label="AMD"><option value="36">RX 6800 XT · 36</option><option value="33">RX 6900 XT · 33</option></optgroup><option value="">custom</option></select></label>
+              <div class="field">Card<div class="dd" id="card" data-value="52"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Card">RTX 3090 · 52</button><ul class="dd-list" role="listbox" tabindex="-1" hidden><li class="dd-group" role="presentation">NVIDIA</li><li role="option" data-v="85">RTX 4090 · 85</li><li role="option" data-v="78">RTX 5080 (MXBM) · 78</li><li role="option" data-v="57">RTX 4070 Ti Super · 57</li><li role="option" data-v="54">RTX 3080 Ti · 54</li><li role="option" data-v="52" aria-selected="true">RTX 3090 · 52</li><li role="option" data-v="47">RTX 4070 Super · 47</li><li role="option" data-v="47">RTX 4070 · 47</li><li role="option" data-v="46.5">RTX 3080 · 46.5</li><li role="option" data-v="35">RTX 3070 Ti · 35</li><li role="option" data-v="34">RTX 3070 · 34</li><li role="option" data-v="32.5">RTX 3060 Ti · 32.5</li><li role="option" data-v="26">RTX 5060 Ti · 26</li><li role="option" data-v="22">RTX 3060 · 22</li><li class="dd-group" role="presentation">AMD</li><li role="option" data-v="36">RX 6800 XT · 36</li><li role="option" data-v="33">RX 6900 XT · 33</li><li role="option" data-v="">custom</li></ul></div></div>
             </div>
             <div class="calc-out" id="calc-out"></div>
             <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement), in Sol/s; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
@@ -456,6 +456,68 @@
     if (/^[0-9a-f]{64,70}$/i.test(a)) return { cls: 'warn', text: 'This looks like a regular address. It expires and needs your wallet online; use an offline address from Receive.' };
     if (a.length >= 100 && /^[0-9a-z]+$/i.test(a)) return { cls: 'ok', text: 'Offline address: payouts arrive while your wallet is closed.' };
     return { cls: 'warn', text: 'This does not look like a Beam address.' };
+  }
+
+  // A small listbox in place of a native <select>, whose open list the browser draws itself (system
+  // colours, square corners). Opened, it continues the button seamlessly: same fill and border,
+  // the button's bottom corners square, the list's bottom corners round. Keyboard: arrows,
+  // Home/End, Enter or Space to pick, Esc or Tab to close.
+  function dropdown(root, onPick) {
+    const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
+    const items = [...list.querySelectorAll('[role="option"]')];
+    let active = -1;
+    const isOpen = () => !list.hidden;
+    function mark(i) {
+      active = i;
+      items.forEach((li, j) => li.classList.toggle('active', j === i));
+      if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+    }
+    function set(v) {
+      const li = items.find((x) => x.dataset.v === v) || items.find((x) => x.dataset.v === '');
+      items.forEach((x) => x.setAttribute('aria-selected', String(x === li)));
+      root.dataset.value = li ? li.dataset.v : '';
+      btn.textContent = li ? li.textContent : '';
+    }
+    function open() {
+      list.hidden = false;
+      root.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      mark(Math.max(0, items.findIndex((x) => x.getAttribute('aria-selected') === 'true')));
+    }
+    function close(focus = true) {
+      list.hidden = true;
+      root.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      if (focus) btn.focus();
+    }
+    function pick(i) {
+      const li = items[i];
+      if (!li) return;
+      set(li.dataset.v);
+      close();
+      onPick(li.dataset.v);
+    }
+    btn.addEventListener('click', () => (isOpen() ? close() : open()));
+    list.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus on the button
+    list.addEventListener('click', (e) => { const li = e.target.closest('[role="option"]'); if (li) pick(items.indexOf(li)); });
+    list.addEventListener('mousemove', (e) => { const li = e.target.closest('[role="option"]'); if (li && items.indexOf(li) !== active) mark(items.indexOf(li)); });
+    btn.addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (!isOpen()) {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) { e.preventDefault(); open(); }
+        return;
+      }
+      if (k === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
+      else if (k === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
+      else if (k === 'Home') { e.preventDefault(); mark(0); }
+      else if (k === 'End') { e.preventDefault(); mark(items.length - 1); }
+      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(active); }
+      else if (k === 'Escape') { e.preventDefault(); close(); }
+      else if (k === 'Tab') close(false);
+    });
+    document.addEventListener('click', (e) => { if (isOpen() && !root.contains(e.target)) close(false); });
+    set(root.dataset.value || '');
+    return { set };
   }
 
   function bindConnect() {
@@ -502,8 +564,8 @@
     seg('#tls', 'tls');
     $('#addr').addEventListener('input', render);
     $('#worker').addEventListener('input', render);
-    $('#sols').addEventListener('input', () => { $('#card').value = ''; calc(); });
-    $('#card').addEventListener('change', () => { if ($('#card').value) $('#sols').value = $('#card').value; calc(); });
+    const card = dropdown($('#card'), (v) => { if (v) $('#sols').value = v; calc(); });
+    $('#sols').addEventListener('input', () => { card.set(''); calc(); });
     render();
     calc();
   }
