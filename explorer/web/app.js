@@ -67,7 +67,8 @@
     return {
       height: num(b.height), hash: hex(b.hash), prev: hex(b.prev), ts: num(b.timestamp), difficulty: num(b.difficulty),
       subsidy: num(b.subsidy), chainwork: typeof b.chainwork === 'string' ? b.chainwork.slice(0, 60) : '',
-      kernels: arr(b.kernels).map((k) => ({ id: hex(k && k.id), fee: num(k && k.fee), min: num(k && k.minHeight), max: num(k && k.maxHeight) })),
+      kernels: arr(b.kernels).map((k) => ({ id: hex(k && k.id), fee: num(k && k.fee), min: num(k && k.minHeight), max: num(k && k.maxHeight),
+        extra: k && typeof k === 'object' ? Object.fromEntries(Object.entries(k).filter(([key]) => !['id', 'fee', 'minHeight', 'maxHeight'].includes(key))) : {} })),
       inputs: arr(b.inputs).map((i) => ({ commitment: hex(i && i.commitment, 70), height: num(i && i.height) })),
       outputs: arr(b.outputs).map((o) => ({ commitment: hex(o && o.commitment, 70), coinbase: o && o.type === 'Coinbase', value: num(o && o.Value),
         maturity: num(o && o.Maturity), spent: num(o && o.spent) })),
@@ -81,6 +82,114 @@
     return rows.map((r) => ({ height: num(v(r[0])), hash: hex(v(r[1])), ts: num(v(r[2])), difficulty: num(v(r[3])), fee: num(v(r[4])),
       txs: num(v(r[5])), outputs: num(v(r[6])), inputs: num(v(r[7])) })).filter((r) => r.height != null);
   }
+
+  // ---------- the API's typed documents ----------
+  // Contracts, assets and contract calls come as nested documents: plain values, objects, arrays,
+  // and typed cells {type, value} where type is aid (asset ID), amount (groth, maybe signed), blob,
+  // cid (contract ID), height, time, th (table header), table (rows) or group (a call with its
+  // sub-calls). doc() renders any of it; IDs and heights become links.
+  let assetIndex = null; // { at, byId: Map(aid -> {name, ticker, ...}), list }
+  function meta(text) {
+    const out = {};
+    if (typeof text !== 'string' || !text.startsWith('STD:')) return out;
+    for (const kv of text.slice(4).split(';')) { const i = kv.indexOf('='); if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1).slice(0, 200); }
+    return out;
+  }
+  async function assets() {
+    if (assetIndex && Date.now() - assetIndex.at < 600000) return assetIndex;
+    const t = await get('assets', 15000);
+    const rows = t && Array.isArray(t.value) ? t.value.slice(1) : [];
+    const v = (c) => (c && typeof c === 'object' ? c.value : c);
+    const list = rows.map((r) => { const m = meta(v(r[5])); return { aid: num(v(r[0])), owner: hex(v(r[1])), deposit: num(v(r[2])), supply: num(v(r[3])),
+      lock: num(v(r[4])), name: m.N || '', ticker: m.SN || '', unit: m.UN || '', metaText: typeof v(r[5]) === 'string' ? v(r[5]).slice(0, 2000) : '' }; }).filter((a) => a.aid != null);
+    assetIndex = { at: Date.now(), list, byId: new Map(list.map((a) => [a.aid, a])) };
+    return assetIndex;
+  }
+  const assetName = (aid) => (aid === 0 ? 'BEAM' : (assetIndex && assetIndex.byId.get(aid) && (assetIndex.byId.get(aid).ticker || assetIndex.byId.get(aid).name)) || `asset #${aid}`);
+  const assetHref = (aid) => `/asset/${Math.round(Number(aid) || 0)}`;
+  const contractHref = (cid) => `/contract/${hex(cid, 64)}`;
+  function amount(v) {
+    const s = String(v ?? ''), sign = /^[+-]/.test(s) ? s[0] : '', n = num(s.replace(/^[+-]/, ''));
+    if (n == null) return esc(s.slice(0, 60));
+    return `<span class="amt ${sign === '-' ? 'neg' : sign === '+' ? 'pos' : ''}">${sign}${(n / GROTH).toLocaleString('en-US', { maximumFractionDigits: 8 })}</span>`;
+  }
+  const isCell = (x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.type === 'string' && 'value' in x;
+  function cell(c, colHead = '') {
+    if (c == null || c === '') return '';
+    if (typeof c === 'number') return /height/i.test(colHead) && Number.isInteger(c) && c >= 0 ? `<a href="${blockHref(c)}">${int(c)}</a>` : esc(c.toLocaleString('en-US', { maximumFractionDigits: 8 }));
+    if (typeof c === 'boolean') return c ? 'yes' : 'no';
+    if (typeof c === 'string') {
+      const m = meta(c);
+      if (m.N || m.SN) return `<span title="${esc(c.slice(0, 2000))}">${esc(m.N || m.SN)}${m.SN && m.N ? ` <span class="dim">${esc(m.SN)}</span>` : ''}</span>`;
+      return esc(c.slice(0, 2000));
+    }
+    if (Array.isArray(c)) return c.every(Array.isArray) ? table({ value: c }, true) : c.map((x) => cell(x, colHead)).join(', ');
+    if (isCell(c)) {
+      const v = c.value;
+      switch (c.type) {
+        case 'aid': { const a = num(v); return a == null ? '' : `<a href="${assetHref(a)}">${esc(assetName(a))}</a>`; }
+        case 'amount': return amount(v);
+        case 'blob': { const h = hex(v, 200); return `<span class="mono dim" title="${esc(h)}">${esc(short(h, 8, 6))}</span>`; }
+        case 'cid': { const h = hex(v, 64); return h ? `<a class="mono" href="${contractHref(h)}" title="${esc(h)}">${esc(short(h, 8, 6))}</a>` : ''; }
+        case 'height': { const h = num(v); return h == null ? '' : `<a href="${blockHref(h)}">${int(h)}</a>`; }
+        case 'time': return esc(utc(num(v)));
+        case 'table': return table(c, true);
+        case 'group': return table({ value: v }, true);
+        default: return cell(v, colHead);
+      }
+    }
+    return obj(c);
+  }
+  function obj(o) {
+    const entries = Object.entries(o).filter(([k]) => k !== 'more' && k !== 'h');
+    if (!entries.length) return '';
+    return `<dl class="kv">${entries.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${cell(v, k)}</dd>`).join('')}</dl>`;
+  }
+  const isHead = (row) => Array.isArray(row) && row.length && row.every((x) => isCell(x) && x.type === 'th');
+  // table rows; a group is one call and its sub-calls, drawn as one block of rows
+  function bodyRows(rows, heads) {
+    return rows.map((row) => {
+      if (isCell(row) && row.type === 'group' && Array.isArray(row.value)) {
+        return row.value.map((r, i) => `<tr class="${i ? 'grp-sub' : 'grp-first'}">${(Array.isArray(r) ? r : [r]).map((c, j) => `<td>${cell(c, heads[j])}</td>`).join('')}</tr>`).join('');
+      }
+      return `<tr>${(Array.isArray(row) ? row : [row]).map((c, j) => `<td>${cell(c, heads[j])}</td>`).join('')}</tr>`;
+    }).join('');
+  }
+  function table(t, nested = false, bodyId = '') {
+    const rows = Array.isArray(t && t.value) ? t.value.slice(0, 5000) : [];
+    const head = isHead(rows[0]) ? rows[0].map((h) => String(h.value)) : [];
+    const body = head.length ? rows.slice(1) : rows;
+    if (!body.length) return nested ? '' : '<div class="empty">Nothing here</div>';
+    const html = `<table class="${nested ? 'nested' : 'doc'}">${head.length ? `<thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>` : ''}<tbody${bodyId ? ` id="${bodyId}"` : ''}>${bodyRows(body, head)}</tbody></table>`;
+    return nested ? html : `<div class="table-wrap">${html}</div>`;
+  }
+  // A section of a document; a table that has older rows gets a "load older" button.
+  function section(title, v, pager = null) {
+    const id = `t${Math.random().toString(36).slice(2, 8)}`;
+    const more = isCell(v) && v.type === 'table' && v.more && num(v.more.hMax);
+    const body = isCell(v) && v.type === 'table' ? table(v, false, id) : `<div class="doc-obj">${cell(v)}</div>`;
+    return `<section class="panel"><div class="panel-head"><h2 class="panel-title">${esc(title)}</h2></div>${body}
+      ${pager && more != null ? `<div class="more"><button class="btn ghost" data-pager="${esc(pager)}" data-hmax="${more}" data-body="${id}" data-title="${esc(title)}">Load older</button></div>` : ''}</section>`;
+  }
+  // the "load older" buttons on asset and contract pages
+  view.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-pager]');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      const d = await get(`${btn.dataset.pager}&hMax=${Number(btn.dataset.hmax)}`, 20000);
+      const t = d && d[btn.dataset.title];
+      const rows = isCell(t) && Array.isArray(t.value) ? t.value : [];
+      const heads = isHead(rows[0]) ? rows[0].map((h) => String(h.value)) : [];
+      document.getElementById(btn.dataset.body).insertAdjacentHTML('beforeend', bodyRows(heads.length ? rows.slice(1) : rows, heads));
+      const more = t && t.more && num(t.more.hMax);
+      if (more == null) btn.remove();
+      else { btn.dataset.hmax = String(more); btn.disabled = false; btn.textContent = 'Load older'; }
+    } catch (err) {
+      btn.textContent = 'Could not load';
+    }
+  });
 
   // ---------- views ----------
   const views = {};
@@ -99,7 +208,7 @@
       <div class="tiles">
         ${tile('Height', int(st.height), st.ts ? `last block ${ago(st.ts)}` : '', 'accent')}
         ${tile('Difficulty', diff(rows[0] && rows[0].difficulty))}
-        ${tile('Peers', int(st.peers), 'connected to our node')}
+        ${tile('Peers', `<a href="/peers">${int(st.peers)}</a>`, 'connected to our node')}
         ${tile('Shielded outputs 24h', int(st.shielded24h), `${int(st.shieldedTotal)} in total`)}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span>Outputs / inputs are Mimblewimble UTXOs</span></div></div>
@@ -130,9 +239,14 @@
 
   async function blockView(b, hit = '') {
     const fees = b.kernels.reduce((s, k) => s + (k.fee || 0), 0);
+    const withExtra = b.kernels.filter((k) => Object.keys(k.extra).length);
+    if (withExtra.length) await assets().catch(() => null);
+    const calls = withExtra.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Contract calls and other kernel data</h2></div>
+      ${withExtra.map((k) => `<div class="doc-kernel"><div class="dim mono" style="font-size:11px;margin:4px 0 6px">kernel <a href="${kernelHref(k.id)}">${esc(short(k.id, 16, 12))}</a></div>
+        ${Object.entries(k.extra).map(([name, v]) => (isCell(v) && v.type === 'table' ? table(v) : `<dl class="kv"><dt>${esc(name)}</dt><dd>${cell(v, name)}</dd></dl>`)).join('')}</div>`).join('')}</section>` : '';
     const coinbase = b.outputs.filter((o) => o.coinbase).reduce((s, o) => s + (o.value || 0), 0);
     const kRows = b.kernels.map((k) => `<tr class="${k.id && k.id === hit ? 'hit' : ''}"><td class="mono"><a href="${kernelHref(k.id)}">${esc(short(k.id, 16, 12))}</a></td>
-      <td class="num">${k.fee ? beam(k.fee, 8) : '0'}</td><td class="num dim">${int(k.min)}</td><td class="num dim">${int(k.max)}</td></tr>`).join('');
+      <td class="num">${k.fee ? beam(k.fee, 8) : '0'}</td><td class="num dim">${int(k.min)}</td><td class="num dim">${int(k.max)}</td><td>${Object.keys(k.extra).length ? '<span class="badge solo">contract</span>' : ''}</td></tr>`).join('');
     const iRows = b.inputs.map((i) => `<tr><td class="mono dim">${esc(short(i.commitment, 16, 12))}</td><td class="num">${i.height ? `<a href="${blockHref(i.height)}">${int(i.height)}</a>` : '—'}</td></tr>`).join('');
     const oRows = b.outputs.map((o) => `<tr><td class="mono dim">${esc(short(o.commitment, 16, 12))}</td>
       <td>${o.coinbase ? '<span class="badge ok">coinbase</span>' : '<span class="dim">confidential</span>'}</td>
@@ -153,7 +267,8 @@
         <dt>Chainwork</dt><dd>${esc(b.chainwork) || '—'}</dd>
       </dl></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Kernels</h2><div class="panel-meta"><span>one per transaction; amounts are hidden by design</span></div></div>
-        ${kRows ? `<div class="table-wrap"><table><thead><tr><th>Kernel ID</th><th class="num">Fee</th><th class="num">Min height</th><th class="num">Max height</th></tr></thead><tbody>${kRows}</tbody></table></div>` : '<div class="empty">No kernels</div>'}</section>
+        ${kRows ? `<div class="table-wrap"><table><thead><tr><th>Kernel ID</th><th class="num">Fee</th><th class="num">Min height</th><th class="num">Max height</th><th></th></tr></thead><tbody>${kRows}</tbody></table></div>` : '<div class="empty">No kernels</div>'}</section>
+      ${calls}
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Outputs</h2></div>
           ${oRows ? `<div class="table-wrap"><table><thead><tr><th>Commitment</th><th>Type</th><th class="num">Value</th><th class="num">Matures</th><th class="num">Spent in</th></tr></thead><tbody>${oRows}</tbody></table></div>` : '<div class="empty">No outputs</div>'}</section>
@@ -189,6 +304,78 @@
       ${await blockView(b, k)}`;
   };
 
+  const ASSET_PAGE = 50, CALLS_PAGE = 50;
+
+  views.assets = async (filter) => {
+    const ix = await assets();
+    const q = String(filter || '').toLowerCase();
+    const list = q ? ix.list.filter((a) => [a.name, a.ticker, a.unit].some((x) => x && x.toLowerCase().includes(q))) : ix.list;
+    const rows = list.map((a) => `<tr><td><a href="${assetHref(a.aid)}">#${int(a.aid)}</a></td><td><a href="${assetHref(a.aid)}">${esc(a.name || '—')}</a></td><td>${esc(a.ticker)}</td>
+      <td class="num">${amount(a.supply)}</td><td class="num dim">${amount(a.deposit)}</td><td class="mono dim" title="${esc(a.owner)}">${esc(short(a.owner, 8, 6))}</td></tr>`).join('');
+    return `<div class="page-head"><h1 class="page-title">${q ? `Assets matching “${esc(filter)}”` : 'Assets'}</h1></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span>${int(list.length)} of ${int(ix.list.length)}</span></div></div>
+      <p class="hint">Tokens issued on Beam, each with an asset ID. Balances and transfers stay private like BEAM's; supply, issuer key and history are public.</p>
+      ${rows ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Ticker</th><th class="num">Supply</th><th class="num">Deposit (BEAM)</th><th>Owner key</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No assets match</div>'}</section>`;
+  };
+
+  views.asset = async (arg) => {
+    if (!/^\d{1,10}$/.test(arg || '')) return notFound(`Asset ${String(arg || '').slice(0, 40)}`);
+    const aid = Number(arg);
+    if (aid === 0) return `<div class="page-head"><h1 class="page-title">BEAM</h1></div><div class="panel empty">Asset 0 is BEAM itself. <a href="/assets">All assets</a></div>`;
+    const pager = `asset?id=${aid}&nMaxOps=${ASSET_PAGE}`;
+    const [d, ix] = await Promise.all([get(pager, 20000), assets().catch(() => null)]);
+    const hist = d && d['Asset history'], a = ix && ix.byId.get(aid);
+    if (!a && !(isCell(hist) && Array.isArray(hist.value) && hist.value.length > 1)) return notFound(`Asset ${aid}`);
+    const m = a ? meta(a.metaText) : {};
+    const sections = Object.entries(d || {}).filter(([k]) => k !== 'h').map(([k, v]) => section(k, v, k === 'Asset history' ? pager : null)).join('');
+    return `<div class="page-head"><h1 class="page-title">${esc((a && (a.name || a.ticker)) || `Asset #${aid}`)}</h1><div class="actions"><a class="btn ghost small" href="/assets">all assets</a></div></div>
+      <div class="tiles">
+        ${tile('Asset ID', `#${int(aid)}`, esc(a && a.ticker ? a.ticker : ''), 'accent')}
+        ${tile('Supply', a ? amount(a.supply) : '—', esc(a && a.unit ? a.unit : ''))}
+        ${tile('Deposit', a ? `${amount(a.deposit)} BEAM` : '—', 'locked by the issuer')}
+        ${tile('Lock height', a && a.lock ? `<a href="${blockHref(a.lock)}">${int(a.lock)}</a>` : '—')}
+      </div>
+      ${a ? `<section class="panel"><dl class="kv"><dt>Owner key</dt><dd>${esc(a.owner) || '—'}</dd>${Object.entries(m).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></section>` : ''}
+      ${sections}`;
+  };
+
+  views.contracts = async () => {
+    const [t] = await Promise.all([get('contracts', 20000), assets().catch(() => null)]);
+    const n = isCell(t) && Array.isArray(t.value) ? t.value.length - 1 : 0;
+    return `<div class="page-head"><h1 class="page-title">Contracts</h1></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span>${int(Math.max(0, n))}</span></div></div>
+      <p class="hint">Beam's smart contracts (shaders): DApps such as the DEX, DAO vaults and the Nephrite stablecoin, with the funds they hold.</p>
+      ${table(t)}</section>`;
+  };
+
+  views.contract = async (arg) => {
+    const cid = hex(arg, 64);
+    if (cid.length !== 64) return notFound(`Contract ${String(arg || '').slice(0, 80)}`);
+    const pager = `contract?id=${cid}&nMaxTxs=${CALLS_PAGE}&state=0&assets_owned=0&funds_locked=0&ver_info=0`;
+    const [d] = await Promise.all([get(`contract?id=${cid}&nMaxTxs=${CALLS_PAGE}`, 20000), assets().catch(() => null)]);
+    const ver = d && d['Version History'];
+    const versions = isCell(ver) && Array.isArray(ver.value) ? ver.value.slice(1) : [];
+    if (!versions.length) return notFound(`Contract ${short(cid)}`);
+    const first = versions[versions.length - 1], deployed = num(isCell(first[0]) ? first[0].value : first[0]);
+    const order = ['State', 'Locked Funds', 'Owned assets', 'Version History', 'Calls history'];
+    const keys = Object.keys(d).filter((k) => !['h', 'kind'].includes(k)).sort((x, y) => (order.indexOf(x) + 99) % 99 - (order.indexOf(y) + 99) % 99);
+    return `<div class="page-head"><h1 class="page-title">${esc(typeof d.kind === 'string' ? d.kind.slice(0, 80) : 'Contract')}</h1><div class="actions"><a class="btn ghost small" href="/contracts">all contracts</a></div></div>
+      <div class="tiles">
+        ${tile('Kind', esc(typeof d.kind === 'string' ? d.kind.slice(0, 80) : 'unknown'), 'decoded by Beam\'s explorer parser', 'accent')}
+        ${tile('Deployed', deployed != null ? `<a href="${blockHref(deployed)}">${int(deployed)}</a>` : '—', `${int(versions.length)} version${versions.length === 1 ? '' : 's'}`)}
+      </div>
+      <section class="panel"><dl class="kv"><dt>Contract ID</dt><dd>${esc(cid)}</dd></dl></section>
+      ${keys.map((k) => section(k, d[k], k === 'Calls history' ? pager : null)).join('')}`;
+  };
+
+  views.peers = async () => {
+    const list = await get('peers');
+    const peers = Array.isArray(list) ? list.filter((p) => typeof p === 'string').map((p) => p.slice(0, 80)) : [];
+    return `<div class="page-head"><h1 class="page-title">Peers</h1></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Nodes our node knows</h2><div class="panel-meta"><span>${int(peers.length)}</span></div></div>
+      ${peers.length ? `<div class="peers">${peers.map((p) => `<span class="mono">${esc(p)}</span>`).join('')}</div>` : '<div class="empty">No peers</div>'}</section>`;
+  };
+
   views.notfound = async () => notFound('This page');
 
   // ---------- status: footer pill and a banner while the node catches up ----------
@@ -203,11 +390,31 @@
     if (st && behind) banner.innerHTML = `<b>Syncing.</b> Our explorer node is at block ${int(st.height)}${st.ts ? `, mined ${esc(ago(st.ts))}` : ''}; newer blocks appear once it catches up.`;
   }
 
-  // ---------- search: block height or kernel ID ----------
-  function search(q) {
-    q = q.replace(/\s+/g, '').replace(/,/g, '');
-    if (/^\d{1,10}$/.test(q)) return blockHref(q);
-    if (hex(q, 64).length === 64) return kernelHref(q);
+  // ---------- search: block height, kernel or contract ID, asset number, name or ticker ----------
+  async function search(raw) {
+    const q = raw.trim(), compact = q.replace(/[\s,]+/g, '');
+    if (/^\d{1,10}$/.test(compact)) return blockHref(compact);
+    const a = q.match(/^(?:asset\s*|#|a)(\d{1,10})$/i);
+    if (a) return assetHref(a[1]);
+    const h = hex(compact, 64);
+    if (h.length === 64) {
+      try {
+        const b = normBlock(await get(`block?kernel=${h}`));
+        if (b && b.kernels.some((x) => x.id === h)) return kernelHref(h);
+        const c = await get(`contract?id=${h}&nMaxTxs=1&state=0&assets_owned=0&funds_locked=0`);
+        const ver = c && c['Version History'];
+        if (isCell(ver) && Array.isArray(ver.value) && ver.value.length > 1) return contractHref(h);
+      } catch (e) { /* not found below */ }
+      return kernelHref(h);
+    }
+    if (q.length >= 2 && q.length <= 60) {
+      try {
+        const ix = await assets(), l = q.toLowerCase();
+        const exact = ix.list.filter((x) => [x.ticker, x.unit, x.name].some((y) => y && y.toLowerCase() === l));
+        if (exact.length === 1) return assetHref(exact[0].aid);
+        return `/assets/${encodeURIComponent(q)}`;
+      } catch (e) { return null; }
+    }
     return null;
   }
 
@@ -218,7 +425,8 @@
     const [route, ...rest] = p.split('/');
     let arg = null;
     try { arg = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch (e) { return { route: 'notfound', arg: null }; }
-    return { route: ['block', 'kernel'].includes(route) && arg ? route : 'notfound', arg };
+    if (['assets', 'contracts', 'peers'].includes(route)) return { route, arg };
+    return { route: ['block', 'kernel', 'asset', 'contract'].includes(route) && arg ? route : 'notfound', arg };
   }
   function go(path) {
     if (path !== location.pathname) history.pushState(null, '', path + location.search);
@@ -229,7 +437,7 @@
   async function render(scrollTop = true) {
     const { route, arg } = parse();
     const my = ++seq;
-    document.querySelectorAll('#main-nav a[data-route]').forEach((a) => a.classList.toggle('active', a.dataset.route === route || (route === 'block' && a.dataset.route === 'home')));
+    document.querySelectorAll('#main-nav a[data-route]').forEach((a) => a.classList.toggle('active', a.dataset.route === route || (['block', 'kernel', 'peers'].includes(route) && a.dataset.route === 'home') || (route === 'asset' && a.dataset.route === 'assets') || (route === 'contract' && a.dataset.route === 'contracts')));
     if (scrollTop && !view.innerHTML) view.innerHTML = '<div class="empty">Loading…</div>';
     try {
       const html = await views[route](arg);
@@ -256,8 +464,8 @@
     e.preventDefault();
     const input = $('#search-input'), q = input.value.trim();
     if (!q) return;
-    const path = search(q);
-    if (!path) { input.setCustomValidity('Enter a block height or a kernel ID'); input.reportValidity(); return; }
+    const path = await search(q);
+    if (!path) { input.setCustomValidity('Enter a block height, a kernel or contract ID, or an asset name'); input.reportValidity(); return; }
     input.value = '';
     input.blur();
     go(path);
