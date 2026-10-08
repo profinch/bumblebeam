@@ -217,10 +217,23 @@
       return tr(row);
     }).join('');
   }
+  // explorer-node's contract call history names 7 columns but sends 8: Emission is missing from
+  // the header, between Funds and Keys (the per-block call tables have it). Put it back, and give any
+  // other extra column an empty header, so cells stay under the right names.
+  function fixHead(head, body) {
+    if (!head.length) return;
+    const width = body.reduce((w, r) => {
+      const rr = isCell(r) && r.type === 'group' && Array.isArray(r.value) ? r.value : [r];
+      return Math.max(w, ...rr.map((x) => (Array.isArray(x) ? x.length : 1)));
+    }, 0);
+    if (width === head.length + 1 && head.includes('Funds') && head[head.length - 1] === 'Keys' && !head.includes('Emission')) head.splice(head.length - 1, 0, 'Emission');
+    while (head.length < width) head.push('');
+  }
   function table(t, nested = false, bodyId = '') {
     const rows = Array.isArray(t && t.value) ? t.value.slice(0, 5000) : [];
     const head = isHead(rows[0]) ? rows[0].map((h) => String(h.value)) : [];
     const body = head.length ? rows.slice(1) : rows;
+    fixHead(head, body);
     if (!body.length) return nested ? '' : '<div class="empty">Nothing here</div>';
     const html = `<table class="${nested ? 'nested' : 'doc'}">${head.length ? `<thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>` : ''}<tbody${bodyId ? ` id="${bodyId}"` : ''}>${bodyRows(body, head)}</tbody></table>`;
     return nested ? html : `<div class="table-wrap">${html}</div>`;
@@ -308,6 +321,7 @@
       const t = d && d[btn.dataset.title];
       const rows = isCell(t) && Array.isArray(t.value) ? t.value : [];
       const heads = isHead(rows[0]) ? rows[0].map((h) => String(h.value)) : [];
+      fixHead(heads, heads.length ? rows.slice(1) : rows);
       document.getElementById(btn.dataset.body).insertAdjacentHTML('beforeend', bodyRows(heads.length ? rows.slice(1) : rows, heads));
       const more = t && t.more && num(t.more.hMax);
       if (more == null) btn.remove();
