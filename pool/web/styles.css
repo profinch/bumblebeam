@@ -343,3 +343,6 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 /* copy buttons keep one width for "copy", "copied" and "failed" (monospace, 7ch), so the text
    next to them does not jump */
 .btn[data-copy] { flex: none; justify-content: center; min-width: calc(7ch + 18px); }
+
+/* the product name after the logo: "BumbleBeam Pool", "BumbleBeam Explorer" */
+.word .sub-word { font-style: normal; font-weight: 400; color: var(--muted); font-size: 0.8em; margin-left: 4px; }
