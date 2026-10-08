@@ -39,6 +39,22 @@ block_check_urls = []                     # cross-check of the block hash by hei
                                           # your own explorer-node first, a public one as a fallback; it never confirms alone
 public_host = "pool.example.com"
 
+[coinbase]
+# Coinbase payouts (tools/coinbase): miners who log in with a "cb:<key>" account are paid in the blocks
+# themselves, with outputs they made and signed. Needs the patched beam-node (--mine_online=1
+# --mine_online_foreign=1 --mine_online_reserve=65536, owner_key of a mining wallet of its own) and
+# bb-finalizer running next to it with that wallet's seed. With this on, blocks are confirmed by our
+# node's chain as the finalizer reports it, not by the wallet's UTXOs.
+enabled = false
+link_bind = "127.0.0.1:3480"              # bb-finalizer connects here; keep it on loopback
+ladder_shift = 20                         # pair values: 2^20 groth (0.0105 BEAM) times powers of two
+ladder_steps = 12                         # ... up to 2^31 groth (21.5 BEAM)
+max_coinbase_bytes = 65536                # block space for the miners' pairs (249 bytes each)
+stock_max_per_account = 512
+max_pairs_per_upload = 256
+kernel_validity_blocks = 43200            # Beam: a kernel lives 1440*30 blocks after its minimum height
+expiry_margin_blocks = 100                # a pair this close to expiry is not offered any more
+
 [vardiff]
 start = 64.0
 min = 8.0

@@ -26,3 +26,7 @@ web_dir = "../web"
 
 [database]
 url_file = "database.test.url"   # created by the test scripts next to this file
+
+[coinbase]
+enabled = true                            # tools/e2e_coinbase.py plays bb-finalizer on this link
+link_bind = "127.0.0.1:13480"

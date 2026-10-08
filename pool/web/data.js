@@ -157,6 +157,7 @@ const BB = (() => {
       blockReward: num(c.blockReward) ?? blockReward(height),
       stratumHost: str(c.stratumHost, 253),
       minerPaysTxFee: c.minerPaysTxFee !== false,
+      coinbase: c.coinbase === true,
       shieldedFee: num(c.txFee && c.txFee.shielded) ?? 1000100,
       ports: {
         pplns: num(c.ports && c.ports.pplns) ?? 3333, solo: num(c.ports && c.ports.solo) ?? 3334,
@@ -179,7 +180,7 @@ const BB = (() => {
     stale: num(w.stale), rejected: num(w.rejected),
   });
   const normPayment = (p) => ({
-    ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 64),
+    ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 96), status: str(p.status, 16),
     txs: (Array.isArray(p.txs) ? p.txs : []).slice(0, 500).map((t) => ({ kernel: str(t && t.kernel, 64), amount: num(t && t.amount) || 0 })).filter((t) => t.kernel),
   });
   const normMiner = (m) => ({
@@ -189,6 +190,13 @@ const BB = (() => {
     payments: (Array.isArray(m.payments) ? m.payments : []).map(normPayment),
     blocksFound: num(m.blocksFound) || 0, blocks24h: num(m.blocks24h) || 0, lastBlockAt: num(m.lastBlockAt),
     blocks: (Array.isArray(m.blocks) ? m.blocks : []).map(normBlock),
+    addressType: str(m.addressType, 16),
+    // coinbase accounts (paid in the blocks themselves): their pair stock and what blocks paid them
+    coinbase: m.coinbase && typeof m.coinbase === 'object' ? {
+      stockPairs: num(m.coinbase.stockPairs) || 0, stockValue: num(m.coinbase.stockValue) || 0,
+      minedPairs: num(m.coinbase.minedPairs) || 0, minedValue: num(m.coinbase.minedValue) || 0, blocks: num(m.coinbase.blocks) || 0,
+      expiredPairs: num(m.coinbase.expiredPairs) || 0, expiresAt: num(m.coinbase.expiresAt),
+    } : null,
   });
   function normalize(path, r) {
     const p = path.split('?')[0];

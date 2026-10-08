@@ -9,3 +9,5 @@ pool/server/pool.toml
 /deploy/docker/containers/certbot/config.json
 /deploy/docker/.env
 /tools/coinbase/coinbase_test
+/tools/coinbase/bb-finalizer
+/tools/coinbase/bb-coinbase

@@ -136,6 +136,11 @@ struct WorkerStats {
 /// Beam addresses: regular SBBS ones are 64–70 hex chars and expire; offline, max-privacy and
 /// public-offline ones are long alphanumerics. The server accepts both, the UI warns on regular.
 fn address_type(a: &str) -> Option<&'static str> {
+    // coinbase accounts (tools/coinbase): "cb:" + a public key (Beam's serialization: X then a Y byte of 00/01),
+    // paid in the blocks themselves
+    if let Some(pk) = a.strip_prefix("cb:") {
+        return crate::coinbase::is_account_key(pk).then_some("coinbase");
+    }
     let hex_like = a.len() >= 64 && a.len() <= 70 && a.chars().all(|c| c.is_ascii_hexdigit());
     if hex_like {
         return Some("regular");
@@ -197,16 +202,23 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             send(&mut wr, result(&id, -32003, "Login failed: use <beam address>.<worker>; an offline address is recommended")).await?;
                             return Ok(());
                         };
-                        address = addr.to_string();
+                        address = if kind == "coinbase" { addr.to_ascii_lowercase() } else { addr.to_string() };
+                        if kind == "coinbase" && shared.coinbase.is_none() {
+                            send(&mut wr, result(&id, -32003, "Login failed: this pool does not pay in the coinbase, use a Beam address")).await?;
+                            return Ok(());
+                        }
                         worker = wk.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(32).collect();
                         if worker.is_empty() { worker = "default".into(); }
-                        miner_id = match shared.db.miner_id(&address, &format!("{kind}?"), crate::state::now()).await {
+                        let kind_label = if kind == "coinbase" { kind.to_string() } else { format!("{kind}?") };
+                        miner_id = match shared.db.miner_id(&address, &kind_label, crate::state::now()).await {
                             Ok(id) => id,
                             Err(e) => { warn!("miner lookup: {e:#}"); send(&mut wr, result(&id, -32003, "Login failed: pool database unavailable, retry")).await?; return Ok(()); }
                         };
-                        let desc = if kind == "regular" {
-                            "Login successful. Warning: regular addresses expire and need the wallet online; use an offline address for payouts"
-                        } else { "Login successful" };
+                        let desc = match kind {
+                            "regular" => "Login successful. Warning: regular addresses expire and need the wallet online; use an offline address for payouts",
+                            "coinbase" => "Login successful: paid in the coinbase of the blocks (keep your pair stock topped up with bb-coinbase)",
+                            _ => "Login successful",
+                        };
                         let mut res = result(&id, 0, desc);
                         res["nonceprefix"] = json!(prefix);
                         res["forkheight"] = json!(FORK_HEIGHT);

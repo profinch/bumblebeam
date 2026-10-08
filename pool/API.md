@@ -92,8 +92,12 @@ guessed.
   "workers": [{ "name": "rig1", "hashrate": 52.1, "hashrate24h": 50.7, "lastShare": 1791321590,
                 "online": true, "stale": 0.012, "rejected": 0.001 }],
   "charts": { "hashrate": [[1791300000, 49.8]] },
-  "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }] }
+  "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }],
+  "addressType": "offline", "coinbase": null }
 ```
+
+`addressType` is `regular`, `offline`, `max_privacy`, `public_offline` or `coinbase`; `coinbase` is
+set only for `cb:` accounts (see [coinbase payouts](#coinbase-payouts)).
 
 `charts.hashrate` takes `?range=` as in `/api/stats`; minutes without shares count as zero.
 `blocksFound` and `blocks24h` count the blocks this miner's shares found (orphans not counted),
@@ -157,6 +161,54 @@ regular address is accepted at login with a warning in the login response. Balan
 address that mined them: a payout to a regular address is attempted each run, a failed one is
 refunded to that balance and tried again next run, and the miner's page shows the address type.
 To move to an offline address, mine with it; the old balance is paid once its wallet is online.
+
+## Coinbase payouts
+
+With `[coinbase] enabled = true` (see `tools/coinbase/`), a miner can be paid in the blocks the pool
+finds instead of by transactions. The miner's **account** is `cb:` plus a public key the `bb-coinbase`
+tool derives from the wallet's miner key (66 hex characters, ending in `00` or `01`); it is the
+stratum login in place of an address. The miner uploads **pairs**, coinbase outputs with their
+kernels made and signed with its own keys; the pool verifies them through bb-finalizer and keeps them
+in stock; when the node asks for a block's coinbase, the pool picks pairs for what each account is
+owed (its balance plus its share of the block), and the block pays them. The pool never holds the
+miner's keys, so it cannot spend these outputs. Blocks are then confirmed by the pool's own node, as
+the finalizer reports the chain (`verifiedBy: "node"`).
+
+`GET /api/coinbase`
+
+```json
+{ "enabled": true, "height": 4070449,
+  "ladder": { "shift": 20, "steps": 12, "unit": 1048576 },
+  "maxPairsPerUpload": 256, "stockMaxPerAccount": 512, "kernelValidityBlocks": 43200, "expiryMarginBlocks": 100,
+  "maxCoinbaseBytes": 65536, "accounts": 3, "stockPairs": 96, "minedPairs": 240,
+  "finalizer": { "connected": true, "tip": 4070449, "scanned": 4070449, "lastFinalization": 1791428210, "lastMined": 1791428210, "finalizations": 1312 } }
+```
+
+Pair values are `unit × 2^k` groth for `k < steps` (0.0105 … 21.47 BEAM); the stock is topped up with
+`bb-coinbase top-up`. A pair's kernel is valid for `kernelValidityBlocks` after its minimum height, and
+the pool stops offering it `expiryMarginBlocks` before that.
+
+`POST /api/coinbase/pairs`, body `{ "account": "cb:…", "ts": <unix seconds>, "pairs": ["<hex>", …], "signature": "<hex>" }`
+(`bb-coinbase` sends it). The signature is over the account, `ts` and the pairs, by the account key.
+Answer:
+
+```json
+{ "account": "cb:…", "accepted": 34, "rejected": [{ "index": 2, "error": "invalid kernel signature" }],
+  "stockPairs": 70, "validUntil": 4113649 }
+```
+
+Errors come as `{ "error": "…" }` with 400 (shape, signature, ladder, expiry), 409 (stock full),
+503 (finalizer offline). The miner page of a `cb:` account carries a `coinbase` object:
+
+```json
+"coinbase": { "stock": [{ "value": 1048576, "count": 3 }], "stockPairs": 36, "stockValue": 12881756160,
+              "minedPairs": 108, "minedValue": 38645268480, "blocks": 4, "expiredPairs": 0, "expiresAt": 4113649 }
+```
+
+and its payments have `kernel` of the form `coinbase@<height> <block hash>`: a payment per block,
+`pending` until the block confirms, then `completed`; `failed` if the block is orphaned, with the
+pairs back in stock. Such an account has no address, so the regular payout run skips it; what the
+blocks could not pay stays on its balance and goes into later blocks.
 
 ## Payment states
 

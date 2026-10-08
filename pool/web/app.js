@@ -338,12 +338,18 @@
       <div class="panel addr"><span>${esc(m.address || address)}</span><button class="btn small" data-copy="${esc(m.address || address)}">copy</button></div>
       <div class="tiles">
         ${tile('Hashrate', hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
-        ${tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
+        ${m.coinbase ? tile('Unpaid', beam(Math.max(0, m.balance)), 'goes into the next blocks the pool finds') : tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.immature), 'blocks still confirming')}
-        ${tile('Paid', beam(m.paid, 2))}
+        ${tile('Paid', beam(m.paid, 2), m.coinbase ? 'in the blocks themselves, to your own outputs' : undefined)}
         ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(m.blocks24h)} in 24h · last ${ago(m.lastBlockAt)}` : 'by your shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>
+      ${m.coinbase ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Coinbase account</h2><div class="panel-meta"><span>Paid in the blocks, with outputs made by your own bb-coinbase: the pool never holds your coins</span></div></div>
+      <div class="tiles">
+        ${tile('Pair stock', int(m.coinbase.stockPairs), `${beam(m.coinbase.stockValue, 2)} ready for the next blocks${m.coinbase.stockPairs < 12 ? ' · run bb-coinbase top-up' : ''}`, m.coinbase.stockPairs < 12 ? 'warn' : '')}
+        ${tile('Paid in blocks', int(m.coinbase.blocks), `${int(m.coinbase.minedPairs)} outputs, ${beam(m.coinbase.minedValue, 2)}`)}
+        ${tile('Stock expires', m.coinbase.expiresAt ? `#${int(m.coinbase.expiresAt)}` : '—', m.coinbase.expiredPairs ? `${int(m.coinbase.expiredPairs)} pairs expired unspent` : 'pairs live 30 days; top-up renews them')}
+      </div></section>` : ''}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers</h2></div>
@@ -354,7 +360,7 @@
         </section>
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
           ${m.payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th>Kernel</th></tr></thead><tbody>
-          ${m.payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount)}</td><td class="dim">${p.kernel ? `<a href="${explorerKernel(p.kernel)}" target="_blank" rel="noopener">${esc(short(p.kernel))}</a>` : '—'}</td></tr>`).join('')}
+          ${m.payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount)}</td><td class="dim">${paymentRef(p)}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No payments yet</div>'}
         </section>
       </div>
@@ -379,6 +385,12 @@
   };
 
   // One kernel link, or for a run with several transactions a list of all of them with amounts.
+  // A payout by transaction links its kernel; a payout in a block (coinbase accounts) links the block.
+  function paymentRef(p) {
+    const cb = p.kernel && /^coinbase@(\d+)/.exec(p.kernel);
+    if (cb) return `<a href="${explorerBlock(cb[1])}" target="_blank" rel="noopener">block ${int(cb[1])}</a>${p.status === 'pending' ? ' <span class="dim">· confirming</span>' : ''}`;
+    return p.kernel ? `<a href="${explorerKernel(p.kernel)}" target="_blank" rel="noopener">${esc(short(p.kernel))}</a>` : '—';
+  }
   const kernelLink = (k) => `<a href="${explorerKernel(k)}" target="_blank" rel="noopener" class="mono">${esc(short(k))}</a>`;
   const kernelCell = (p) => {
     if (p.txs.length > 1) {
@@ -408,7 +420,7 @@
           <div class="steps">
             <div class="step"><h3>Get an offline Beam address</h3>
               <p>In any Beam wallet open <b>Receive</b> and choose an <b>offline</b> (permanent) address. A regular address expires and
-                needs your wallet online to receive, so payouts to it fail while the wallet is closed.</p>
+                needs your wallet online to receive, so payouts to it fail while the wallet is closed.${stats.coinbase ? ` Or skip the address: with <a href="https://github.com/profinch/bumblebeam/tree/main/tools/coinbase" target="_blank" rel="noopener">bb-coinbase</a> you are <b>paid in the blocks themselves</b>, to outputs you made, and log in with your <code>cb:…</code> account.` : ''}</p>
               <div class="row"><label class="field" style="flex:1;min-width:240px">Wallet address<input id="addr" placeholder="paste your offline address" spellcheck="false" autocomplete="off"></label>
               <label class="field">Worker<input id="worker" value="rig1" maxlength="32" style="width:110px"></label></div>
               <div class="note" id="addr-note" hidden></div></div>
@@ -444,6 +456,7 @@
               <div><b>Checkable.</b> Every block and every payout transaction links to the chain, and PPLNS rounds are published so you can recompute your share.</div>
               ${stats.finderBonus ? `<div><b>Finder bonus.</b> Find a block in PPLNS and ${pctFee(stats.finderBonus)} of it is yours on top of your share.</div>` : ''}
               <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no registration. Payouts carry only Beam's own network fee.</div>
+              ${stats.coinbase ? '<div><b>Non-custodial.</b> Be paid in the blocks, with coinbase outputs only your wallet can spend: the pool never holds your coins.</div>' : ''}
               <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
           </section>
@@ -457,6 +470,7 @@
   // 64–66 hex chars; offline, max-privacy and public-offline addresses are much longer.
   function addressHint(a) {
     if (!a) return null;
+    if (/^cb:[0-9a-f]{64}0[01]$/i.test(a)) return { cls: 'ok', text: 'Coinbase account: you are paid in the blocks themselves, to your own outputs. Keep the pair stock topped up.' };
     if (/^[0-9a-f]{64,70}$/i.test(a)) return { cls: 'warn', text: 'This looks like a regular address. It expires and needs your wallet online; use an offline address from Receive.' };
     if (a.length >= 100 && /^[0-9a-z]+$/i.test(a)) return { cls: 'ok', text: 'Offline address: payouts arrive while your wallet is closed.' };
     return { cls: 'warn', text: 'This does not look like a Beam address.' };

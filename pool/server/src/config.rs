@@ -15,7 +15,60 @@ pub struct Config {
     pub vardiff: Vardiff,
     pub http: Http,
     pub database: Database,
+    #[serde(default)]
+    pub coinbase: Coinbase,
 }
+
+/// Coinbase payouts (tools/coinbase): miners upload pairs made with their own keys, the pool puts them
+/// into the blocks it finds, bb-finalizer next to the node builds the coinbase and follows the chain.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Coinbase {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Where bb-finalizer connects (loopback: the link is not authenticated).
+    #[serde(default = "link_bind")]
+    pub link_bind: String,
+    /// Pair values are 2^ladder_shift groth times powers of two, ladder_steps of them.
+    #[serde(default = "ladder_shift")]
+    pub ladder_shift: u32,
+    #[serde(default = "ladder_steps")]
+    pub ladder_steps: u32,
+    /// Block space the pairs may take; the node is started with --mine_online_reserve of at least this.
+    #[serde(default = "coinbase_bytes")]
+    pub max_coinbase_bytes: usize,
+    #[serde(default = "stock_max")]
+    pub stock_max_per_account: u32,
+    #[serde(default = "upload_max")]
+    pub max_pairs_per_upload: u32,
+    /// Kernel lifespan (Beam: 1440*30 blocks after HF2) and how long before expiry a pair stops being offered.
+    #[serde(default = "validity")]
+    pub kernel_validity_blocks: u64,
+    #[serde(default = "expiry_margin")]
+    pub expiry_margin_blocks: u64,
+}
+impl Default for Coinbase {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            link_bind: link_bind(),
+            ladder_shift: ladder_shift(),
+            ladder_steps: ladder_steps(),
+            max_coinbase_bytes: coinbase_bytes(),
+            stock_max_per_account: stock_max(),
+            max_pairs_per_upload: upload_max(),
+            kernel_validity_blocks: validity(),
+            expiry_margin_blocks: expiry_margin(),
+        }
+    }
+}
+fn link_bind() -> String { "127.0.0.1:3480".into() }
+fn ladder_shift() -> u32 { 20 }
+fn ladder_steps() -> u32 { 12 }
+fn coinbase_bytes() -> usize { 64 * 1024 }
+fn stock_max() -> u32 { 512 }
+fn upload_max() -> u32 { 256 }
+fn validity() -> u64 { 1440 * 30 }
+fn expiry_margin() -> u64 { 100 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Node {
@@ -100,6 +153,9 @@ pub struct PoolCfg {
     /// on top of that miner's PPLNS part. 0 disables.
     #[serde(default)]
     pub finder_bonus_percent: f64,
+    /// Test chains only (FakePoW with a short Maturity.Coinbase): lets `maturity` go below Beam's 240.
+    #[serde(default)]
+    pub unsafe_test_maturity: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -152,12 +208,23 @@ impl Config {
         anyhow::ensure!((0.0..100.0).contains(&cfg.pool.fee_percent) && (0.0..100.0).contains(&cfg.pool.solo_fee_percent), "fee_percent must be in 0..100");
         anyhow::ensure!(cfg.pool.pplns_window > 0.0, "pplns_window must be positive");
         anyhow::ensure!((0.0..=10.0).contains(&cfg.pool.finder_bonus_percent), "finder_bonus_percent must be in 0..10");
-        anyhow::ensure!(cfg.pool.maturity >= 240, "maturity must be at least 240: Beam's coinbase matures after 240 blocks, paying earlier would spend other funds of the wallet");
+        anyhow::ensure!(
+            cfg.pool.maturity >= 240 || cfg.pool.unsafe_test_maturity,
+            "maturity must be at least 240: Beam's coinbase matures after 240 blocks, paying earlier would spend other funds of the wallet (unsafe_test_maturity = true only on a test chain)"
+        );
+        anyhow::ensure!(cfg.pool.maturity >= 1, "maturity must be at least 1");
         anyhow::ensure!(
             cfg.pool.min_payout_groth > cfg.wallet_api.shielded_fee_groth.max(cfg.wallet_api.tx_fee_groth),
             "min_payout_groth must exceed the network fee, or payouts would be zero"
         );
         anyhow::ensure!(cfg.vardiff.min >= 1.0 && cfg.vardiff.max >= cfg.vardiff.start && cfg.vardiff.start >= cfg.vardiff.min, "vardiff: need 1 <= min <= start <= max");
+        if cfg.coinbase.enabled {
+            let cb = &cfg.coinbase;
+            anyhow::ensure!((10..=40).contains(&cb.ladder_shift) && (1..=32).contains(&cb.ladder_steps), "coinbase: ladder_shift 10..40, ladder_steps 1..32");
+            anyhow::ensure!(cb.max_coinbase_bytes >= 1024 && cb.max_coinbase_bytes <= 900 * 1024, "coinbase: max_coinbase_bytes 1 KB .. 900 KB");
+            anyhow::ensure!(cb.max_pairs_per_upload >= 1 && cb.stock_max_per_account >= cb.max_pairs_per_upload, "coinbase: stock_max_per_account must be at least max_pairs_per_upload");
+            anyhow::ensure!(cb.kernel_validity_blocks > cb.expiry_margin_blocks + 1440, "coinbase: kernel_validity_blocks must exceed expiry_margin_blocks by a day");
+        }
         Ok(cfg)
     }
     pub fn wallet_enabled(&self) -> bool {

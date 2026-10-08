@@ -4,6 +4,7 @@
 mod accounting;
 mod admin;
 mod api;
+mod coinbase;
 mod config;
 mod db;
 mod emission;
@@ -58,7 +59,18 @@ async fn main() -> Result<()> {
         net_height: AtomicU64::new(0),
         started: Instant::now(),
         http: http.clone(),
+        coinbase: cfg.coinbase.enabled.then(coinbase::Link::new),
     });
+    if let Some(link) = shared.coinbase.clone() {
+        let s = shared.clone();
+        tokio::spawn(async move {
+            if let Err(e) = coinbase::serve(s, link).await {
+                error!("coinbase link: {e:#}");
+            }
+        });
+        tokio::spawn(coinbase::expiry_loop(shared.clone()));
+        info!(link = %cfg.coinbase.link_bind, "coinbase payouts enabled");
+    }
 
     {
         // the single-instance lock lives in one connection: if it is lost and cannot be retaken, stop

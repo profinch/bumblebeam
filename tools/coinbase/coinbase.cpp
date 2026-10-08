@@ -3,11 +3,14 @@
 
 #include "coinbase.h"
 
+#include "core/block_rw.h"
 #include "core/serialization_adapters.h"
+#include "mnemonic/mnemonic.h"
 #include "utility/hex.h"
 #include "utility/serialize.h"
 
 #include <algorithm>
+#include <sstream>
 
 namespace bb::coinbase {
 
@@ -49,6 +52,11 @@ size_t Pair::get_Size() const
 	return ssc.m_Counter.m_Value;
 }
 
+Height Pair::get_MaxHeight() const
+{
+	return m_pKernel->get_EffectiveHeightRange().m_Max;
+}
+
 Pair MakePair(Key::IKdf& coin, Key::Index subIdx, Key::IPKdf& tag, Amount value, uint64_t idx, Height hScheme,
 	Height hMinKernel)
 {
@@ -71,8 +79,9 @@ Pair MakePair(Key::IKdf& coin, Key::Index subIdx, Key::IPKdf& tag, Amount value,
 	return p;
 }
 
-bool VerifyPair(const Pair& p, Height hScheme, std::string& sErr)
+bool VerifyPair(const Pair& p, Height hBlock, std::string& sErr)
 {
+	const Height hScheme = hBlock;
 	const Output& o = p.m_Output;
 	if (!o.m_Coinbase)
 		return sErr = "not a coinbase output", false;
@@ -93,8 +102,8 @@ bool VerifyPair(const Pair& p, Height hScheme, std::string& sErr)
 	const auto& krn = Cast::Up<TxKernelStd>(*p.m_pKernel);
 	if (krn.m_Fee || krn.m_pHashLock || krn.m_pRelativeLock || krn.m_CanEmbed || !krn.m_vNested.empty())
 		return sErr = "the kernel must have no fee, locks or nested kernels", false;
-	if (!krn.get_EffectiveHeightRange().IsInRange(hScheme + 1))
-		return sErr = "the kernel is not valid at the next height", false;
+	if (!krn.get_EffectiveHeightRange().IsInRange(hBlock))
+		return sErr = "the kernel is not valid at the next block", false;
 
 	ECC::Point::Native exc(Zero);
 	try
@@ -193,39 +202,235 @@ Coinbase Allocator::Allocate(const std::map<std::string, Amount>& owed, Amount t
 	return cb;
 }
 
+namespace {
+
+void AddPairToTx(Transaction& tx, const Pair& p)
+{
+	// Output has no copy constructor
+	Serializer ser;
+	ser & p.m_Output;
+	auto pOut = std::make_unique<Output>();
+	Deserializer der;
+	der.reset(ser.buffer().first, ser.buffer().second);
+	der & *pOut;
+	tx.m_vOutputs.push_back(std::move(pOut));
+
+	TxKernel::Ptr pKrn;
+	p.m_pKernel->Clone(pKrn);
+	tx.m_vKernels.push_back(std::move(pKrn));
+}
+
+} // namespace
+
 Transaction::Ptr BuildCoinbaseTx(const Allocator& a, const Coinbase& cb, Key::IKdf& poolCoin, Key::Index poolSubIdx,
 	Key::IPKdf& poolTag, Height h)
 {
 	auto pTx = std::make_shared<Transaction>();
 	pTx->m_Offset = Zero;
 
-	auto fnAdd = [&pTx](const Pair& p) {
-		// Output has no copy constructor
-		Serializer ser;
-		ser & p.m_Output;
-		auto pOut = std::make_unique<Output>();
-		Deserializer der;
-		der.reset(ser.buffer().first, ser.buffer().second);
-		der & *pOut;
-		pTx->m_vOutputs.push_back(std::move(pOut));
-
-		TxKernel::Ptr pKrn;
-		p.m_pKernel->Clone(pKrn);
-		pTx->m_vKernels.push_back(std::move(pKrn));
-	};
-
 	for (const auto& paid : cb.m_vPaid)
 	{
 		const auto& s = a.m_Stock.at(paid.m_Miner);
 		for (size_t i : paid.m_vPairs)
-			fnAdd(s.m_vPairs[i]);
+			AddPairToTx(*pTx, s.m_vPairs[i]);
 	}
 
 	if (cb.m_PoolValue)
-		fnAdd(MakePair(poolCoin, poolSubIdx, poolTag, cb.m_PoolValue, h, h, h));
+		AddPairToTx(*pTx, MakePair(poolCoin, poolSubIdx, poolTag, cb.m_PoolValue, h, h, h));
 
 	pTx->Normalize();
 	return pTx;
+}
+
+Transaction::Ptr BuildCoinbaseTx(const std::vector<Pair>& vPairs, Amount total, Key::IKdf& poolCoin,
+	Key::Index poolSubIdx, Key::IPKdf& poolTag, Height h, std::vector<size_t>& vDropped)
+{
+	auto pTx = std::make_shared<Transaction>();
+	pTx->m_Offset = Zero;
+	vDropped.clear();
+
+	Amount left = total;
+	for (size_t i = 0; i < vPairs.size(); i++)
+	{
+		const Pair& p = vPairs[i];
+		std::string sErr;
+		// h is the height being mined: the pair must be valid in that block
+		if ((p.get_Value() > left) || !VerifyPair(p, h, sErr))
+		{
+			vDropped.push_back(i);
+			continue;
+		}
+		left -= p.get_Value();
+		AddPairToTx(*pTx, p);
+	}
+
+	if (left)
+		AddPairToTx(*pTx, MakePair(poolCoin, poolSubIdx, poolTag, left, h, h, h));
+
+	pTx->Normalize();
+	return pTx;
+}
+
+// ---- Keys ----
+
+Key::IKdf::Ptr KdfFromSeedPhrase(const std::string& phrase, std::string& sErr)
+{
+	WordList words;
+	std::istringstream is(phrase);
+	std::string w;
+	while (is >> w)
+	{
+		// beam-wallet prints and accepts the phrase with semicolons as well as spaces
+		std::string part;
+		std::istringstream ws(w);
+		while (std::getline(ws, part, ';'))
+			if (!part.empty())
+				words.push_back(part);
+	}
+	if (words.size() != 12)
+		return sErr = "a seed phrase has 12 words", nullptr;
+	if (!isValidMnemonic(words))
+		return sErr = "not a valid seed phrase", nullptr;
+
+	std::vector<uint8_t> buf = decodeMnemonic(words);
+	ECC::NoLeak<ECC::uintBig> seed;
+	ECC::Hash::Processor() << Blob(buf.data(), static_cast<uint32_t>(buf.size())) >> seed.V;
+
+	Key::IKdf::Ptr pKdf;
+	ECC::HKdf::Create(pKdf, seed.V);
+	return pKdf;
+}
+
+Key::IKdf::Ptr ImportMinerKey(const std::string& s, const std::string& pass)
+{
+	KeyString ks;
+	ks.SetPassword(Blob(pass.data(), static_cast<uint32_t>(pass.size())));
+	ks.m_sRes = s;
+	auto pKdf = std::make_shared<ECC::HKdf>();
+	if (!ks.Import(*pKdf))
+		return nullptr;
+	return pKdf;
+}
+
+Key::IPKdf::Ptr ImportOwnerKey(const std::string& s, const std::string& pass)
+{
+	KeyString ks;
+	ks.SetPassword(Blob(pass.data(), static_cast<uint32_t>(pass.size())));
+	ks.m_sRes = s;
+	auto pKdf = std::make_shared<ECC::HKdfPub>();
+	if (!ks.Import(*pKdf))
+		return nullptr;
+	return pKdf;
+}
+
+std::string OwnerFingerprint(Key::IPKdf& kdf)
+{
+	uint32_t n = kdf.ExportP(nullptr);
+	std::vector<uint8_t> buf(n);
+	kdf.ExportP(buf.data());
+	ECC::Hash::Value hv;
+	ECC::Hash::Processor() << Blob(buf.data(), n) >> hv;
+	return to_hex(hv.m_pData, 8);
+}
+
+// ---- Identity ----
+
+Identity Identity::Derive(Key::IKdf& minerKey)
+{
+	Identity id;
+	ECC::Hash::Value hv;
+	ECC::Hash::Processor() << "bumblebeam-coinbase-identity" >> hv;
+	minerKey.DeriveKey(id.m_sk, hv);
+	ECC::Point::Native pt = ECC::Context::get().G * id.m_sk;
+	id.m_pk = pt;
+	return id;
+}
+
+std::string AccountFromPk(const ECC::Point& pk)
+{
+	Serializer ser;
+	ser & pk;
+	auto [p, n] = ser.buffer();
+	return "cb:" + to_hex(p, n);
+}
+
+std::string Identity::get_Account() const
+{
+	return AccountFromPk(m_pk);
+}
+
+bool ParseAccount(const std::string& s, ECC::Point::Native& pk)
+{
+	if ((s.size() != 3 + 66) || (s.compare(0, 3, "cb:") != 0))
+		return false;
+	bool bHex = false;
+	std::vector<uint8_t> buf = from_hex(s.substr(3), &bHex);
+	if (!bHex || (buf.size() != 33))
+		return false;
+	try
+	{
+		ECC::Point pt;
+		Deserializer der;
+		der.reset(buf);
+		der & pt;
+		return pk.ImportNnz(pt);
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
+}
+
+ECC::Hash::Value UploadHash(const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex)
+{
+	ECC::Hash::Processor hp;
+	hp << "bumblebeam-coinbase-upload" << pk << ts << static_cast<uint64_t>(vPairsHex.size());
+	for (const auto& s : vPairsHex)
+		hp << s;
+	ECC::Hash::Value hv;
+	hp >> hv;
+	return hv;
+}
+
+std::string SignUpload(const Identity& id, uint64_t ts, const std::vector<std::string>& vPairsHex)
+{
+	ECC::Signature sig;
+	sig.Sign(UploadHash(id.m_pk, ts, vPairsHex), id.m_sk);
+	Serializer ser;
+	ser & sig;
+	auto [p, n] = ser.buffer();
+	return to_hex(p, n);
+}
+
+bool VerifyUpload(const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
+	const std::string& sigHex)
+{
+	ECC::Point::Native pk;
+	if (!ParseAccount(account, pk))
+		return false;
+
+	bool bHex = false;
+	std::vector<uint8_t> buf = from_hex(sigHex, &bHex);
+	if (!bHex || buf.empty())
+		return false;
+
+	ECC::Signature sig;
+	try
+	{
+		Deserializer der;
+		der.reset(buf);
+		der & sig;
+		if (der.bytes_left())
+			return false;
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
+
+	ECC::Point pkPacked;
+	pk.Export(pkPacked);
+	return sig.IsValid(UploadHash(pkPacked, ts, vPairsHex), pk);
 }
 
 } // namespace bb::coinbase
