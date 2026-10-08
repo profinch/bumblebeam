@@ -340,6 +340,7 @@
         ${tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.immature), 'blocks still confirming')}
         ${tile('Paid', beam(m.paid, 2))}
+        ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(m.blocks24h)} in 24h · last ${ago(m.lastBlockAt)}` : 'by your shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate</h2><div class="panel-meta">${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range })}</section>
@@ -355,7 +356,9 @@
           ${m.payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount)}</td><td class="dim">${p.kernel ? `<a href="${explorerKernel(p.kernel)}" target="_blank" rel="noopener">${esc(short(p.kernel))}</a>` : '—'}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No payments yet</div>'}
         </section>
-      </div>`;
+      </div>
+      ${m.blocks.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks you found</h2><div class="panel-meta"><span>latest ${int(m.blocks.length)}</span></div></div>
+        ${blocksTable(m.blocks, stats.maturity)}</section>` : ''}`;
   }
 
   views.payments = async () => {

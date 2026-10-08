@@ -96,6 +96,9 @@ guessed.
 ```
 
 `charts.hashrate` takes `?range=` as in `/api/stats`; minutes without shares count as zero.
+`blocksFound` and `blocks24h` count the blocks this miner's shares found (orphans not counted),
+`lastBlockAt` is the latest one's time, and `blocks` lists the 10 most recent in the `/api/blocks`
+shape, orphans included.
 `stale` and `rejected` are the worker's share of stale and rejected shares over 24 hours, counted
 by the stratum server per connection and flushed once a minute. A stale share is one for a block
 that was already found when it arrived; it is not credited. The
