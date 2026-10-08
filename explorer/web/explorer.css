@@ -36,3 +36,11 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text); }
 th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); color: var(--accent); }
 .small { font-size: 10px; }
+/* names: fixed column widths sized for the longest content, so paging and filters never move them */
+#names-table { table-layout: fixed; min-width: 1060px; }
+#names-table col.w-h { width: 160px; }
+#names-table col.w-st { width: 180px; }
+#names-table col.w-pr { width: 170px; }
+#names-table col.w-key { width: 160px; }
+#names-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#names-table td .small { white-space: nowrap; }

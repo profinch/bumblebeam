@@ -572,7 +572,7 @@
     ns.page = Math.min(ns.page, pages - 1);
     const slice = rows.slice(ns.page * NAMES_PAGE, (ns.page + 1) * NAMES_PAGE);
     const badge = (s) => `<span class="badge ${s === 'Active' ? 'ok' : s === 'Expired' ? 'bad' : 'pending'}">${esc(s)}</span>`;
-    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono">${esc(x.name)}</td>
+    $('#names-body').innerHTML = slice.map((x) => `<tr><td class="mono name-cell">${esc(x.name)}</td>
       <td class="num">${heightCell(x.reg, ns.regsLoaded ? '' : '…')}</td>
       <td class="num">${heightCell(x.exp)}</td>
       <td>${badge(x.status)}${x.price ? ' <span class="badge solo">for sale</span>' : ''}</td>
@@ -614,7 +614,7 @@
           <div class="seg"><button type="button" id="names-sale">For sale only</button></div>
           <div class="names-pager"><button type="button" class="btn ghost small" id="names-prev">‹ Prev</button><span class="dim" id="names-page"></span><button type="button" class="btn ghost small" id="names-next">Next ›</button></div>
         </div>
-        <div class="table-wrap"><table id="names-table"><thead><tr>${th('name', 'Name')}${th('reg', 'Registered', 'num')}${th('exp', 'Expires', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}<th>Owner key</th></tr></thead>
+        <div class="table-wrap"><table id="names-table"><colgroup><col><col class="w-h"><col class="w-h"><col class="w-st"><col class="w-pr"><col class="w-key"></colgroup><thead><tr>${th('name', 'Name')}${th('reg', 'Registered', 'num')}${th('exp', 'Expires', 'num')}${th('status', 'Status')}${th('price', 'Sell price', 'num')}<th>Owner key</th></tr></thead>
         <tbody id="names-body"></tbody></table></div>
         <p class="hint" style="margin:12px 0 0">Registration is the latest Register call for the name. Dates of past blocks come from block times; future expiry dates assume a block a minute. Click a key to copy it.</p></section>`;
   };
