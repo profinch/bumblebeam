@@ -98,7 +98,14 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     let before = q.get("before").and_then(|v| v.parse().ok());
     let tip = s.tip_height().map(|h| h as i64);
     let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip).await?;
-    Ok(Json(json!({ "blocks": list })))
+    // The same blocks split the open-ethereum-pool way, which the Beam Explorer's `open-eth`
+    // adapter reads to attribute blocks to pools. Orphans are in neither.
+    let by_status = |want: &[&str]| -> Vec<Value> {
+        list.iter().filter(|b| want.contains(&b["status"].as_str().unwrap_or(""))).cloned().collect()
+    };
+    let matured = by_status(&["confirmed"]);
+    let immature = by_status(&["pending", "unverified"]);
+    Ok(Json(json!({ "blocks": list, "matured": matured, "immature": immature, "candidates": [] })))
 }
 
 async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {

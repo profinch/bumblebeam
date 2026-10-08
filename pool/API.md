@@ -62,8 +62,13 @@ the wallet's coinbase can confirm a block; the explorer alone never does.
 ```json
 { "blocks": [{ "height": 4068700, "hash": "…", "ts": 1791320000, "reward": 2500000000,
                "fees": 1100000, "effort": 0.82, "status": "pending", "confirmations": 10,
-               "finder": "rig1", "mode": "pplns" }] }
+               "finder": "rig1", "mode": "pplns" }],
+  "matured": [], "immature": [{ "height": 4068700, "…": "…" }], "candidates": [] }
 ```
+
+`matured` (confirmed), `immature` (pending and unverified) and an always-empty `candidates`
+repeat the same page of blocks in the open-ethereum-pool shape, so the Beam Explorer's `open-eth`
+adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
 
 ## `GET /api/miners?limit=50`
 
