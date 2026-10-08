@@ -326,7 +326,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
             }
             _ = flush.tick() => {
                 if !address.is_empty() && (stats.stale > 0 || stats.rejected > 0) {
-                    let _ = shared.db.record_share_events(crate::state::now(), miner_id, &worker, stats.stale, stats.rejected).await;
+                    let _ = shared.db.record_share_events(crate::state::now(), miner_id, &worker, mode.as_str(), stats.stale, stats.rejected).await;
                 }
                 if !address.is_empty() && stats.last_share > 0 {
                     let _ = shared.db.touch_miner(miner_id, stats.last_share).await;

@@ -98,6 +98,7 @@ CREATE INDEX IF NOT EXISTS payments_status ON payments(status);
 CREATE INDEX IF NOT EXISTS payments_ts ON payments(ts);
 CREATE TABLE IF NOT EXISTS share_events (ts BIGINT NOT NULL, miner_id BIGINT NOT NULL, worker TEXT NOT NULL, stale BIGINT NOT NULL, rejected BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS se_miner_ts ON share_events(miner_id, ts);
+ALTER TABLE share_events ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'pplns';
 CREATE TABLE IF NOT EXISTS hashrate_samples (ts BIGINT NOT NULL, scope TEXT NOT NULL, hashrate DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS hs_scope_ts ON hashrate_samples(scope, ts);
 "#;
@@ -266,9 +267,9 @@ impl Db {
         Ok(())
     }
 
-    pub async fn record_share_events(&self, ts: i64, miner_id: i64, worker: &str, stale: i64, rejected: i64) -> Result<()> {
+    pub async fn record_share_events(&self, ts: i64, miner_id: i64, worker: &str, mode: &str, stale: i64, rejected: i64) -> Result<()> {
         let c = self.client().await?;
-        c.execute("INSERT INTO share_events (ts, miner_id, worker, stale, rejected) VALUES ($1,$2,$3,$4,$5)", &[&ts, &miner_id, &worker, &stale, &rejected]).await?;
+        c.execute("INSERT INTO share_events (ts, miner_id, worker, mode, stale, rejected) VALUES ($1,$2,$3,$4,$5,$6)", &[&ts, &miner_id, &worker, &mode, &stale, &rejected]).await?;
         Ok(())
     }
 
@@ -404,7 +405,8 @@ impl Db {
                 "WITH s AS (SELECT worker, COALESCE(SUM(difficulty) FILTER (WHERE ts > $2),0)::FLOAT8/600.0 AS hr, SUM(difficulty)::FLOAT8/86400.0 AS hr24,
                                    MAX(ts) AS last, COUNT(*) AS n, ARRAY_AGG(DISTINCT mode ORDER BY mode) AS modes FROM shares
                             WHERE miner_id=$1 AND ts > $3 AND ($4::TEXT IS NULL OR mode = $4) GROUP BY worker),
-                      e AS (SELECT worker, SUM(stale) AS stale, SUM(rejected) AS rejected FROM share_events WHERE miner_id=$1 AND ts > $3 GROUP BY worker)
+                      e AS (SELECT worker, SUM(stale) AS stale, SUM(rejected) AS rejected FROM share_events
+                            WHERE miner_id=$1 AND ts > $3 AND ($4::TEXT IS NULL OR mode = $4) GROUP BY worker)
                  SELECT s.worker, s.hr, s.hr24, s.last, s.n, COALESCE(e.stale,0)::BIGINT, COALESCE(e.rejected,0)::BIGINT, s.modes FROM s LEFT JOIN e USING (worker) ORDER BY s.hr DESC",
                 &[&id, &(now - 600), &(now - 86400), &mode],
             )
