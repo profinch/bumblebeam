@@ -41,7 +41,7 @@
   const explorerBlock = (h) => `https://explorer.beam.mw/#/explorer/block/${Math.round(Number(h) || 0)}`;
   const explorerKernel = (k) => `https://explorer.beam.mw/#/explorer/kernel/${encodeURIComponent(k)}`;
   const cleanAddress = (a) => String(a ?? '').replace(/\s+/g, '');
-  const minerHref = (a) => `#/miners/${encodeURIComponent(cleanAddress(a))}`;
+  const minerHref = (a) => `/miners/${encodeURIComponent(cleanAddress(a))}`;
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const RANGES = { '24h': { label: '24h', text: 'last 24 hours' }, '7d': { label: '7d', text: 'last 7 days' }, '30d': { label: '30d', text: 'last 30 days' } };
 
@@ -233,7 +233,7 @@
         ${areaChart(stats.chart, { title: 'Pool hashrate', range })}
       </section>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="#/blocks">all blocks →</a></div></div>
+        <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="/blocks">all blocks →</a></div></div>
         ${blocksTable(blocks, stats.maturity)}
       </section>
       ${poolsTable(stats, net, { meta: false })}`;
@@ -327,7 +327,7 @@
     const [m, stats] = await Promise.all([BB.pool(`miners/${encodeURIComponent(address)}?range=${range}`), BB.pool('stats')]);
     rememberAddress(m.address || address);
     const toPayout = stats.minPayout ? Math.min(1, m.balance / stats.minPayout) : null;
-    return `<div class="page-head"><h1 class="page-title">Miner</h1><div class="actions"><a class="btn ghost" href="#/miners">← all miners</a></div></div>
+    return `<div class="page-head"><h1 class="page-title">Miner</h1><div class="actions"><a class="btn ghost" href="/miners">← all miners</a></div></div>
       <div class="panel addr"><span>${esc(m.address || address)}</span><button class="btn small" data-copy="${esc(m.address || address)}">copy</button></div>
       <div class="tiles">
         ${tile('Hashrate', hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
@@ -599,12 +599,26 @@
     else done(copyFallback(text));
   });
 
-  // ---------- routing ----------
+  views.notfound = async () => `<div class="page-head"><h1 class="page-title">Not found</h1></div>
+    <div class="panel empty">There is no such page. <a href="/">Back to the pool</a></div>`;
+
+  // ---------- routing: clean paths (/network, /miners/<address>) over the History API ----------
+  // The pool server answers every path that is not a file or /api/* with index.html.
   function parse() {
-    const h = location.hash.replace(/^#\/?/, '');
-    const [route, ...rest] = h.split('/');
-    return { route: views[route] ? route : 'dashboard', arg: rest.length ? decodeURIComponent(rest.join('/')) : null };
+    let p = location.pathname.replace(/^\/+|\/+$/g, '');
+    const [route, ...rest] = p ? p.split('/') : ['dashboard'];
+    let arg = null;
+    try { arg = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch (e) { return { route: 'notfound', arg: null }; }
+    if (route === 'dashboard' && p) return { route: 'notfound', arg: null };
+    return { route: views[route] && route !== 'notfound' ? route : 'notfound', arg };
   }
+  // Same-tab navigation; the query string (?api= on localhost) is kept.
+  function go(path) {
+    if (path + location.search !== location.pathname + location.search) history.pushState(null, '', path + location.search);
+    render(true);
+  }
+  // Old links had the route after a hash (/#/miners/<address>): move it into the path.
+  if (/^#\//.test(location.hash)) history.replaceState(null, '', `/${location.hash.slice(2)}${location.search}`);
 
   let seq = 0;
   async function render(scrollTop = true) {
@@ -627,11 +641,24 @@
     }
   }
 
-  window.addEventListener('hashchange', () => render(true));
+  window.addEventListener('popstate', () => render(true));
+  // Links inside the app change the path without a reload; new tabs, modified clicks and
+  // external links behave as usual.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+    e.preventDefault();
+    go(url.pathname);
+  });
   $('#search').addEventListener('submit', (e) => {
     e.preventDefault();
-    const v = cleanAddress($('#search-input').value);
-    if (v) location.hash = minerHref(v);
+    const input = $('#search-input'), v = cleanAddress(input.value);
+    if (!v) return;
+    input.value = '';
+    input.blur();
+    go(minerHref(v));
   });
   setMyLink();
   // "/" focuses the search, as on GitHub, unless the user is typing somewhere; Esc leaves it.

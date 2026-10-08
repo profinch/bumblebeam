@@ -84,7 +84,8 @@ the oracle before it is sent. Details and tuning in [`miner/README.md`](miner/RE
 ## Pool web UI
 
 Open `pool/web/index.html` through any static server (`python3 -m http.server -d pool/web`). It needs
-no build step and no framework. It follows the Beam Explorer's design (palette, type, header and
+no build step and no framework. Pages have clean paths (`/network`, `/miners/<address>`); the pool
+server answers them with `index.html`, a plain static server only serves `/`. It follows the Beam Explorer's design (palette, type, header and
 footer, chart style), and its network numbers come live from the Explorer's public API, including
 every other Beam pool. It reads the pool's own data from `/api/*` as described in
 [`pool/API.md`](pool/API.md), served by [`pool/server`](pool/server); opened as plain files it
