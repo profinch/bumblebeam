@@ -251,11 +251,21 @@ same nonces. The server is `pool/server` (Rust).
 
 ## MCP for agents
 
-`https://pool.bumblebeam.org/mcp` is an MCP server (Streamable HTTP) with read-only tools for the
-pool (`pool_stats`, `pool_blocks`, `pool_miner`, `pool_miners`, `pool_payments`, `pool_network`,
-`pool_health`) and for the Beam chain through our explorer node. It is the same server as
-`https://explorer.bumblebeam.org/mcp`, described in [`explorer/API.md`](../explorer/API.md).
+`https://pool.bumblebeam.org/mcp` is the pool's MCP server (Streamable HTTP, stateless, read-only):
+
+| tool | what it answers |
+|---|---|
+| `pool_stats` | pool hashrate, miners, workers, blocks in 24h, effort, fee, chart |
+| `pool_blocks` | blocks the pool found, with status and finder |
+| `pool_miner` | one miner by payout address: hashrate, balances, workers, payments, blocks |
+| `pool_miners` | top miners by hashrate |
+| `pool_payments` | payout runs |
+| `pool_network` | Beam network and every Beam pool |
+| `pool_health` | whether the pool is up and has work |
 
 ```sh
-claude mcp add --transport http bumblebeam https://pool.bumblebeam.org/mcp
+claude mcp add --transport http bumblebeam-pool https://pool.bumblebeam.org/mcp
 ```
+
+The blockchain itself (blocks, kernels, assets, contracts) is in the explorer's MCP server,
+`https://explorer.bumblebeam.org/mcp`, described in [`explorer/API.md`](../explorer/API.md).

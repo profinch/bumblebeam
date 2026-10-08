@@ -6,7 +6,7 @@ description: Look up the Beam (BEAM) blockchain through BumbleBeam's explorer AP
 # BumbleBeam Explorer
 
 Plain JSON over HTTPS from BumbleBeam's own Beam nodes. Base URL `https://explorer.bumblebeam.org`,
-no key. If the `bumblebeam` MCP server is connected, its `explorer_*` tools do the same.
+no key. The MCP server at `https://explorer.bumblebeam.org/mcp` has `explorer_*` tools that do the same.
 
 ## What Beam does and does not show
 
