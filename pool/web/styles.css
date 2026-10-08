@@ -40,8 +40,10 @@ body::before {
   background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%);
 }
 html, body { margin: 0; padding: 0; }
-/* the colour past the page's ends (overscroll) is the gradient's last one */
-html { background: #0a5a80; }
+/* the colour past the page's ends (overscroll) is the gradient's last one. The scrollbar is
+   always there, so a short page (a loading view, the explorer while it syncs) is as wide as a
+   long one and the centred header does not shift between pages or between the two sites. */
+html { background: #0a5a80; overflow-y: scroll; }
 body {
   min-height: 100vh;
   display: flex; flex-direction: column;
