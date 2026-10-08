@@ -332,7 +332,9 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .bars-key { display: flex; gap: 14px; margin-left: auto; font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
 .bars-key span { display: inline-flex; align-items: center; gap: 5px; }
 .bars-key i { width: 9px; height: 9px; border-radius: 2px; opacity: 0.75; }
-.bars { width: 100%; height: 120px; display: block; }
+.bars-key i.line { width: 12px; height: 0; border-radius: 0; border-top: 1px solid var(--accent); opacity: 0.6; }
+.bars-foot { display: flex; justify-content: space-between; margin-top: 4px; font: 10px var(--font-mono); color: var(--muted); }
+.bars { width: 100%; height: 104px; display: block; }
 .bars text { font: 10px var(--font-mono); fill: var(--muted); }
 .bars .target { stroke: var(--accent); stroke-opacity: .6; }
 
