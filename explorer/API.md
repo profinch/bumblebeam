@@ -63,7 +63,7 @@ blocks = requests.get("https://explorer.bumblebeam.org/v1/blocks", params={"limi
 
 ## MCP for agents
 
-`https://explorer.bumblebeam.org/mcp` speaks MCP over Streamable HTTP (stateless, JSON
+`https://explorer.bumblebeam.org/mcp` (also at `https://pool.bumblebeam.org/mcp`, the same server) speaks MCP over Streamable HTTP (stateless, JSON
 responses, protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
 
 | tool | what it answers |
