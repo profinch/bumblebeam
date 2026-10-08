@@ -435,7 +435,7 @@
   };
 
   // Contracts: the list is one API table, so search, filters and sorting run in the page. A cell
-  // with more than one asset shows the first and a +N toggle that opens the whole row.
+  // with more than one asset shows the first and a more / less toggle that opens the whole row.
   const cs = { q: '', known: false, funds: false, sort: 'deployed', dir: -1, open: new Set(), list: [], tip: null };
   function contractRows(t) {
     return rowsOf(t).map((r) => {
@@ -480,7 +480,7 @@
         <td class="num">${pastHeight(c.deployed)}</td>
         <td class="num">${stack(c.locked, open, fund)}</td>
         <td>${stack(c.owned, open, own)}</td>
-        <td class="num">${more > 0 ? `<button type="button" class="btn ghost small" data-open="${c.cid}">${open ? 'less' : `+${more}`}</button>` : ''}</td></tr>`;
+        <td class="num">${more > 0 ? `<button type="button" class="btn ghost small" data-open="${c.cid}">${open ? 'less' : 'more'}</button>` : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="6" class="empty">No contracts match</td></tr>';
     $('#contracts-count').innerHTML = `<b>${int(rows.length)}</b> of ${int(cs.list.length)}`;
     $('#contracts-known').classList.toggle('on', cs.known);
