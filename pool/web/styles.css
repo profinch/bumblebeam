@@ -200,6 +200,8 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 
 .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
 .grid2 > .panel { margin-bottom: 0; }
+/* the connect guide ends with its content instead of stretching to the taller right column */
+#guide { align-self: start; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* small pieces */
@@ -243,9 +245,17 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .field { display: flex; flex-direction: column; gap: 6px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .field input, .field select {
   height: 36px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
 }
-.field input:focus { border-color: rgba(0, 246, 210, 0.5); }
+.field input:focus, .field select:focus { border-color: rgba(0, 246, 210, 0.5); outline: none; }
+/* the select in the page's style: own arrow, and a dark list (browsers draw options with
+   system colours, which made the white text vanish on a white list) */
+.field select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px; color-scheme: dark;
+  background: var(--surface2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+}
+.field select option, .field select optgroup { background: #0a2f52; color: var(--text); font: 13px var(--font-mono); }
+.field select optgroup { color: var(--muted); font-weight: 700; }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
 
