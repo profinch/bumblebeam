@@ -1,0 +1,7 @@
+# Beam explorer node -> /data/bumblebeam/explorer/explorer-node.cfg (paths inside the container).
+# A full node of its own with the HTTP explorer API; it syncs from our archival node first.
+port=10000
+api_port=8888
+# one peer option, comma-separated (explorer-node refuses repeated peer lines)
+peer=beam-node:10000,eu-nodes.mainnet.beam.mw:8100,us-nodes.mainnet.beam.mw:8100
+log_level=info
