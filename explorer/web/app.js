@@ -38,12 +38,22 @@
     return `${Math.floor(s / 86400)}d ago`;
   }
   const utc = (ts) => (ts ? new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—');
-  // date and time in the viewer's time zone, e.g. "2026-10-08 04:12:33 BST"; UTC goes in a title
-  const TZ = (() => { try { return (new Intl.DateTimeFormat('en-GB', { timeZoneName: 'short' }).formatToParts(new Date()).find((x) => x.type === 'timeZoneName') || {}).value || ''; } catch (e) { return ''; } })();
+  // Times are UTC by default and shown in the viewer's time zone when the browser tells us which
+  // one it is (Intl); the zone is always labelled, and the UTC time is in the title.
+  const TZ = (() => {
+    try {
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!zone || /^(UTC|Etc\/(UTC|GMT|Universal|Zulu))$/i.test(zone)) return null;
+      const label = (new Intl.DateTimeFormat('en-GB', { timeZone: zone, timeZoneName: 'short' }).formatToParts(new Date()).find((x) => x.type === 'timeZoneName') || {}).value;
+      return { zone, label: label || zone };
+    } catch (e) { return null; }
+  })();
   function local(ts) {
     if (!ts) return '—';
     const d = new Date(ts * 1000), z = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}${TZ ? ` ${TZ}` : ''}`;
+    if (!TZ) return `${d.getUTCFullYear()}-${z(d.getUTCMonth() + 1)}-${z(d.getUTCDate())} ${z(d.getUTCHours())}:${z(d.getUTCMinutes())}:${z(d.getUTCSeconds())} UTC`;
+    const label = (() => { try { return (new Intl.DateTimeFormat('en-GB', { timeZone: TZ.zone, timeZoneName: 'short' }).formatToParts(d).find((x) => x.type === 'timeZoneName') || {}).value; } catch (e) { return ''; } })() || TZ.label;
+    return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())} ${label}`;
   }
   const when = (ts) => `<span title="${esc(utc(ts))}">${esc(local(ts))}</span>`;
   const tile = (k, v, s = '', cls = '') => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
