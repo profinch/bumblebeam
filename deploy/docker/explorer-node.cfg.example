@@ -5,3 +5,5 @@ api_port=8888
 # one peer option, comma-separated (explorer-node refuses repeated peer lines)
 peer=beam-node:10000,eu-nodes.mainnet.beam.mw:8100,us-nodes.mainnet.beam.mw:8100
 log_level=info
+# decode contract calls and state (Beam's parser shader, in the image)
+contract_rich_parser=/usr/local/share/beam/Parser.wasm
