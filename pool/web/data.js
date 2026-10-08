@@ -187,6 +187,8 @@ const BB = (() => {
     immature: num(m.immature) || 0, paid: num(m.paid) || 0, lastShare: num(m.lastShare),
     workers: (Array.isArray(m.workers) ? m.workers : []).map(normWorker), chart: series(m.charts && m.charts.hashrate),
     payments: (Array.isArray(m.payments) ? m.payments : []).map(normPayment),
+    blocksFound: num(m.blocksFound) || 0, blocks24h: num(m.blocks24h) || 0, lastBlockAt: num(m.lastBlockAt),
+    blocks: (Array.isArray(m.blocks) ? m.blocks : []).map(normBlock),
   });
   function normalize(path, r) {
     const p = path.split('?')[0];

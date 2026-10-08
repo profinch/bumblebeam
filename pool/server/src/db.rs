@@ -272,13 +272,16 @@ impl Db {
         Ok(row.get(0))
     }
 
-    pub async fn blocks(&self, limit: i64, before: Option<i64>, maturity: i64, tip: Option<i64>) -> Result<Vec<Value>> {
+    /// The pool's blocks, newest first; with `miner` only the blocks that miner found.
+    pub async fn blocks(&self, limit: i64, before: Option<i64>, maturity: i64, tip: Option<i64>, miner: Option<i64>) -> Result<Vec<Value>> {
         let c = self.client().await?;
-        let sql = "SELECT height, hash, ts, worker, mode, reward, fees, effort, status, verified_by FROM blocks";
-        let rows = match before {
-            Some(b) => c.query(&format!("{sql} WHERE height < $1 ORDER BY height DESC LIMIT $2"), &[&b, &limit]).await?,
-            None => c.query(&format!("{sql} ORDER BY height DESC LIMIT $1"), &[&limit]).await?,
-        };
+        let rows = c
+            .query(
+                "SELECT height, hash, ts, worker, mode, reward, fees, effort, status, verified_by FROM blocks
+                 WHERE ($1::BIGINT IS NULL OR height < $1) AND ($2::BIGINT IS NULL OR miner_id = $2) ORDER BY height DESC LIMIT $3",
+                &[&before, &miner, &limit],
+            )
+            .await?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -292,6 +295,26 @@ impl Db {
                 })
             })
             .collect())
+    }
+
+    /// Blocks found by one miner: total and in 24 h (orphans not counted), the last one's time, and
+    /// the most recent `limit` (orphans included, with their status).
+    pub async fn miner_blocks(&self, address: &str, now: i64, limit: i64, maturity: i64, tip: Option<i64>) -> Result<Value> {
+        let c = self.client().await?;
+        let Some(m) = c.query_opt("SELECT id FROM miners WHERE address=$1", &[&address]).await? else {
+            return Ok(json!({ "blocksFound": 0, "blocks24h": 0, "lastBlockAt": null, "blocks": [] }));
+        };
+        let id: i64 = m.get(0);
+        let row = c
+            .query_one(
+                "SELECT COUNT(*) FILTER (WHERE status <> 'orphaned'), COUNT(*) FILTER (WHERE status <> 'orphaned' AND ts > $2), MAX(ts)
+                 FROM blocks WHERE miner_id = $1",
+                &[&id, &(now - 86400)],
+            )
+            .await?;
+        drop(c);
+        let list = self.blocks(limit, None, maturity, tip, Some(id)).await?;
+        Ok(json!({ "blocksFound": row.get::<_, i64>(0), "blocks24h": row.get::<_, i64>(1), "lastBlockAt": row.get::<_, Option<i64>>(2), "blocks": list }))
     }
 
     pub async fn blocks_24h(&self, now: i64) -> Result<(i64, Option<f64>)> {

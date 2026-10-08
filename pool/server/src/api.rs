@@ -98,7 +98,7 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     let s = &api.shared;
     let before = q.get("before").and_then(|v| v.parse().ok());
     let tip = s.tip_height().map(|h| h as i64);
-    let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip).await?;
+    let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip, None).await?;
     // The same blocks split the open-ethereum-pool way, which the Beam Explorer's `open-eth`
     // adapter reads to attribute blocks to pools. Orphans are in neither.
     let by_status = |want: &[&str]| -> Vec<Value> {
@@ -118,11 +118,17 @@ async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Qu
     if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Ok(Json(json!({ "error": "not a Beam address" })));
     }
-    match api.shared.db.miner(&address, now(), range(&q)).await? {
-        Some(v) => Ok(Json(v)),
-        None => Ok(Json(json!({ "address": address, "hashrate": 0, "hashrate24h": 0, "balance": 0, "immature": 0, "paid": 0,
-                                "lastShare": null, "workers": [], "charts": { "hashrate": [] }, "payments": [] }))),
+    let s = &api.shared;
+    let found = s.db.miner_blocks(&address, now(), 10, s.cfg.pool.maturity as i64, s.tip_height().map(|h| h as i64)).await?;
+    let mut v = match s.db.miner(&address, now(), range(&q)).await? {
+        Some(v) => v,
+        None => json!({ "address": address, "hashrate": 0, "hashrate24h": 0, "balance": 0, "immature": 0, "paid": 0,
+                        "lastShare": null, "workers": [], "charts": { "hashrate": [] }, "payments": [] }),
+    };
+    for k in ["blocksFound", "blocks24h", "lastBlockAt", "blocks"] {
+        v[k] = found[k].clone();
     }
+    Ok(Json(v))
 }
 
 async fn payments(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
