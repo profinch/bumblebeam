@@ -198,7 +198,8 @@ the finalizer reports the chain (`verifiedBy: "node"`).
   "ladder": { "shift": 20, "steps": 12, "unit": 1048576 },
   "maxPairsPerUpload": 256, "stockMaxPerAccount": 512, "kernelValidityBlocks": 43200, "expiryMarginBlocks": 100,
   "maxCoinbaseBytes": 65536, "accounts": 3, "stockPairs": 96, "minedPairs": 240,
-  "finalizer": { "connected": true, "tip": 4070449, "scanned": 4070449, "lastFinalization": 1791428210, "lastMined": 1791428210, "finalizations": 1312 } }
+  "finalizer": { "connected": true, "tip": 4070449, "scanned": 4070449, "lastFinalization": 1791428210, "lastMined": 1791428210, "finalizations": 1312,
+                 "failStreak": 0, "poolOnlyUntil": null } }
 ```
 
 Pair values are `unit × 2^k` groth for `k < steps` (0.0105 … 21.47 BEAM); the stock is topped up with
@@ -216,7 +217,8 @@ Answer:
 ```
 
 Errors come as `{ "error": "…" }` with 400 (shape, signature, ladder, expiry), 409 (stock full),
-503 (finalizer offline). The miner page of a `cb:` account carries a `coinbase` object:
+429 (uploads are verified one at a time, a second apart: try again), 503 (finalizer offline, or no
+block template yet). The miner page of a `cb:` account carries a `coinbase` object:
 
 ```json
 "coinbase": { "stock": [{ "value": 1048576, "count": 3 }], "stockPairs": 36, "stockValue": 12881756160,
@@ -230,7 +232,12 @@ blocks do not pay the same amount again; the payment is `pending` until the bloc
 `completed`; if the block is orphaned it is `failed`, the debit is refunded and the pairs are back in
 stock. A balance can therefore be negative for a while (a block that had paid was orphaned): the next
 blocks work the advance off first, and a miner who leaves right after an orphan keeps at most that
-one block's share. `spentElsewhere` counts pairs whose kernel turned
+one block's share. A block the pool's node has already replaced (its header differs) no longer
+counts among the credits owed, so a reorg is felt at once, not 240 blocks later.
+
+`finalizer.failStreak` counts coinbases with pairs the node refused in a row (it drops the finalizer
+on each); from two, the finalizer answers pool-only coinbases until `poolOnlyUntil` and logs an
+error: check `--mine_online_reserve` against `max_coinbase_bytes`. `spentElsewhere` counts pairs whose kernel turned
 up in a block that is not the pool's (another pool on the same chain, or the miner spending its own
 pair): they are simply gone from the stock, no payment is made. Such an account has no address, so
 the regular payout run skips it, and `GET /api/payments` lists transactions only, not these block

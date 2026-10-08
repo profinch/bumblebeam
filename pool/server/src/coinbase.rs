@@ -44,6 +44,13 @@ pub struct Link {
     pub last_finalization: AtomicI64,
     pub last_mined: AtomicI64,
     pub finalizations: AtomicU64,
+    /// What the finalizer last reported about itself (`built`): failures in a row and pool-only mode.
+    pub fail_streak: AtomicU64,
+    pub pool_only_until: AtomicU64,
+    /// The allocation for a height, kept a few seconds: templates come with every mempool change.
+    alloc_cache: Mutex<Option<(u64, std::time::Instant, Value)>>,
+    /// Uploads: one verification at a time on the finalizer, and not more than one a second.
+    upload_gate: tokio::sync::Mutex<std::time::Instant>,
 }
 
 impl Link {
@@ -58,6 +65,10 @@ impl Link {
             last_finalization: AtomicI64::new(0),
             last_mined: AtomicI64::new(0),
             finalizations: AtomicU64::new(0),
+            fail_streak: AtomicU64::new(0),
+            pool_only_until: AtomicU64::new(0),
+            alloc_cache: Mutex::new(None),
+            upload_gate: tokio::sync::Mutex::new(std::time::Instant::now() - Duration::from_secs(10)),
         })
     }
 
@@ -95,7 +106,12 @@ impl Link {
             "connected": self.is_connected(), "tip": self.tip.load(Ordering::Relaxed), "scanned": self.scanned.load(Ordering::Relaxed),
             "lastFinalization": nz(self.last_finalization.load(Ordering::Relaxed)), "lastMined": nz(self.last_mined.load(Ordering::Relaxed)),
             "finalizations": self.finalizations.load(Ordering::Relaxed),
+            "failStreak": self.fail_streak.load(Ordering::Relaxed), "poolOnlyUntil": nz(self.pool_only_until.load(Ordering::Relaxed) as i64),
         })
+    }
+
+    fn forget_allocation(&self) {
+        *self.alloc_cache.lock().unwrap() = None;
     }
 }
 
@@ -105,7 +121,9 @@ fn nz(v: i64) -> Option<i64> {
 
 /// The public key of an account as the miner's tool prints it: 32 bytes of X and a Y flag byte, hex.
 pub fn is_account_key(pk: &str) -> bool {
-    pk.len() == 66 && pk.chars().all(|c| c.is_ascii_hexdigit()) && (pk.ends_with("00") || pk.ends_with("01"))
+    // X below secp256k1's field order; the Y flag 00 or 01; the curve check is the finalizer's at upload
+    const FIELD: &str = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f";
+    pk.len() == 66 && pk.chars().all(|c| c.is_ascii_hexdigit()) && (pk.ends_with("00") || pk.ends_with("01")) && pk[..64].to_ascii_lowercase().as_str() < FIELD
 }
 
 pub async fn serve(shared: Arc<Shared>, link: Arc<Link>) -> Result<()> {
@@ -211,15 +229,23 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
             let total = msg["total"].as_u64().ok_or_else(|| anyhow!("no total"))?;
             link.last_finalization.store(now(), Ordering::Relaxed);
             link.finalizations.fetch_add(1, Ordering::Relaxed);
+            if let Some((h, at, v)) = link.alloc_cache.lock().unwrap().as_ref() {
+                if *h == height && at.elapsed() < Duration::from_secs(5) {
+                    return Ok(v.clone());
+                }
+            }
             let a = allocate(shared, height, total).await?;
             info!(height, total, pairs = a.pairs.len(), paid = a.paid, pool = total - a.paid, accounts = a.offers.len(), "coinbase allocated");
-            Ok(json!({ "ok": true, "pairs": a.pairs, "paid": a.paid, "poolValue": total - a.paid,
-                       "offers": a.offers.iter().map(|(m, v)| json!({ "miner": m, "amount": v })).collect::<Vec<_>>() }))
+            let v = json!({ "ok": true, "pairs": a.pairs, "paid": a.paid, "poolValue": total - a.paid,
+                            "offers": a.offers.iter().map(|(m, v)| json!({ "miner": m, "amount": v })).collect::<Vec<_>>() });
+            *link.alloc_cache.lock().unwrap() = Some((height, std::time::Instant::now(), v.clone()));
+            Ok(v)
         }
         "mined" => {
             let height = msg["height"].as_i64().ok_or_else(|| anyhow!("no height"))?;
             let hash = msg["hash"].as_str().unwrap_or("").to_lowercase();
             let kernels: Vec<String> = msg["kernels"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(|s| s.to_lowercase())).collect()).unwrap_or_default();
+            link.forget_allocation();
             let (paid, spent) = shared.db.cb_block_mined(height, &hash, &kernels, now()).await?;
             if !paid.is_empty() {
                 let sum: i64 = paid.iter().map(|p| p.1).sum();
@@ -241,6 +267,7 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
                 .map(|a| a.iter().filter_map(|h| Some((h["height"].as_i64()?, h["hash"].as_str()?.to_lowercase()))).collect())
                 .unwrap_or_default();
             if let Some(from) = shared.db.chain_headers_set(&list, now()).await? {
+                link.forget_allocation();
                 let (pairs, pays) = shared.db.cb_rollback(from).await?;
                 warn!(from, pairs, payments = pays, "chain reorganized under us: pairs back in stock, pending coinbase payments failed");
                 // headers were written before the rollback deleted them: write the new ones again
@@ -250,6 +277,7 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
         }
         "rollback" => {
             let height = msg["height"].as_i64().ok_or_else(|| anyhow!("no height"))?;
+            link.forget_allocation();
             let (pairs, pays) = shared.db.cb_rollback(height).await?;
             if pairs > 0 || pays > 0 {
                 warn!(height, pairs, payments = pays, "finalizer reported a rollback: pairs back in stock, pending coinbase payments failed");
@@ -257,19 +285,43 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
             if let Some(scanned) = shared.db.meta_get(META_SCANNED).await?.and_then(|s| s.parse::<i64>().ok()) {
                 if scanned >= height {
                     shared.db.meta_set(META_SCANNED, &(height - 1).max(0).to_string()).await?;
+                    link.scanned.store((height - 1).max(0) as u64, Ordering::Relaxed);
                 }
             }
             Ok(json!({ "ok": true }))
         }
         "spent" => {
-            // the finalizer found these kernels in the chain while building: the pairs are gone
-            let height = msg["height"].as_i64().unwrap_or(0);
-            let kernels: Vec<String> = msg["kernels"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(|s| s.to_lowercase())).collect()).unwrap_or_default();
-            let n = shared.db.cb_spent_elsewhere(&kernels, height).await?;
-            warn!(height, kernels = kernels.len(), removed = n, "pairs already spent in the chain, taken out of the stock");
+            // the finalizer found these kernels in the chain while building, each with the block it is in:
+            // a block of ours whose `mined` report never arrived is paid now, anything else is just gone
+            link.forget_allocation();
+            let mut by_height: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+            for k in msg["kernels"].as_array().map(|a| a.iter()).into_iter().flatten() {
+                let (kernel, height) = match k {
+                    Value::String(s) => (s.to_lowercase(), msg["height"].as_i64().unwrap_or(0)),
+                    v => (v["kernel"].as_str().unwrap_or("").to_lowercase(), v["height"].as_i64().unwrap_or(0)),
+                };
+                if !kernel.is_empty() {
+                    by_height.entry(height).or_default().push(kernel);
+                }
+            }
+            for (height, kernels) in by_height {
+                let (paid, spent) = shared.db.cb_spent_at(&kernels, height, now()).await?;
+                if !paid.is_empty() {
+                    warn!(height, accounts = paid.len(), groth = paid.iter().map(|p| p.1).sum::<i64>(), "pairs found in a block of ours that was never reported mined: paid now");
+                }
+                if spent > 0 {
+                    warn!(height, pairs = spent, "pairs already spent in the chain, taken out of the stock");
+                }
+            }
             Ok(json!({ "ok": true }))
         }
         "built" => {
+            if let Some(n) = msg["failStreak"].as_u64() {
+                link.fail_streak.store(n, Ordering::Relaxed);
+            }
+            if let Some(h) = msg["poolOnlyUntil"].as_u64() {
+                link.pool_only_until.store(h, Ordering::Relaxed);
+            }
             info!(height = %msg["height"], pairs = %msg["pairs"], paid = %msg["paid"], pool = %msg["poolValue"], dropped = msg["dropped"].as_array().map(|a| a.len()).unwrap_or(0),
                   note = %msg["note"], "finalizer built a coinbase");
             Ok(json!({ "ok": true }))
@@ -386,8 +438,18 @@ pub async fn upload(shared: &Arc<Shared>, body: &Value) -> Result<Value, (u16, S
     if !link.is_connected() {
         return Err((503, "the pool's finalizer is offline, try again later".into()));
     }
+    let Some(tip) = shared.tip_height() else {
+        return Err((503, "the pool has no block template yet (node syncing?), try again later".into()));
+    };
 
-    let tip = shared.tip_height().unwrap_or(0);
+    // verification runs on the finalizer next to block building: one upload at a time, a second apart
+    let Ok(mut last) = link.upload_gate.try_lock() else {
+        return Err((429, "another upload is being verified, try again in a few seconds".into()));
+    };
+    if last.elapsed() < Duration::from_secs(1) {
+        return Err((429, "uploads are accepted one a second, try again".into()));
+    }
+    *last = std::time::Instant::now();
     let res = link
         .request(json!({ "method": "verify", "account": account, "ts": ts, "pairs": pairs, "signature": sig, "height": tip, "domain": domain(shared) }), Duration::from_secs(20))
         .await
@@ -440,6 +502,8 @@ pub async fn upload(shared: &Arc<Shared>, body: &Value) -> Result<Value, (u16, S
     // only a signed upload creates the account
     let miner_id = shared.db.miner_id(&account, "coinbase", now()).await.map_err(|e| (500, format!("{e}")))?;
     let (accepted, dup) = shared.db.cb_add_pairs(miner_id, &good, now(), cfg.stock_max_per_account as i64).await.map_err(|e| (500, format!("{e}")))?;
+    link.forget_allocation();
+    drop(last);
     for (i, e) in dup {
         rejected.push(json!({ "index": i, "error": e }));
     }

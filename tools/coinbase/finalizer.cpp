@@ -82,6 +82,12 @@ struct PoolLink
 	std::function<void()> m_OnConnected;             // to send hello
 	io::Timer::Ptr m_pTimer;
 
+	// messages the pool server must not lose (a block that paid pairs): sent as requests and retried
+	// until it answers ok
+	std::deque<json> m_Reliable;
+	std::chrono::steady_clock::time_point m_NextReliable = std::chrono::steady_clock::now();
+	bool m_ReliableInFlight = false;
+
 	PoolLink(io::Reactor& r, const io::Address& a) :m_Reactor(r), m_Addr(a)
 	{
 		m_pTimer = io::Timer::create(r);
@@ -109,7 +115,46 @@ struct PoolLink
 		}
 		for (auto& cb : vExpired)
 			cb(nullptr);
+
+		if (m_pStream && !m_ReliableInFlight && !m_Reliable.empty() && (now >= m_NextReliable))
+			SendReliable();
 	}
+
+	void SendReliable()
+	{
+		m_ReliableInFlight = true;
+		json j = m_Reliable.front();
+		Request(j, [this](const json* pRes) {
+			m_ReliableInFlight = false;
+			if (pRes && (*pRes).count("ok") && (*pRes)["ok"].is_boolean() && (*pRes)["ok"].get<bool>())
+			{
+				m_Reliable.pop_front();
+				m_NextReliable = std::chrono::steady_clock::now();
+			}
+			else
+			{
+				BEAM_LOG_WARNING() << "pool link: " << m_Reliable.front().value("method", "?") << " not acknowledged ("
+					<< (pRes ? (*pRes).value("error", "no ok") : std::string("no answer")) << "), retrying in 2 s";
+				m_NextReliable = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+			}
+		}, 10000);
+	}
+
+	// Queued until the pool server answers ok; order is kept, and the first one goes out at once so that
+	// a block's report reaches the server before the next template's request.
+	void NotifyReliable(const json& j)
+	{
+		if (m_Reliable.size() >= s_MaxQueue)
+		{
+			BEAM_LOG_ERROR() << "pool link: reliable queue full, dropping the oldest " << m_Reliable.front().value("method", "?");
+			m_Reliable.pop_front();
+		}
+		m_Reliable.push_back(j);
+		if (m_pStream && !m_ReliableInFlight && (std::chrono::steady_clock::now() >= m_NextReliable))
+			SendReliable();
+	}
+
+	bool HasReliableBacklog() const { return !m_Reliable.empty(); }
 
 	void Connect()
 	{
@@ -147,6 +192,7 @@ struct PoolLink
 		BEAM_LOG_WARNING() << "pool link: " << szWhy;
 		m_pStream.reset();
 		m_Buf.clear();
+		m_ReliableInFlight = false;
 		auto reqs = std::move(m_Reqs);
 		m_Reqs.clear();
 		for (auto& [id, r] : reqs)
@@ -298,16 +344,38 @@ struct NodeLink
 		Amount m_Total;
 		uint64_t m_Seq;
 		std::vector<Pair> m_vPairs;
-		std::vector<bool> m_vInChain;
+		std::vector<Height> m_vInChain; // 0 = not in the chain, else the block's height
 		size_t m_Next = 0;
 		std::string m_Note;
 	};
 	std::unique_ptr<Check> m_pCheck;
+	std::chrono::steady_clock::time_point m_CheckDeadline;
 	bool m_Busy = false; // an answer is being prepared (pool request, kernel check); the next template waits
+	io::Timer::Ptr m_pWatch;
+
+	// The node drops the finalizer when it refuses a coinbase (a kernel already in the chain, a block too
+	// large for its reserve). Two refusals in a row mean something systematic: pool-only coinbases for a
+	// while, loudly, instead of a drop on every block.
+	std::chrono::steady_clock::time_point m_LastPairsSent;
+	uint32_t m_FailStreak = 0;
+	Height m_PoolOnlyUntil = 0;
 
 	NodeLink(const Settings& s, PoolLink& p) :m_S(s), m_Pool(p)
 	{
 		m_pTimer = io::Timer::create(io::Reactor::get_Current());
+		m_pWatch = io::Timer::create(io::Reactor::get_Current());
+		m_pWatch->start(500, true, [this]() { OnWatch(); });
+	}
+
+	void OnWatch()
+	{
+		FinalizeIfReady(); // a template may have waited for the reports to be acknowledged
+		if (m_pCheck && (std::chrono::steady_clock::now() >= m_CheckDeadline))
+		{
+			auto pCheck = std::move(m_pCheck);
+			BEAM_LOG_WARNING() << "node: no answer to the kernel proofs in 5 s, template for " << pCheck->m_Height << " built without pairs";
+			SendCoinbase(pCheck->m_Height, pCheck->m_Total, std::vector<Pair>(), pCheck->m_Seq, "kernel check timed out");
+		}
 	}
 
 	void Start()
@@ -374,6 +442,16 @@ struct NodeLink
 		std::ostringstream os;
 		os << dr;
 		BEAM_LOG_WARNING() << "node: disconnected (" << os.str() << "), reconnecting";
+		if (std::chrono::steady_clock::now() - m_LastPairsSent < std::chrono::seconds(5))
+		{
+			// dropped right after a coinbase with pairs: the node refused it
+			if (++m_FailStreak >= 2)
+			{
+				m_PoolOnlyUntil = (m_HaveTip ? m_Tip.get_Height() : 0) + 10;
+				BEAM_LOG_ERROR() << "node: refused a coinbase with pairs " << m_FailStreak << " times in a row: pool-only coinbases until height "
+					<< m_PoolOnlyUntil << " (check --mine_online_reserve against the pool's max_coinbase_bytes, and the node log)";
+			}
+		}
 		Reset();
 		m_HaveTip = false;
 		m_pPending.reset();
@@ -390,6 +468,8 @@ struct NodeLink
 	{
 		m_Tip = msg.m_Description;
 		m_HaveTip = true;
+		if (m_FailStreak && (std::chrono::steady_clock::now() - m_LastPairsSent > std::chrono::seconds(5)))
+			m_FailStreak = 0; // a coinbase with pairs went through
 		if (!m_hScanned)
 		{
 			// first start: from where the pool server left off (its hello), or a little back from the tip
@@ -531,9 +611,17 @@ struct NodeLink
 
 	void OnMsg(proto::DataMissing&&) override
 	{
-		// the node has no body for that range (pruned, or it moved on): try again from the tip
+		// The node has no body for the range (pruned below its horizon, or the tip moved): skip half of the
+		// gap and try again, so an old start never loops. Pairs in skipped blocks are caught at the next
+		// build (the kernel check) and paid or dropped by the pool server then.
 		m_BodiesPending = false;
 		m_HdrsPending = false;
+		if (m_HaveTip && (m_Tip.get_Height() > m_hScanned + 1))
+		{
+			Height hSkipTo = m_hScanned + (m_Tip.get_Height() - m_hScanned) / 2;
+			BEAM_LOG_WARNING() << "node: no block bodies from " << (m_hScanned + 1) << ", skipping to " << hSkipTo;
+			m_hScanned = hSkipTo;
+		}
 		SyncHeaders();
 	}
 
@@ -562,7 +650,7 @@ struct NodeLink
 				jKrn.push_back(HashHex(pKrn->get_ID()));
 
 			auto it = m_Hashes.find(h);
-			m_Pool.Notify({ { "method", "mined" }, { "height", h }, { "hash", (m_Hashes.end() != it) ? HashHex(it->second) : std::string() },
+			m_Pool.NotifyReliable({ { "method", "mined" }, { "height", h }, { "hash", (m_Hashes.end() != it) ? HashHex(it->second) : std::string() },
 				{ "kernels", jKrn } });
 			m_hScanned = h++;
 		}
@@ -593,6 +681,8 @@ struct NodeLink
 			SyncHeaders();
 			return;
 		}
+		if (m_Pool.IsConnected() && m_Pool.HasReliableBacklog())
+			return; // ... and the pool server must have taken the reports of those blocks (the watch retries)
 		auto pMsg = std::move(m_pPending);
 		Answer(*pMsg, m_FinSeq);
 	}
@@ -608,6 +698,11 @@ struct NodeLink
 		{
 			// before HF6 fees are an explicit UTXO: not supported, the pool takes everything
 			SendCoinbase(h, total, std::vector<Pair>(), seq, "before fork 6");
+			return;
+		}
+		if (h < m_PoolOnlyUntil)
+		{
+			SendCoinbase(h, total, std::vector<Pair>(), seq, "pool-only after refused coinbases");
 			return;
 		}
 
@@ -647,8 +742,9 @@ struct NodeLink
 		pCheck->m_Total = total;
 		pCheck->m_Seq = seq;
 		pCheck->m_vPairs = std::move(vPairs);
-		pCheck->m_vInChain.assign(pCheck->m_vPairs.size(), false);
+		pCheck->m_vInChain.assign(pCheck->m_vPairs.size(), 0);
 		pCheck->m_Note = szNote;
+		m_CheckDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 		for (const auto& p : pCheck->m_vPairs)
 		{
 			proto::GetProofKernel msg;
@@ -663,7 +759,7 @@ struct NodeLink
 		if (!m_pCheck || (m_pCheck->m_Next >= m_pCheck->m_vPairs.size()))
 			return;
 		Check& c = *m_pCheck;
-		c.m_vInChain[c.m_Next++] = !msg.m_Proof.empty();
+		c.m_vInChain[c.m_Next++] = msg.m_Proof.empty() ? 0 : msg.m_Proof.m_State.get_Height();
 		if (c.m_Next < c.m_vPairs.size())
 			return;
 
@@ -673,14 +769,14 @@ struct NodeLink
 		for (size_t i = 0; i < pCheck->m_vPairs.size(); i++)
 		{
 			if (pCheck->m_vInChain[i])
-				jSpent.push_back(HashHex(pCheck->m_vPairs[i].get_KernelID()));
+				jSpent.push_back({ { "kernel", HashHex(pCheck->m_vPairs[i].get_KernelID()) }, { "height", pCheck->m_vInChain[i] } });
 			else
 				vGood.push_back(std::move(pCheck->m_vPairs[i]));
 		}
 		if (!jSpent.empty())
 		{
 			BEAM_LOG_WARNING() << "node: " << jSpent.size() << " offered pair(s) already have their kernel in the chain, left out and reported";
-			m_Pool.Notify({ { "method", "spent" }, { "height", pCheck->m_Height }, { "kernels", jSpent } });
+			m_Pool.NotifyReliable({ { "method", "spent" }, { "height", pCheck->m_Height }, { "kernels", jSpent } });
 		}
 		SendCoinbase(pCheck->m_Height, pCheck->m_Total, vGood, pCheck->m_Seq, pCheck->m_Note.c_str());
 	}
@@ -711,6 +807,8 @@ struct NodeLink
 		out.m_Value = pTx;
 		Send(out);
 		m_Finalizations++;
+		if (vPairs.size() > vDropped.size())
+			m_LastPairsSent = std::chrono::steady_clock::now();
 
 		BEAM_LOG_INFO() << "node: coinbase for " << h << ": " << (vPairs.size() - vDropped.size()) << " pairs, "
 			<< paid << " groth to miners, " << (total - paid) << " to the pool"
@@ -718,7 +816,7 @@ struct NodeLink
 			<< (szNote[0] ? " (" : "") << szNote << (szNote[0] ? ")" : "");
 
 		m_Pool.Notify({ { "method", "built" }, { "height", h }, { "pairs", vPairs.size() - vDropped.size() }, { "paid", paid },
-			{ "poolValue", total - paid }, { "dropped", jDropped }, { "note", szNote } });
+			{ "poolValue", total - paid }, { "dropped", jDropped }, { "note", szNote }, { "failStreak", m_FailStreak }, { "poolOnlyUntil", m_PoolOnlyUntil } });
 	}
 
 	// ---- requests from the pool ----

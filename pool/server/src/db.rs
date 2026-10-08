@@ -697,14 +697,28 @@ impl Db {
         cb_pay_block(tx, height, hash, &kernels, ts).await
     }
 
-    /// The finalizer found these kernels already in the chain while building a block: the pairs are
-    /// gone for us (spent elsewhere), whatever the earlier bookkeeping said.
-    pub async fn cb_spent_elsewhere(&self, kernels: &[String], height: i64) -> Result<u64> {
+    /// The finalizer found these kernels already in the chain while building a block, in the block at
+    /// `height`. If that block is ours (the `mined` report for it was lost or never came), the pairs are
+    /// paid as if it had; otherwise they are gone for us (spent elsewhere). Returns (paid, spent).
+    pub async fn cb_spent_at(&self, kernels: &[String], height: i64, ts: i64) -> Result<(Vec<(i64, i64, i64)>, u64)> {
         if kernels.is_empty() {
-            return Ok(0);
+            return Ok((Vec::new(), 0));
         }
-        let c = self.client().await?;
-        Ok(c.execute("UPDATE coinbase_pairs SET status='spent', mined_height=$2 WHERE kernel = ANY($1) AND status='stock'", &[&kernels, &height]).await?)
+        let mut c = self.client().await?;
+        let tx = c.transaction().await?;
+        let ours: Option<String> = tx
+            .query_opt("SELECT hash FROM blocks WHERE height=$1 AND status <> 'orphaned' AND hash IS NOT NULL", &[&height])
+            .await?
+            .map(|r| r.get(0));
+        let res = match ours {
+            Some(hash) => (cb_pay_block(&tx, height, &hash, kernels, ts).await?, 0),
+            None => {
+                let n = tx.execute("UPDATE coinbase_pairs SET status='spent', mined_height=$2 WHERE kernel = ANY($1) AND status='stock'", &[&kernels, &height]).await?;
+                (Vec::new(), n)
+            }
+        };
+        tx.commit().await?;
+        Ok(res)
     }
 
     /// The chain dropped everything from `height` on: the pending coinbase payments of those blocks are
@@ -734,7 +748,8 @@ impl Db {
         let rows = c
             .query(
                 "SELECT m.id, m.balance + COALESCE((SELECT SUM(c.amount) FROM credits c JOIN blocks b ON b.height=c.block_height
-                                                   WHERE c.miner_id=m.id AND b.status='pending'), 0)::BIGINT
+                                                   LEFT JOIN chain_headers ch ON ch.height=b.height
+                                                   WHERE c.miner_id=m.id AND b.status='pending' AND (ch.hash IS NULL OR ch.hash = b.hash)), 0)::BIGINT
                  FROM miners m WHERE m.address LIKE 'cb:%'",
                 &[],
             )
@@ -831,10 +846,13 @@ async fn cb_pay_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, 
     for (miner_id, (amount, n)) in per {
         let tx_id = format!("cb:{height}:{hash}:{miner_id}");
         let kernel = format!("coinbase@{height} {hash}");
+        // a row that a reorg failed earlier is revived when the chain comes back to this block
         let inserted = tx
             .execute(
                 "INSERT INTO payments (ts, miner_id, amount, fee, debit, tx_id, kernel, status, created_at, accepted_at, cb_height)
-                 VALUES ($1,$2,$3,0,$3,$4,$5,'pending',$1,$1,$6) ON CONFLICT (tx_id) DO NOTHING",
+                 VALUES ($1,$2,$3,0,$3,$4,$5,'pending',$1,$1,$6)
+                 ON CONFLICT (tx_id) DO UPDATE SET status='pending', ts=EXCLUDED.ts, amount=EXCLUDED.amount, debit=EXCLUDED.debit, attempts=payments.attempts+1
+                 WHERE payments.status='failed'",
                 &[&ts, &miner_id, &amount, &tx_id, &kernel, &height],
             )
             .await?;

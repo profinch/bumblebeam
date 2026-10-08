@@ -61,9 +61,12 @@ The Beam core already allows this:
 5. **The finalizer follows the chain.** It reads every block's header and kernels (`GetHdrPack`,
    `GetBodyPack`), reports them to the pool, and does not answer for height h+1 before it has read
    block h, so a pair is never offered twice. Before building it also asks the node for a proof of
-   every offered kernel: one already in the chain (a pair the miner spent itself, or one that another
-   pool mined) would make the node refuse the whole coinbase, so it is left out and reported, and the
-   pool drops it from the stock. The pool marks the pairs mined and writes one `pending` payment per
+   every offered kernel: one already in the chain would make the node refuse the whole coinbase, so
+   it is left out and reported with the block it is in; a block of the pool's own means a `mined`
+   report that never arrived, and the pool pays it then, any other block means the pair is gone.
+   Reports of mined blocks are acknowledged by the pool server and retried until they are, so a
+   database hiccup cannot lose one. If the node refuses a coinbase with pairs twice in a row, the
+   finalizer answers pool-only for ten blocks and says so (a reserve too small, usually). The pool marks the pairs mined and writes one `pending` payment per
    account and block, with the debit off the balance at once, so the blocks that follow before this
    one confirms do not pay the same amount again. Those same headers confirm or orphan the pool's
    blocks: a confirmed block completes its payments, an orphaned one refunds them and frees the pairs;
