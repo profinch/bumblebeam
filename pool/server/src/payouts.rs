@@ -105,7 +105,7 @@ async fn address_type(shared: &Arc<Shared>, wallet: &Wallet, miner_id: i64, addr
     let v = match wallet.validate_address(address).await {
         Ok(v) => v,
         Err(e) => {
-            warn!(%address, "validate_address: {e}");
+            warn!(address = %crate::state::Short(&address), "validate_address: {e}");
             return Ok(None);
         }
     };
@@ -125,7 +125,7 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
     let ts = now();
     for (miner_id, address, balance, cached_type) in due {
         let Some(kind) = address_type(shared, wallet, miner_id, &address, cached_type).await? else {
-            warn!(%address, "no valid address type, payout skipped");
+            warn!(address = %crate::state::Short(&address), "no valid address type, payout skipped");
             continue;
         };
         let push = PUSH_TYPES.contains(&kind.as_str());
@@ -134,19 +134,19 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
             Ok(f) if f > 0 => f,
             Ok(_) => fallback,
             Err(e) => {
-                warn!(%address, "calc_change failed, using configured fee: {e}");
+                warn!(address = %crate::state::Short(&address), "calc_change failed, using configured fee: {e}");
                 fallback
             }
         };
         let (value, debit) = if cfg.pool.miner_pays_tx_fee { (balance - fee as i64, balance) } else { (balance, balance) };
         if value <= 0 {
-            warn!(%address, balance, fee, "balance does not cover the network fee, payout skipped");
+            warn!(address = %crate::state::Short(&address), balance, fee, "balance does not cover the network fee, payout skipped");
             continue;
         }
         let need = value as u64 + fee;
         if available < need {
             // a miner too big for the wallet right now does not block the smaller ones
-            warn!(%address, value, fee, available, "wallet balance too low for this payout, postponed");
+            warn!(address = %crate::state::Short(&address), value, fee, available, "wallet balance too low for this payout, postponed");
             continue;
         }
         let tx_id = new_tx_id();
@@ -161,7 +161,7 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                 note_txid(shared, &tx_id, &got).await?;
                 check_moved(shared.db.set_payment_status(&got, "created", "pending").await?, &got, "pending");
                 available -= need;
-                info!(%address, value, fee, tx_id = %got, "payout sent");
+                info!(address = %crate::state::Short(&address), value, fee, tx_id = %got, "payout sent");
             }
             Err(WalletError::Api { message, .. }) => {
                 // the wallet refused; before refunding make sure it did not record the transaction anyway
@@ -169,18 +169,18 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                 match wallet.tx_status(&tx_id).await {
                     Ok(_) => {
                         check_moved(shared.db.set_payment_status(&tx_id, "created", "pending").await?, &tx_id, "pending");
-                        warn!(%address, value, %tx_id, "tx_send answered with an error but the transaction exists, now pending: {message}");
+                        warn!(address = %crate::state::Short(&address), value, %tx_id, "tx_send answered with an error but the transaction exists, now pending: {message}");
                     }
                     Err(e) if e.is_unknown_tx_with(unk.as_deref()) => {
                         check_moved(shared.db.refund_payment(&tx_id, "created").await?, &tx_id, "failed");
-                        warn!(%address, value, fee, "tx_send refused, refunded: {message}");
+                        warn!(address = %crate::state::Short(&address), value, fee, "tx_send refused, refunded: {message}");
                     }
-                    Err(e) => warn!(%address, %tx_id, "tx_send refused and tx_status unclear, left for recovery: {message} / {e}"),
+                    Err(e) => warn!(address = %crate::state::Short(&address), %tx_id, "tx_send refused and tx_status unclear, left for recovery: {message} / {e}"),
                 }
             }
             Err(e @ WalletError::Transport { .. }) => {
                 // unknown whether it was sent: stays `created`, recovery decides later
-                warn!(%address, value, %tx_id, "tx_send transport failure, left for recovery: {e}");
+                warn!(address = %crate::state::Short(&address), value, %tx_id, "tx_send transport failure, left for recovery: {e}");
                 break;
             }
         }
@@ -202,7 +202,7 @@ async fn recover_created(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
         match wallet.tx_status(&p.tx_id).await {
             Ok(_) => {
                 check_moved(shared.db.set_payment_status_any(&p.tx_id, &["created", "sending"], "pending").await?, &p.tx_id, "pending");
-                info!(address = %p.address, amount = p.amount, tx_id = %p.tx_id, "payment exists in the wallet, now pending");
+                info!(address = %crate::state::Short(&p.address), amount = p.amount, tx_id = %p.tx_id, "payment exists in the wallet, now pending");
                 continue;
             }
             Err(e) if e.is_unknown_tx_with(unk.as_deref()) => {}
@@ -221,7 +221,7 @@ async fn recover_created(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
         if honored != Some(true) {
             // a resend is only safe once the wallet is known to keep one transaction per id
             shared.db.set_payment_status_any(&p.tx_id, &["created", "sending"], "review").await?;
-            warn!(address = %p.address, amount = p.amount, tx_id = %p.tx_id, "interrupted payment and txId idempotency unproven: set to review (admin payment <txid> sent|refund)");
+            warn!(address = %crate::state::Short(&p.address), amount = p.amount, tx_id = %p.tx_id, "interrupted payment and txId idempotency unproven: set to review (admin payment <txid> sent|refund)");
             continue;
         }
         // claim the row so nobody refunds it while the resend is in flight
@@ -235,17 +235,17 @@ async fn recover_created(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                 }
                 note_txid(shared, &p.tx_id, &got).await?;
                 check_moved(shared.db.set_payment_status(&got, "sending", "pending").await?, &got, "pending");
-                info!(address = %p.address, amount = p.amount, tx_id = %got, "payment resent after a failure, now pending");
+                info!(address = %crate::state::Short(&p.address), amount = p.amount, tx_id = %got, "payment resent after a failure, now pending");
             }
             Err(e) if e.is_duplicate_tx(dup.as_deref()) => {
                 check_moved(shared.db.set_payment_status(&p.tx_id, "sending", "pending").await?, &p.tx_id, "pending");
-                info!(address = %p.address, amount = p.amount, tx_id = %p.tx_id, "payment was already in the wallet, now pending");
+                info!(address = %crate::state::Short(&p.address), amount = p.amount, tx_id = %p.tx_id, "payment was already in the wallet, now pending");
             }
             Err(WalletError::Api { message, .. }) => {
                 let attempts = shared.db.bump_payment_attempts(&p.tx_id).await?;
                 if attempts >= 3 {
                     shared.db.set_payment_status(&p.tx_id, "sending", "review").await?;
-                    warn!(address = %p.address, amount = p.amount, tx_id = %p.tx_id, "resend refused three times, set to review: {message}");
+                    warn!(address = %crate::state::Short(&p.address), amount = p.amount, tx_id = %p.tx_id, "resend refused three times, set to review: {message}");
                 } else {
                     shared.db.set_payment_status(&p.tx_id, "sending", "created").await?;
                     warn!(tx_id = %p.tx_id, attempts, "resend refused, will try again: {message}");
@@ -346,7 +346,7 @@ async fn poll_pending(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                 let attempts = shared.db.bump_payment_attempts(&tx_id).await?;
                 if attempts >= 10 {
                     shared.db.set_payment_status(&tx_id, "pending", "review").await?;
-                    warn!(%address, value, %tx_id, "tx_status keeps failing, payment set to review: {e}");
+                    warn!(address = %crate::state::Short(&address), value, %tx_id, "tx_status keeps failing, payment set to review: {e}");
                 } else {
                     warn!(%tx_id, attempts, "tx_status: {e}");
                 }
@@ -359,11 +359,11 @@ async fn poll_pending(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
         match status {
             3 => {
                 shared.db.complete_payment(&tx_id, kernel).await?;
-                info!(%address, value, %kernel, "payout completed");
+                info!(address = %crate::state::Short(&address), value, %kernel, "payout completed");
             }
             2 | 4 => {
                 if shared.db.refund_payment(&tx_id, "pending").await? {
-                    warn!(%address, value, %tx_id, status, reason = %st["failure_reason"], "payout failed, refunded");
+                    warn!(address = %crate::state::Short(&address), value, %tx_id, status, reason = %st["failure_reason"], "payout failed, refunded");
                 }
             }
             _ => {}

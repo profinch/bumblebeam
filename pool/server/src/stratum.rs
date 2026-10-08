@@ -67,16 +67,22 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
         let tls = tls.clone();
         tokio::spawn(async move {
             shared.connected_workers.fetch_add(1, Ordering::Relaxed);
+            let mut s = Session { peer, tls: tls.is_some(), started: Instant::now(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0 };
             let r = match tls {
                 Some(acceptor) => match tokio::time::timeout(Duration::from_secs(15), acceptor.accept(sock)).await {
-                    Ok(Ok(stream)) => connection(shared.clone(), stream, mode).await,
+                    Ok(Ok(stream)) => connection(shared.clone(), stream, mode, &mut s).await,
                     Ok(Err(e)) => Err(anyhow::anyhow!("tls: {e}")),
                     Err(_) => Err(anyhow::anyhow!("tls handshake timeout")),
                 },
-                None => connection(shared.clone(), sock, mode).await,
+                None => connection(shared.clone(), sock, mode, &mut s).await,
             };
-            if let Err(e) = r {
-                debug!(%peer, "connection ended: {e}");
+            let reason = match &r { Ok(()) => "closed by the miner".to_string(), Err(e) => format!("{e:#}") };
+            if s.miner.is_empty() {
+                // scanners and failed handshakes: only with RUST_LOG=debug
+                debug!(%peer, tls = s.tls, %reason, "connection ended before login");
+            } else {
+                info!(%peer, miner = %crate::state::Short(&s.miner), worker = %s.worker, mode = mode.as_str(), tls = s.tls,
+                      minutes = s.started.elapsed().as_secs() / 60, accepted = s.accepted, stale = s.stale, rejected = s.rejected, %reason, "disconnect");
             }
             shared.connected_workers.fetch_sub(1, Ordering::Relaxed);
             ip_release(peer.ip());
@@ -106,6 +112,19 @@ struct Vardiff {
     since: Instant,
 }
 
+/// One miner connection, for the line logged when it ends: who it was, how long it lasted, what
+/// it sent and why it closed. The connection fills it in; serve() logs it.
+struct Session {
+    peer: std::net::SocketAddr,
+    tls: bool,
+    started: Instant,
+    miner: String,
+    worker: String,
+    accepted: u64,
+    stale: u64,
+    rejected: u64,
+}
+
 #[derive(Default)]
 struct WorkerStats {
     accepted: u64,
@@ -127,7 +146,7 @@ fn address_type(a: &str) -> Option<&'static str> {
     None
 }
 
-async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared>, stream: S, mode: Mode) -> Result<()> {
+async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared>, stream: S, mode: Mode, sess: &mut Session) -> Result<()> {
     let (rd, mut wr) = tokio::io::split(stream);
     let mut lines = FramedRead::new(rd, LinesCodec::new_with_max_length(MAX_LINE));
     let mut job_rx = shared.job_tx.subscribe();
@@ -193,7 +212,9 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         res["forkheight"] = json!(FORK_HEIGHT);
                         res["forkheight2"] = json!(FORK_HEIGHT2);
                         send(&mut wr, res).await?;
-                        info!(miner = %address, worker = %worker, mode = mode.as_str(), %kind, "login");
+                        sess.miner = address.clone();
+                        sess.worker = worker.clone();
+                        info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, "login");
                         if let Some(job) = shared.current_job() {
                             seq += 1;
                             push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?;
@@ -209,6 +230,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             if jobs[pos].job.height < cur.height {
                                 send(&mut wr, result(&id, 3, "stale: block already found")).await?;
                                 stats.stale += 1;
+                                sess.stale += 1;
                                 continue;
                             }
                         }
@@ -233,6 +255,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         if jobs.iter().any(|j| j.job.input == input && j.seen.contains(&(n, hash))) {
                             send(&mut wr, result(&id, 2, "rejected: duplicate share")).await?;
                             stats.rejected += 1;
+                            sess.rejected += 1;
                             continue;
                         }
                         let mj = &mut jobs[pos];
@@ -245,11 +268,13 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         }
                         if r != pow::BB_OK {
                             send(&mut wr, result(&id, 2, &format!("rejected: {}", pow::result_str(r)))).await?;
-                            warn!(miner = %address, worker = %worker, reason = pow::result_str(r), "share rejected");
+                            warn!(miner = %crate::state::Short(&address), worker = %worker, reason = pow::result_str(r), "share rejected");
                             stats.rejected += 1;
+                            sess.rejected += 1;
                             continue;
                         }
                         stats.accepted += 1;
+                        sess.accepted += 1;
                         stats.last_share = crate::state::now();
                         let share_diff = pow::difficulty_to_double(packed);
                         let job = mj.job.clone();
@@ -258,7 +283,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             warn!("record share: {e:#}");
                         }
                         if pow::difficulty_reached(&hash, job.net_packed) {
-                            info!(miner = %address, worker = %worker, height = job.height, "share reaches network difficulty, submitting block");
+                            info!(miner = %crate::state::Short(&address), worker = %worker, height = job.height, "share reaches network difficulty, submitting block");
                             let _ = shared.submit_tx.send(Submit { job: job.clone(), nonce: n, output: out, miner_id, address: address.clone(), worker: worker.clone(), mode }).await;
                         }
                         // vardiff: aim at one share per target_secs, adjust at most 4x per step
@@ -272,7 +297,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             vd.shares = 0; vd.since = Instant::now();
                             if (new / vd.diff - 1.0).abs() > 0.25 {
                                 vd.diff = new;
-                                debug!(miner = %address, worker = %worker, diff = new, "vardiff");
+                                debug!(miner = %crate::state::Short(&address), worker = %worker, diff = new, "vardiff");
                                 if let Some(job) = shared.current_job() { push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?; }
                             }
                         }
@@ -293,7 +318,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 if !address.is_empty() && vd.shares == 0 && vd.since.elapsed().as_secs_f64() > 6.0 * vd_cfg.target_secs && vd.diff > vd_cfg.min {
                     vd.diff = (vd.diff / 4.0).max(vd_cfg.min);
                     vd.since = Instant::now();
-                    debug!(miner = %address, worker = %worker, diff = vd.diff, "vardiff down: no shares");
+                    debug!(miner = %crate::state::Short(&address), worker = %worker, diff = vd.diff, "vardiff down: no shares");
                     if let Some(job) = shared.current_job() { push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?; }
                 }
             }

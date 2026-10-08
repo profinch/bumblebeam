@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 User=beam
 WorkingDirectory=/etc/bumblebeam
-Environment=RUST_LOG=info
+Environment=RUST_LOG=info,tokio_postgres=warn
 ExecStart=/opt/bumblebeam/bumblebeam-pool /etc/bumblebeam/pool.toml
 Restart=always
 RestartSec=3

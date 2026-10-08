@@ -149,13 +149,13 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                         let sub = pending.get_mut(&id).and_then(|q| q.pop_front());
                         match (sub, code) {
                             (Some(sub), 1) => {
-                                info!(height = sub.job.height, %blockhash, miner = %sub.address, worker = %sub.worker, "BLOCK FOUND, accepted by node");
+                                info!(height = sub.job.height, %blockhash, miner = %crate::state::Short(&sub.address), worker = %sub.worker, "BLOCK FOUND, accepted by node");
                                 let shared = shared.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = crate::accounting::block_found(&shared, sub, blockhash).await { error!("accounting: {e:#}"); }
                                 });
                             }
-                            (Some(sub), _) => warn!(height = sub.job.height, code, %desc, miner = %sub.address, "block solution rejected by node"),
+                            (Some(sub), _) => warn!(height = sub.job.height, code, %desc, miner = %crate::state::Short(&sub.address), "block solution rejected by node"),
                             (None, _) => warn!(%id, code, %desc, "result for unknown submission"),
                         }
                     }
@@ -167,7 +167,7 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                 let id = sub.job.upstream_id.clone();
                 let sol = json!({ "jsonrpc": "2.0", "id": id, "method": "solution", "nonce": hex::encode(sub.nonce), "output": hex::encode(sub.output) });
                 wr.write_all(format!("{sol}\n").as_bytes()).await?;
-                info!(height = sub.job.height, miner = %sub.address, "block solution sent to node");
+                info!(height = sub.job.height, miner = %crate::state::Short(&sub.address), "block solution sent to node");
                 pending.entry(id).or_default().push_back(sub);
                 if pending.len() > 64 { pending.clear(); }
             }
