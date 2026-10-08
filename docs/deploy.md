@@ -152,23 +152,26 @@ nginx: `proxy_pass http://127.0.0.1:8080;` for `/` with a Let's Encrypt certific
 
 ## Docker
 
-The whole stack as one compose project: the Beam node, wallet-api, PostgreSQL, the pool, and nginx
-with certbot for the web. This is how pool.bumblebeam.org runs (Debian 13, 4 vCPU, 8 GB RAM, a
+The whole stack as one compose project: the Beam node, wallet-api, PostgreSQL, the pool, the block
+explorer (explorer-node and its web UI), and nginx with certbot for the web. This is how pool.bumblebeam.org runs (Debian 13, 4 vCPU, 8 GB RAM, a
 separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker), which mirrors
 `/data/docker` on the server; persistent data lives in `/data/bumblebeam`, owned by uid 10001
 (the `beam` user inside the images):
 
 ```
 /data/docker/                         = deploy/docker
-  compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool, nginx, certbot
-  containers/beam/                    node + wallet CLI + wallet-api from the release (sha256 pinned, GPG-checked)
+  compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool, explorer-node, explorer-web, nginx, certbot
+  containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
+                                      GPG-checked) and the explorer's contract parser shader
   containers/pool/                    builds bumblebeam-pool from this repository at BUMBLEBEAM_REF
+  containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
   containers/nginx/, containers/certbot/
-  beam-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
+  beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
 /data/bumblebeam/
   node/        node.db, beam-node.cfg, secrets/ (stratum TLS + API key)
   wallet/      wallet.db, wallet.pass                                  <- the money, back it up
   pool/        pool.toml, database.url, tls/                           (mounted at /etc/bumblebeam)
+  explorer/    explorer-node's database and explorer-node.cfg
   postgres/    database files;  secrets/postgres.pass
   letsencrypt/ certificates;    logs/
 ```
@@ -179,6 +182,8 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 | `wallet-api` | `bumblebeam` + internal `bumblebeam-wallet`, fixed `172.30.1.2` | nothing; answers only the pool's `172.30.1.10` |
 | `postgres` | `bumblebeam` | nothing |
 | `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
+| `explorer-node` | `bumblebeam` | nothing; syncs from `beam-node`, API `8888` stays inside |
+| `explorer-web` | `bumblebeam` | `127.0.0.1:8090`; proxies GET `/api/*` to explorer-node, rate-limited |
 | `nginx` | host network | `80`, `443`, Cloudflare addresses only (host firewall) |
 | `certbot` | default | nothing |
 
@@ -302,7 +307,14 @@ Telegram notices go out when `/data/docker/.env` has `TELEGRAM_BOT_TOKEN` and `T
 4. `sudo docker compose -f compose-bumblebeam.yaml up -d certbot nginx`.
 
 [`bumblebeam.conf`](../deploy/docker/containers/nginx/conf/bumblebeam.conf) serves the pool on
-`pool.bumblebeam.org` and redirects `bumblebeam.org` and `www` there.
+`pool.bumblebeam.org`, the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
+and `www` to the pool.
+
+The explorer: copy `explorer-node.cfg.example` to `/data/bumblebeam/explorer/explorer-node.cfg`
+(owned by 10001), then `up -d explorer-node explorer-web`. explorer-node is a second full node with
+Beam's HTTP explorer API; it syncs from our archival node over the compose network and decodes
+contract calls with the parser shader in the Beam image. To rebuild one service without touching
+the running node, use `up -d --no-deps <service>`.
 
 ### D8. Operations
 

@@ -16,6 +16,7 @@ oracle and test vectors.
 | [`oracle/`](oracle) | BeamHash III verification and difficulty checks, tested against the Beam core and real mainnet blocks | **done** (step 1) |
 | [`vectors/`](vectors) | Test vectors: real mainnet headers, the core's difficulty decisions, full solution sets from the reference solver | **done** (step 1) |
 | [`tools/hdrdump`](tools/hdrdump) | Dev tool that pulls headers from a Beam node and has the core validate them | **done** (step 1) |
+| [`explorer/web`](explorer/web) | Block explorer on our own explorer-node: blocks, kernels, confidential assets, contracts with decoded state and calls, peers. explorer.bumblebeam.org | **done** |
 | [`pool/web`](pool/web) | Pool web UI in the Beam Explorer style: pool, network (pools, blocks by pool, block times), blocks, miners, payments, start-mining guide with calculator. Served by the pool server; shows labelled demo data when opened without one | **done** |
 | [`pool/API.md`](pool/API.md) | Pool HTTP API, readable as-is by the Beam Explorer's pool adapter | spec |
 | [`docs/deploy.md`](docs/deploy.md) | How to put the node, wallet-api, PostgreSQL and the pool on a server: systemd units in [`pool/deploy`](pool/deploy), or the Docker stack in [`deploy/docker`](deploy/docker) | guide |
