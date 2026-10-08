@@ -108,6 +108,8 @@ struct MinerJob {
 
 struct Vardiff {
     diff: f64,
+    /// lowest difficulty for this connection: vardiff.min, or nicehash_min for NiceHash's proxy
+    floor: f64,
     shares: u32,
     since: Instant,
 }
@@ -169,7 +171,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     let mut jobs: VecDeque<MinerJob> = VecDeque::new();
     let mut seq = 0u64;
     let vd_cfg = &shared.cfg.vardiff;
-    let mut vd = Vardiff { diff: vd_cfg.start, shares: 0, since: Instant::now() };
+    let mut vd = Vardiff { diff: vd_cfg.start, floor: vd_cfg.min, shares: 0, since: Instant::now() };
     let idle = Duration::from_secs(900);
     let mut stats = WorkerStats::default();
     let mut flush = tokio::time::interval(Duration::from_secs(60));
@@ -246,7 +248,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         send(&mut wr, res).await?;
                         sess.miner = address.clone();
                         sess.worker = worker.clone();
-                        info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, "login");
+                        let agent: String = msg["agent"].as_str().unwrap_or("").chars().take(64).collect();
+                        if agent.to_ascii_lowercase().contains("nicehash") {
+                            vd.floor = vd_cfg.nicehash_min.max(vd_cfg.min);
+                            vd.diff = vd.diff.max(vd.floor);
+                        }
+                        info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, %agent, diff = vd.diff, "login");
                         if let Some(job) = shared.current_job() {
                             seq += 1;
                             push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?;
@@ -325,7 +332,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             // the worker finds shares at hashrate/diff per second; scale diff so that
                             // becomes one per target_secs
                             let want = vd.diff * (vd.shares as f64 * vd_cfg.target_secs / el.max(0.5));
-                            let new = want.clamp(vd.diff / 4.0, vd.diff * 4.0).clamp(vd_cfg.min, vd_cfg.max);
+                            let new = want.clamp(vd.diff / 4.0, vd.diff * 4.0).clamp(vd.floor, vd_cfg.max.max(vd.floor));
                             vd.shares = 0; vd.since = Instant::now();
                             if (new / vd.diff - 1.0).abs() > 0.25 {
                                 vd.diff = new;
@@ -347,8 +354,8 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
                 stats = WorkerStats { accepted: stats.accepted, ..Default::default() };
                 // a worker that has not found a share in a long time has too high a difficulty
-                if !address.is_empty() && vd.shares == 0 && vd.since.elapsed().as_secs_f64() > 6.0 * vd_cfg.target_secs && vd.diff > vd_cfg.min {
-                    vd.diff = (vd.diff / 4.0).max(vd_cfg.min);
+                if !address.is_empty() && vd.shares == 0 && vd.since.elapsed().as_secs_f64() > 6.0 * vd_cfg.target_secs && vd.diff > vd.floor {
+                    vd.diff = (vd.diff / 4.0).max(vd.floor);
                     vd.since = Instant::now();
                     debug!(miner = %crate::state::Short(&address), worker = %worker, diff = vd.diff, "vardiff down: no shares");
                     if let Some(job) = shared.current_job() { push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?; }
