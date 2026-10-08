@@ -73,8 +73,10 @@ async fn block(db: &Db, height: i64, action: &str, force: bool) -> Result<()> {
         )
         .await?;
     }
+    // coinbase payments of the block follow the verdict: completed, or refunded with the pairs freed
+    let settled = crate::db::cb_settle_block(&tx, height, status).await?;
     tx.commit().await?;
-    println!("block {height}: {status} by operator");
+    println!("block {height}: {status} by operator{}", if settled > 0 { format!(", {settled} coinbase payment(s) settled") } else { String::new() });
     Ok(())
 }
 

@@ -55,6 +55,12 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
         return Ok(());
     }
     tx.execute("DELETE FROM credits WHERE block_height=$1", &[&height]).await?;
+    if shared.coinbase.is_some() {
+        let adopted = crate::db::Db::cb_adopt_block(&tx, height, &blockhash, ts).await?;
+        if !adopted.is_empty() {
+            info!(height, accounts = adopted.len(), groth = adopted.iter().map(|p| p.1).sum::<i64>(), "pairs the finalizer read before the block was recorded are now paid");
+        }
+    }
 
     match sub.mode {
         Mode::Solo => {
@@ -92,7 +98,7 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
 /// A PPLNS block's credits: the reward minus the fee is the miners' pot; the finder's bonus comes
 /// out of it, and the rest is shared in proportion to each miner's difficulty in the window.
 /// Returns the per-miner amounts and the bonus, all rounded down (the dust stays with the pool).
-fn pplns_split(reward: i64, fee_percent: f64, bonus_percent: f64, per: &[(i64, f64)], total: f64) -> (Vec<(i64, i64)>, i64) {
+pub(crate) fn pplns_split(reward: i64, fee_percent: f64, bonus_percent: f64, per: &[(i64, f64)], total: f64) -> (Vec<(i64, i64)>, i64) {
     let pot = reward as f64 * (1.0 - fee_percent / 100.0);
     let bonus = (pot * bonus_percent / 100.0).floor() as i64;
     let pot = pot - bonus as f64;
@@ -232,6 +238,9 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
             (Some(true), _, _) => (Some("confirmed"), "node"),
             (Some(false), _, Some(true)) => (Some("unverified"), "our node says another block, explorer says ours"),
             (Some(false), _, _) => (Some("orphaned"), "our node: another block at this height"),
+            (None, _, _) if coinbase_mode && chain_tip >= height + maturity + 60 => {
+                (Some("unverified"), "no chain header from the finalizer 60 blocks past maturity (was it down? admin block <h> confirm|orphan)")
+            }
             (None, _, _) if coinbase_mode => {
                 if chain_tip > 0 && chain_tip < height + maturity {
                     info!(height, chain_tip, "node chain not yet past this block's maturity, waits");
@@ -260,7 +269,7 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
             .await?;
         }
         if coinbase_mode {
-            let settled = crate::db::cb_settle_block(&tx, height, status == "confirmed").await?;
+            let settled = crate::db::cb_settle_block(&tx, height, status).await?;
             if settled > 0 {
                 info!(height, settled, status, "coinbase payments of the block settled");
             }

@@ -1,7 +1,7 @@
-# throwaway config for tools/e2e_coinbase.py: fake node on 19101 without TLS, a fake bb-finalizer on the
+# throwaway config for tools/e2e_coinbase.py: fake node on 19102 without TLS, a fake bb-finalizer on the
 # coinbase link, test ports, the test database
 [node]
-stratum_addr = "127.0.0.1:19101"
+stratum_addr = "127.0.0.1:19102"
 api_key = "e2e-test-key"
 tls = false
 sync_lag_blocks = 0                       # the test template is a historical mainnet header

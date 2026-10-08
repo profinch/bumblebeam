@@ -52,17 +52,23 @@ The Beam core already allows this:
    balancing to value·H, and the kernel valid at the next block. The pool refuses values off the
    ladder, duplicate kernels or commitments, and pairs that would expire soon.
 4. **The pool picks the pairs for each block.** When the node asks for a coinbase, the finalizer asks
-   the pool server, which takes what every account is owed (its balance from earlier blocks plus its
-   share of this block by the PPLNS window) and covers it with that account's pairs, largest first,
+   the pool server, which takes what every account is owed (its balance, the credits of its blocks
+   still confirming, and its share of this block by the PPLNS window) and covers it with that account's
+   pairs, largest first,
    within the block space. The finalizer verifies the pairs once more, adds one output of the mining
    wallet for the rest (fee, transaction fees, rounding) and answers the node. If the pool server is
    down or slow, the finalizer answers with a pool-only coinbase: mining never waits for payouts.
 5. **The finalizer follows the chain.** It reads every block's header and kernels (`GetHdrPack`,
    `GetBodyPack`), reports them to the pool, and does not answer for height h+1 before it has read
-   block h, so a pair is never offered twice. The pool marks the pairs mined and writes one `pending`
-   payment per account and block. Those same headers confirm or orphan the pool's blocks: a confirmed
-   block completes its payments and settles the balances, an orphaned one fails them and frees the
-   pairs; a reorganization does the same for every block it dropped.
+   block h, so a pair is never offered twice. Before building it also asks the node for a proof of
+   every offered kernel: one already in the chain (a pair the miner spent itself, or one that another
+   pool mined) would make the node refuse the whole coinbase, so it is left out and reported, and the
+   pool drops it from the stock. The pool marks the pairs mined and writes one `pending` payment per
+   account and block, with the debit off the balance at once, so the blocks that follow before this
+   one confirms do not pay the same amount again. Those same headers confirm or orphan the pool's
+   blocks: a confirmed block completes its payments, an orphaned one refunds them and frees the pairs;
+   a reorganization does the same for every block it dropped. Solo mining is off while this mode is on:
+   every template already pays the PPLNS accounts.
 6. **Kernel lifespan.** After HF2 a kernel is valid for 43 200 blocks (30 days) from its minimum
    height, so pairs expire; the pool stops offering them 100 blocks earlier and `bb-coinbase top-up`
    (run daily from cron) replaces what was spent or expired.

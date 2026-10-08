@@ -70,6 +70,9 @@ async fn main() -> Result<()> {
         });
         tokio::spawn(coinbase::expiry_loop(shared.clone()));
         info!(link = %cfg.coinbase.link_bind, "coinbase payouts enabled");
+        if cfg.stratum.solo_port > 0 || cfg.stratum.solo_tls_port > 0 {
+            tracing::warn!("solo ports are configured but solo logins are refused while coinbase payouts are on: every template pays the PPLNS accounts");
+        }
     }
 
     {

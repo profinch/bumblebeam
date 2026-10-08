@@ -220,13 +220,14 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
             let height = msg["height"].as_i64().ok_or_else(|| anyhow!("no height"))?;
             let hash = msg["hash"].as_str().unwrap_or("").to_lowercase();
             let kernels: Vec<String> = msg["kernels"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(|s| s.to_lowercase())).collect()).unwrap_or_default();
-            let paid = shared.db.cb_mark_mined(&kernels, height, &hash).await?;
+            let (paid, spent) = shared.db.cb_block_mined(height, &hash, &kernels, now()).await?;
             if !paid.is_empty() {
-                shared.db.cb_create_payments(height, &hash, &paid, now()).await?;
                 let sum: i64 = paid.iter().map(|p| p.1).sum();
                 info!(height, %hash, accounts = paid.len(), pairs = paid.iter().map(|p| p.2).sum::<i64>(), groth = sum, "block paid miners in its coinbase");
             }
-            shared.db.meta_set(META_SCANNED, &height.to_string()).await?;
+            if spent > 0 {
+                warn!(height, %hash, pairs = spent, "pairs of ours spent in a block that is not ours (another pool, or the miner itself)");
+            }
             link.scanned.store(height as u64, Ordering::Relaxed);
             link.last_mined.store(now(), Ordering::Relaxed);
             Ok(json!({ "ok": true }))
@@ -260,6 +261,14 @@ async fn handle(shared: &Arc<Shared>, link: &Arc<Link>, method: &str, msg: &Valu
             }
             Ok(json!({ "ok": true }))
         }
+        "spent" => {
+            // the finalizer found these kernels in the chain while building: the pairs are gone
+            let height = msg["height"].as_i64().unwrap_or(0);
+            let kernels: Vec<String> = msg["kernels"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(|s| s.to_lowercase())).collect()).unwrap_or_default();
+            let n = shared.db.cb_spent_elsewhere(&kernels, height).await?;
+            warn!(height, kernels = kernels.len(), removed = n, "pairs already spent in the chain, taken out of the stock");
+            Ok(json!({ "ok": true }))
+        }
         "built" => {
             info!(height = %msg["height"], pairs = %msg["pairs"], paid = %msg["paid"], pool = %msg["poolValue"], dropped = msg["dropped"].as_array().map(|a| a.len()).unwrap_or(0),
                   note = %msg["note"], "finalizer built a coinbase");
@@ -275,34 +284,39 @@ pub struct Allocation {
     pub offers: Vec<(i64, i64)>,
 }
 
-/// What each coinbase account is owed at `height`: its balance (earlier blocks, confirmed but not paid)
-/// plus its share of this block's reward by the current PPLNS window.
+/// What each coinbase account is owed at `height`: its balance, the credits of its blocks still
+/// confirming, and its share of this block's reward by the current PPLNS window (the P2Pool rule: a
+/// block pays the window as it stands, not 240 blocks later). The balance already carries the debits of
+/// the blocks that paid it, so nothing is paid twice; it can be negative when a block that paid turns
+/// out orphaned, and such an advance is worked off by the blocks that follow.
 async fn owed(shared: &Arc<Shared>, height: u64) -> Result<BTreeMap<i64, i64>> {
-    let mut owed: BTreeMap<i64, i64> = BTreeMap::new();
-    for (id, balance) in shared.db.cb_accounts().await? {
-        if balance > 0 {
-            owed.insert(id, balance);
-        }
-    }
+    let accounts = shared.db.cb_accounts().await?;
+    let mut owed: BTreeMap<i64, i64> = accounts.iter().map(|(id, balance)| (*id, *balance)).collect();
     if let Some(job) = shared.current_job() {
         let ts = now();
         let net_diff = pow::difficulty_to_double(job.net_packed);
         let window = shared.cfg.pool.pplns_window * net_diff;
         let hashrate = shared.db.mode_hashrate("pplns", ts).await?.max(1.0);
-        let lookback = ((window / hashrate) * 6.0).clamp(3600.0, 3.0 * 86400.0) as i64;
+        let max_lookback = 3 * 86400;
+        let lookback = ((window / hashrate) * 6.0).clamp(3600.0, max_lookback as f64) as i64;
         let c = shared.db.client().await?;
-        let shares = crate::db::pplns_window_in(&c, ts, ts - lookback, window).await?;
-        let total: f64 = shares.iter().map(|(_, d)| d).sum();
+        let mut shares = crate::db::pplns_window_in(&c, ts, ts - lookback, window).await?;
+        let mut total: f64 = shares.iter().map(|(_, d)| d).sum();
+        if total < window && lookback < max_lookback {
+            shares = crate::db::pplns_window_in(&c, ts, ts - max_lookback, window).await?;
+            total = shares.iter().map(|(_, d)| d).sum();
+        }
         if total > 0.0 {
-            let pot = miner_reward_groth(height) as f64 * (1.0 - shared.cfg.pool.fee_percent / 100.0);
-            let accounts: std::collections::HashSet<i64> = shared.db.cb_accounts().await?.into_iter().map(|(id, _)| id).collect();
-            for (id, d) in shares {
-                if accounts.contains(&id) {
-                    *owed.entry(id).or_insert(0) += (pot * d / total).floor() as i64;
+            // the same split as block_found, finder bonus set aside (the finder is unknown until the block is found)
+            let (amounts, _) = crate::accounting::pplns_split(miner_reward_groth(height) as i64, shared.cfg.pool.fee_percent, shared.cfg.pool.finder_bonus_percent, &shares, total);
+            for (id, amount) in amounts {
+                if let Some(o) = owed.get_mut(&id) {
+                    *o += amount;
                 }
             }
         }
     }
+    owed.retain(|_, v| *v > 0);
     Ok(owed)
 }
 
@@ -372,15 +386,10 @@ pub async fn upload(shared: &Arc<Shared>, body: &Value) -> Result<Value, (u16, S
     if !link.is_connected() {
         return Err((503, "the pool's finalizer is offline, try again later".into()));
     }
-    let miner_id = shared.db.miner_id(&account, "coinbase", now()).await.map_err(|e| (500, format!("{e}")))?;
-    let in_stock = shared.db.cb_stock_count(miner_id).await.map_err(|e| (500, format!("{e}")))?;
-    if in_stock as u64 + pairs.len() as u64 > cfg.stock_max_per_account as u64 {
-        return Err((409, format!("stock would exceed {} pairs ({} in stock)", cfg.stock_max_per_account, in_stock)));
-    }
 
     let tip = shared.tip_height().unwrap_or(0);
     let res = link
-        .request(json!({ "method": "verify", "account": account, "ts": ts, "pairs": pairs, "signature": sig, "height": tip }), Duration::from_secs(20))
+        .request(json!({ "method": "verify", "account": account, "ts": ts, "pairs": pairs, "signature": sig, "height": tip, "domain": domain(shared) }), Duration::from_secs(20))
         .await
         .map_err(|e| (503, format!("finalizer: {e}")))?;
     if res["ok"].as_bool() != Some(true) {
@@ -428,7 +437,9 @@ pub async fn upload(shared: &Arc<Shared>, body: &Value) -> Result<Value, (u16, S
             },
         ));
     }
-    let (accepted, dup) = shared.db.cb_add_pairs(miner_id, &good, now()).await.map_err(|e| (500, format!("{e}")))?;
+    // only a signed upload creates the account
+    let miner_id = shared.db.miner_id(&account, "coinbase", now()).await.map_err(|e| (500, format!("{e}")))?;
+    let (accepted, dup) = shared.db.cb_add_pairs(miner_id, &good, now(), cfg.stock_max_per_account as i64).await.map_err(|e| (500, format!("{e}")))?;
     for (i, e) in dup {
         rejected.push(json!({ "index": i, "error": e }));
     }
@@ -436,6 +447,13 @@ pub async fn upload(shared: &Arc<Shared>, body: &Value) -> Result<Value, (u16, S
     info!(%account, accepted, rejected = rejected.len(), stock, "coinbase pairs uploaded");
     Ok(json!({ "account": account, "accepted": accepted, "rejected": rejected, "stockPairs": stock,
                "validUntil": good.iter().map(|(_, p)| p.max_height).min().unwrap_or(0) }))
+}
+
+/// What uploads are signed for, so a signature cannot be replayed to another pool: the public host,
+/// or the pool's name when none is set.
+pub fn domain(shared: &Arc<Shared>) -> String {
+    let h = shared.cfg.pool.public_host.trim();
+    if h.is_empty() { shared.cfg.pool.name.clone() } else { h.to_string() }
 }
 
 /// Every five minutes: pairs about to expire leave the stock.
@@ -459,7 +477,7 @@ pub async fn info(shared: &Arc<Shared>) -> Result<Value> {
     };
     let (accounts, stock, mined) = shared.db.cb_totals().await?;
     Ok(json!({
-        "enabled": true, "height": shared.tip_height().unwrap_or(0),
+        "enabled": true, "height": shared.tip_height().unwrap_or(0), "domain": domain(shared),
         "ladder": { "shift": cfg.ladder_shift, "steps": cfg.ladder_steps, "unit": 1u64 << cfg.ladder_shift },
         "maxPairsPerUpload": cfg.max_pairs_per_upload, "stockMaxPerAccount": cfg.stock_max_per_account,
         "kernelValidityBlocks": cfg.kernel_validity_blocks, "expiryMarginBlocks": cfg.expiry_margin_blocks,

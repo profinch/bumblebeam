@@ -252,6 +252,7 @@ int TopUp(const po::variables_map& vm, Cfg& cfg)
 	ladder.m_Shift = info["ladder"].value("shift", 20u);
 	ladder.m_Steps = info["ladder"].value("steps", 12u);
 	uint32_t maxUpload = info.value("maxPairsPerUpload", 256u);
+	std::string domain = info.value("domain", "");
 	uint32_t stockMax = info.value("stockMaxPerAccount", 512u);
 
 	json m = Http("GET", pool + "/api/miners/" + k.m_Id.get_Account(), "");
@@ -290,7 +291,7 @@ int TopUp(const po::variables_map& vm, Cfg& cfg)
 	}
 
 	uint64_t ts = static_cast<uint64_t>(time(nullptr));
-	json body = { { "account", k.m_Id.get_Account() }, { "ts", ts }, { "pairs", vHex }, { "signature", SignUpload(k.m_Id, ts, vHex) } };
+	json body = { { "account", k.m_Id.get_Account() }, { "ts", ts }, { "pairs", vHex }, { "signature", SignUpload(k.m_Id, domain, ts, vHex) } };
 	json res = Http("POST", pool + "/api/coinbase/pairs", body.dump());
 	if (res.count("error"))
 		throw std::runtime_error("pool refused the upload: " + res["error"].get<std::string>());
@@ -350,7 +351,8 @@ int Make(const po::variables_map& vm, Cfg& cfg)
 	cfg.Save();
 
 	uint64_t ts = static_cast<uint64_t>(time(nullptr));
-	json body = { { "account", k.m_Id.get_Account() }, { "ts", ts }, { "pairs", vHex }, { "signature", SignUpload(k.m_Id, ts, vHex) } };
+	std::string domain = vm["domain"].as<std::string>();
+	json body = { { "account", k.m_Id.get_Account() }, { "ts", ts }, { "pairs", vHex }, { "signature", SignUpload(k.m_Id, domain, ts, vHex) } };
 	std::cout << body.dump() << "\n";
 	return 0;
 }
@@ -378,7 +380,8 @@ int main(int argc, char* argv[])
 			("steps_max", po::value<uint32_t>()->default_value(12), "top-up: make pairs for this many steps from the smallest")
 			("height", po::value<uint64_t>()->default_value(0), "make: current chain height")
 			("count", po::value<uint32_t>()->default_value(0), "make: how many pairs")
-			("value", po::value<uint64_t>()->default_value(0), "make: value of each pair, groth");
+			("value", po::value<uint64_t>()->default_value(0), "make: value of each pair, groth")
+			("domain", po::value<std::string>()->default_value(""), "make: the pool's domain the upload is signed for (GET /api/coinbase)");
 		options.add(own);
 		visible.add(own);
 

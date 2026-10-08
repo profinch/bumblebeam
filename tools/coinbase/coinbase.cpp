@@ -381,10 +381,10 @@ bool ParseAccount(const std::string& s, ECC::Point::Native& pk)
 	}
 }
 
-ECC::Hash::Value UploadHash(const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex)
+ECC::Hash::Value UploadHash(const std::string& domain, const ECC::Point& pk, uint64_t ts, const std::vector<std::string>& vPairsHex)
 {
 	ECC::Hash::Processor hp;
-	hp << "bumblebeam-coinbase-upload" << pk << ts << static_cast<uint64_t>(vPairsHex.size());
+	hp << "bumblebeam-coinbase-upload" << domain << pk << ts << static_cast<uint64_t>(vPairsHex.size());
 	for (const auto& s : vPairsHex)
 		hp << s;
 	ECC::Hash::Value hv;
@@ -392,17 +392,17 @@ ECC::Hash::Value UploadHash(const ECC::Point& pk, uint64_t ts, const std::vector
 	return hv;
 }
 
-std::string SignUpload(const Identity& id, uint64_t ts, const std::vector<std::string>& vPairsHex)
+std::string SignUpload(const Identity& id, const std::string& domain, uint64_t ts, const std::vector<std::string>& vPairsHex)
 {
 	ECC::Signature sig;
-	sig.Sign(UploadHash(id.m_pk, ts, vPairsHex), id.m_sk);
+	sig.Sign(UploadHash(domain, id.m_pk, ts, vPairsHex), id.m_sk);
 	Serializer ser;
 	ser & sig;
 	auto [p, n] = ser.buffer();
 	return to_hex(p, n);
 }
 
-bool VerifyUpload(const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
+bool VerifyUpload(const std::string& domain, const std::string& account, uint64_t ts, const std::vector<std::string>& vPairsHex,
 	const std::string& sigHex)
 {
 	ECC::Point::Native pk;
@@ -430,7 +430,7 @@ bool VerifyUpload(const std::string& account, uint64_t ts, const std::vector<std
 
 	ECC::Point pkPacked;
 	pk.Export(pkPacked);
-	return sig.IsValid(UploadHash(pkPacked, ts, vPairsHex), pk);
+	return sig.IsValid(UploadHash(domain, pkPacked, ts, vPairsHex), pk);
 }
 
 } // namespace bb::coinbase
