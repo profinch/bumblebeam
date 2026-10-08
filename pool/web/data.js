@@ -311,6 +311,8 @@ const BB = (() => {
 
     function miner(w, address, range) {
       const known = w.miners.find((m) => m.address === address);
+      // like the server: an address that never mined here gets an empty record
+      if (!known) return { address, hashrate: 0, hashrate24h: 0, balance: 0, immature: 0, paid: 0, lastShare: null, workers: [], charts: { hashrate: [] }, payments: [] };
       const r = rng(strSeed(address));
       const hr = known ? known.hashrate : (r() < 0.25 ? 0 : 20 + r() * 300);
       const nW = known ? known.workers : 1 + ((r() * 3) | 0);
