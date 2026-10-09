@@ -119,12 +119,16 @@
   const PALETTE = ['#00f6d2', '#24c1ff', '#ffbd2e', '#ff51ff', '#a4e000', '#d885ff', '#ff7a21'];
   // Pools that found blocks in 24 h, most first, each with its colour: the donut's legend, and the
   // recent-blocks table for our own rows, use the same mapping.
+  // BumbleBeam keeps one colour whatever its rank; the other pools share the rest of the palette.
+  const OUR_COLOUR = '#a4e000';
+  const isOurs = (name) => /^bumblebeam\b/i.test(String(name || ''));
   function poolColours(net) {
     if (!net || !net.ok || !Array.isArray(net.pools)) return [];
+    const others = PALETTE.filter((c) => c !== OUR_COLOUR);
+    let k = 0;
     return net.pools.filter((p) => p.blocks24h).sort((a, b) => b.blocks24h - a.blocks24h)
-      .map((p, i) => ({ name: p.name, n: p.blocks24h, color: PALETTE[i % PALETTE.length] }));
+      .map((p) => ({ name: p.name, n: p.blocks24h, color: isOurs(p.name) ? OUR_COLOUR : others[k++ % others.length] }));
   }
-  const isOurs = (name) => /^bumblebeam\b/i.test(String(name || ''));
   function blocksDonut(net) {
     if (!net || !net.ok || !net.blocks24h) return '';
     const rows = poolColours(net);
@@ -310,13 +314,12 @@
     const [stats, net] = await Promise.all([BB.pool('stats'), BB.network().catch(() => null)]);
     let bl = [];
     try { bl = await BB.networkBlocks(80); } catch (e) { bl = []; }
-    const colours = poolColours(net);
     const recent = bl.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Recent network blocks</h2></div>
         <div class="table-wrap"><table><thead><tr><th>Block</th><th>Mined by</th><th class="num">Age</th></tr></thead><tbody>
         ${bl.slice(0, 30).map((b) => {
           // our blocks: the row marked as the explorer marks them (tr.ours), the name in our legend colour
           const ours = isOurs(b.by);
-          const colour = ours ? (colours.find((c) => c.name === b.by) || {}).color || '#a4e000' : null;
+          const colour = ours ? OUR_COLOUR : null;
           const rowAttr = ours ? ' class="ours"' : '';
           const name = b.by ? `<span class="name"${colour ? ` style="color:${colour}"` : ''}>${esc(b.by)}</span>` : '<span class="dim">—</span>';
           // the height as the explorer shows our blocks: a badge
