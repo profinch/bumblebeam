@@ -176,6 +176,11 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .dim { color: var(--muted); }
 .mono { font-family: var(--font-mono); }
 tr.ours td { background: rgba(0, 246, 210, 0.05); }
+/* blocks lists: fixed widths, so rows loaded or refreshed later do not shift the columns */
+.blocks-table { table-layout: fixed; min-width: 760px; }
+.blocks-table col.w-h { width: 110px; } .blocks-table col.w-t { width: 120px; } .blocks-table col.w-m { width: 90px; }
+.blocks-table col.w-r { width: 130px; } .blocks-table col.w-e { width: 90px; } .blocks-table col.w-s { width: 120px; }
+.blocks-table td { overflow: hidden; text-overflow: ellipsis; }
 .name { color: var(--accent); font-weight: 700; }
 .sub { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
