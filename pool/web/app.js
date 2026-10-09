@@ -317,7 +317,7 @@
     let bl = [];
     try { bl = await BB.networkBlocks(80); } catch (e) { bl = []; }
     const recent = bl.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Recent network blocks</h2></div>
-        <div class="table-wrap"><table><thead><tr><th>Block</th><th>Mined by</th><th class="num">Age</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Block</th><th>Mined by</th><th class="num" title="From the block's timestamp on the chain. The node sets it when it builds the block template, so it reads earlier than the moment a miner found the block, which is what Last found shows.">Age</th></tr></thead><tbody>
         ${bl.slice(0, 30).map((b) => {
           // our blocks: the row marked as the explorer marks them (tr.ours), the name in our legend colour
           const ours = isOurs(b.by);
