@@ -103,6 +103,7 @@
   async function attention() {
     const a = await api('attention');
     setCount(a.blocks.length + a.payments.length);
+    setNext(a);
     const blocks = a.blocks.length
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th><th></th></tr></thead><tbody>
         ${a.blocks.map((b) => `<tr>
@@ -126,7 +127,8 @@
       ${flashHtml()}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Unverified blocks</h2></div>
         <p class="hint">Blocks the automatic checks could not settle. Confirm credits the miners' balances; orphan drops the block.</p>${blocks}</section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2>
+        <span class="panel-meta">${a.nextPayout ? `next scheduled <b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
         <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>
         <button class="btn" id="pay-all">Pay all due now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
@@ -279,6 +281,29 @@
     });
   }
 
+  // ---------- the next scheduled payout ----------
+  let nextPay = null; // in this browser's clock: the server's time minus its offset from ours
+  function setNext(a) {
+    nextPay = a.nextPayout ? a.nextPayout - a.now + Date.now() / 1000 : null;
+    tick();
+  }
+  function left() {
+    const s = Math.round(nextPay - Date.now() / 1000);
+    if (s <= 0) return 'now';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(sec).padStart(2, '0')}`;
+  }
+  function tick() {
+    const top = $('#next-pay'), panel = $('#next-pay-panel');
+    top.hidden = nextPay == null;
+    if (nextPay == null) return;
+    const at = new Date(nextPay * 1000).toISOString().slice(11, 16);
+    top.innerHTML = `payout in <b>${esc(left())}</b>`;
+    top.title = `Next scheduled payout run at ${at} UTC (the pool looks once a minute)`;
+    if (panel) panel.textContent = `in ${left()} (${at} UTC)`;
+  }
+  setInterval(tick, 1000);
+
   // ---------- routing ----------
   function setCount(n) {
     const el = $('#n-attention');
@@ -321,15 +346,16 @@
     e.preventDefault();
     memToken = '';
     setToken('');
+    nextPay = null;
     signIn();
   });
   // the Attention count shows on every tab
   async function poll() {
     if (memToken) {
-      try { const a = await api('attention'); setCount(a.blocks.length + a.payments.length); } catch { /* shown by the view */ }
+      try { const a = await api('attention'); setCount(a.blocks.length + a.payments.length); setNext(a); } catch { /* shown by the view */ }
     }
   }
   route();
   poll();
-  setInterval(poll, 60000);
+  setInterval(poll, 30000);
 })();

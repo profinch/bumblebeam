@@ -43,6 +43,12 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
     let wallet = Wallet::new(&shared.cfg.wallet_api.url, &shared.cfg.wallet_api.acl_key, shared.http.clone());
     let interval = Duration::from_secs(shared.cfg.pool.payout_interval_secs.max(60));
     let mut next = tokio::time::Instant::now() + interval;
+    // the same moment in wall-clock time, for the operator's countdown
+    let set_next = |next: tokio::time::Instant| {
+        let at = now() + next.saturating_duration_since(tokio::time::Instant::now()).as_secs() as i64;
+        shared.next_payout.store(at, std::sync::atomic::Ordering::Relaxed);
+    };
+    set_next(next);
     loop {
         if let Err(e) = recover_created(&shared, &wallet).await {
             warn!("payout recovery: {e:#}");
@@ -52,6 +58,7 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
         }
         if tokio::time::Instant::now() >= next {
             next += interval;
+            set_next(next);
             if let Err(e) = pay_once(&shared, &wallet, None).await {
                 warn!("payout run: {e:#}");
             }

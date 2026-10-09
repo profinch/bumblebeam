@@ -303,7 +303,14 @@ struct ActionBody {
 }
 
 async fn admin_attention(State(api): State<Api>) -> R {
-    Ok(Json(crate::admin::attention(&api.shared.db).await?))
+    let s = &api.shared;
+    let mut a = crate::admin::attention(&s.db).await?;
+    // the loop looks every minute, so a run starts up to a minute after this
+    let next = s.next_payout.load(std::sync::atomic::Ordering::Relaxed);
+    a["nextPayout"] = if next > 0 { json!(next) } else { Value::Null };
+    a["payoutInterval"] = json!(s.cfg.pool.payout_interval_secs);
+    a["now"] = json!(now());
+    Ok(Json(a))
 }
 
 async fn admin_connections(State(api): State<Api>) -> R {

@@ -61,6 +61,7 @@ async fn main() -> Result<()> {
         connected_workers: AtomicU64::new(0),
         conns: conns::Conns::default(),
         net_height: AtomicU64::new(0),
+        next_payout: std::sync::atomic::AtomicI64::new(0),
         started: Instant::now(),
         http: http.clone(),
         coinbase: cfg.coinbase.enabled.then(coinbase::Link::new),
