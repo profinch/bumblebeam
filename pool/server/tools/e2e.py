@@ -118,4 +118,9 @@ print("miner immature groth:", m["immature"], "hashrate:", round(m["hashrate"], 
 assert m["immature"] > 0
 stats = json.load(urllib.request.urlopen(a.api + "/api/stats"))
 print("stats: miners", stats["minersTotal"], "node height", stats["nodes"][0]["height"], "reward", stats["config"]["blockReward"])
+hs = json.load(urllib.request.urlopen(a.api + "/api/blocks/heights"))
+print("api block heights:", hs)
+assert hs["count"] == 1 and hs["blocks"][0][0] == hdr["height"] and hs["blocks"][0][1] in ("pplns", "solo") and hs["blocks"][0][2] == "pending"
+print("stats: blocks pending", stats["blocksPending"])
+assert stats["blocksPending"] == 1
 print("E2E OK")

@@ -13,9 +13,10 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 
 | need | call |
 |---|---|
-| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h, effort, fee, min payout, payout interval, ports | `/api/stats` (`?range=24h|7d|30d` for the chart) |
+| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h, blocks still confirming (`blocksPending`), effort, fee, min payout, payout interval, ports | `/api/stats` (`?range=24h|7d|30d` for the chart) |
 | is it up, does it have work | `/api/health` |
 | blocks the pool found, status and confirmations | `/api/blocks?limit=50&before=<height>` |
+| every height the pool found, compact: is this block ours? how many confirmed? | `/api/blocks/heights` (`[height, mode, status]`, orphans left out) |
 | top miners by hashrate (no addresses) | `/api/miners?limit=50` |
 | one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments, `blocksFound`) |
 | payout runs | `/api/payments?limit=50` |
