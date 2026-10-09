@@ -529,15 +529,17 @@ impl Db {
 
     /// Miners at or above the payout threshold: (id, address, balance, cached address type). An
     /// `invalid` verdict older than a day is returned as unknown so it gets checked again. Coinbase
-    /// accounts have no address: they are paid in blocks.
-    pub async fn miners_due(&self, min_payout: i64, now: i64) -> Result<Vec<DuePayout>> {
+    /// accounts have no address: they are paid in blocks. `only` narrows to one miner (an operator's
+    /// payout, below the threshold too).
+    pub async fn miners_due(&self, min_payout: i64, now: i64, only: Option<i64>) -> Result<Vec<DuePayout>> {
         let c = self.client().await?;
         let rows = c
             .query(
                 "SELECT id, address, balance, CASE WHEN address_type='invalid' AND COALESCE(type_checked,0) < $2 THEN NULL ELSE address_type END
                  FROM miners WHERE balance >= $1 AND address NOT LIKE 'cb:%'
-                   AND NOT (COALESCE(address_type,'') = 'invalid' AND COALESCE(type_checked,0) >= $2) ORDER BY balance DESC",
-                &[&min_payout, &(now - 86400)],
+                   AND NOT (COALESCE(address_type,'') = 'invalid' AND COALESCE(type_checked,0) >= $2)
+                   AND ($3::BIGINT IS NULL OR id = $3) ORDER BY balance DESC",
+                &[&min_payout, &(now - 86400), &only],
             )
             .await?;
         Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2), r.get(3))).collect())

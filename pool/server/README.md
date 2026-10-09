@@ -77,7 +77,8 @@ The same actions are in the operator's dashboard at `/admin`, on when `[admin] t
 characters, `openssl rand -hex 24`) is set: the decisions above, live stratum connections with
 their agent, port, difficulty and shares (and a button to end one), the connections that ended
 before a login with what they sent first and why they ended (a rental service's checker, TLS on a
-plain port), and the miners with the move above. The API is in [`../API.md`](../API.md).
+plain port), and the miners with the move above. "Pay all due now" runs the payout without waiting for the next
+interval; "Pay now" on a miner's page sends its whole balance even below the threshold. The API is in [`../API.md`](../API.md).
 
 `block_check_urls` lists explorer-node APIs (`/block?height=`) tried in order. None of them can
 confirm a block by itself: only the wallet's coinbase confirms; an explorer orphans a block whose

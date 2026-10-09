@@ -48,6 +48,8 @@ pub struct Shared {
     pub db: Db,
     pub job_tx: watch::Sender<Option<Arc<Job>>>,
     pub submit_tx: mpsc::Sender<Submit>,
+    /// The operator's "pay now", answered by the payout loop (crate::payouts).
+    pub payout_tx: mpsc::Sender<crate::payouts::PayNow>,
     /// Nonce prefix the node assigned to the pool's own stratum login (hex, may be empty).
     pub node_prefix: RwLock<String>,
     pub conn_seq: AtomicU64,

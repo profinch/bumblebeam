@@ -28,7 +28,14 @@ pub const META_DUPLICATE_TEXT: &str = "duplicate_error_text";
 pub const META_UNKNOWN_TEXT: &str = "unknown_tx_error_text";
 const PUSH_TYPES: [&str; 3] = ["offline", "max_privacy", "public_offline"];
 
-pub async fn run(shared: Arc<Shared>) {
+/// An operator's request for a payout run now instead of at the next interval: every miner due,
+/// or one miner (`only`) whatever its balance against the threshold. `reply` gets what was done.
+pub struct PayNow {
+    pub only: Option<i64>,
+    pub reply: tokio::sync::oneshot::Sender<Result<String, String>>,
+}
+
+pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<PayNow>) {
     if !shared.cfg.wallet_enabled() {
         warn!("wallet_api.url is empty: payouts disabled, balances accrue");
         return;
@@ -45,11 +52,22 @@ pub async fn run(shared: Arc<Shared>) {
         }
         if tokio::time::Instant::now() >= next {
             next += interval;
-            if let Err(e) = pay_once(&shared, &wallet).await {
+            if let Err(e) = pay_once(&shared, &wallet, None).await {
                 warn!("payout run: {e:#}");
             }
         }
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        // the same loop answers the operator, so a payout run never overlaps another
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+            Some(req) = requests.recv() => {
+                info!(only = ?req.only, "payout run requested by the operator");
+                let r = pay_once(&shared, &wallet, req.only).await.map_err(|e| format!("{e:#}"));
+                if let Err(e) = &r {
+                    warn!("payout run: {e}");
+                }
+                let _ = req.reply.send(r);
+            }
+        }
     }
 }
 
@@ -114,18 +132,23 @@ async fn address_type(shared: &Arc<Shared>, wallet: &Wallet, miner_id: i64, addr
     Ok(if t == "invalid" { None } else { Some(t) })
 }
 
-async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
+/// One payout run; returns a line per miner (sent, or why not) for the operator.
+async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet, only: Option<i64>) -> Result<String> {
     let cfg = &shared.cfg;
-    let due = shared.db.miners_due(cfg.pool.min_payout_groth as i64, now()).await?;
+    let min = if only.is_some() { 1 } else { cfg.pool.min_payout_groth as i64 };
+    let due = shared.db.miners_due(min, now(), only).await?;
     if due.is_empty() {
-        return Ok(());
+        return Ok(if only.is_some() { "nothing to pay: no unpaid balance, a coinbase account, or an invalid address".into() } else { "nobody is at the payout threshold".into() });
     }
+    let mut notes: Vec<String> = Vec::new();
+    let beam = |g: i64| format!("{:.4} BEAM", g as f64 / 1e8);
     let st = wallet.status().await?;
     let mut available = st["available"].as_u64().unwrap_or(0);
     let ts = now();
     for (miner_id, address, balance, cached_type) in due {
         let Some(kind) = address_type(shared, wallet, miner_id, &address, cached_type).await? else {
             warn!(address = %crate::state::Short(&address), "no valid address type, payout skipped");
+            notes.push(format!("{}: skipped, the wallet does not take the address", crate::state::Short(&address)));
             continue;
         };
         let push = PUSH_TYPES.contains(&kind.as_str());
@@ -141,16 +164,19 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
         let (value, debit) = if cfg.pool.miner_pays_tx_fee { (balance - fee as i64, balance) } else { (balance, balance) };
         if value <= 0 {
             warn!(address = %crate::state::Short(&address), balance, fee, "balance does not cover the network fee, payout skipped");
+            notes.push(format!("{}: skipped, {} does not cover the network fee of {}", crate::state::Short(&address), beam(balance), beam(fee as i64)));
             continue;
         }
         let need = value as u64 + fee;
         if available < need {
             // a miner too big for the wallet right now does not block the smaller ones
             warn!(address = %crate::state::Short(&address), value, fee, available, "wallet balance too low for this payout, postponed");
+            notes.push(format!("{}: postponed, the wallet has {} available for {}", crate::state::Short(&address), beam(available as i64), beam(need as i64)));
             continue;
         }
         let tx_id = new_tx_id();
         if !shared.db.create_payment(miner_id, debit, value, fee as i64, &tx_id, ts).await? {
+            notes.push(format!("{}: skipped, the balance changed meanwhile", crate::state::Short(&address)));
             continue; // balance changed under us
         }
         match wallet.send(&address, value as u64, fee, COMMENT, &tx_id).await {
@@ -162,6 +188,7 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                 check_moved(shared.db.set_payment_status(&got, "created", "pending").await?, &got, "pending");
                 available -= need;
                 info!(address = %crate::state::Short(&address), value, fee, tx_id = %got, "payout sent");
+                notes.push(format!("{}: sent {} (fee {}), tx {got}", crate::state::Short(&address), beam(value), beam(fee as i64)));
             }
             Err(WalletError::Api { message, .. }) => {
                 // the wallet refused; before refunding make sure it did not record the transaction anyway
@@ -170,22 +197,28 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
                     Ok(_) => {
                         check_moved(shared.db.set_payment_status(&tx_id, "created", "pending").await?, &tx_id, "pending");
                         warn!(address = %crate::state::Short(&address), value, %tx_id, "tx_send answered with an error but the transaction exists, now pending: {message}");
+                        notes.push(format!("{}: sent {} with a wallet error, the transaction exists: {message}", crate::state::Short(&address), beam(value)));
                     }
                     Err(e) if e.is_unknown_tx_with(unk.as_deref()) => {
                         check_moved(shared.db.refund_payment(&tx_id, "created").await?, &tx_id, "failed");
                         warn!(address = %crate::state::Short(&address), value, fee, "tx_send refused, refunded: {message}");
+                        notes.push(format!("{}: the wallet refused, balance returned: {message}", crate::state::Short(&address)));
                     }
-                    Err(e) => warn!(address = %crate::state::Short(&address), %tx_id, "tx_send refused and tx_status unclear, left for recovery: {message} / {e}"),
+                    Err(e) => {
+                        warn!(address = %crate::state::Short(&address), %tx_id, "tx_send refused and tx_status unclear, left for recovery: {message} / {e}");
+                        notes.push(format!("{}: the wallet refused and its status is unclear, left for recovery: {message}", crate::state::Short(&address)));
+                    }
                 }
             }
             Err(e @ WalletError::Transport { .. }) => {
                 // unknown whether it was sent: stays `created`, recovery decides later
                 warn!(address = %crate::state::Short(&address), value, %tx_id, "tx_send transport failure, left for recovery: {e}");
+                notes.push(format!("{}: the wallet did not answer, left for recovery; the run stopped here", crate::state::Short(&address)));
                 break;
             }
         }
     }
-    Ok(())
+    Ok(notes.join("\n"))
 }
 
 /// Payments debited but not confirmed as sent (`created`, or `sending` from a crash mid-resend).
