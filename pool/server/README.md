@@ -96,3 +96,7 @@ days, hashrate samples for 31 (the month chart).
 
 Hot standby switch under 100 ms (today a dead node is replaced within seconds), publishing PPLNS
 rounds for audit, automatic coin splitting, and rate limits beyond the per-address connection cap.
+The payout schedule counts from the pool's start (`payout_interval_secs` after it, then every
+interval), so each restart postpones the next run by up to a full interval. Meant for later: a
+wall-clock schedule (every interval on the hour) or one counted from the last payout run. Until
+then "Pay all due now" in `/admin` covers a restart.
