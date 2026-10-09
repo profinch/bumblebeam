@@ -57,10 +57,50 @@
     return j;
   }
 
+  // A confirmation in the site's own look instead of window.confirm: resolves true on the button
+  // (or Enter), false on Cancel, Esc or a click outside. Text only, never HTML.
+  function ask(title, text, { ok = 'Confirm', danger = false } = {}) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'adm-ask-bg';
+      back.innerHTML = `<div class="adm-ask${danger ? ' danger' : ''}" role="alertdialog" aria-modal="true" aria-labelledby="adm-ask-t" aria-describedby="adm-ask-d">
+        <h3 id="adm-ask-t"></h3><div id="adm-ask-d"></div>
+        <div class="adm-row"><button class="btn ghost" data-a="no">Cancel</button><button class="btn${danger ? ' danger' : ''}" data-a="yes"></button></div></div>`;
+      $('#adm-ask-t', back).textContent = title;
+      $('#adm-ask-d', back).textContent = text;
+      $('[data-a="yes"]', back).textContent = ok;
+      const before = document.activeElement;
+      const done = (v) => {
+        document.removeEventListener('keydown', key, true);
+        back.remove();
+        if (before && before.focus) before.focus();
+        resolve(v);
+      };
+      const key = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); done(false); }
+        else if (e.key === 'Enter' && document.activeElement !== $('[data-a="no"]', back)) { e.preventDefault(); done(true); }
+        else if (e.key === 'Tab') { // keep the focus inside the dialog
+          const b = [...back.querySelectorAll('button')], i = b.indexOf(document.activeElement);
+          e.preventDefault();
+          b[(i + (e.shiftKey ? b.length - 1 : 1)) % b.length].focus();
+        }
+      };
+      back.addEventListener('click', (e) => {
+        const a = e.target.closest('[data-a]');
+        if (a) done(a.dataset.a === 'yes');
+        else if (e.target === back) done(false);
+      });
+      document.addEventListener('keydown', key, true);
+      document.body.appendChild(back);
+      requestAnimationFrame(() => back.classList.add('on'));
+      $('[data-a="yes"]', back).focus();
+    });
+  }
+
   let flash = null;
   const flashHtml = () => (flash ? `<div class="adm-msg ${flash.ok ? 'ok' : 'err'}">${esc(flash.text)}</div>` : '');
-  async function act(path, body, confirmText) {
-    if (confirmText && !window.confirm(confirmText)) return;
+  async function act(path, body, q) {
+    if (q && !(await ask(q.title, q.text, q))) return;
     try {
       const r = await api(path, body);
       flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
@@ -71,8 +111,8 @@
   }
 
   // a payout run takes a few seconds per miner: the button says so until the pool answers
-  async function payNow(btn, body, confirmText) {
-    if (!window.confirm(confirmText)) return;
+  async function payNow(btn, body, text) {
+    if (!(await ask('Payout', text, { ok: 'Pay now' }))) return;
     btn.disabled = true;
     btn.textContent = 'Paying…';
     await act('payouts', body);
@@ -140,14 +180,20 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Wallet txId deduplication</h2>
         <span class="panel-meta">${a.txidHonored ? `proven: <b>${esc(a.txidHonored)}</b>` : 'not proven: run <b>admin probe-txid</b>'}</span></div></section>`;
     const force = () => $('#force').checked;
-    $('#pay-all').addEventListener('click', (e) => payNow(e.target, {}, 'Run a payout for every miner at the threshold now?'));
+    $('#pay-all').addEventListener('click', (e) => payNow(e.target, {}, 'Run a payout now for every miner at the payout threshold?'));
     view.querySelectorAll('[data-block]').forEach((b) => b.addEventListener('click', () => {
       const h = b.dataset.block, action = b.dataset.action;
-      act(`blocks/${h}`, { action, force: force() }, `${action} block ${h}${force() ? ' (forced)' : ''}?`);
+      act(`blocks/${h}`, { action, force: force() }, {
+        title: `${action} block`, ok: action === 'orphan' ? 'Orphan' : 'Confirm', danger: action === 'orphan',
+        text: `${action === 'orphan' ? 'Drop' : 'Confirm'} block ${h}${force() ? ' (forced)' : ''}? ${action === 'orphan' ? 'Its credits are not paid.' : 'Its credits go into the miners\' balances.'}`,
+      });
     }));
     view.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => {
       const tx = b.dataset.pay, action = b.dataset.action;
-      act(`payments/${encodeURIComponent(tx)}`, { action, force: force() }, `Mark payment ${tx} as ${action}${force() ? ' (forced)' : ''}?`);
+      act(`payments/${encodeURIComponent(tx)}`, { action, force: force() }, {
+        title: action === 'refund' ? 'Refund payment' : 'Payment sent', ok: action === 'refund' ? 'Refund' : 'Mark sent', danger: action === 'refund',
+        text: `${action === 'refund' ? 'Return the debit of' : 'Mark as sent'} payment ${tx}${force() ? ' (forced)' : ''}?`,
+      });
     }));
   }
 
@@ -160,7 +206,7 @@
     <td><button class="btn small danger" data-kick="${Number(c.id)}">End</button></td></tr>`;
   const connHead = (withMiner = true) => `<thead><tr><th>Peer</th><th>${withMiner ? 'Miner / worker' : 'Worker'}</th><th>Agent</th><th>Up</th><th class="num">Diff</th><th class="num">Shares</th><th>Last share</th><th></th></tr></thead>`;
   function bindKick() {
-    view.querySelectorAll('[data-kick]').forEach((b) => b.addEventListener('click', () => act(`connections/${b.dataset.kick}/kick`, {}, `End connection ${b.dataset.kick}? The miner will reconnect on its own.`)));
+    view.querySelectorAll('[data-kick]').forEach((b) => b.addEventListener('click', () => act(`connections/${b.dataset.kick}/kick`, {}, { title: 'End connection', ok: 'End', danger: true, text: `End connection ${b.dataset.kick}? The miner will reconnect on its own.` })));
   }
 
   async function connections() {
@@ -271,7 +317,7 @@
       e.preventDefault();
       const to = $('#merge-to').value.replace(/\s+/g, '');
       if (!to) return;
-      if (!window.confirm(`Move everything of miner #${m.id} (${short(m.address)}) to ${short(to)}?`)) return;
+      if (!(await ask('Move to another address', `Move the shares, block credits, found blocks and unpaid balance of miner #${m.id} (${short(m.address)}) to ${short(to)}? Its connections are ended first.`, { ok: 'Move everything', danger: true }))) return;
       try {
         const r = await api(`miners/${m.id}/merge`, { to });
         flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
