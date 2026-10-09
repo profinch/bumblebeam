@@ -183,13 +183,16 @@
     : `<span class="badge pending">${int(Math.min(b.confirmations, maturity))}/${int(maturity)}</span>`;
   const modeBadge = (m) => (m === 'solo' ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>');
 
-  function blocksRows(blocks, maturity) {
-    return blocks.map((b) => `<tr>
+  // `rewardLast`: Reward right before Status (a miner's own blocks), not after Mode
+  function blocksRows(blocks, maturity, rewardLast = false) {
+    return blocks.map((b) => {
+      const reward = `<td class="num">${beam(b.reward + b.fees, 3)}</td>`;
+      return `<tr>
         <td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
-        <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
-        <td class="num">${beam(b.reward + b.fees, 3)}</td>
+        <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>${rewardLast ? '' : reward}
         <td class="num" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
-        <td class="dim">${esc(b.finder || '—')}</td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
+        <td class="dim">${esc(b.finder || '—')}</td>${rewardLast ? reward : ''}<td class="num">${statusBadge(b, maturity)}</td></tr>`;
+    }).join('');
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
@@ -415,14 +418,14 @@
         <div class="panel-meta"><span id="mine-count"></span>
           ${ddHtml('mine-mode', 'Filter by mode', mine.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml('mine-finder', 'Filter by finder', mine.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
-      <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-r"><col class="w-e"><col><col class="w-s"></colgroup>
-        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}<th class="num">Reward</th>${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Status</th></tr></thead>
+      <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
+        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Reward</th><th class="num">Status</th></tr></thead>
         <tbody id="mine-body"></tbody></table></div>
       <div class="more" id="mine-more" hidden><button class="btn ghost">Show more</button></div></section>`;
   }
   function drawMine() {
     const list = mineList();
-    $('#mine-body').innerHTML = list.length ? blocksRows(list.slice(0, mine.shown), mine.maturity) : '<tr><td colspan="7" class="dim">No blocks match</td></tr>';
+    $('#mine-body').innerHTML = list.length ? blocksRows(list.slice(0, mine.shown), mine.maturity, true) : '<tr><td colspan="7" class="dim">No blocks match</td></tr>';
     $('#mine-more').hidden = list.length <= mine.shown;
     const all = mine.blocks.length;
     $('#mine-count').textContent = list.length === all ? `${int(all)} blocks` : `${int(list.length)} of ${int(all)}`;
