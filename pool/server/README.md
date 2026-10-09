@@ -69,7 +69,8 @@ by the wallet, or when it is less than an hour old; `--force` overrides. Decide 
 wallet's transaction list and the chain in front of you.
 
 `admin merge <from address> <to address>` moves what a rig mined under a wrong address (shares,
-block credits, found blocks, unpaid balance) to the right one; a miner never paid is deleted, one
+block credits, found blocks, unpaid balance) to the right one, which must already be a miner here
+(a new address logs in once first: a typo can pass even the wallet's check); a miner never paid is deleted, one
 already paid keeps its payout history. It is refused while a payment of the old address is in
 flight and for coinbase accounts.
 

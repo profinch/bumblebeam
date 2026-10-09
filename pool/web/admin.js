@@ -504,10 +504,10 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers, 7 days</h2></div>${workers}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Move to another address</h2></div>
         <p class="hint">For a rig that mined under the wrong address: its shares, block credits (immature ones are paid to the new address when they mature),
-        found blocks, and unpaid balance go to the address below; its connections are ended first. Payout history stays here: an account that has never paid is deleted.
+        found blocks, and unpaid balance go to the miner below (only a miner of this pool: a new address logs in once first); its connections are ended first. Payout history stays here: an account that has never paid is deleted.
         If the rig keeps using the wrong address, it comes back as a new miner, so fix the rig (or the rental profile) too.</p>
         <form class="adm-row" id="merge">
-          <div class="adm-suggest"><input class="adm-field" id="merge-to" placeholder="the right Beam address, or a piece of a known miner's" autocomplete="off" spellcheck="false"
+          <div class="adm-suggest"><input class="adm-field" id="merge-to" placeholder="the right miner: a piece of its address" autocomplete="off" spellcheck="false"
             role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="merge-list" aria-label="Address to move to">
             <ul class="dd-list" id="merge-list" role="listbox" hidden></ul></div>
           <button class="btn danger" type="submit">Move everything</button>
@@ -533,13 +533,13 @@
       try { chk = await api(`address?a=${encodeURIComponent(to)}`); } catch (err) { flash = { ok: false, text: err.message }; return render(); }
       const fail = (text) => { flash = { ok: false, text }; render(); };
       if (chk.minerId === m.id) return fail('That is this same miner.');
+      // only to a miner of this pool: a typo in a long address can pass even the wallet's check
       if (chk.minerId == null) {
         if (!chk.shape) return fail('Not a Beam address.');
-        if (chk.shape === 'coinbase') return fail('A coinbase account cannot receive a move.');
-        if (!chk.wallet || chk.wallet.error) return fail(`The address is not a miner of this pool and the wallet could not check it${chk.wallet && chk.wallet.error ? `: ${chk.wallet.error}` : ''}.`);
-        if (!chk.wallet.valid) return fail('The wallet does not accept this address: check it for a typo.');
+        return fail('Not a miner of this pool. Moves go only to a known miner: log in once with this address (any miner, or the rental profile), then pick it here.');
       }
-      const toWhat = chk.minerId != null ? `miner #${chk.minerId}, ${beam(chk.balance)} unpaid` : `a new account, ${chk.wallet.type} address`;
+      if (chk.shape === 'coinbase') return fail('A coinbase account cannot receive a move.');
+      const toWhat = `miner #${chk.minerId}, ${beam(chk.balance)} unpaid`;
       if (!(await ask('Move to another address', ['Move the shares, block credits, found blocks and unpaid balance (', { b: beam(m.balance) },
         `) of miner #${m.id}?\n\nFrom: `, m.address, '\n\nTo (', { b: toWhat }, '): ', to, '\n\nIts connections are ended first.'], { ok: 'Move everything', danger: true }))) return;
       try {
