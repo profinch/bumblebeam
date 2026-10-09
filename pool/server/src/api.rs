@@ -255,6 +255,7 @@ fn admin_router(api: Api) -> Router<Api> {
         .route("/api/admin/miners/:id/merge", post(admin_merge))
         .route("/api/admin/blocks/:height", post(admin_block))
         .route("/api/admin/payments/:tx_id", post(admin_payment))
+        .route("/api/admin/payouts", post(admin_pay_now))
         .layer(middleware::from_fn_with_state(api, admin_auth))
 }
 
@@ -297,6 +298,8 @@ struct ActionBody {
     force: bool,
     #[serde(default)]
     to: String,
+    #[serde(default)]
+    miner: Option<i64>,
 }
 
 async fn admin_attention(State(api): State<Api>) -> R {
@@ -360,5 +363,23 @@ async fn admin_payment(State(api): State<Api>, h: HeaderMap, Path(tx_id): Path<S
     let wallet = s.cfg.wallet_enabled().then(|| crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone()));
     let r = crate::admin::payment(&s.db, wallet.as_ref(), &tx_id, &b.action, b.force).await;
     info!(ip = %client_ip(&h), %tx_id, action = %b.action, force = b.force, ok = r.is_ok(), "admin: payment");
+    outcome(r)
+}
+
+/// A payout run now, by the payout loop itself (so it never overlaps a scheduled one): every miner
+/// at the threshold, or `miner` alone whatever its balance against the threshold.
+async fn admin_pay_now(State(api): State<Api>, h: HeaderMap, Json(b): Json<ActionBody>) -> Response {
+    let (reply, rx) = tokio::sync::oneshot::channel();
+    let r = if api.shared.payout_tx.try_send(crate::payouts::PayNow { only: b.miner, reply }).is_err() {
+        Err(anyhow::anyhow!("payouts are off (no wallet_api) or a run is already queued"))
+    } else {
+        match tokio::time::timeout(std::time::Duration::from_secs(150), rx).await {
+            Ok(Ok(Ok(notes))) => Ok(notes),
+            Ok(Ok(Err(e))) => Err(anyhow::anyhow!(e)),
+            Ok(Err(_)) => Err(anyhow::anyhow!("the payout loop is not running")),
+            Err(_) => Err(anyhow::anyhow!("still running after 150 s: see the pool's log and the Payments list")),
+        }
+    };
+    info!(ip = %client_ip(&h), miner = ?b.miner, ok = r.is_ok(), "admin: pay now");
     outcome(r)
 }

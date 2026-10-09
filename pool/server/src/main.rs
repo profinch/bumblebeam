@@ -44,6 +44,7 @@ async fn main() -> Result<()> {
     anyhow::ensure!(db.acquire_instance_lock().await?, "another pool process already runs against this database");
     let (job_tx, _) = watch::channel(None);
     let (submit_tx, submit_rx) = mpsc::channel(256);
+    let (payout_tx, payout_rx) = mpsc::channel(4);
     let http = reqwest::Client::builder()
         .user_agent("bumblebeam-pool/0.1")
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -54,6 +55,7 @@ async fn main() -> Result<()> {
         db,
         job_tx,
         submit_tx,
+        payout_tx,
         node_prefix: RwLock::new(String::new()),
         conn_seq: AtomicU64::new(0),
         connected_workers: AtomicU64::new(0),
@@ -94,7 +96,7 @@ async fn main() -> Result<()> {
     tokio::spawn(network::run(net.clone(), shared.clone()));
     tokio::spawn(upstream::run(shared.clone(), submit_rx));
     tokio::spawn(accounting::confirm_loop(shared.clone()));
-    tokio::spawn(payouts::run(shared.clone()));
+    tokio::spawn(payouts::run(shared.clone(), payout_rx));
     {
         let s = shared.clone();
         tokio::spawn(async move {

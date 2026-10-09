@@ -70,6 +70,14 @@
     render();
   }
 
+  // a payout run takes a few seconds per miner: the button says so until the pool answers
+  async function payNow(btn, body, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    btn.disabled = true;
+    btn.textContent = 'Paying…';
+    await act('payouts', body);
+  }
+
   // ---------- views ----------
   function signIn(err) {
     $('#tabs').hidden = true;
@@ -118,6 +126,9 @@
       ${flashHtml()}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Unverified blocks</h2></div>
         <p class="hint">Blocks the automatic checks could not settle. Confirm credits the miners' balances; orphan drops the block.</p>${blocks}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2></div>
+        <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>
+        <button class="btn" id="pay-all">Pay all due now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
         <p class="hint">In review, or created/sending for over an hour. <b>Sent</b>: the transaction is out, the pool polls its kernel.
         <b>Refund</b>: the debit goes back to the miner (refused while the wallet still knows the transaction).</p>${pays}
@@ -125,6 +136,7 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Wallet txId deduplication</h2>
         <span class="panel-meta">${a.txidHonored ? `proven: <b>${esc(a.txidHonored)}</b>` : 'not proven: run <b>admin probe-txid</b>'}</span></div></section>`;
     const force = () => $('#force').checked;
+    $('#pay-all').addEventListener('click', (e) => payNow(e.target, {}, 'Run a payout for every miner at the threshold now?'));
     view.querySelectorAll('[data-block]').forEach((b) => b.addEventListener('click', () => {
       const h = b.dataset.block, action = b.dataset.action;
       act(`blocks/${h}`, { action, force: force() }, `${action} block ${h}${force() ? ' (forced)' : ''}?`);
@@ -233,6 +245,9 @@
           <div class="tile"><div class="k">Blocks found</div><div class="v">${int(m.blocksFound)}</div></div>
         </div>
       </section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Pay now</h2></div>
+        <p class="hint">Sends the whole unpaid balance now, even below the payout threshold; the network fee comes out of it.</p>
+        <button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay ${beam(m.balance)} now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Live connections</h2></div>
         ${m.connections.length ? `<div class="table-wrap"><table>${connHead(false)}<tbody>${m.connections.map((c) => connRow(c, false)).join('')}</tbody></table></div>` : '<p class="hint">None.</p>'}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers, 7 days</h2></div>${workers}</section>
@@ -247,6 +262,7 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Block credits</h2></div>${credits}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>${pays}</section>`;
     bindKick();
+    $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, `Pay ${beam(m.balance)} to ${short(m.address)} now?`));
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
       const to = $('#merge-to').value.replace(/\s+/g, '');
