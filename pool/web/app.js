@@ -193,7 +193,8 @@
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
-    return `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th class="num">Effort</th><th>Finder</th><th class="num">Status</th></tr></thead>
+    return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-r"><col class="w-e"><col><col class="w-s"></colgroup>
+      <thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th class="num">Effort</th><th>Finder</th><th class="num">Status</th></tr></thead>
       <tbody id="blocks-body">${blocksRows(blocks, maturity)}</tbody></table></div>${more}`;
   }
 
