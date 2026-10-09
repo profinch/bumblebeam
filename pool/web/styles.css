@@ -190,6 +190,9 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .badge.pending { color: var(--color-yellow); background: rgba(244, 206, 74, 0.1); }
 .badge.bad { color: var(--color-red); background: rgba(242, 95, 91, 0.12); }
 .badge.solo { color: var(--color-purple); background: rgba(218, 104, 245, 0.12); }
+/* a block our pool found: its height as a badge, in the explorer and the pool's network page */
+.badge.ours-h { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 1px 6px; margin: -2px 0 -2px -6px; text-decoration: none; }
+.badge.ours-h:hover { background: rgba(0, 246, 210, 0.2); }
 
 .hashcell { display: flex; align-items: center; gap: 10px; }
 .spark { width: 90px; height: 22px; flex: none; }
