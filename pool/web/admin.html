@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BumbleBeam Pool - operator</title>
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<!-- the v=dev query becomes the commit hash in the Docker build, so a release never mixes cached and new files -->
+<link rel="stylesheet" href="/styles.css?v=dev">
+<style>
+  .adm-tabs { display: flex; gap: 6px; margin-left: auto; }
+  .adm-tabs a { color: var(--text-dim); font: 700 12px var(--font-mono); padding: 8px 10px; border-bottom: 2px solid transparent; }
+  .adm-tabs a:hover { color: var(--text); text-decoration: none; }
+  .adm-tabs a.active { color: var(--text); border-bottom-color: var(--accent); }
+  .adm-tabs .n { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px; border-radius: 8px; font-size: 10px; text-align: center; background: rgba(242, 95, 91, .2); color: var(--color-red); }
+  .adm-field { width: 100%; max-width: 520px; background: var(--field-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font: 12px var(--font-mono); }
+  .adm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .adm-msg { margin: 0 0 16px; padding: 10px 12px; border-radius: 6px; font: 12px var(--font-mono); line-height: 1.5; word-break: break-word; }
+  .adm-msg.ok { color: var(--accent); background: rgba(0, 246, 210, .08); border: 1px solid rgba(0, 246, 210, .3); }
+  .adm-msg.err { color: var(--color-red); background: rgba(242, 95, 91, .08); border: 1px solid rgba(242, 95, 91, .35); }
+  .adm-addr { font: 12px var(--font-mono); word-break: break-all; color: var(--text-dim); line-height: 1.5; }
+  .btn.danger { color: var(--color-red); border-color: rgba(242, 95, 91, .6); background: rgba(242, 95, 91, .06); }
+  .btn.danger:hover { background: rgba(242, 95, 91, .18); }
+  td.wrap { white-space: normal; word-break: break-word; min-width: 220px; }
+  tr.clickable { cursor: pointer; }
+  .flag { margin-right: 4px; }
+  label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Pool, home">
+      <img class="logo" src="/favicon.svg" alt="">
+      <span class="word">Bumble<b>Beam</b> <i class="sub-word">Operator</i></span>
+    </a>
+    <nav class="adm-tabs" id="tabs" aria-label="Operator" hidden>
+      <a href="#attention" data-tab="attention">Attention<span class="n" id="n-attention" hidden></span></a>
+      <a href="#connections" data-tab="connections">Connections</a>
+      <a href="#miners" data-tab="miners">Miners</a>
+      <a href="#" id="signout">Sign out</a>
+    </nav>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<footer class="foot">
+  <a href="/">Pool</a>
+  <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a>
+  <span class="dim">operator's dashboard</span>
+</footer>
+
+<script src="/admin.js?v=dev"></script>
+</body>
+</html>

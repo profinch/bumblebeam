@@ -234,6 +234,12 @@ impl Db {
         Ok(self.pool.get().await?)
     }
 
+    /// The miner's row id, if the address was ever seen.
+    pub async fn miner_lookup(&self, address: &str) -> Result<Option<i64>> {
+        let c = self.client().await?;
+        Ok(c.query_opt("SELECT id FROM miners WHERE address=$1", &[&address]).await?.map(|r| r.get(0)))
+    }
+
     /// The miner's row id, created on first sight. `kind` is the address type seen at login.
     pub async fn miner_id(&self, address: &str, kind: &str, now: i64) -> Result<i64> {
         let c = self.client().await?;

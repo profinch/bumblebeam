@@ -68,6 +68,17 @@ wallet and is refused while the wallet knows the transaction, when the payment w
 by the wallet, or when it is less than an hour old; `--force` overrides. Decide with the
 wallet's transaction list and the chain in front of you.
 
+`admin merge <from address> <to address>` moves what a rig mined under a wrong address (shares,
+block credits, found blocks, unpaid balance) to the right one; a miner never paid is deleted, one
+already paid keeps its payout history. It is refused while a payment of the old address is in
+flight and for coinbase accounts.
+
+The same actions are in the operator's dashboard at `/admin`, on when `[admin] token` (24+
+characters, `openssl rand -hex 24`) is set: the decisions above, live stratum connections with
+their agent, port, difficulty and shares (and a button to end one), the connections that ended
+before a login with what they sent first and why they ended (a rental service's checker, TLS on a
+plain port), and the miners with the move above. The API is in [`../API.md`](../API.md).
+
 `block_check_urls` lists explorer-node APIs (`/block?height=`) tried in order. None of them can
 confirm a block by itself: only the wallet's coinbase confirms; an explorer orphans a block whose
 height shows another hash when the wallet has no coinbase either, and otherwise only corroborates.

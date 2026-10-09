@@ -67,16 +67,19 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
         let tls = tls.clone();
         tokio::spawn(async move {
             shared.connected_workers.fetch_add(1, Ordering::Relaxed);
-            let mut s = Session { peer, tls: tls.is_some(), started: Instant::now(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0 };
+            let id = shared.next_conn();
+            let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some());
+            let mut s = Session { id, peer, tls: tls.is_some(), started: Instant::now(), first: String::new(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0, last_share: 0 };
             let r = match tls {
                 Some(acceptor) => match tokio::time::timeout(Duration::from_secs(15), acceptor.accept(sock)).await {
-                    Ok(Ok(stream)) => connection(shared.clone(), stream, mode, &mut s).await,
+                    Ok(Ok(stream)) => connection(shared.clone(), stream, mode, &mut s, kick).await,
                     Ok(Err(e)) => Err(anyhow::anyhow!("tls: {e}")),
                     Err(_) => Err(anyhow::anyhow!("tls handshake timeout")),
                 },
-                None => connection(shared.clone(), sock, mode, &mut s).await,
+                None => connection(shared.clone(), sock, mode, &mut s, kick).await,
             };
             let reason = match &r { Ok(()) => "closed by the miner".to_string(), Err(e) => format!("{e:#}") };
+            shared.conns.close(s.id, &s.first, &reason);
             if s.miner.is_empty() {
                 // scanners and failed handshakes: only with RUST_LOG=debug
                 debug!(%peer, tls = s.tls, %reason, "connection ended before login");
@@ -117,14 +120,30 @@ struct Vardiff {
 /// One miner connection, for the line logged when it ends: who it was, how long it lasted, what
 /// it sent and why it closed. The connection fills it in; serve() logs it.
 struct Session {
+    /// also the connection's number in the nonce prefix and in the operator's list (crate::conns)
+    id: u64,
     peer: std::net::SocketAddr,
     tls: bool,
     started: Instant,
+    /// what the client sent first, without the values, for a connection that never logs in
+    first: String,
     miner: String,
     worker: String,
     accepted: u64,
     stale: u64,
     rejected: u64,
+    last_share: i64,
+}
+
+/// Copies a session's counters and difficulty to the operator's list of live connections.
+fn sync(shared: &Shared, sess: &Session, diff: f64) {
+    shared.conns.update(sess.id, |c| {
+        c.accepted = sess.accepted;
+        c.stale = sess.stale;
+        c.rejected = sess.rejected;
+        c.last_share = sess.last_share;
+        c.diff = diff;
+    });
 }
 
 #[derive(Default)]
@@ -137,7 +156,7 @@ struct WorkerStats {
 
 /// Beam addresses: regular SBBS ones are 64–70 hex chars and expire; offline, max-privacy and
 /// public-offline ones are long alphanumerics. The server accepts both, the UI warns on regular.
-fn address_type(a: &str) -> Option<&'static str> {
+pub fn address_type(a: &str) -> Option<&'static str> {
     // coinbase accounts (tools/coinbase): "cb:" + a public key (Beam's serialization: X then a Y byte of 00/01),
     // paid in the blocks themselves
     if let Some(pk) = a.strip_prefix("cb:") {
@@ -153,12 +172,12 @@ fn address_type(a: &str) -> Option<&'static str> {
     None
 }
 
-async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared>, stream: S, mode: Mode, sess: &mut Session) -> Result<()> {
+async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared>, stream: S, mode: Mode, sess: &mut Session, kick: Arc<tokio::sync::Notify>) -> Result<()> {
     let (rd, mut wr) = tokio::io::split(stream);
     let mut lines = FramedRead::new(rd, LinesCodec::new_with_max_length(MAX_LINE));
     let mut job_rx = shared.job_tx.subscribe();
 
-    let conn = shared.next_conn();
+    let conn = sess.id;
     let node_prefix = shared.node_prefix.read().await.clone();
     let own_bytes = shared.cfg.stratum.nonce_prefix_bytes.min(6usize.saturating_sub(node_prefix.len() / 2));
     let own = hex::encode(&conn.to_be_bytes()[8 - own_bytes..]);
@@ -196,6 +215,9 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                     Err(_) => {
                         if address.is_empty() {
                             info!(peer = %sess.peer, line = %line.chars().take(120).collect::<String>(), "not JSON before login");
+                            if sess.first.is_empty() {
+                                sess.first = format!("not JSON: {}", line.chars().take(60).collect::<String>());
+                            }
                         }
                         send(&mut wr, result(&json!(""), -32000, "message corrupted")).await?;
                         continue;
@@ -206,6 +228,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                     // client (a rental service's checker) fails to log in
                     let fields: Vec<&str> = msg.as_object().map(|o| o.keys().map(|k| k.as_str()).collect()).unwrap_or_default();
                     info!(peer = %sess.peer, method = %msg["method"], ?fields, id = %msg["id"], "message before login");
+                    if sess.first.is_empty() {
+                        let key = msg["api_key"].as_str().unwrap_or("");
+                        sess.first = format!("{} {:?}; api_key {} ({} chars), agent {:?}", msg["method"], fields, crate::state::Short(key), key.len(), msg["agent"].as_str().unwrap_or(""));
+                    }
                 }
                 // answered with the id exactly as sent: Beam miners use strings, other clients (NiceHash) may send numbers
                 let id = msg.get("id").filter(|v| v.is_string() || v.is_number()).cloned().unwrap_or_else(|| json!(""));
@@ -216,25 +242,25 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         let (addr, wk) = match key.split_once('.') { Some((a, w)) => (a, w), None => (key, "default") };
                         let Some(kind) = address_type(addr) else {
                             send(&mut wr, result(&id, -32003, "Login failed: use <beam address>.<worker>; an offline address is recommended")).await?;
-                            return Ok(());
+                            anyhow::bail!("login refused: {}", "Login failed: use <beam address>.<worker>; an offline address is recommended");
                         };
                         address = if kind == "coinbase" { addr.to_ascii_lowercase() } else { addr.to_string() };
                         if kind == "coinbase" && shared.coinbase.is_none() {
                             send(&mut wr, result(&id, -32003, "Login failed: this pool does not pay in the coinbase, use a Beam address")).await?;
-                            return Ok(());
+                            anyhow::bail!("login refused: {}", "Login failed: this pool does not pay in the coinbase, use a Beam address");
                         }
                         // with coinbase payouts every template already pays the PPLNS accounts in its coinbase,
                         // so a block cannot go whole to a solo finder
                         if mode == Mode::Solo && shared.coinbase.is_some() {
                             send(&mut wr, result(&id, -32003, "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port")).await?;
-                            return Ok(());
+                            anyhow::bail!("login refused: {}", "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port");
                         }
                         worker = wk.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(32).collect();
                         if worker.is_empty() { worker = "default".into(); }
                         let kind_label = if kind == "coinbase" { kind.to_string() } else { format!("{kind}?") };
                         miner_id = match shared.db.miner_id(&address, &kind_label, crate::state::now()).await {
                             Ok(id) => id,
-                            Err(e) => { warn!("miner lookup: {e:#}"); send(&mut wr, result(&id, -32003, "Login failed: pool database unavailable, retry")).await?; return Ok(()); }
+                            Err(e) => { warn!("miner lookup: {e:#}"); send(&mut wr, result(&id, -32003, "Login failed: pool database unavailable, retry")).await?; anyhow::bail!("login refused: pool database unavailable"); }
                         };
                         let desc = match kind {
                             "regular" => "Login successful. Warning: regular addresses expire and need the wallet online; use an offline address for payouts",
@@ -254,6 +280,13 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             vd.diff = vd.diff.max(vd.floor);
                         }
                         info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, %agent, diff = vd.diff, "login");
+                        shared.conns.update(sess.id, |c| {
+                            c.miner_id = miner_id;
+                            c.miner = address.clone();
+                            c.worker = worker.clone();
+                            c.agent = agent.clone();
+                            c.diff = vd.diff;
+                        });
                         if let Some(job) = shared.current_job() {
                             seq += 1;
                             push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?;
@@ -270,6 +303,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                                 send(&mut wr, result(&id, 3, "stale: block already found")).await?;
                                 stats.stale += 1;
                                 sess.stale += 1;
+                                sync(&shared, sess, vd.diff);
                                 continue;
                             }
                         }
@@ -295,6 +329,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             send(&mut wr, result(&id, 2, "rejected: duplicate share")).await?;
                             stats.rejected += 1;
                             sess.rejected += 1;
+                            sync(&shared, sess, vd.diff);
                             continue;
                         }
                         let mj = &mut jobs[pos];
@@ -310,11 +345,13 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             warn!(miner = %crate::state::Short(&address), worker = %worker, reason = pow::result_str(r), "share rejected");
                             stats.rejected += 1;
                             sess.rejected += 1;
+                            sync(&shared, sess, vd.diff);
                             continue;
                         }
                         stats.accepted += 1;
                         sess.accepted += 1;
                         stats.last_share = crate::state::now();
+                        sess.last_share = stats.last_share;
                         let share_diff = pow::difficulty_to_double(packed);
                         let job = mj.job.clone();
                         send(&mut wr, result(&id, 1, "accepted")).await?;
@@ -325,6 +362,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             info!(miner = %crate::state::Short(&address), worker = %worker, height = job.height, "share reaches network difficulty, submitting block");
                             let _ = shared.submit_tx.send(Submit { job: job.clone(), nonce: n, output: out, miner_id, address: address.clone(), worker: worker.clone(), mode }).await;
                         }
+                        sync(&shared, sess, vd.diff);
                         // vardiff: aim at one share per target_secs, adjust at most 4x per step
                         vd.shares += 1;
                         let el = vd.since.elapsed().as_secs_f64();
@@ -337,6 +375,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             if (new / vd.diff - 1.0).abs() > 0.25 {
                                 vd.diff = new;
                                 debug!(miner = %crate::state::Short(&address), worker = %worker, diff = new, "vardiff");
+                                sync(&shared, sess, vd.diff);
                                 if let Some(job) = shared.current_job() { push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?; }
                             }
                         }
@@ -358,9 +397,11 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                     vd.diff = (vd.diff / 4.0).max(vd.floor);
                     vd.since = Instant::now();
                     debug!(miner = %crate::state::Short(&address), worker = %worker, diff = vd.diff, "vardiff down: no shares");
+                    sync(&shared, sess, vd.diff);
                     if let Some(job) = shared.current_job() { push_job(&mut wr, &mut jobs, &job, &mut seq, vd.diff).await?; }
                 }
             }
+            _ = kick.notified() => anyhow::bail!("ended by the operator"),
             changed = job_rx.changed() => {
                 if changed.is_err() { return Ok(()); }
                 let job = job_rx.borrow_and_update().clone();
