@@ -35,6 +35,7 @@
   const explorerTx = (p) => (p.kernel
     ? `<a href="https://explorer.bumblebeam.org/kernel/${encodeURIComponent(p.kernel)}" target="_blank" rel="noopener" title="${esc(p.txId)}">${esc(short(p.txId || p.kernel))}</a>`
     : esc(short(p.txId)));
+  const tile = (k, v, s = '', cls = '') => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   const statusBadge = (s) => badge(s, s === 'confirmed' || s === 'completed' ? 'ok' : s === 'orphaned' || s === 'failed' ? 'bad' : 'pending');
 
   // ---------- token and API ----------
@@ -72,7 +73,11 @@
         <h3 id="adm-ask-t"></h3><div id="adm-ask-d"></div>
         <div class="adm-row"><button class="btn ghost" data-a="no">Cancel</button><button class="btn${danger ? ' danger' : ''}" data-a="yes"></button></div></div>`;
       $('#adm-ask-t', back).textContent = title;
-      $('#adm-ask-d', back).textContent = text;
+      // text, or a list of strings and { b: text } for bold parts; never HTML
+      const d = $('#adm-ask-d', back);
+      for (const part of Array.isArray(text) ? text : [text]) {
+        if (part && typeof part === 'object') { const b = document.createElement('b'); b.textContent = part.b; d.append(b); } else d.append(String(part));
+      }
       $('[data-a="yes"]', back).textContent = ok;
       const before = document.activeElement;
       const done = (v) => {
@@ -426,8 +431,12 @@
   async function miner(id) {
     const m = await api(`miners/${id}`);
     // the blocks this miner found, from the public API (its own credits are in every PPLNS block)
-    const found = await fetch(`/api/blocks?limit=500&miner=${encodeURIComponent(m.address)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { blocks: [] })).then((j) => j.blocks || []).catch(() => []);
+    // the public API: every block this miner found, and the numbers of its page on the pool site
+    const pub = (path) => fetch(`/api/${path}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const [fj, pm, st] = await Promise.all([pub(`blocks?limit=500&miner=${encodeURIComponent(m.address)}`), pub(`miners/${encodeURIComponent(m.address)}?range=24h`), pub('stats')]);
+    const found = (fj && fj.blocks) || [];
+    const p = pm || {};
+    const minPayout = st && st.config ? st.config.minPayout : null;
     if (fb.id !== m.id) Object.assign(fb, { id: m.id, mode: '', finder: '', sort: '', dir: 1, shown: FB_PAGE });
     fb.blocks = found;
     fb.credit = new Map(m.credits.map((c) => [c.height, c.amount]));
@@ -448,20 +457,22 @@
         </tbody></table></div>`
       : '<p class="hint">Never paid.</p>';
     view.innerHTML = `
-      <div class="page-head"><h1 class="page-title">Miner #${Number(m.id)}</h1><div class="actions"><a class="btn ghost small" href="#miners">All miners</a></div></div>
+      <div class="page-head"><h1 class="page-title">Miner #${Number(m.id)}</h1><span class="dim mono adm-seen">first seen ${time(m.firstSeen)}</span>
+        <div class="actions"><a class="btn ghost small" href="#miners">All miners</a></div></div>
       ${flashHtml()}
-      <div class="panel addr"><span>${esc(m.address)}</span><button class="btn small" data-copy="${esc(m.address)}">copy</button></div>
-      <p class="hint">${esc(m.type || '?')} · first seen ${time(m.firstSeen)} · last share ${ago(m.lastShare)} ·
-        <a href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public page</a></p>
+      <div class="panel addr"><span>${esc(m.address)}</span><button class="btn small" data-copy="${esc(m.address)}">copy</button>
+        <a class="btn small ghost" href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public</a></div>
       <div class="tiles">
-        <div class="tile"><div class="k">Unpaid</div><div class="v">${beam(m.balance)}</div></div>
-        <div class="tile"><div class="k">Immature</div><div class="v">${beam(m.credits.filter((c) => c.status === 'pending' || c.status === 'unverified').reduce((s, c) => s + c.amount, 0))}</div></div>
-        <div class="tile"><div class="k">Paid</div><div class="v">${beam(m.paid)}</div></div>
-        <div class="tile"><div class="k">Blocks found</div><div class="v">${int(m.blocksFound)}</div></div>
+        ${tile('Hashrate', hr(p.hashrate), `24h avg ${hr(p.hashrate24h)}`, 'accent')}
+        ${tile('Unpaid', beam(m.balance), minPayout ? `owed by the pool · ${Math.round(Math.min(1, m.balance / minPayout) * 100)}% of the ${beam(minPayout)} threshold` : 'owed by the pool')}
+        ${tile('Immature', beam(m.credits.filter((c) => c.status === 'pending' || c.status === 'unverified').reduce((s, c) => s + c.amount, 0)), 'blocks still confirming')}
+        ${tile('Paid', beam(m.paid))}
+        ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(p.blocks24h)} in 24h · last ${ago(p.lastBlockAt)}` : 'by its shares')}
+        ${tile('Last share', ago(m.lastShare))}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Pay now</h2></div>
         <p class="hint">Sends the whole unpaid balance now, even below the payout threshold (the network fee comes out of it).</p>
-        <button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay ${beam(m.balance)} now</button></section>
+        <button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Live connections</h2></div>
         ${m.connections.length ? `<div class="table-wrap"><table>${connHead(false)}<tbody>${m.connections.map((c) => connRow(c, false)).join('')}</tbody></table></div>` : '<p class="hint">None.</p>'}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers, 7 days</h2></div>${workers}</section>
@@ -479,7 +490,7 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>${pays}</section>`;
     bindKick();
     bindFound();
-    $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, `Pay ${beam(m.balance)} to ${short(m.address)} now?`));
+    $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, ['Pay ', { b: beam(m.balance) }, ' now?\nAddress: ', m.address]));
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
       const to = $('#merge-to').value.replace(/\s+/g, '');
