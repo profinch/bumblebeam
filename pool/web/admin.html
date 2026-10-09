@@ -27,6 +27,9 @@
   td.wrap { white-space: normal; word-break: break-word; min-width: 220px; }
   tr.clickable { cursor: pointer; }
   .flag { margin-right: 4px; }
+  .adm-next { align-self: center; font: 11px var(--font-mono); color: var(--muted); padding: 0 6px; white-space: nowrap; }
+  .adm-next b { color: var(--accent); }
+  .adm-next[hidden] { display: none; }
   label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
 </style>
 </head>
@@ -41,6 +44,7 @@
       <a href="#attention" data-tab="attention">Attention<span class="n" id="n-attention" hidden></span></a>
       <a href="#connections" data-tab="connections">Connections</a>
       <a href="#miners" data-tab="miners">Miners</a>
+      <span class="adm-next" id="next-pay" title="Next scheduled payout run for every miner at the threshold" hidden></span>
       <a href="#" id="signout">Sign out</a>
     </nav>
   </div>

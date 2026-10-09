@@ -58,6 +58,8 @@ pub struct Shared {
     pub conns: crate::conns::Conns,
     /// Network height from the explorer cache (0 = unknown); jobs far below it mean the node is syncing.
     pub net_height: AtomicU64,
+    /// When the next scheduled payout run is due (unix seconds; 0 while payouts are off).
+    pub next_payout: std::sync::atomic::AtomicI64,
     pub started: Instant,
     pub http: reqwest::Client,
     /// The link to bb-finalizer when coinbase payouts are enabled.
