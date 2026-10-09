@@ -1,4 +1,4 @@
-// BumbleBeam pool: the operator's dashboard (/admin). It calls /api/admin/* with the token from
+// BumbleBeam pool: the operator dashboard (/admin). It calls /api/admin/* with the token from
 // pool.toml [admin], kept in this browser's localStorage. Every string from the API goes through
 // esc() before it is put into HTML.
 'use strict';
@@ -30,6 +30,11 @@
   }
   const time = (ts) => (ts ? new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—');
   const badge = (text, kind) => `<span class="badge ${kind}">${esc(text)}</span>`;
+  const explorerBlock = (h) => `<a href="https://explorer.bumblebeam.org/block/${Number(h)}" target="_blank" rel="noopener">${int(h)}</a>`;
+  // a payout's transaction: its kernel in our explorer once the pool knows it, the bare tx id before
+  const explorerTx = (p) => (p.kernel
+    ? `<a href="https://explorer.bumblebeam.org/kernel/${encodeURIComponent(p.kernel)}" target="_blank" rel="noopener" title="${esc(p.txId)}">${esc(short(p.txId || p.kernel))}</a>`
+    : esc(short(p.txId)));
   const statusBadge = (s) => badge(s, s === 'confirmed' || s === 'completed' ? 'ok' : s === 'orphaned' || s === 'failed' ? 'bad' : 'pending');
 
   // ---------- token and API ----------
@@ -149,7 +154,7 @@
     const blocks = a.blocks.length
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th><th></th></tr></thead><tbody>
         ${a.blocks.map((b) => `<tr>
-          <td><a href="https://explorer.bumblebeam.org/block/${Number(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a><span class="sub">${esc(short(b.hash))}</span></td>
+          <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
           <td>${ago(b.ts)}</td><td>${esc(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td>
           <td class="adm-row"><button class="btn small" data-block="${Number(b.height)}" data-action="confirm">Confirm</button>
               <button class="btn small danger" data-block="${Number(b.height)}" data-action="orphan">Orphan</button></td></tr>`).join('')}
@@ -158,7 +163,7 @@
     const pays = a.payments.length
       ? `<div class="table-wrap"><table><thead><tr><th>Tx</th><th>Status</th><th>Created</th><th class="num">Amount</th><th class="num">Tries</th><th>To</th><th></th></tr></thead><tbody>
         ${a.payments.map((p) => `<tr>
-          <td>${esc(short(p.txId))}</td><td>${statusBadge(p.status)}</td><td>${ago(p.created)}</td><td class="num">${beam(p.amount)}</td><td class="num">${int(p.attempts)}</td>
+          <td>${explorerTx(p)}</td><td>${statusBadge(p.status)}</td><td>${ago(p.created)}</td><td class="num">${beam(p.amount)}</td><td class="num">${int(p.attempts)}</td>
           <td><a href="#miner/${Number(p.minerId)}">${esc(short(p.address))}</a></td>
           <td class="adm-row"><button class="btn small" data-pay="${esc(p.txId)}" data-action="sent">Sent</button>
               <button class="btn small danger" data-pay="${esc(p.txId)}" data-action="refund">Refund</button></td></tr>`).join('')}
@@ -270,13 +275,14 @@
       .then((r) => (r.ok ? r.json() : { blocks: [] })).then((j) => j.blocks || []).catch(() => []);
     const creditAt = new Map(m.credits.map((c) => [c.height, c.amount]));
     const foundHtml = found.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Found</th><th>Worker</th><th>Mode</th><th>Status</th><th class="num">Effort</th><th class="num">Reward</th><th class="num">Its credit</th></tr></thead><tbody>
+      ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Found</th><th>Worker</th><th>Mode</th><th>Status</th><th class="num">Effort</th><th class="num">Earned</th><th class="num">Credit</th></tr></thead><tbody>
         ${found.map((b) => `<tr>
-          <td><a href="https://explorer.bumblebeam.org/block/${Number(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
+          <td>${explorerBlock(b.height)}</td>
           <td>${ago(b.ts)}</td><td>${esc(b.finder)}</td><td>${esc(b.mode)}</td>
           <td>${statusBadge(b.status)}${b.status === 'pending' ? `<span class="sub">${int(b.confirmations)} conf.</span>` : ''}</td>
           <td class="num">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
-          <td class="num">${beam(b.reward)}</td><td class="num">${creditAt.has(b.height) ? beam(creditAt.get(b.height)) : '—'}</td></tr>`).join('')}
+          <td class="num">${beam(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
+          <td class="num">${creditAt.has(b.height) ? beam(creditAt.get(b.height)) : '—'}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">This miner has not found a block.</p>';
     const workers = m.workers.length
@@ -287,12 +293,12 @@
       : '<p class="hint">No shares in 7 days.</p>';
     const credits = m.credits.length
       ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Status</th><th>Found</th><th class="num">Credit</th></tr></thead><tbody>
-        ${m.credits.map((c) => `<tr><td>${int(c.height)}</td><td>${statusBadge(c.status)}</td><td>${ago(c.ts)}</td><td class="num">${beam(c.amount)}</td></tr>`).join('')}
+        ${m.credits.map((c) => `<tr><td>${explorerBlock(c.height)}</td><td>${statusBadge(c.status)}</td><td>${ago(c.ts)}</td><td class="num">${beam(c.amount)}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No block credits.</p>';
     const pays = m.payments.length
       ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Tx</th></tr></thead><tbody>
-        ${m.payments.map((p) => `<tr><td>${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beam(p.amount)}</td><td class="num">${beam(p.fee)}</td><td>${esc(short(p.txId))}</td></tr>`).join('')}
+        ${m.payments.map((p) => `<tr><td>${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beam(p.amount)}</td><td class="num">${beam(p.fee)}</td><td>${explorerTx(p)}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">Never paid.</p>';
     view.innerHTML = `
