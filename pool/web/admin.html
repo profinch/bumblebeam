@@ -31,7 +31,20 @@
   .flag { margin-right: 4px; }
   .adm-next { font: 11px var(--font-mono); color: var(--muted); padding: 0 10px; white-space: nowrap; }
   .adm-next b { color: var(--accent); }
-  .adm-next[hidden] { display: none; }
+  .adm-next[hidden], .adm-freeze[hidden] { display: none; }
+  .adm-next.frozen b { color: var(--color-yellow); }
+  .adm-freeze { padding: 3px 8px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .adm-freeze.frozen { color: var(--color-yellow); border-color: rgba(244, 206, 74, 0.55); }
+  /* phones: the brand on its own row, then the freeze button and the countdown, then the menu */
+  @media (max-width: 700px) {
+    .adm-right { flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; gap: 4px 8px; }
+    .adm-next { padding: 0; }
+    .adm-tabs { flex: 1 1 100%; justify-content: space-between; gap: 0; }
+    .adm-tabs a { padding: 8px 4px; font-size: 11px; }
+    .adm-field { max-width: none; }
+    .adm-row > .btn { flex: none; }
+    td.wrap { min-width: 160px; }
+  }
   /* confirmations (ask() in admin.js): the tooltips' look, the light end of the page's gradient
      with the accent edge, instead of the browser's own dialog */
   .adm-ask-bg { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -60,6 +73,7 @@
       <span class="word">Bumble<b>Beam</b> <i class="sub-word">Operator</i></span>
     </a>
     <div class="adm-right">
+    <button class="btn small ghost adm-freeze" id="freeze" type="button" hidden></button>
     <span class="adm-next" id="next-pay" title="Next scheduled payout run for every miner at the threshold" hidden></span>
     <nav class="adm-tabs" id="tabs" aria-label="Operator" hidden>
       <a href="#attention" data-tab="attention">Attention<span class="n" id="n-attention" hidden></span></a>
@@ -75,7 +89,6 @@
 
 <footer class="foot">
   <a href="/">Pool</a>
-  <span class="dim">operator dashboard</span>
   <a class="mail" href="mailto:support@bumblebeam.org">support@bumblebeam.org</a>
 </footer>
 

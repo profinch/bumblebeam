@@ -256,6 +256,7 @@ fn admin_router(api: Api) -> Router<Api> {
         .route("/api/admin/blocks/:height", post(admin_block))
         .route("/api/admin/payments/:tx_id", post(admin_payment))
         .route("/api/admin/payouts", post(admin_pay_now))
+        .route("/api/admin/payouts/freeze", post(admin_freeze))
         .layer(middleware::from_fn_with_state(api, admin_auth))
 }
 
@@ -300,6 +301,8 @@ struct ActionBody {
     to: String,
     #[serde(default)]
     miner: Option<i64>,
+    #[serde(default)]
+    freeze: bool,
 }
 
 async fn admin_attention(State(api): State<Api>) -> R {
@@ -309,6 +312,9 @@ async fn admin_attention(State(api): State<Api>) -> R {
     let next = s.next_payout.load(std::sync::atomic::Ordering::Relaxed);
     a["nextPayout"] = if next > 0 { json!(next) } else { Value::Null };
     a["payoutInterval"] = json!(s.cfg.pool.payout_interval_secs);
+    let frozen = s.payouts_frozen_left.load(std::sync::atomic::Ordering::Relaxed);
+    a["payoutsFrozen"] = json!(frozen >= 0);
+    a["frozenLeft"] = if frozen >= 0 { json!(frozen) } else { Value::Null };
     a["now"] = json!(now());
     Ok(Json(a))
 }
@@ -388,5 +394,12 @@ async fn admin_pay_now(State(api): State<Api>, h: HeaderMap, Json(b): Json<Actio
         }
     };
     info!(ip = %client_ip(&h), miner = ?b.miner, ok = r.is_ok(), "admin: pay now");
+    outcome(r)
+}
+
+/// `{"freeze": true}` stops the scheduled payout countdown where it is, `false` resumes it.
+async fn admin_freeze(State(api): State<Api>, h: HeaderMap, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::payouts::set_frozen(&api.shared, b.freeze).await;
+    info!(ip = %client_ip(&h), freeze = b.freeze, ok = r.is_ok(), "admin: freeze payouts");
     outcome(r)
 }

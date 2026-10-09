@@ -60,6 +60,8 @@ pub struct Shared {
     pub net_height: AtomicU64,
     /// When the next scheduled payout run is due (unix seconds; 0 while payouts are off).
     pub next_payout: std::sync::atomic::AtomicI64,
+    /// Seconds left on the payout countdown while the operator has frozen it; -1 when it runs.
+    pub payouts_frozen_left: std::sync::atomic::AtomicI64,
     pub started: Instant,
     pub http: reqwest::Client,
     /// The link to bb-finalizer when coinbase payouts are enabled.
