@@ -192,21 +192,18 @@
     : `<span class="badge pending">${int(Math.min(b.confirmations, maturity))}/${int(maturity)}</span>`;
   const modeBadge = (m) => (m === 'solo' ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>');
 
-  // `rewardLast`: Reward right before Status (a miner's own blocks), not after Mode
-  function blocksRows(blocks, maturity, rewardLast = false) {
-    return blocks.map((b) => {
-      const reward = `<td class="num">${beam(b.reward + b.fees, 3)}</td>`;
-      return `<tr>
+  // every blocks table: Reward right before Status
+  function blocksRows(blocks, maturity) {
+    return blocks.map((b) => `<tr>
         <td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
-        <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>${rewardLast ? '' : reward}
+        <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
         <td class="num" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
-        <td class="dim">${esc(b.finder || '—')}</td>${rewardLast ? reward : ''}<td class="num">${statusBadge(b, maturity)}</td></tr>`;
-    }).join('');
+        <td class="dim">${esc(b.finder || '—')}</td><td class="num">${beam(b.reward + b.fees, 3)}</td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
-    return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-r"><col class="w-e"><col><col class="w-s"></colgroup>
-      <thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th class="num">Effort</th><th>Finder</th><th class="num">Status</th></tr></thead>
+    return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
+      <thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Effort</th><th>Finder</th><th class="num">Reward</th><th class="num">Status</th></tr></thead>
       <tbody id="blocks-body">${blocksRows(blocks, maturity)}</tbody></table></div>${more}`;
   }
 
@@ -434,7 +431,7 @@
   }
   function drawMine() {
     const list = mineList();
-    $('#mine-body').innerHTML = list.length ? blocksRows(list.slice(0, mine.shown), mine.maturity, true) : '<tr><td colspan="7" class="dim">No blocks match</td></tr>';
+    $('#mine-body').innerHTML = list.length ? blocksRows(list.slice(0, mine.shown), mine.maturity) : '<tr><td colspan="7" class="dim">No blocks match</td></tr>';
     $('#mine-more').hidden = list.length <= mine.shown;
     const all = mine.blocks.length;
     $('#mine-count').textContent = list.length === all ? `${int(all)} blocks` : `${int(list.length)} of ${int(all)}`;
