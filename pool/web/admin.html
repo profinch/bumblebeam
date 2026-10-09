@@ -10,8 +10,8 @@
 <!-- the v=dev query becomes the commit hash in the Docker build, so a release never mixes cached and new files -->
 <link rel="stylesheet" href="/styles.css?v=dev">
 <style>
-  /* the menu, and under it on the right the countdown to the next payout */
-  .adm-right { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  /* the countdown to the next payout, left of the menu */
+  .adm-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
   .adm-tabs { display: flex; gap: 6px; }
   .adm-tabs[hidden], .adm-tabs .n[hidden] { display: none; }
   .adm-tabs a { color: var(--text-dim); font: 700 12px var(--font-mono); padding: 8px 10px; border-bottom: 2px solid transparent; }
@@ -43,13 +43,13 @@
       <span class="word">Bumble<b>Beam</b> <i class="sub-word">Operator</i></span>
     </a>
     <div class="adm-right">
+    <span class="adm-next" id="next-pay" title="Next scheduled payout run for every miner at the threshold" hidden></span>
     <nav class="adm-tabs" id="tabs" aria-label="Operator" hidden>
       <a href="#attention" data-tab="attention">Attention<span class="n" id="n-attention" hidden></span></a>
       <a href="#connections" data-tab="connections">Connections</a>
       <a href="#miners" data-tab="miners">Miners</a>
       <a href="#" id="signout">Sign out</a>
     </nav>
-    <span class="adm-next" id="next-pay" title="Next scheduled payout run for every miner at the threshold" hidden></span>
     </div>
   </div>
 </header>
