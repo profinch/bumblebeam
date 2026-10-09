@@ -295,6 +295,14 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
   clip-path: inset(0 -40px -40px -40px);
 }
 .dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+/* a compact list for table filters in a panel head */
+.dd.compact { min-width: 130px; }
+.dd.compact .dd-btn { height: 28px; font-size: 12px; }
+.dd.compact .dd-list [role="option"] { padding: 6px 10px 6px 14px; font-size: 12px; }
+/* sortable table heads: the active one shows its direction */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); color: var(--accent); }
 .dd-list [role="option"].active { background: rgba(0, 246, 210, 0.12); color: var(--text); }
 .dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
 /* scrolling boxes (wide tables, code, the card list): a thin accent bar, no track, no arrows */
