@@ -253,6 +253,7 @@ fn admin_router(api: Api) -> Router<Api> {
         .route("/api/admin/miners", get(admin_miners))
         .route("/api/admin/miners/:id", get(admin_miner))
         .route("/api/admin/miners/:id/merge", post(admin_merge))
+        .route("/api/admin/address", get(admin_address))
         .route("/api/admin/blocks/:height", post(admin_block))
         .route("/api/admin/payments/:tx_id", post(admin_payment))
         .route("/api/admin/payouts", post(admin_pay_now))
@@ -360,7 +361,8 @@ async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, 
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    let r = crate::admin::merge(&s.db, id, &b.to).await;
+    let wallet = s.cfg.wallet_enabled().then(|| crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone()));
+    let r = crate::admin::merge(&s.db, wallet.as_ref(), id, &b.to).await;
     info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
     outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
 }
@@ -402,4 +404,25 @@ async fn admin_freeze(State(api): State<Api>, h: HeaderMap, Json(b): Json<Action
     let r = crate::payouts::set_frozen(&api.shared, b.freeze).await;
     info!(ip = %client_ip(&h), freeze = b.freeze, ok = r.is_ok(), "admin: freeze payouts");
     outcome(r)
+}
+
+/// `?a=<address>`: whether it is a miner of this pool (its id and unpaid balance) and what the
+/// wallet says of it, before the operator moves anything there.
+async fn admin_address(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let s = &api.shared;
+    let a: String = q.get("a").map(|v| v.chars().filter(|c| !c.is_whitespace()).collect()).unwrap_or_default();
+    let c = s.db.client().await?;
+    let known = c.query_opt("SELECT id, balance FROM miners WHERE address=$1", &[&a]).await?;
+    let shape = crate::stratum::address_type(&a);
+    let wallet = if shape.is_some() && shape != Some("coinbase") && s.cfg.wallet_enabled() {
+        let w = crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone());
+        match w.validate_address(&a).await {
+            Ok(v) => json!({ "valid": v["is_valid"].as_bool() == Some(true), "type": v["type"] }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    } else {
+        Value::Null
+    };
+    Ok(Json(json!({ "address": a, "shape": shape, "minerId": known.as_ref().map(|r| r.get::<_, i64>(0)),
+                    "balance": known.as_ref().map(|r| r.get::<_, i64>(1)), "wallet": wallet })))
 }

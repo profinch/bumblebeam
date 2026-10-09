@@ -221,6 +221,7 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 /* small pieces */
 .hint { margin: -4px 0 12px; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .more { display: flex; justify-content: center; padding: 14px 0 2px; }
+.more[hidden] { display: none; }
 .addr { display: flex; align-items: center; gap: 10px; font: 12px var(--font-mono); word-break: break-all; color: var(--text-dim); }
 .addr span { flex: 1; min-width: 0; }
 .why { gap: 10px; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
