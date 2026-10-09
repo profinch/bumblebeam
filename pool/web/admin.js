@@ -127,6 +127,7 @@
   function signIn(err) {
     $('#tabs').hidden = true;
     nextPay = null; // the countdown sits outside the menu: hidden with it
+    frozenLeft = null;
     tick();
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Operator sign-in</h1></div>
@@ -175,7 +176,7 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Unverified blocks</h2></div>
         <p class="hint">Blocks the automatic checks could not settle. Confirm credits the miners' balances; orphan drops the block.</p>${blocks}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2>
-        <span class="panel-meta">${a.nextPayout ? `next scheduled <b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
+        <span class="panel-meta">${a.nextPayout ? `<b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
         <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>
         <button class="btn" id="pay-all">Pay all due now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
@@ -353,25 +354,54 @@
 
   // ---------- the next scheduled payout ----------
   let nextPay = null; // in this browser's clock: the server's time minus its offset from ours
+  let frozenLeft = null; // seconds left on a countdown the operator has frozen
   function setNext(a) {
     nextPay = a.nextPayout ? a.nextPayout - a.now + Date.now() / 1000 : null;
+    frozenLeft = a.payoutsFrozen ? a.frozenLeft : null;
     tick();
   }
   function left() {
-    const s = Math.round(nextPay - Date.now() / 1000);
+    const s = frozenLeft != null ? frozenLeft : Math.round(nextPay - Date.now() / 1000);
     if (s <= 0) return 'now';
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(sec).padStart(2, '0')}`;
   }
   function tick() {
-    const top = $('#next-pay'), panel = $('#next-pay-panel');
-    top.hidden = nextPay == null;
+    const top = $('#next-pay'), panel = $('#next-pay-panel'), fz = $('#freeze');
+    top.hidden = fz.hidden = nextPay == null;
     if (nextPay == null) return;
+    const frozen = frozenLeft != null;
+    fz.textContent = frozen ? 'Resume' : 'Freeze';
+    fz.classList.toggle('frozen', frozen);
+    fz.title = frozen ? 'Resume the scheduled payouts: the countdown goes on from where it stopped' : 'Freeze the scheduled payouts: the countdown stops, no run starts until resumed';
+    top.classList.toggle('frozen', frozen);
+    if (frozen) {
+      top.innerHTML = `payouts frozen <b>${esc(left())}</b>`;
+      top.title = 'Scheduled payouts are frozen; Pay now still works';
+      if (panel) panel.textContent = `scheduled runs frozen, ${left()} left`;
+      return;
+    }
     const at = new Date(nextPay * 1000).toISOString().slice(11, 16);
     top.innerHTML = `payout in <b>${esc(left())}</b>`;
     top.title = `Next scheduled payout run at ${at} UTC (the pool looks once a minute)`;
-    if (panel) panel.textContent = `in ${left()} (${at} UTC)`;
+    if (panel) panel.textContent = `next run in ${left()} (${at} UTC)`;
   }
+  $('#freeze').addEventListener('click', async () => {
+    const freeze = frozenLeft == null;
+    const ok = await ask(freeze ? 'Freeze payouts' : 'Resume payouts', freeze
+      ? `Stop the payout countdown at ${left()}? No scheduled run starts until you resume it, also after a pool restart. Pay now still works.`
+      : `Resume the scheduled payouts? The next run is in ${left()}.`, { ok: freeze ? 'Freeze' : 'Resume', danger: freeze });
+    if (!ok) return;
+    try {
+      const r = await api('payouts/freeze', { freeze });
+      flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
+    } catch (e) {
+      flash = { ok: false, text: e.message };
+    }
+    keepFlash = true;
+    await poll();
+    route();
+  });
   setInterval(tick, 1000);
 
   // ---------- routing ----------

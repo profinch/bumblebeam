@@ -35,20 +35,55 @@ pub struct PayNow {
     pub reply: tokio::sync::oneshot::Sender<Result<String, String>>,
 }
 
+/// The frozen countdown's seconds left, kept so a restart does not quietly resume payouts; -1 runs.
+pub const META_FROZEN: &str = "payouts_frozen_left";
+
+/// Freezes or resumes the scheduled payouts. Frozen, the countdown stops where it is and no
+/// scheduled run starts (the operator's "pay now" still works); resumed, it goes on from there.
+pub async fn set_frozen(shared: &Shared, freeze: bool) -> Result<String> {
+    use std::sync::atomic::Ordering::Relaxed;
+    if !shared.cfg.wallet_enabled() {
+        anyhow::bail!("payouts are off (no wallet_api)");
+    }
+    let t = now();
+    let left = shared.payouts_frozen_left.load(Relaxed);
+    let mins = |s: i64| format!("{}:{:02}", s / 3600, (s % 3600) / 60);
+    if freeze {
+        if left >= 0 {
+            anyhow::bail!("scheduled payouts are already frozen");
+        }
+        let left = (shared.next_payout.load(Relaxed) - t).max(0);
+        shared.db.meta_set(META_FROZEN, &left.to_string()).await?;
+        shared.payouts_frozen_left.store(left, Relaxed);
+        info!(left, "scheduled payouts frozen by the operator");
+        Ok(format!("scheduled payouts frozen with {} left on the countdown", mins(left)))
+    } else {
+        if left < 0 {
+            anyhow::bail!("scheduled payouts are not frozen");
+        }
+        shared.next_payout.store(t + left, Relaxed);
+        shared.db.meta_set(META_FROZEN, "-1").await?;
+        shared.payouts_frozen_left.store(-1, Relaxed);
+        info!(left, "scheduled payouts resumed by the operator");
+        Ok(format!("scheduled payouts resumed: the next run in {}", mins(left)))
+    }
+}
+
 pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<PayNow>) {
     if !shared.cfg.wallet_enabled() {
         warn!("wallet_api.url is empty: payouts disabled, balances accrue");
         return;
     }
     let wallet = Wallet::new(&shared.cfg.wallet_api.url, &shared.cfg.wallet_api.acl_key, shared.http.clone());
-    let interval = Duration::from_secs(shared.cfg.pool.payout_interval_secs.max(60));
-    let mut next = tokio::time::Instant::now() + interval;
-    // the same moment in wall-clock time, for the operator's countdown
-    let set_next = |next: tokio::time::Instant| {
-        let at = now() + next.saturating_duration_since(tokio::time::Instant::now()).as_secs() as i64;
-        shared.next_payout.store(at, std::sync::atomic::Ordering::Relaxed);
-    };
-    set_next(next);
+    use std::sync::atomic::Ordering::Relaxed;
+    // wall-clock seconds: the operator's countdown shows the same moment, and can freeze it
+    let interval = shared.cfg.pool.payout_interval_secs.max(60) as i64;
+    let frozen = shared.db.meta_get(META_FROZEN).await.ok().flatten().and_then(|v| v.parse::<i64>().ok()).filter(|v| *v >= 0);
+    shared.next_payout.store(now() + frozen.unwrap_or(interval), Relaxed);
+    if let Some(left) = frozen {
+        shared.payouts_frozen_left.store(left, Relaxed);
+        warn!(left, "scheduled payouts are frozen by the operator (dashboard); they wait until resumed");
+    }
     loop {
         if let Err(e) = recover_created(&shared, &wallet).await {
             warn!("payout recovery: {e:#}");
@@ -56,9 +91,8 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
         if let Err(e) = poll_pending(&shared, &wallet).await {
             warn!("payout status: {e:#}");
         }
-        if tokio::time::Instant::now() >= next {
-            next += interval;
-            set_next(next);
+        if shared.payouts_frozen_left.load(Relaxed) < 0 && now() >= shared.next_payout.load(Relaxed) {
+            shared.next_payout.store(now() + interval, Relaxed);
             if let Err(e) = pay_once(&shared, &wallet, None).await {
                 warn!("payout run: {e:#}");
             }
