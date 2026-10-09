@@ -319,7 +319,11 @@
           const colour = ours ? (colours.find((c) => c.name === b.by) || {}).color || '#a4e000' : null;
           const rowAttr = ours ? ' class="ours"' : '';
           const name = b.by ? `<span class="name"${colour ? ` style="color:${colour}"` : ''}>${esc(b.by)}</span>` : '<span class="dim">—</span>';
-          return `<tr${rowAttr}><td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td><td>${name}</td><td class="num dim">${ago(b.ts)}</td></tr>`;
+          // the height as the explorer shows our blocks: a badge
+          const height = ours
+            ? `<a class="badge ok ours-h" href="${explorerBlock(b.height)}" target="_blank" rel="noopener" title="Found by the BumbleBeam pool">${int(b.height)}</a>`
+            : `<a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a>`;
+          return `<tr${rowAttr}><td>${height}</td><td>${name}</td><td class="num dim">${ago(b.ts)}</td></tr>`;
         }).join('')}
         </tbody></table></div></section>` : '';
     const donut = blocksDonut(net), times = blockTimes(bl);
