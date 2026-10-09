@@ -32,6 +32,22 @@
   .adm-next { font: 11px var(--font-mono); color: var(--muted); padding: 0 10px; white-space: nowrap; }
   .adm-next b { color: var(--accent); }
   .adm-next[hidden] { display: none; }
+  /* confirmations (ask() in admin.js): the tooltips' look, the light end of the page's gradient
+     with the accent edge, instead of the browser's own dialog */
+  .adm-ask-bg { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: rgba(2, 18, 34, 0.55); opacity: 0; transition: opacity 0.14s ease; }
+  .adm-ask-bg.on { opacity: 1; }
+  .adm-ask { width: min(440px, 100%); padding: 18px 18px 16px 20px; font: 12px/1.6 var(--font-mono); color: rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, rgba(18, 108, 150, 0.98), rgba(10, 90, 128, 0.98));
+    border: 1px solid rgba(0, 246, 210, 0.32); border-radius: 8px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 3px 0 0 rgba(0, 246, 210, 0.55);
+    transform: translateY(6px); transition: transform 0.14s ease; overflow-wrap: anywhere; white-space: pre-line; }
+  .adm-ask-bg.on .adm-ask { transform: none; }
+  .adm-ask.danger { border-color: rgba(242, 95, 91, 0.45); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 3px 0 0 rgba(242, 95, 91, 0.7); }
+  .adm-ask h3 { margin: 0 0 8px; font: 700 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  .adm-ask.danger h3 { color: var(--color-red); }
+  .adm-ask .adm-row { justify-content: flex-end; margin-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { .adm-ask-bg, .adm-ask { transition: none; } }
   label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
 </style>
 </head>
