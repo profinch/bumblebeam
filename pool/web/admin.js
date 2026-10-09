@@ -265,6 +265,20 @@
 
   async function miner(id) {
     const m = await api(`miners/${id}`);
+    // the blocks this miner found, from the public API (its own credits are in every PPLNS block)
+    const found = await fetch(`/api/blocks?limit=50&miner=${encodeURIComponent(m.address)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { blocks: [] })).then((j) => j.blocks || []).catch(() => []);
+    const creditAt = new Map(m.credits.map((c) => [c.height, c.amount]));
+    const foundHtml = found.length
+      ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Found</th><th>Worker</th><th>Mode</th><th>Status</th><th class="num">Effort</th><th class="num">Reward</th><th class="num">Its credit</th></tr></thead><tbody>
+        ${found.map((b) => `<tr>
+          <td><a href="https://explorer.bumblebeam.org/block/${Number(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
+          <td>${ago(b.ts)}</td><td>${esc(b.finder)}</td><td>${esc(b.mode)}</td>
+          <td>${statusBadge(b.status)}${b.status === 'pending' ? `<span class="sub">${int(b.confirmations)} conf.</span>` : ''}</td>
+          <td class="num">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
+          <td class="num">${beam(b.reward)}</td><td class="num">${creditAt.has(b.height) ? beam(creditAt.get(b.height)) : '—'}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : '<p class="hint">This miner has not found a block.</p>';
     const workers = m.workers.length
       ? `<div class="table-wrap"><table><thead><tr><th>Worker</th><th>Modes</th><th class="num">Shares</th><th class="num">Hashrate</th><th>First</th><th>Last</th></tr></thead><tbody>
         ${m.workers.map((w) => `<tr><td>${esc(w.worker)}</td><td>${esc(w.modes.join(', '))}</td><td class="num">${int(w.shares)}</td>
@@ -309,7 +323,9 @@
           <input class="adm-field" id="merge-to" placeholder="the right Beam address" autocomplete="off" spellcheck="false" aria-label="Address to move to">
           <button class="btn danger" type="submit">Move everything</button>
         </form></section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Block credits</h2></div>${credits}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks found</h2><span class="panel-meta">by this miner, newest first</span></div>${foundHtml}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">PPLNS credits</h2><span class="panel-meta">latest 50</span></div>
+        <p class="hint">Its share of every block the pool found while its shares were in the PPLNS window, whoever found the block.</p>${credits}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>${pays}</section>`;
     bindKick();
     $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, `Pay ${beam(m.balance)} to ${short(m.address)} now?`));
