@@ -132,6 +132,10 @@ pub struct Stratum {
     /// Bytes of nonce the pool reserves per connection (after the node's own prefix).
     #[serde(default = "three")]
     pub nonce_prefix_bytes: usize,
+    /// Relays (plain TCP forwarders such as nginx stream) whose connections start with a PROXY
+    /// protocol v1 header carrying the miner's real address. Only these addresses may send one.
+    #[serde(default)]
+    pub proxy_protocol_from: Vec<std::net::IpAddr>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

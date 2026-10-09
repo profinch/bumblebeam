@@ -160,6 +160,37 @@ sudo ufw enable
 
 nginx: `proxy_pass http://127.0.0.1:8080;` for `/` with a Let's Encrypt certificate.
 
+### Regional relays
+
+A relay is a plain TCP forwarder in another country (miners who reach it more easily than the
+pool), for example nginx `stream`; TLS is not terminated there, so the pool's certificate must
+cover the relay's name too (a wildcard does). Without help the pool would see every miner behind a
+relay as the relay's address, one 64-connection limit for all of them. So the relay sends a
+PROXY protocol v1 header on the stratum ports and the pool trusts it from the relay only:
+
+```toml
+[stratum]
+proxy_protocol_from = ["185.133.42.180"]
+```
+
+```nginx
+stream {
+  server {
+    listen 3333; listen 3334; listen 3443; listen 3444;
+    proxy_pass <pool ip>:$server_port;
+    proxy_protocol on;
+    proxy_timeout 1800s;
+  }
+  server { listen 10000; proxy_pass <pool ip>:10000; }   # beam-node p2p: no PROXY support, plain
+}
+```
+
+Set `proxy_protocol_from` (and restart the pool) **before** turning on `proxy_protocol` at the
+relay: a header the pool does not expect is taken for a broken login. Connections from a listed
+address without a header are dropped after 10 s.
+
+bumblebeam.org runs one: **ru.bumblebeam.org** (185.133.42.180, Novosibirsk).
+
 ## 9. Operations
 
 - `admin list` shows blocks the checks could not settle and payments waiting for a decision;
