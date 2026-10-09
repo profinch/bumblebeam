@@ -428,7 +428,3 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .md table td, .md table th { white-space: normal; overflow-wrap: break-word; }
 /* code in tables breaks only where the renderer allows it (after / ? & =), never mid-word */
 .md table td code { white-space: normal; overflow-wrap: normal; }
-/* the network page's recent blocks: our pool's rows tinted in its legend colour, whole row */
-tr.ours td { background: var(--row-bg, rgba(164, 224, 0, 0.12)); }
-tr.ours td:first-child { box-shadow: inset 3px 0 0 var(--row-colour, #a4e000); }
-tr.ours .name { font-weight: 700; }
