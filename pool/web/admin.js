@@ -263,7 +263,8 @@
         <div class="panel-meta"><span id="fb-count"></span>
           ${ddHtml('fb-mode', 'Filter by mode', fb.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml('fb-finder', 'Filter by finder', fb.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
-      <div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Earned</th><th class="num">Credit</th><th class="num">Status</th></tr></thead>
+      <div class="table-wrap"><table class="fb-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-c"><col class="w-s"></colgroup>
+        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Earned</th><th class="num">Credit</th><th class="num">Status</th></tr></thead>
         <tbody id="fb-body"></tbody></table></div>
       <div class="more" id="fb-more" hidden><button class="btn ghost">Show more</button></div></section>`;
   }
