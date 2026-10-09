@@ -109,23 +109,35 @@
 
   let flash = null;
   const flashHtml = () => (flash ? `<div class="adm-msg ${flash.ok ? 'ok' : 'err'}">${esc(flash.text)}</div>` : '');
+  // an operator action under way (its dialog, the request): the live refresh waits for it
+  let busy = 0;
   async function act(path, body, q) {
-    if (q && !(await ask(q.title, q.text, q))) return;
+    busy++;
     try {
-      const r = await api(path, body);
-      flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
-    } catch (e) {
-      flash = { ok: false, text: e.message };
+      if (q && !(await ask(q.title, q.text, q))) return;
+      try {
+        const r = await api(path, body);
+        flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
+      } catch (e) {
+        flash = { ok: false, text: e.message };
+      }
+      render();
+    } finally {
+      busy--;
     }
-    render();
   }
 
   // a payout run takes a few seconds per miner: the button says so until the pool answers
   async function payNow(btn, body, text) {
-    if (!(await ask('Payout', text, { ok: 'Pay now' }))) return;
-    btn.disabled = true;
-    btn.textContent = 'Paying…';
-    await act('payouts', body);
+    busy++;
+    try {
+      if (!(await ask('Payout', text, { ok: 'Pay now' }))) return;
+      btn.disabled = true;
+      btn.textContent = 'Paying…';
+      await act('payouts', body);
+    } finally {
+      busy--;
+    }
   }
 
   // A table shown ten rows at a time: the rest are there but hidden, "Show more" reveals ten more.
@@ -136,7 +148,9 @@
   view.addEventListener('click', (e) => {
     const b = e.target.closest('[data-page]');
     if (!b) return;
-    const rest = [...b.closest('.panel').querySelectorAll('tbody tr[hidden]')];
+    const panel = b.closest('.panel');
+    panel.dataset.expanded = '1'; // the live refresh leaves an opened list alone
+    const rest = [...panel.querySelectorAll('tbody tr[hidden]')];
     rest.slice(0, PAGE).forEach((tr) => { tr.hidden = false; });
     if (rest.length <= PAGE) b.parentElement.remove();
   });
@@ -508,6 +522,10 @@
     bindSuggest(m.id);
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
+      busy++;
+      try { await merge(); } finally { busy--; }
+    });
+    const merge = async () => {
       const to = $('#merge-to').value.replace(/\s+/g, '');
       if (!to) return;
       // what the address is, before the dialog: a miner of this pool, or a new account the wallet accepts
@@ -532,7 +550,7 @@
         flash = { ok: false, text: err.message };
       }
       render();
-    });
+    };
   }
 
   // Suggestions for the move's address: known miners whose address holds what was typed.
@@ -679,4 +697,15 @@
   route();
   poll();
   setInterval(poll, 30000);
+  // Live refresh every 30 s, as on the pool's site (Connections keeps its own 10 s), except while
+  // the operator types, a dialog or a list is open, a table was opened with Show more, or an
+  // action is under way. Filters and sorting of the found blocks are kept across it.
+  setInterval(() => {
+    if (!memToken || document.hidden || $('#tabs').hidden || busy) return;
+    if ((location.hash.replace(/^#/, '') || 'attention').split('/')[0] === 'connections') return;
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    if (document.querySelector('.adm-ask-bg, .dd.open') || view.querySelector('[data-expanded]')) return;
+    render();
+  }, 30000);
 })();
