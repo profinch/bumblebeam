@@ -442,7 +442,7 @@
     fb.credit = new Map(m.credits.map((c) => [c.height, c.amount]));
     const workers = m.workers.length
       ? `<div class="table-wrap"><table><thead><tr><th>Worker</th><th>Modes</th><th class="num">Shares</th><th class="num">Hashrate</th><th>First</th><th>Last</th></tr></thead><tbody>
-        ${m.workers.map((w) => `<tr><td>${esc(w.worker)}</td><td>${esc(w.modes.join(', '))}</td><td class="num">${int(w.shares)}</td>
+        ${m.workers.map((w) => `<tr><td>${esc(w.worker)}</td><td>${w.modes.map(modeBadge).join(' ')}</td><td class="num">${int(w.shares)}</td>
           <td class="num">${hr(w.difficulty / Math.max(60, w.last - w.first))}</td><td>${ago(w.first)}</td><td>${ago(w.last)}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No shares in 7 days.</p>';
