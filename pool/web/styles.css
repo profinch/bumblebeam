@@ -431,8 +431,8 @@ tr.ours td { background: rgba(0, 246, 210, 0.05); }
 .md table td, .md table th { white-space: normal; overflow-wrap: break-word; }
 /* code in tables breaks only where the renderer allows it (after / ? & =), never mid-word */
 .md table td code { white-space: normal; overflow-wrap: normal; }
-/* a header with an explanation on hover (tips.js moves title to data-tip) */
-th[title], th[data-tip] { text-decoration: underline dotted rgba(255, 255, 255, 0.35); text-underline-offset: 3px; cursor: help; }
+/* text with an explanation on hover: only the words, not the whole cell (tips.js moves title to data-tip) */
+.tipped { text-decoration: underline dotted rgba(255, 255, 255, 0.35); text-underline-offset: 3px; cursor: help; }
 
 /* tooltips (tips.js): the light end of the page's own gradient, the accent edge, mono text */
 .bb-tip {
