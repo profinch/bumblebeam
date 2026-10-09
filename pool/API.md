@@ -287,6 +287,24 @@ do not verify it. Share difficulty is per worker (vardiff), aimed at about one s
 seconds, starting at 64. The pool assigns each connection a nonce prefix so no two rigs search the
 same nonces. The server is `pool/server` (Rust).
 
+## Operator's API
+
+`/api/admin/*` backs the operator's dashboard at `/admin`. It exists only when `[admin] token` is
+set in pool.toml (24+ characters), takes `Authorization: Bearer <token>`, answers with
+`Cache-Control: no-store` and has no CORS headers. A wrong token is logged with the client's
+address; every action is logged.
+
+| | |
+|---|---|
+| `GET attention` | unverified blocks, payments in review or stuck, txId deduplication proof |
+| `GET connections` | live stratum connections (peer, port, TLS, address, worker, agent, difficulty, shares) and the last 300 that ended before a login, with what they sent first and why they ended |
+| `POST connections/<id>/kick` | ends a connection |
+| `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address |
+| `GET miners/<id>` | one miner: workers over 7 days, block credits, payments, live connections |
+| `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another address (ends the miner's connections first) |
+| `POST blocks/<height>` `{"action": "confirm"\|"orphan", "force": false}` | as `admin block` |
+| `POST payments/<txid>` `{"action": "sent"\|"refund", "force": false}` | as `admin payment` |
+
 ## MCP for agents
 
 `https://pool.bumblebeam.org/mcp` is the pool's MCP server (Streamable HTTP, stateless, read-only):

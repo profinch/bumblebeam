@@ -52,6 +52,8 @@ pub struct Shared {
     pub node_prefix: RwLock<String>,
     pub conn_seq: AtomicU64,
     pub connected_workers: AtomicU64,
+    /// Live stratum connections and recent failed ones, for the operator.
+    pub conns: crate::conns::Conns,
     /// Network height from the explorer cache (0 = unknown); jobs far below it mean the node is syncing.
     pub net_height: AtomicU64,
     pub started: Instant,

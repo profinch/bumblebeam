@@ -6,6 +6,7 @@ mod admin;
 mod api;
 mod coinbase;
 mod config;
+mod conns;
 mod db;
 mod emission;
 mod network;
@@ -56,6 +57,7 @@ async fn main() -> Result<()> {
         node_prefix: RwLock::new(String::new()),
         conn_seq: AtomicU64::new(0),
         connected_workers: AtomicU64::new(0),
+        conns: conns::Conns::default(),
         net_height: AtomicU64::new(0),
         started: Instant::now(),
         http: http.clone(),

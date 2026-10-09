@@ -17,6 +17,16 @@ pub struct Config {
     pub database: Database,
     #[serde(default)]
     pub coinbase: Coinbase,
+    #[serde(default)]
+    pub admin: Admin,
+}
+
+/// The operator's dashboard (/admin, /api/admin/*). An empty token, or one under 24 characters,
+/// turns it off.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Admin {
+    #[serde(default)]
+    pub token: String,
 }
 
 /// Coinbase payouts (tools/coinbase): miners upload pairs made with their own keys, the pool puts them
@@ -234,6 +244,9 @@ impl Config {
             anyhow::ensure!(cb.kernel_validity_blocks > cb.expiry_margin_blocks + 1440, "coinbase: kernel_validity_blocks must exceed expiry_margin_blocks by a day");
         }
         Ok(cfg)
+    }
+    pub fn admin_enabled(&self) -> bool {
+        self.admin.token.len() >= 24
     }
     pub fn wallet_enabled(&self) -> bool {
         !self.wallet_api.url.is_empty()

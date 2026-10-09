@@ -6,7 +6,7 @@ ARG BUMBLEBEAM_REF=main
 RUN apk add --no-cache git
 RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
 # version the asset URLs with the commit, so a release never mixes cached and new files
-RUN sed -i "s/?v=dev/?v=$(git -C /src rev-parse --short HEAD)/g" /src/pool/web/index.html
+RUN sed -i "s/?v=dev/?v=$(git -C /src rev-parse --short HEAD)/g" /src/pool/web/index.html /src/pool/web/admin.html
 
 FROM nginx:1.28-alpine
 COPY --from=src /src/pool/web/ /usr/share/nginx/html/

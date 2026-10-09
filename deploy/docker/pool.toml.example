@@ -50,5 +50,8 @@ target_secs = 10.0
 bind = "0.0.0.0:8080"
 web_dir = "/opt/bumblebeam/web"
 
+[admin]
+token = ""                                # the operator's dashboard at /admin; 24+ random chars (openssl rand -hex 24), empty turns it off
+
 [database]
 url_file = "/etc/bumblebeam/database.url"   # a file holding postgres://user:pass@host/db, or set url = "..." here

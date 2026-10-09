@@ -4,17 +4,18 @@ use crate::emission::miner_reward_groth;
 use crate::network::NetCache;
 use crate::pow;
 use crate::state::{now, Shared};
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
-use tracing::error;
+use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct Api {
@@ -39,7 +40,9 @@ type R = Result<Json<Value>, ApiError>;
 pub fn router(api: Api) -> Router {
     let web = api.shared.cfg.http.web_dir.clone();
     let index = format!("{web}/index.html");
+    let admin_page = format!("{web}/admin.html");
     Router::new()
+        .route_service("/admin", ServeFile::new(admin_page))
         .route("/api/stats", get(stats))
         .route("/api/blocks", get(blocks))
         .route("/api/blocks/heights", get(block_heights))
@@ -51,8 +54,10 @@ pub fn router(api: Api) -> Router {
         .route("/api/coinbase", get(coinbase_info))
         .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
         .route("/api/miningboard", get(miningboard))
-        .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
         .layer(CorsLayer::permissive())
+        // the operator's API is added after the CORS layer: no other site may call it from a browser
+        .merge(admin_router(api.clone()))
+        .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
         .with_state(api)
 }
 
@@ -111,7 +116,18 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     let s = &api.shared;
     let before = q.get("before").and_then(|v| v.parse().ok());
     let tip = s.tip_height().map(|h| h as i64);
-    let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip, None).await?;
+    // `miner=<address>`: only the blocks that miner found (none for an address never seen)
+    let miner = match q.get("miner") {
+        Some(a) => match clean_address(a) {
+            Some(a) => match s.db.miner_lookup(&a).await? {
+                Some(id) => Some(id),
+                None => return Ok(Json(json!({ "blocks": [], "matured": [], "immature": [], "candidates": [] }))),
+            },
+            None => return Ok(Json(json!({ "error": "not a Beam address" }))),
+        },
+        None => None,
+    };
+    let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip, miner).await?;
     // The same blocks split the open-ethereum-pool way, which the Beam Explorer's `open-eth`
     // adapter reads to attribute blocks to pools. Orphans are in neither.
     let by_status = |want: &[&str]| -> Vec<Value> {
@@ -134,13 +150,18 @@ async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now(), mode(&q)).await? })))
 }
 
-async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
+/// A miner address as typed: whitespace dropped, a coinbase account ("cb:" + hex) lowercased;
+/// None if it cannot be an address.
+fn clean_address(address: &str) -> Option<String> {
     let address: String = address.chars().filter(|c| !c.is_whitespace()).collect();
-    // coinbase accounts are "cb:" + hex, and case-insensitive
     let address = if address.to_ascii_lowercase().starts_with("cb:") { address.to_ascii_lowercase() } else { address };
-    if address.len() > 600 || !address.chars().all(|c| c.is_ascii_alphanumeric() || c == ':') {
+    (address.len() <= 600 && address.chars().all(|c| c.is_ascii_alphanumeric() || c == ':')).then_some(address)
+}
+
+async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
+    let Some(address) = clean_address(&address) else {
         return Ok(Json(json!({ "error": "not a Beam address" })));
-    }
+    };
     let s = &api.shared;
     let found = s.db.miner_blocks(&address, now(), 10, s.cfg.pool.maturity as i64, s.tip_height().map(|h| h as i64)).await?;
     let mut v = match s.db.miner(&address, now(), range(&q), mode(&q)).await? {
@@ -220,4 +241,124 @@ async fn health(State(api): State<Api>) -> R {
     let job = s.current_job();
     Ok(Json(json!({ "ok": true, "node": job.is_some(), "jobAgeSecs": job.as_ref().map(|j| j.received.elapsed().as_secs()), "uptime": s.started.elapsed().as_secs(),
                     "workers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed) })))
+}
+
+// ---- the operator's dashboard (pool/web/admin.html) ----
+
+fn admin_router(api: Api) -> Router<Api> {
+    Router::new()
+        .route("/api/admin/attention", get(admin_attention))
+        .route("/api/admin/connections", get(admin_connections))
+        .route("/api/admin/connections/:id/kick", post(admin_kick))
+        .route("/api/admin/miners", get(admin_miners))
+        .route("/api/admin/miners/:id", get(admin_miner))
+        .route("/api/admin/miners/:id/merge", post(admin_merge))
+        .route("/api/admin/blocks/:height", post(admin_block))
+        .route("/api/admin/payments/:tx_id", post(admin_payment))
+        .layer(middleware::from_fn_with_state(api, admin_auth))
+}
+
+fn client_ip(h: &HeaderMap) -> String {
+    h.get("x-real-ip").and_then(|v| v.to_str().ok()).unwrap_or("-").to_string()
+}
+
+/// `Authorization: Bearer <admin.token>`, compared in constant time. Without a token configured the
+/// routes do not exist; a wrong token is logged with the client's address.
+async fn admin_auth(State(api): State<Api>, req: Request, next: Next) -> Response {
+    let cfg = &api.shared.cfg;
+    if !cfg.admin_enabled() {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "the operator's dashboard is off (admin.token)" }))).into_response();
+    }
+    let given = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+    let want = cfg.admin.token.as_bytes();
+    let ok = given.len() == want.len() && given.bytes().zip(want).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0;
+    if !ok {
+        warn!(ip = %client_ip(req.headers()), path = %req.uri().path(), "admin: wrong token");
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "wrong token" }))).into_response();
+    }
+    let mut res = next.run(req).await;
+    res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    res
+}
+
+/// An operator action's outcome: 200 with a message, or 409 with why it was refused.
+fn outcome(r: anyhow::Result<String>) -> Response {
+    match r {
+        Ok(msg) => Json(json!({ "ok": true, "message": msg })).into_response(),
+        Err(e) => (StatusCode::CONFLICT, Json(json!({ "ok": false, "error": format!("{e:#}") }))).into_response(),
+    }
+}
+
+#[derive(serde::Deserialize, Default)]
+struct ActionBody {
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    to: String,
+}
+
+async fn admin_attention(State(api): State<Api>) -> R {
+    Ok(Json(crate::admin::attention(&api.shared.db).await?))
+}
+
+async fn admin_connections(State(api): State<Api>) -> R {
+    let c = &api.shared.conns;
+    Ok(Json(json!({ "now": now(), "live": c.live(None), "recent": c.recent() })))
+}
+
+async fn admin_kick(State(api): State<Api>, h: HeaderMap, Path(id): Path<u64>) -> Response {
+    let ok = api.shared.conns.kick(id);
+    info!(ip = %client_ip(&h), id, ok, "admin: kick");
+    outcome(if ok { Ok(format!("connection {id} ended")) } else { Err(anyhow::anyhow!("no connection {id}")) })
+}
+
+async fn admin_miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let search: String = q.get("q").map(|s| s.trim().to_string()).unwrap_or_default();
+    let mut list = crate::admin::miners(&api.shared.db, &search, limit(&q, 100, 1000)).await?;
+    for m in list.iter_mut() {
+        m["connections"] = json!(api.shared.conns.count_miner(m["id"].as_i64().unwrap_or(0)));
+    }
+    Ok(Json(json!({ "miners": list })))
+}
+
+async fn admin_miner(State(api): State<Api>, Path(id): Path<i64>) -> Response {
+    match crate::admin::miner(&api.shared.db, id).await {
+        Ok(Some(mut m)) => {
+            m["connections"] = json!(api.shared.conns.live(Some(id)));
+            Json(m).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "no such miner" }))).into_response(),
+        Err(e) => ApiError(e).into_response(),
+    }
+}
+
+async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let s = &api.shared;
+    // end the miner's connections first: their next shares would recreate the old account
+    let kicked = s.conns.kick_miner(id);
+    for _ in 0..50 {
+        if s.conns.count_miner(id) == 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let r = crate::admin::merge(&s.db, id, &b.to).await;
+    info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
+    outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
+}
+
+async fn admin_block(State(api): State<Api>, h: HeaderMap, Path(height): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::admin::block(&api.shared.db, height, &b.action, b.force).await;
+    info!(ip = %client_ip(&h), height, action = %b.action, force = b.force, ok = r.is_ok(), "admin: block");
+    outcome(r)
+}
+
+async fn admin_payment(State(api): State<Api>, h: HeaderMap, Path(tx_id): Path<String>, Json(b): Json<ActionBody>) -> Response {
+    let s = &api.shared;
+    let wallet = s.cfg.wallet_enabled().then(|| crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone()));
+    let r = crate::admin::payment(&s.db, wallet.as_ref(), &tx_id, &b.action, b.force).await;
+    info!(ip = %client_ip(&h), %tx_id, action = %b.action, force = b.force, ok = r.is_ok(), "admin: payment");
+    outcome(r)
 }

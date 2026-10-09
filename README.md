@@ -101,6 +101,11 @@ core's emission rule (25 BEAM today, 12.5 from height 4,730,400), so it stays ri
 redeploy. Payouts need an **offline** Beam address: a regular one expires and needs the wallet
 online, so the guide asks for the offline kind and the login warns otherwise.
 
+The operator's dashboard is `/admin` (`pool/web/admin.html`): what waits for a decision (unverified
+blocks, stuck payments), live stratum connections and the ones that ended before a login, and the
+miners, with a move of everything mined under a wrong address to the right one. It is off until
+`[admin] token` is set in pool.toml. Support: [support@bumblebeam.org](mailto:support@bumblebeam.org).
+
 ## License
 
 [Apache-2.0](LICENSE), the same license as the Beam core, whose code `oracle/third_party/beam`

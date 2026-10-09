@@ -350,7 +350,7 @@
     const day = blocks.filter((b) => b.ts > Date.now() / 1000 - 86400);
     const effort24h = stats.effort24h ?? (day.length ? day.reduce((s, b) => s + (b.effort || 0), 0) / day.length : null);
     const next = BB.nextRewardChange(stats.height);
-    const more = blocks.length >= 50 ? `<div class="more"><button class="btn ghost" id="more-blocks" data-before="${int(blocks[blocks.length - 1].height).replace(/,/g, '')}">Load older blocks</button></div>` : '';
+    const more = moreBlocks(blocks, 50);
     return `<div class="page-head"><h1 class="page-title">Blocks</h1></div>
       <div class="tiles">
         ${tile('Blocks 24h', int(stats.blocks24h ?? day.length))}
@@ -363,15 +363,22 @@
       <template id="ctx" data-maturity="${int(stats.maturity).replace(/,/g, '')}"></template>`;
   };
 
+  // "Load older blocks" under a blocks table that came back full; with `miner`, that miner's blocks only.
+  const moreBlocks = (blocks, page, miner) => (blocks.length >= page
+    ? `<div class="more"><button class="btn ghost" id="more-blocks" data-before="${blocks[blocks.length - 1].height}"${miner ? ` data-miner="${esc(miner)}"` : ''}>Load older blocks</button></div>` : '');
+
   function bindBlocks() {
     const btn = $('#more-blocks');
     if (!btn) return;
     const maturity = Number($('#ctx').dataset.maturity) || BB.MATURITY;
+    const miner = btn.dataset.miner ? `&miner=${encodeURIComponent(btn.dataset.miner)}` : '';
     btn.addEventListener('click', async () => {
+      // the live refresh would drop the loaded rows, so it skips this page from now on
+      $('#blocks-body').dataset.more = '1';
       btn.disabled = true;
       btn.textContent = 'Loading…';
       try {
-        const { blocks } = await BB.pool(`blocks?limit=50&before=${Number(btn.dataset.before) || 0}`);
+        const { blocks } = await BB.pool(`blocks?limit=50&before=${Number(btn.dataset.before) || 0}${miner}`);
         $('#blocks-body').insertAdjacentHTML('beforeend', blocksRows(blocks, maturity));
         if (blocks.length < 50) btn.remove();
         else { btn.dataset.before = String(blocks[blocks.length - 1].height); btn.disabled = false; btn.textContent = 'Load older blocks'; }
@@ -454,8 +461,9 @@
           </tbody></table></div>` : '<div class="empty">No payments yet</div>'}
         </section>
       </div>
-      ${m.blocks.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks you found</h2><div class="panel-meta"><span>latest ${int(m.blocks.length)}</span></div></div>
-        ${blocksTable(m.blocks, stats.maturity)}</section>` : ''}`;
+      ${m.blocks.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks you found</h2><div class="panel-meta"><span>newest first</span></div></div>
+        ${blocksTable(m.blocks, stats.maturity, moreBlocks(m.blocks, 10, addr))}</section>
+        <template id="ctx" data-maturity="${int(stats.maturity).replace(/,/g, '')}"></template>` : ''}`;
   }
 
   views.payments = async () => {
@@ -549,6 +557,10 @@
               ${stats.coinbase ? '<div><b>Non-custodial.</b> Be paid in the blocks, with coinbase outputs only your wallet can spend: the pool never holds your coins.</div>' : ''}
               <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
+          </section>
+          <section class="panel"><div class="panel-head"><h2 class="panel-title">Help</h2></div>
+            <div class="why">A rig mined to a wrong address, a payout is late, or a miner will not connect?
+              Write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> with your address and what you see.</div>
           </section>
         </div>
       </div>
@@ -860,7 +872,7 @@
       setBanner();
       setFooter();
       if (route === 'connect') bindConnect();
-      if (route === 'blocks') bindBlocks();
+      if (route === 'blocks' || route === 'miners') bindBlocks();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
       if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
@@ -901,7 +913,7 @@
   // Live refresh every 30 s, except where the user is typing or has loaded more rows.
   setInterval(() => {
     const r = parse().route;
-    if (r === 'connect' || r === 'api' || document.hidden || (r === 'blocks' && $('#blocks-body') && $('#blocks-body').children.length > 50)) return;
+    if (r === 'connect' || r === 'api' || document.hidden || ($('#blocks-body') && $('#blocks-body').dataset.more)) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
     render(false);
   }, 30000);
