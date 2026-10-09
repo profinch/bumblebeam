@@ -77,6 +77,18 @@
   .fb-table col.w-h { width: 110px; } .fb-table col.w-t { width: 110px; } .fb-table col.w-m { width: 90px; } .fb-table col.w-e { width: 90px; }
   .fb-table col.w-r { width: 190px; } .fb-table col.w-c { width: 120px; } .fb-table col.w-s { width: 110px; }
   .fb-table td { overflow: hidden; text-overflow: ellipsis; }
+  .adm-suggest .dd-list li.none { cursor: default; color: var(--muted); }
+  .adm-suggest .dd-list li.none:hover { background: none; }
+  /* toast(): the dialogs' look, bottom centre, gone after 5 s */
+  .adm-toast { position: fixed; z-index: 1001; left: 50%; bottom: 24px; transform: translate(-50%, 8px); width: max-content; max-width: min(520px, calc(100vw - 32px));
+    padding: 12px 16px 12px 18px; font: 12px/1.6 var(--font-mono); color: rgba(255, 255, 255, 0.92); overflow-wrap: anywhere; cursor: pointer;
+    background: linear-gradient(180deg, rgba(18, 108, 150, 0.98), rgba(10, 90, 128, 0.98));
+    border: 1px solid rgba(0, 246, 210, 0.32); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 3px 0 0 rgba(0, 246, 210, 0.55);
+    opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease; }
+  .adm-toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .adm-toast.danger { border-color: rgba(242, 95, 91, 0.45); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 3px 0 0 rgba(242, 95, 91, 0.7); }
+  @media (prefers-reduced-motion: reduce) { .adm-toast { transition: none; } }
   label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
 </style>
 </head>

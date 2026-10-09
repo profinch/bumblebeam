@@ -107,6 +107,21 @@
     });
   }
 
+  // A short notice in the dialogs' look, gone after 5 s (or on a click): for a check that failed
+  // before anything was sent.
+  function toast(text, { ok = false } = {}) {
+    document.querySelectorAll('.adm-toast').forEach((t) => t.remove());
+    const t = document.createElement('div');
+    t.className = `adm-toast${ok ? '' : ' danger'}`;
+    t.setAttribute('role', ok ? 'status' : 'alert');
+    t.textContent = text;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('on'));
+    const gone = () => { t.classList.remove('on'); setTimeout(() => t.remove(), 200); };
+    const timer = setTimeout(gone, 5000);
+    t.addEventListener('click', () => { clearTimeout(timer); gone(); });
+  }
+
   let flash = null;
   const flashHtml = () => (flash ? `<div class="adm-msg ${flash.ok ? 'ok' : 'err'}">${esc(flash.text)}</div>` : '');
   // an operator action under way (its dialog, the request): the live refresh waits for it
@@ -530,8 +545,8 @@
       if (!to) return;
       // what the address is, before the dialog: a miner of this pool, or a new account the wallet accepts
       let chk;
-      try { chk = await api(`address?a=${encodeURIComponent(to)}`); } catch (err) { flash = { ok: false, text: err.message }; return render(); }
-      const fail = (text) => { flash = { ok: false, text }; render(); };
+      try { chk = await api(`address?a=${encodeURIComponent(to)}`); } catch (err) { return toast(err.message); }
+      const fail = (text) => toast(text);
       if (chk.minerId === m.id) return fail('That is this same miner.');
       // only to a miner of this pool: a typo in a long address can pass even the wallet's check
       if (chk.minerId == null) {
@@ -558,34 +573,33 @@
     const input = $('#merge-to'), list = $('#merge-list');
     let timer = null, items = [], active = -1, seq = 0;
     const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
-    const mark = (i) => { active = i; [...list.children].forEach((li, j) => li.classList.toggle('active', j === i)); };
+    const mark = (i) => { active = i; [...list.querySelectorAll('li[data-i]')].forEach((li, j) => li.classList.toggle('active', j === i)); };
     const pick = (i) => { if (items[i]) { input.value = items[i].address; close(); input.focus(); } };
-    input.addEventListener('input', () => {
-      clearTimeout(timer);
-      const q = input.value.trim();
-      if (q.length < 3) return close();
-      timer = setTimeout(async () => {
-        const my = ++seq;
-        let r;
-        try { r = await api(`miners?limit=8&q=${encodeURIComponent(q)}`); } catch { return; }
-        if (my !== seq) return;
-        items = r.miners.filter((x) => x.id !== selfId && x.address !== q);
-        if (!items.length) return close();
-        list.innerHTML = items.map((x) => `<li role="option">#${Number(x.id)} ${esc(short(x.address))}<span class="sub">${esc(x.type || '?')} · ${beam(x.balance)} unpaid · last share ${ago(x.lastShare)}</span></li>`).join('');
-        list.hidden = false;
-        input.setAttribute('aria-expanded', 'true');
-        mark(-1);
-      }, 250);
-    });
+    // known miners whose address holds what was typed; an empty field lists them all
+    async function search() {
+      const my = ++seq, q = input.value.trim();
+      let r;
+      try { r = await api(`miners?limit=8&q=${encodeURIComponent(q)}`); } catch { return; }
+      if (my !== seq || document.activeElement !== input) return;
+      items = r.miners.filter((x) => x.id !== selfId && x.address !== q);
+      list.innerHTML = items.length
+        ? items.map((x, i) => `<li role="option" data-i="${i}">#${Number(x.id)} ${esc(short(x.address))}<span class="sub">${esc(x.type || '?')} · ${beam(x.balance)} unpaid · last share ${ago(x.lastShare)}</span></li>`).join('')
+        : `<li class="none">${q ? 'No known miner matches' : 'No other miners'}</li>`;
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      mark(-1);
+    }
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 200); });
+    input.addEventListener('focus', () => { if (list.hidden) search(); });
     input.addEventListener('keydown', (e) => {
-      if (list.hidden) return;
+      if (list.hidden) { if (e.key === 'ArrowDown') { e.preventDefault(); search(); } return; }
       if (e.key === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
       else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
       else if (e.key === 'Escape') { e.preventDefault(); close(); }
     });
     list.addEventListener('mousedown', (e) => e.preventDefault());
-    list.addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) pick([...list.children].indexOf(li)); });
+    list.addEventListener('click', (e) => { const li = e.target.closest('li[data-i]'); if (li) pick(Number(li.dataset.i)); });
     input.addEventListener('blur', () => setTimeout(close, 100));
   }
 
