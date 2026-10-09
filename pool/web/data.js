@@ -60,7 +60,7 @@ const BB = (() => {
     ? s.map((p) => (Array.isArray(p) ? [num(p[0]), num(p[1])] : [num(p && p.ts), num(p && p.value)])).filter((p) => p[0] != null && p[1] != null)
     : []);
   // the range's highest one-minute hashrate, [ts, value], from servers that send it
-  const peakOf = (p) => (Array.isArray(p) && num(p[1]) != null ? num(p[1]) : null);
+  const peakOf = (p) => (Array.isArray(p) && num(p[0]) != null && num(p[1]) != null ? [num(p[0]), num(p[1])] : null);
   const tsOf = (x) => (typeof x === 'string' && /[^\d.]/.test(x) ? num(Date.parse(x) / 1000) : num(x));
 
   async function getJSON(url, timeoutMs = 8000) {
