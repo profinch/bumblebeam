@@ -34,13 +34,12 @@
     const vw = document.documentElement.clientWidth;
     const w = tip.offsetWidth;
     const h = tip.offsetHeight;
-    const gap = 10;
+    const gap = 8;
     const above = r.top - h - gap >= 8 || r.bottom + h + gap > window.innerHeight;
     const cx = r.left + r.width / 2;
     const left = Math.min(Math.max(8, cx - w / 2), vw - w - 8);
     tip.style.left = `${Math.round(left)}px`;
     tip.style.top = `${Math.round(above ? r.top - h - gap : r.bottom + gap)}px`;
-    tip.style.setProperty('--ax', `${Math.round(Math.min(Math.max(12, cx - left), w - 12))}px`);
     tip.classList.toggle('above', above);
     tip.classList.toggle('below', !above);
   }
