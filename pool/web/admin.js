@@ -128,6 +128,19 @@
     await act('payouts', body);
   }
 
+  // A table shown ten rows at a time: the rest are there but hidden, "Show more" reveals ten more.
+  const PAGE = 10;
+  const paged = (head, rows) => `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>
+    ${rows.map((r, i) => `<tr${i >= PAGE ? ' hidden' : ''}>${r}</tr>`).join('')}</tbody></table></div>
+    ${rows.length > PAGE ? '<div class="more"><button class="btn ghost" data-page>Show more</button></div>' : ''}`;
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-page]');
+    if (!b) return;
+    const rest = [...b.closest('.panel').querySelectorAll('tbody tr[hidden]')];
+    rest.slice(0, PAGE).forEach((tr) => { tr.hidden = false; });
+    if (rest.length <= PAGE) b.parentElement.remove();
+  });
+
   // ---------- copy buttons (data-copy), as on the pool's pages ----------
   function copyFallback(text) {
     const ta = document.createElement('textarea');
@@ -447,14 +460,12 @@
         </tbody></table></div>`
       : '<p class="hint">No shares in 7 days.</p>';
     const credits = m.credits.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Status</th><th>Found</th><th class="num">Credit</th></tr></thead><tbody>
-        ${m.credits.map((c) => `<tr><td>${explorerBlock(c.height)}</td><td>${statusBadge(c.status)}</td><td>${ago(c.ts)}</td><td class="num">${beam(c.amount)}</td></tr>`).join('')}
-        </tbody></table></div>`
+      ? paged('<th>Block</th><th>Status</th><th>Found</th><th class="num">Credit</th>',
+        m.credits.map((c) => `<td>${explorerBlock(c.height)}</td><td>${statusBadge(c.status)}</td><td class="dim">${ago(c.ts)}</td><td class="num">${beam(c.amount)}</td>`))
       : '<p class="hint">No block credits.</p>';
     const pays = m.payments.length
-      ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Tx</th></tr></thead><tbody>
-        ${m.payments.map((p) => `<tr><td>${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beam(p.amount)}</td><td class="num">${beam(p.fee)}</td><td>${explorerTx(p)}</td></tr>`).join('')}
-        </tbody></table></div>`
+      ? paged('<th>When</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Tx</th>',
+        m.payments.map((p) => `<td class="dim">${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beam(p.amount)}</td><td class="num">${beam(p.fee)}</td><td>${explorerTx(p)}</td>`))
       : '<p class="hint">Never paid.</p>';
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Miner #${Number(m.id)}</h1><span class="dim mono adm-seen">first seen ${time(m.firstSeen)}</span>
@@ -481,21 +492,37 @@
         found blocks, and unpaid balance go to the address below; its connections are ended first. Payout history stays here: an account that has never paid is deleted.
         If the rig keeps using the wrong address, it comes back as a new miner, so fix the rig (or the rental profile) too.</p>
         <form class="adm-row" id="merge">
-          <input class="adm-field" id="merge-to" placeholder="the right Beam address" autocomplete="off" spellcheck="false" aria-label="Address to move to">
+          <div class="adm-suggest"><input class="adm-field" id="merge-to" placeholder="the right Beam address, or a piece of a known miner's" autocomplete="off" spellcheck="false"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="merge-list" aria-label="Address to move to">
+            <ul class="dd-list" id="merge-list" role="listbox" hidden></ul></div>
           <button class="btn danger" type="submit">Move everything</button>
         </form></section>
       ${foundPanel()}
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">PPLNS credits</h2><span class="panel-meta">latest 50</span></div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">PPLNS credits</h2><span class="panel-meta">${m.credits.length >= 500 ? 'latest 500 blocks' : `${int(m.credits.length)} blocks`}</span></div>
         <p class="hint">Its share of every block the pool found while its shares were in the PPLNS window, whoever found the block.</p>${credits}</section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>${pays}</section>`;
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2>${m.payments.length ? `<span class="panel-meta">${int(m.payments.length)}</span>` : ''}</div>${pays}</section>`;
     bindKick();
     bindFound();
     $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, ['Pay ', { b: beam(m.balance) }, ' now?\nAddress: ', m.address]));
+    bindSuggest(m.id);
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
       const to = $('#merge-to').value.replace(/\s+/g, '');
       if (!to) return;
-      if (!(await ask('Move to another address', `Move the shares, block credits, found blocks and unpaid balance of miner #${m.id} (${short(m.address)}) to ${short(to)}? Its connections are ended first.`, { ok: 'Move everything', danger: true }))) return;
+      // what the address is, before the dialog: a miner of this pool, or a new account the wallet accepts
+      let chk;
+      try { chk = await api(`address?a=${encodeURIComponent(to)}`); } catch (err) { flash = { ok: false, text: err.message }; return render(); }
+      const fail = (text) => { flash = { ok: false, text }; render(); };
+      if (chk.minerId === m.id) return fail('That is this same miner.');
+      if (chk.minerId == null) {
+        if (!chk.shape) return fail('Not a Beam address.');
+        if (chk.shape === 'coinbase') return fail('A coinbase account cannot receive a move.');
+        if (!chk.wallet || chk.wallet.error) return fail(`The address is not a miner of this pool and the wallet could not check it${chk.wallet && chk.wallet.error ? `: ${chk.wallet.error}` : ''}.`);
+        if (!chk.wallet.valid) return fail('The wallet does not accept this address: check it for a typo.');
+      }
+      const toWhat = chk.minerId != null ? `miner #${chk.minerId}, ${beam(chk.balance)} unpaid` : `a new account, ${chk.wallet.type} address`;
+      if (!(await ask('Move to another address', ['Move the shares, block credits, found blocks and unpaid balance (', { b: beam(m.balance) },
+        `) of miner #${m.id}?\n\nFrom: `, m.address, '\n\nTo (', { b: toWhat }, '): ', to, '\n\nIts connections are ended first.'], { ok: 'Move everything', danger: true }))) return;
       try {
         const r = await api(`miners/${m.id}/merge`, { to });
         flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
@@ -505,6 +532,42 @@
       }
       render();
     });
+  }
+
+  // Suggestions for the move's address: known miners whose address holds what was typed.
+  function bindSuggest(selfId) {
+    const input = $('#merge-to'), list = $('#merge-list');
+    let timer = null, items = [], active = -1, seq = 0;
+    const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+    const mark = (i) => { active = i; [...list.children].forEach((li, j) => li.classList.toggle('active', j === i)); };
+    const pick = (i) => { if (items[i]) { input.value = items[i].address; close(); input.focus(); } };
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 3) return close();
+      timer = setTimeout(async () => {
+        const my = ++seq;
+        let r;
+        try { r = await api(`miners?limit=8&q=${encodeURIComponent(q)}`); } catch { return; }
+        if (my !== seq) return;
+        items = r.miners.filter((x) => x.id !== selfId && x.address !== q);
+        if (!items.length) return close();
+        list.innerHTML = items.map((x) => `<li role="option">#${Number(x.id)} ${esc(short(x.address))}<span class="sub">${esc(x.type || '?')} · ${beam(x.balance)} unpaid · last share ${ago(x.lastShare)}</span></li>`).join('');
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        mark(-1);
+      }, 250);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    list.addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) pick([...list.children].indexOf(li)); });
+    input.addEventListener('blur', () => setTimeout(close, 100));
   }
 
   // ---------- the next scheduled payout ----------

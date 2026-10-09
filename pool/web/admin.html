@@ -65,6 +65,13 @@
   .adm-seen { font-size: 11px; }
   .adm-ask b { color: var(--text); }
   .panel.addr .btn { flex: none; }
+  /* the move's address with suggestions from known miners, in the dropdown's look */
+  .adm-suggest { position: relative; flex: 1 1 360px; max-width: 520px; }
+  .adm-suggest .adm-field { max-width: none; }
+  .adm-suggest .dd-list { top: calc(100% + 2px); border-top: 1px solid rgba(0, 246, 210, 0.5); border-radius: 6px; clip-path: none; }
+  .adm-suggest .dd-list li { padding: 7px 12px; font: 12px var(--font-mono); color: var(--text-dim); cursor: pointer; }
+  .adm-suggest .dd-list li.active, .adm-suggest .dd-list li:hover { background: rgba(0, 246, 210, 0.12); color: var(--text); }
+  .adm-ask { width: min(560px, 100%); }
   label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
 </style>
 </head>
