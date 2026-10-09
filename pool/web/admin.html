@@ -72,6 +72,11 @@
   .adm-suggest .dd-list li { padding: 7px 12px; font: 12px var(--font-mono); color: var(--text-dim); cursor: pointer; }
   .adm-suggest .dd-list li.active, .adm-suggest .dd-list li:hover { background: rgba(0, 246, 210, 0.12); color: var(--text); }
   .adm-ask { width: min(560px, 100%); }
+  /* found blocks: fixed columns, so filtering and sorting do not move them (the pool's .blocks-table) */
+  .fb-table { table-layout: fixed; min-width: 900px; }
+  .fb-table col.w-h { width: 110px; } .fb-table col.w-t { width: 110px; } .fb-table col.w-m { width: 90px; } .fb-table col.w-e { width: 90px; }
+  .fb-table col.w-r { width: 190px; } .fb-table col.w-c { width: 120px; } .fb-table col.w-s { width: 110px; }
+  .fb-table td { overflow: hidden; text-overflow: ellipsis; }
   label.chk { font: 11px var(--font-mono); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
 </style>
 </head>
