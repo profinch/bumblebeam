@@ -461,7 +461,7 @@
         <div class="actions"><a class="btn ghost small" href="#miners">All miners</a></div></div>
       ${flashHtml()}
       <div class="panel addr"><span>${esc(m.address)}</span><button class="btn small" data-copy="${esc(m.address)}">copy</button>
-        <a class="btn small ghost" href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public</a></div>
+        <a class="btn small" href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public</a></div>
       <div class="tiles">
         ${tile('Hashrate', hr(p.hashrate), `24h avg ${hr(p.hashrate24h)}`, 'accent')}
         ${tile('Unpaid', beam(m.balance), minPayout ? `owed by the pool · ${Math.round(Math.min(1, m.balance / minPayout) * 100)}% of the ${beam(minPayout)} threshold` : 'owed by the pool')}
