@@ -125,13 +125,6 @@
       .map((p, i) => ({ name: p.name, n: p.blocks24h, color: PALETTE[i % PALETTE.length] }));
   }
   const isOurs = (name) => /^bumblebeam\b/i.test(String(name || ''));
-  // '#a4e000' → 'rgba(164,224,0,0.12)': a row tint every browser understands
-  const tint = (hex, a) => {
-    const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
-    if (!m) return 'transparent';
-    const n = parseInt(m[1], 16);
-    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
-  };
   function blocksDonut(net) {
     if (!net || !net.ok || !net.blocks24h) return '';
     const rows = poolColours(net);
@@ -321,10 +314,10 @@
     const recent = bl.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Recent network blocks</h2></div>
         <div class="table-wrap"><table><thead><tr><th>Block</th><th>Mined by</th><th class="num">Age</th></tr></thead><tbody>
         ${bl.slice(0, 30).map((b) => {
-          // only our blocks stand out: our legend colour on the name and a tint across the row
+          // our blocks: the row marked as the explorer marks them (tr.ours), the name in our legend colour
           const ours = isOurs(b.by);
           const colour = ours ? (colours.find((c) => c.name === b.by) || {}).color || '#a4e000' : null;
-          const rowAttr = colour ? ` class="ours" style="--row-colour:${colour};--row-bg:${tint(colour, 0.12)}"` : '';
+          const rowAttr = ours ? ' class="ours"' : '';
           const name = b.by ? `<span class="name"${colour ? ` style="color:${colour}"` : ''}>${esc(b.by)}</span>` : '<span class="dim">—</span>';
           return `<tr${rowAttr}><td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td><td>${name}</td><td class="num dim">${ago(b.ts)}</td></tr>`;
         }).join('')}
