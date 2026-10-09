@@ -355,7 +355,7 @@
       <div class="tiles">
         ${tile('Blocks 24h', int(stats.blocks24h ?? day.length))}
         ${tile('Average effort 24h', pct(effort24h, 0), 'shares spent / expected; below 100% is good luck')}
-        ${tile('Pending', int(blocks.filter((b) => b.status === 'pending').length), `${int(stats.maturity)} confirmations to mature`)}
+        ${tile('Pending', int(stats.blocksPending ?? blocks.filter((b) => b.status === 'pending' || b.status === 'unverified').length), `${int(stats.maturity)} confirmations to mature`)}
         ${tile('Block reward', beam(stats.blockReward, 1), `+ fees · ${beam(next.reward, 1)} from height ${int(next.height)}`)}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Found blocks</h2><div class="panel-meta"><span>Orphaned in list: <b>${int(blocks.filter((b) => b.status === 'orphaned').length)}</b></span></div></div>

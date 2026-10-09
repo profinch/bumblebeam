@@ -337,6 +337,20 @@ impl Db {
             .collect())
     }
 
+    /// Every block the pool found that the chain kept (orphans left out), newest first, as
+    /// (height, mode, status): the compact list the explorer uses to mark our blocks.
+    pub async fn block_heights(&self) -> Result<Vec<(i64, String, String)>> {
+        let c = self.client().await?;
+        let rows = c.query("SELECT height, mode, status FROM blocks WHERE status <> 'orphaned' ORDER BY height DESC", &[]).await?;
+        Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect())
+    }
+
+    /// Blocks still waiting for maturity or an operator's verdict, over all blocks, not a page.
+    pub async fn blocks_pending(&self) -> Result<i64> {
+        let c = self.client().await?;
+        Ok(c.query_one("SELECT COUNT(*) FROM blocks WHERE status IN ('pending','unverified')", &[]).await?.get(0))
+    }
+
     /// Blocks found by one miner: total and in 24 h (orphans not counted), the last one's time, and
     /// the most recent `limit` (orphans included, with their status).
     pub async fn miner_blocks(&self, address: &str, now: i64, limit: i64, maturity: i64, tip: Option<i64>) -> Result<Value> {

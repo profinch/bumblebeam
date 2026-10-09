@@ -29,9 +29,12 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
     "solo":  { "hashrate": 50.2, "miners": 2, "workers": 3, "blocks24h": 1, "lastBlockFound": 1791290000,
                "series": [[1791234000, 48.1]] }
   },
-  "blocks24h": 31, "effort24h": 0.94
+  "blocks24h": 31, "effort24h": 0.94, "blocksPending": 12
 }
 ```
+
+- `blocksPending` counts every block still waiting for maturity or an operator's verdict
+  (`pending` and `unverified`), not just those on one page of `/api/blocks`.
 
 - `name` is the pool's display name. `config.stratumHost` and `config.ports` (`pplns`, `solo`,
   `pplnsTls`, `soloTls`) tell the UI where miners connect, `config.nodeAddr` (`host:port`, empty if
@@ -84,6 +87,16 @@ the wallet's coinbase can confirm a block; the explorer alone never does.
 `matured` (confirmed), `immature` (pending and unverified) and an always-empty `candidates`
 repeat the same page of blocks in the open-ethereum-pool shape, so the Beam Explorer's `open-eth`
 adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
+
+## `GET /api/blocks/heights`
+
+Every block the pool found that the chain kept (orphans left out), newest first, as
+`[height, mode, status]` and nothing else, so a client can mark all of the pool's blocks with one
+small request. The Beam Explorer and explorer.bumblebeam.org use it to badge our blocks.
+
+```json
+{ "count": 2, "blocks": [[4072327, "pplns", "pending"], [4071981, "pplns", "confirmed"]] }
+```
 
 ## `GET /api/miners?limit=50&mode=`
 

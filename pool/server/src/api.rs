@@ -42,6 +42,7 @@ pub fn router(api: Api) -> Router {
     Router::new()
         .route("/api/stats", get(stats))
         .route("/api/blocks", get(blocks))
+        .route("/api/blocks/heights", get(block_heights))
         .route("/api/miners", get(miners))
         .route("/api/miners/:address", get(miner))
         .route("/api/payments", get(payments))
@@ -101,7 +102,7 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
                                "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
         "charts": { "hashrate": s.db.pool_chart(t, range(&q), mode(&q).unwrap_or("pool")).await? },
         "modes": s.db.mode_stats(t).await?,
-        "blocks24h": blocks24h, "effort24h": effort24h,
+        "blocks24h": blocks24h, "effort24h": effort24h, "blocksPending": s.db.blocks_pending().await?,
         "connectedWorkers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed),
     })))
 }
@@ -119,6 +120,14 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     let matured = by_status(&["confirmed"]);
     let immature = by_status(&["pending", "unverified"]);
     Ok(Json(json!({ "blocks": list, "matured": matured, "immature": immature, "candidates": [] })))
+}
+
+/// Every block the pool found and the chain kept, newest first: `[height, mode, status]`, with
+/// no other fields, so a client can mark all of our blocks in one small request.
+async fn block_heights(State(api): State<Api>) -> R {
+    let list = api.shared.db.block_heights().await?;
+    let rows: Vec<Value> = list.iter().map(|(h, m, st)| json!([h, m, st])).collect();
+    Ok(Json(json!({ "count": rows.len(), "blocks": rows })))
 }
 
 async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {

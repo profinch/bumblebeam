@@ -357,9 +357,15 @@
   function ourBlocks() {
     if (Date.now() - ours.at < 60000) return Promise.resolve(ours.map);
     if (!ours.loading) {
-      ours.loading = fetch(`${POOL_API}/blocks?limit=500`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      // every block in one small list ([height, mode, status]); a pool without that endpoint
+      // answers with its web page (or an error), and the latest 500 full rows stand in
+      const get = (path) => fetch(`${POOL_API}/${path}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json().catch(() => null) : null)).catch(() => null);
+      ours.loading = get('blocks/heights').then((d) => {
+        if (d && Array.isArray(d.blocks)) return d.blocks.map((r) => ({ height: r[0], mode: r[1], status: r[2] }));
+        return get('blocks?limit=500').then((x) => (x && Array.isArray(x.blocks) ? x.blocks : []));
+      }).then((list) => {
         const m = new Map();
-        for (const b of (d && Array.isArray(d.blocks) ? d.blocks : [])) {
+        for (const b of list) {
           const h = num(b.height);
           if (h != null && b.status !== 'orphaned') m.set(h, { mode: b.mode === 'solo' ? 'solo' : 'PPLNS', status: String(b.status || '') });
         }
