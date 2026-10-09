@@ -39,8 +39,8 @@
   const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-8)}` : s || '—');
   const pct = (x, d = 1) => (x == null || !isFinite(x) ? '—' : `${(x * 100).toFixed(d)}%`);
   const effortColor = (e) => (e == null ? 'inherit' : e > 1.5 ? 'var(--color-red)' : e < 0.7 ? 'var(--accent)' : 'inherit');
-  const explorerBlock = (h) => `https://explorer.beam.mw/#/explorer/block/${Math.round(Number(h) || 0)}`;
-  const explorerKernel = (k) => `https://explorer.beam.mw/#/explorer/kernel/${encodeURIComponent(k)}`;
+  const explorerBlock = (h) => `https://explorer.bumblebeam.org/block/${Math.round(Number(h) || 0)}`;
+  const explorerKernel = (k) => `https://explorer.bumblebeam.org/kernel/${encodeURIComponent(k)}`;
   const cleanAddress = (a) => String(a ?? '').replace(/\s+/g, '');
   const minerHref = (a) => `/miners/${encodeURIComponent(cleanAddress(a))}`;
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -128,7 +128,10 @@
     let off = 0, arcs = '';
     for (const row of rows) {
       const len = (row.n / total) * c;
-      arcs += `<circle cx="90" cy="90" r="${r}" fill="none" stroke="${row.color}" stroke-width="20" stroke-dasharray="${(len - 2).toFixed(2)} ${(c - len + 2).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 90 90)"/>`;
+      // a 2-unit gap between segments; a sliver shorter than the gap would give a negative dash,
+      // which browsers ignore and draw as a full ring, so it gets a thin visible mark instead
+      const dash = Math.max(len - 2, 1);
+      arcs += `<circle cx="90" cy="90" r="${r}" fill="none" stroke="${row.color}" stroke-width="20" stroke-dasharray="${dash.toFixed(2)} ${(c - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 90 90)"/>`;
       off += len;
     }
     return `<div class="donut-wrap">
