@@ -123,6 +123,160 @@
     await act('payouts', body);
   }
 
+  // ---------- copy buttons (data-copy), as on the pool's pages ----------
+  function copyFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    const text = b.dataset.copy;
+    const done = (ok) => { b.textContent = ok ? 'copied' : 'failed'; setTimeout(() => (b.textContent = 'copy'), 1500); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), () => done(copyFallback(text)));
+    else done(copyFallback(text));
+  });
+
+  // ---------- the pool site's block cells: mode, effort, status ----------
+  const MATURITY = 240;
+  const modeBadge = (m) => (m === 'solo' ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>');
+  const effortColor = (e) => (e == null ? 'inherit' : e > 1.5 ? 'var(--color-red)' : e < 0.7 ? 'var(--accent)' : 'inherit');
+  const blockStatus = (b) => (b.status === 'confirmed' ? '<span class="badge ok">confirmed</span>'
+    : b.status === 'orphaned' ? '<span class="badge bad">orphaned</span>'
+    : b.status === 'unverified' ? '<span class="badge bad">unverified</span>'
+    : `<span class="badge pending">${int(Math.min(b.confirmations, MATURITY))}/${MATURITY}</span>`);
+
+  // A listbox in place of a native <select> (the pool site's dropdown(), the same .dd styles):
+  // arrows, Home/End, Enter or Space to pick, Esc or Tab to close.
+  function dropdown(root, onPick) {
+    const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
+    const items = [...list.querySelectorAll('[role="option"]')];
+    let active = -1;
+    const isOpen = () => !list.hidden;
+    function mark(i) {
+      active = i;
+      items.forEach((li, j) => li.classList.toggle('active', j === i));
+      if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+    }
+    function set(v) {
+      const li = items.find((x) => x.dataset.v === v) || items.find((x) => x.dataset.v === '');
+      items.forEach((x) => x.setAttribute('aria-selected', String(x === li)));
+      root.dataset.value = li ? li.dataset.v : '';
+      btn.textContent = li ? li.textContent : '';
+    }
+    function open() {
+      list.hidden = false;
+      root.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      mark(Math.max(0, items.findIndex((x) => x.getAttribute('aria-selected') === 'true')));
+    }
+    function close(focus = true) {
+      list.hidden = true;
+      root.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      if (focus) btn.focus();
+    }
+    function pick(i) {
+      const li = items[i];
+      if (!li) return;
+      set(li.dataset.v);
+      close();
+      onPick(li.dataset.v);
+    }
+    btn.addEventListener('click', () => (isOpen() ? close() : open()));
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    list.addEventListener('click', (e) => { const li = e.target.closest('[role="option"]'); if (li) pick(items.indexOf(li)); });
+    list.addEventListener('mousemove', (e) => { const li = e.target.closest('[role="option"]'); if (li && items.indexOf(li) !== active) mark(items.indexOf(li)); });
+    btn.addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (!isOpen()) {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) { e.preventDefault(); open(); }
+        return;
+      }
+      if (k === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
+      else if (k === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
+      else if (k === 'Home') { e.preventDefault(); mark(0); }
+      else if (k === 'End') { e.preventDefault(); mark(items.length - 1); }
+      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(active); }
+      else if (k === 'Escape') { e.preventDefault(); close(); }
+      else if (k === 'Tab') close(false);
+    });
+    document.addEventListener('click', (e) => { if (isOpen() && !root.contains(e.target)) close(false); });
+    set(root.dataset.value || '');
+  }
+  const ddHtml = (id, label, value, opts) => `<div class="dd compact" id="${id}" data-value="${esc(value)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(label)}"></button>
+    <ul class="dd-list" role="listbox" tabindex="-1" hidden>${opts.map(([v, t]) => `<li role="option" data-v="${esc(v)}">${esc(t)}</li>`).join('')}</ul></div>`;
+
+  // ---------- a miner's found blocks: sort by mode, effort or finder, filter by mode and finder ----------
+  const FB_PAGE = 10;
+  const fb = { id: 0, blocks: [], credit: new Map(), mode: '', finder: '', sort: '', dir: 1, shown: FB_PAGE };
+  const FB_SORTS = {
+    mode: (a, b) => a.mode.localeCompare(b.mode),
+    finder: (a, b) => String(a.finder || '').localeCompare(String(b.finder || ''), 'en', { numeric: true }),
+    effort: (a, b) => (a.effort ?? Infinity) - (b.effort ?? Infinity),
+  };
+  function fbList() {
+    const list = fb.blocks.filter((b) => (!fb.mode || b.mode === fb.mode) && (!fb.finder || b.finder === fb.finder));
+    const by = FB_SORTS[fb.sort];
+    const last = (a, b) => (fb.sort === 'effort' ? (a.effort == null) - (b.effort == null) : 0);
+    return list.sort((a, b) => last(a, b) || (by ? by(a, b) * fb.dir : 0) || b.height - a.height);
+  }
+  const fbRow = (b) => `<tr>
+    <td>${explorerBlock(b.height)}</td><td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
+    <td class="num" style="color:${effortColor(b.effort)}">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
+    <td class="dim">${esc(b.finder || '—')}</td>
+    <td class="num">${beam(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
+    <td class="num">${fb.credit.has(b.height) ? beam(fb.credit.get(b.height)) : '—'}</td><td class="num">${blockStatus(b)}</td></tr>`;
+  function foundPanel() {
+    if (!fb.blocks.length) return '<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks found</h2></div><p class="hint">This miner has not found a block.</p></section>';
+    const modes = [...new Set(fb.blocks.map((b) => b.mode))].sort();
+    const finders = [...new Set(fb.blocks.map((b) => b.finder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+    const th = (key, text, cls = '') => `<th class="sortable${cls}" data-sort="${key}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
+    return `<section class="panel" id="fb"><div class="panel-head"><h2 class="panel-title">Blocks found</h2>
+        <div class="panel-meta"><span id="fb-count"></span>
+          ${ddHtml('fb-mode', 'Filter by mode', fb.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
+          ${ddHtml('fb-finder', 'Filter by finder', fb.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
+      <div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Earned</th><th class="num">Credit</th><th class="num">Status</th></tr></thead>
+        <tbody id="fb-body"></tbody></table></div>
+      <div class="more" id="fb-more" hidden><button class="btn ghost">Show more</button></div></section>`;
+  }
+  function drawFound() {
+    const list = fbList();
+    $('#fb-body').innerHTML = list.length ? list.slice(0, fb.shown).map(fbRow).join('') : '<tr><td colspan="8" class="dim">No blocks match</td></tr>';
+    $('#fb-more').hidden = list.length <= fb.shown;
+    $('#fb-count').textContent = list.length === fb.blocks.length ? `${int(list.length)} blocks` : `${int(list.length)} of ${int(fb.blocks.length)}`;
+    view.querySelectorAll('#fb th[data-sort]').forEach((t) => {
+      const on = t.dataset.sort === fb.sort;
+      t.dataset.dir = on ? (fb.dir > 0 ? '▲' : '▼') : '';
+      t.setAttribute('aria-sort', on ? (fb.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  function bindFound() {
+    if (!$('#fb')) return;
+    dropdown($('#fb-mode'), (v) => { fb.mode = v; fb.shown = FB_PAGE; drawFound(); });
+    dropdown($('#fb-finder'), (v) => { fb.finder = v; fb.shown = FB_PAGE; drawFound(); });
+    const sortBy = (key) => {
+      // first click ascending, again descending, a third time back to newest first
+      if (fb.sort !== key) { fb.sort = key; fb.dir = 1; } else if (fb.dir > 0) fb.dir = -1; else { fb.sort = ''; fb.dir = 1; }
+      drawFound();
+    };
+    view.querySelectorAll('#fb th[data-sort]').forEach((t) => {
+      t.addEventListener('click', () => sortBy(t.dataset.sort));
+      t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(t.dataset.sort); } });
+    });
+    $('#fb-more button').addEventListener('click', () => { fb.shown += FB_PAGE; drawFound(); });
+    drawFound();
+  }
+
   // ---------- views ----------
   function signIn(err) {
     $('#tabs').hidden = true;
@@ -272,20 +426,11 @@
   async function miner(id) {
     const m = await api(`miners/${id}`);
     // the blocks this miner found, from the public API (its own credits are in every PPLNS block)
-    const found = await fetch(`/api/blocks?limit=50&miner=${encodeURIComponent(m.address)}`, { cache: 'no-store' })
+    const found = await fetch(`/api/blocks?limit=500&miner=${encodeURIComponent(m.address)}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { blocks: [] })).then((j) => j.blocks || []).catch(() => []);
-    const creditAt = new Map(m.credits.map((c) => [c.height, c.amount]));
-    const foundHtml = found.length
-      ? `<div class="table-wrap"><table><thead><tr><th>Block</th><th>Found</th><th>Worker</th><th>Mode</th><th>Status</th><th class="num">Effort</th><th class="num">Earned</th><th class="num">Credit</th></tr></thead><tbody>
-        ${found.map((b) => `<tr>
-          <td>${explorerBlock(b.height)}</td>
-          <td>${ago(b.ts)}</td><td>${esc(b.finder)}</td><td>${esc(b.mode)}</td>
-          <td>${statusBadge(b.status)}${b.status === 'pending' ? `<span class="sub">${int(b.confirmations)} conf.</span>` : ''}</td>
-          <td class="num">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
-          <td class="num">${beam(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
-          <td class="num">${creditAt.has(b.height) ? beam(creditAt.get(b.height)) : '—'}</td></tr>`).join('')}
-        </tbody></table></div>`
-      : '<p class="hint">This miner has not found a block.</p>';
+    if (fb.id !== m.id) Object.assign(fb, { id: m.id, mode: '', finder: '', sort: '', dir: 1, shown: FB_PAGE });
+    fb.blocks = found;
+    fb.credit = new Map(m.credits.map((c) => [c.height, c.amount]));
     const workers = m.workers.length
       ? `<div class="table-wrap"><table><thead><tr><th>Worker</th><th>Modes</th><th class="num">Shares</th><th class="num">Hashrate</th><th>First</th><th>Last</th></tr></thead><tbody>
         ${m.workers.map((w) => `<tr><td>${esc(w.worker)}</td><td>${esc(w.modes.join(', '))}</td><td class="num">${int(w.shares)}</td>
@@ -305,36 +450,35 @@
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Miner #${Number(m.id)}</h1><div class="actions"><a class="btn ghost small" href="#miners">All miners</a></div></div>
       ${flashHtml()}
-      <section class="panel">
-        <div class="adm-addr">${esc(m.address)}</div>
-        <p class="hint" style="margin-top:8px">${esc(m.type || '?')} · first seen ${time(m.firstSeen)} · last share ${ago(m.lastShare)} ·
-          <a href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public page</a></p>
-        <div class="tiles">
-          <div class="tile"><div class="k">Unpaid</div><div class="v">${beam(m.balance)}</div></div>
-          <div class="tile"><div class="k">Immature</div><div class="v">${beam(m.credits.filter((c) => c.status === 'pending' || c.status === 'unverified').reduce((s, c) => s + c.amount, 0))}</div></div>
-          <div class="tile"><div class="k">Paid</div><div class="v">${beam(m.paid)}</div></div>
-          <div class="tile"><div class="k">Blocks found</div><div class="v">${int(m.blocksFound)}</div></div>
-        </div>
-      </section>
+      <div class="panel addr"><span>${esc(m.address)}</span><button class="btn small" data-copy="${esc(m.address)}">copy</button></div>
+      <p class="hint">${esc(m.type || '?')} · first seen ${time(m.firstSeen)} · last share ${ago(m.lastShare)} ·
+        <a href="/miners/${encodeURIComponent(m.address)}" target="_blank" rel="noopener">public page</a></p>
+      <div class="tiles">
+        <div class="tile"><div class="k">Unpaid</div><div class="v">${beam(m.balance)}</div></div>
+        <div class="tile"><div class="k">Immature</div><div class="v">${beam(m.credits.filter((c) => c.status === 'pending' || c.status === 'unverified').reduce((s, c) => s + c.amount, 0))}</div></div>
+        <div class="tile"><div class="k">Paid</div><div class="v">${beam(m.paid)}</div></div>
+        <div class="tile"><div class="k">Blocks found</div><div class="v">${int(m.blocksFound)}</div></div>
+      </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Pay now</h2></div>
-        <p class="hint">Sends the whole unpaid balance now, even below the payout threshold; the network fee comes out of it.</p>
+        <p class="hint">Sends the whole unpaid balance now, even below the payout threshold (the network fee comes out of it).</p>
         <button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay ${beam(m.balance)} now</button></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Live connections</h2></div>
         ${m.connections.length ? `<div class="table-wrap"><table>${connHead(false)}<tbody>${m.connections.map((c) => connRow(c, false)).join('')}</tbody></table></div>` : '<p class="hint">None.</p>'}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers, 7 days</h2></div>${workers}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Move to another address</h2></div>
-        <p class="hint">For a rig that mined under a wrong address: its shares, block credits (immature ones are paid to the new address when they mature),
-        found blocks and unpaid balance go to the address below; its connections are ended first. Payout history stays here: an account never paid is deleted.
-        If the rig keeps using the wrong address it comes back as a new miner, so fix the rig (or the rental profile) too.</p>
+        <p class="hint">For a rig that mined under the wrong address: its shares, block credits (immature ones are paid to the new address when they mature),
+        found blocks, and unpaid balance go to the address below; its connections are ended first. Payout history stays here: an account that has never paid is deleted.
+        If the rig keeps using the wrong address, it comes back as a new miner, so fix the rig (or the rental profile) too.</p>
         <form class="adm-row" id="merge">
           <input class="adm-field" id="merge-to" placeholder="the right Beam address" autocomplete="off" spellcheck="false" aria-label="Address to move to">
           <button class="btn danger" type="submit">Move everything</button>
         </form></section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks found</h2><span class="panel-meta">by this miner, newest first</span></div>${foundHtml}</section>
+      ${foundPanel()}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">PPLNS credits</h2><span class="panel-meta">latest 50</span></div>
         <p class="hint">Its share of every block the pool found while its shares were in the PPLNS window, whoever found the block.</p>${credits}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>${pays}</section>`;
     bindKick();
+    bindFound();
     $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, `Pay ${beam(m.balance)} to ${short(m.address)} now?`));
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -392,13 +536,15 @@
       ? `Stop the payout countdown at ${left()}? No scheduled run starts until you resume it, also after a pool restart. Pay now still works.`
       : `Resume the scheduled payouts? The next run is in ${left()}.`, { ok: freeze ? 'Freeze' : 'Resume', danger: freeze });
     if (!ok) return;
+    // the countdown itself shows the result; only a refusal gets a message
+    flash = null;
     try {
       const r = await api('payouts/freeze', { freeze });
-      flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
+      if (!r.ok) flash = { ok: false, text: r.error || 'refused' };
     } catch (e) {
       flash = { ok: false, text: e.message };
     }
-    keepFlash = true;
+    keepFlash = !!flash;
     await poll();
     route();
   });
