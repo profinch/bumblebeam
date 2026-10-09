@@ -15,7 +15,7 @@ use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, WriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::codec::{FramedRead, LinesCodec};
@@ -57,15 +57,23 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
     let listener = TcpListener::bind((shared.cfg.stratum.bind.as_str(), port)).await?;
     info!(port, mode = mode.as_str(), tls = tls.is_some(), "stratum listening");
     loop {
-        let (sock, peer) = listener.accept().await?;
+        let (mut sock, mut peer) = listener.accept().await?;
         let _ = sock.set_nodelay(true);
-        if !ip_acquire(peer.ip()) {
-            debug!(%peer, "too many connections from this address");
-            continue;
-        }
         let shared = shared.clone();
         let tls = tls.clone();
         tokio::spawn(async move {
+            if shared.cfg.stratum.proxy_protocol_from.contains(&peer.ip()) {
+                match tokio::time::timeout(Duration::from_secs(10), proxy_header(&mut sock)).await {
+                    Ok(Ok(Some(real))) => peer = real,
+                    Ok(Ok(None)) => {}
+                    Ok(Err(e)) => return debug!(%peer, "proxy header: {e:#}"),
+                    Err(_) => return debug!(%peer, "proxy header timeout"),
+                }
+            }
+            if !ip_acquire(peer.ip()) {
+                debug!(%peer, "too many connections from this address");
+                return;
+            }
             shared.connected_workers.fetch_add(1, Ordering::Relaxed);
             let id = shared.next_conn();
             let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some());
@@ -90,6 +98,26 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
             shared.connected_workers.fetch_sub(1, Ordering::Relaxed);
             ip_release(peer.ip());
         });
+    }
+}
+
+/// Reads a PROXY protocol v1 header (`PROXY TCP4 <src> <dst> <sport> <dport>\r\n`) sent by a
+/// trusted relay ahead of the miner's bytes. Byte by byte, so nothing after it is consumed.
+/// `PROXY UNKNOWN` (the relay's own health checks) keeps the relay's address.
+async fn proxy_header<R: AsyncRead + Unpin>(rd: &mut R) -> Result<Option<std::net::SocketAddr>> {
+    let mut line = Vec::with_capacity(108);
+    while !line.ends_with(b"\r\n") {
+        if line.len() >= 107 {
+            anyhow::bail!("no PROXY v1 header in the first 107 bytes");
+        }
+        line.push(rd.read_u8().await?);
+    }
+    let line = std::str::from_utf8(&line[..line.len() - 2])?;
+    let f: Vec<&str> = line.split(' ').collect();
+    match f.as_slice() {
+        ["PROXY", "UNKNOWN", ..] => Ok(None),
+        ["PROXY", "TCP4" | "TCP6", src, _dst, sport, _dport] => Ok(Some(std::net::SocketAddr::new(src.parse()?, sport.parse()?))),
+        _ => anyhow::bail!("bad PROXY header {line:?}"),
     }
 }
 
@@ -424,4 +452,25 @@ async fn push_job<S: AsyncWrite + Unpin>(wr: &mut WriteHalf<S>, jobs: &mut VecDe
     jobs.push_front(MinerJob { id, job: job.clone(), packed, seen: HashSet::new() });
     while jobs.len() > 4 { jobs.pop_back(); }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::proxy_header;
+
+    #[tokio::test]
+    async fn proxy_v1_header() {
+        let mut rd: &[u8] = b"PROXY TCP4 95.24.1.2 65.109.125.69 51234 3443\r\n\x16\x03\x01";
+        let peer = proxy_header(&mut rd).await.unwrap().unwrap();
+        assert_eq!(peer.to_string(), "95.24.1.2:51234");
+        assert_eq!(rd, b"\x16\x03\x01"); // the TLS hello stays unread
+        let mut rd: &[u8] = b"PROXY TCP6 2a00::1 2a01::2 40000 3333\r\n";
+        assert_eq!(proxy_header(&mut rd).await.unwrap().unwrap().to_string(), "[2a00::1]:40000");
+        let mut rd: &[u8] = b"PROXY UNKNOWN\r\n";
+        assert!(proxy_header(&mut rd).await.unwrap().is_none());
+        let mut rd: &[u8] = b"{\"method\":\"login\"}\r\n";
+        assert!(proxy_header(&mut rd).await.is_err());
+        let mut rd: &[u8] = &[b'x'; 200];
+        assert!(proxy_header(&mut rd).await.is_err());
+    }
 }

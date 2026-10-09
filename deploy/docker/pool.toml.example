@@ -22,6 +22,7 @@ solo_tls_port = 3444
 tls_cert = "/etc/bumblebeam/tls/pool.crt"
 tls_key = "/etc/bumblebeam/tls/pool.key"
 nonce_prefix_bytes = 3
+proxy_protocol_from = []                  # relays that send a PROXY v1 header with the miner's address, e.g. ["185.133.42.180"]
 
 [pool]
 name = "BumbleBeam"
