@@ -389,6 +389,66 @@
     });
   }
 
+  // ---------- a miner's own blocks: sort by mode, effort or finder, filter by mode and finder ----------
+  // Kept across the page's live refresh, for the same address.
+  const MINE_PAGE = 10;
+  const mine = { addr: '', blocks: [], maturity: 0, mode: '', finder: '', sort: '', dir: 1, shown: MINE_PAGE };
+  const MINE_SORTS = {
+    mode: (a, b) => a.mode.localeCompare(b.mode),
+    finder: (a, b) => String(a.finder || '').localeCompare(String(b.finder || ''), 'en', { numeric: true }),
+    effort: (a, b) => (a.effort ?? Infinity) - (b.effort ?? Infinity),
+  };
+  function mineList() {
+    const list = mine.blocks.filter((b) => (!mine.mode || b.mode === mine.mode) && (!mine.finder || b.finder === mine.finder));
+    const by = MINE_SORTS[mine.sort];
+    // a block without an effort goes last either way; ties, and no sort at all: newest first
+    const last = (a, b) => (mine.sort === 'effort' ? (a.effort == null) - (b.effort == null) : 0);
+    return list.sort((a, b) => last(a, b) || (by ? by(a, b) * mine.dir : 0) || b.height - a.height);
+  }
+  const ddHtml = (id, label, value, opts) => `<div class="dd compact" id="${id}" data-value="${esc(value)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(label)}"></button>
+    <ul class="dd-list" role="listbox" tabindex="-1" hidden>${opts.map(([v, t]) => `<li role="option" data-v="${esc(v)}">${esc(t)}</li>`).join('')}</ul></div>`;
+  function minerBlocksPanel() {
+    const modes = [...new Set(mine.blocks.map((b) => b.mode))].sort();
+    const finders = [...new Set(mine.blocks.map((b) => b.finder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+    const th = (key, text, cls = '') => `<th class="sortable${cls}" data-sort="${key}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
+    return `<section class="panel" id="mine-blocks"><div class="panel-head"><h2 class="panel-title">Blocks you found</h2>
+        <div class="panel-meta"><span id="mine-count"></span>
+          ${ddHtml('mine-mode', 'Filter by mode', mine.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
+          ${ddHtml('mine-finder', 'Filter by finder', mine.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
+      <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-r"><col class="w-e"><col><col class="w-s"></colgroup>
+        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}<th class="num">Reward</th>${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Status</th></tr></thead>
+        <tbody id="mine-body"></tbody></table></div>
+      <div class="more" id="mine-more" hidden><button class="btn ghost">Show more</button></div></section>`;
+  }
+  function drawMine() {
+    const list = mineList();
+    $('#mine-body').innerHTML = list.length ? blocksRows(list.slice(0, mine.shown), mine.maturity) : '<tr><td colspan="7" class="dim">No blocks match</td></tr>';
+    $('#mine-more').hidden = list.length <= mine.shown;
+    const all = mine.blocks.length;
+    $('#mine-count').textContent = list.length === all ? `${int(all)} blocks` : `${int(list.length)} of ${int(all)}`;
+    document.querySelectorAll('#mine-blocks th[data-sort]').forEach((t) => {
+      const on = t.dataset.sort === mine.sort;
+      t.dataset.dir = on ? (mine.dir > 0 ? '▲' : '▼') : '';
+      t.setAttribute('aria-sort', on ? (mine.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  function bindMinerBlocks() {
+    if (!$('#mine-blocks')) return;
+    dropdown($('#mine-mode'), (v) => { mine.mode = v; mine.shown = MINE_PAGE; drawMine(); });
+    dropdown($('#mine-finder'), (v) => { mine.finder = v; mine.shown = MINE_PAGE; drawMine(); });
+    const sortBy = (key) => {
+      // first click ascending, again descending, a third time back to newest first
+      if (mine.sort !== key) { mine.sort = key; mine.dir = 1; } else if (mine.dir > 0) mine.dir = -1; else { mine.sort = ''; mine.dir = 1; }
+      drawMine();
+    };
+    document.querySelectorAll('#mine-blocks th[data-sort]').forEach((t) => {
+      t.addEventListener('click', () => sortBy(t.dataset.sort));
+      t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(t.dataset.sort); } });
+    });
+    $('#mine-more button').addEventListener('click', () => { mine.shown += MINE_PAGE; drawMine(); });
+    drawMine();
+  }
+
   views.miners = async (arg) => {
     if (arg) return minerView(arg);
     const mm = MINERS_MODES[prefs.get(MINERS_MODE_KEY)] ? prefs.get(MINERS_MODE_KEY) : 'all';
@@ -429,6 +489,13 @@
     const modeNote = mm === 'all' ? '' : ` · ${mm === 'solo' ? 'solo' : 'PPLNS'}`;
     // "My stats" is for an address that has mined here (sent a share), not for any lookup.
     const addr = m.address || address;
+    // every block of this miner (up to 500), so sorting and the filters see them all
+    if (m.blocksFound > m.blocks.length) {
+      try { m.blocks = (await BB.pool(`blocks?limit=500&miner=${encodeURIComponent(addr)}`)).blocks; } catch (e) { /* the latest ten stay */ }
+    }
+    mine.blocks = m.blocks;
+    mine.maturity = stats.maturity;
+    if (mine.addr !== addr) Object.assign(mine, { addr, mode: '', finder: '', sort: '', dir: 1, shown: MINE_PAGE });
     if (m.lastShare != null) rememberAddress(addr);
     else if (addr === myAddress()) forgetAddress();
     const toPayout = stats.minPayout ? Math.min(1, m.balance / stats.minPayout) : null;
@@ -462,9 +529,7 @@
           </tbody></table></div>` : '<div class="empty">No payments yet</div>'}
         </section>
       </div>
-      ${m.blocks.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks you found</h2><div class="panel-meta"><span>newest first</span></div></div>
-        ${blocksTable(m.blocks, stats.maturity, moreBlocks(m.blocks, 10, addr))}</section>
-        <template id="ctx" data-maturity="${int(stats.maturity).replace(/,/g, '')}"></template>` : ''}`;
+      ${m.blocks.length ? minerBlocksPanel() : ''}`;
   }
 
   views.payments = async () => {
@@ -873,7 +938,8 @@
       setBanner();
       setFooter();
       if (route === 'connect') bindConnect();
-      if (route === 'blocks' || route === 'miners') bindBlocks();
+      if (route === 'blocks') bindBlocks();
+      if (route === 'miners') bindMinerBlocks();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
       if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
@@ -916,6 +982,7 @@
     const r = parse().route;
     if (r === 'connect' || r === 'api' || document.hidden || ($('#blocks-body') && $('#blocks-body').dataset.more)) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+    if (document.querySelector('.dd.open')) return;
     render(false);
   }, 30000);
   render(true);
