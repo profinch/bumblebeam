@@ -104,11 +104,14 @@ services:
     hostname: wallet-api
     restart: unless-stopped
     entrypoint: ["bash", "-c"]
+    # --enable_lelantus: payouts to offline addresses are push (shielded) transactions, which
+    # wallet-api refuses without it ("Unsupported type of transaction: 7")
     command:
       - >-
         exec wallet-api --node_addr=beam-node:10000 --wallet_path=/data/wallet.db
         --pass="$$(cat /data/wallet.pass)" --port=10001 --use_http=1
         --ip_whitelist=172.30.1.10 --log_level=info
+        --enable_lelantus
     working_dir: /data
     volumes:
       - /data/bumblebeam/wallet:/data
