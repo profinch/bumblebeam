@@ -50,6 +50,21 @@ async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRa
     chart_window(c, scope, now, span, bucket).await
 }
 
+/// The highest one-minute hashrate in the range, `[ts, hashrate]`: the week's and the month's
+/// charts average an hour or four into a point, which flattens a short peak, so their "max" comes
+/// from here and is never below the day's.
+async fn chart_peak(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Value> {
+    let (span, _) = range.window();
+    let row = c
+        .query_opt(
+            "SELECT ts / 60 * 60 AS t, SUM(hashrate)::FLOAT8 AS s FROM hashrate_samples WHERE scope=$1 AND ts > $2
+             GROUP BY 1 ORDER BY s DESC LIMIT 1",
+            &[&scope, &(now - span)],
+        )
+        .await?;
+    Ok(row.map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).unwrap_or(Value::Null))
+}
+
 async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i64, bucket: i64) -> Result<Vec<Value>> {
     let from = (now - span) / bucket * bucket + bucket;
     let rows = c
@@ -433,6 +448,7 @@ impl Db {
             .await?;
         let scope = match mode { Some(m) => format!("m:{id}:{m}"), None => format!("m:{id}") };
         let chart = chart(&c, &scope, now, range).await?;
+        let peak = chart_peak(&c, &scope, now, range).await?;
         let payments = c
             .query("SELECT ts, amount, fee, kernel, status FROM payments WHERE miner_id=$1 AND status <> 'failed' ORDER BY ts DESC LIMIT 50", &[&id])
             .await?;
@@ -451,7 +467,7 @@ impl Db {
                         "lastShare": last, "online": now - last < 300, "stale": stale as f64 / total, "rejected": rejected as f64 / total,
                         "modes": w.get::<_, Vec<String>>(7) })
             }).collect::<Vec<_>>(),
-            "charts": { "hashrate": chart },
+            "charts": { "hashrate": chart, "peak": peak },
             "payments": payments.iter().map(|p| json!({ "ts": p.get::<_, i64>(0), "amount": p.get::<_, i64>(1), "fee": p.get::<_, i64>(2),
                                                         "kernel": p.get::<_, Option<String>>(3), "status": p.get::<_, String>(4) })).collect::<Vec<_>>(),
         })))
@@ -488,6 +504,11 @@ impl Db {
     pub async fn pool_chart(&self, now: i64, range: ChartRange, scope: &str) -> Result<Vec<Value>> {
         let c = self.client().await?;
         chart(&c, scope, now, range).await
+    }
+
+    pub async fn pool_chart_peak(&self, now: i64, range: ChartRange, scope: &str) -> Result<Value> {
+        let c = self.client().await?;
+        chart_peak(&c, scope, now, range).await
     }
 
     /// The pool split by mode, as two pools: hashrate, miners and workers over the last 10

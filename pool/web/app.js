@@ -60,21 +60,22 @@
   // Explorer-style area chart: axis on the right, grid in both directions, the current value marked
   // by a dotted guide and a pill on the axis. `label` formats axis values and the pill; `peak`
   // also marks the highest point of the period.
-  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h', peak = false } = {}) {
+  // `peakValue`: the range's true peak (one-minute samples) where the points are hourly averages
+  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h', peak = false, peakValue = null } = {}) {
     const span = RANGES[range] || RANGES['24h'];
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
     // phones get a narrower canvas, so the labels are not scaled down to nothing
     // the right margin holds the axis, the current value's pill and, right of it, the peak
     const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 7.2 + 12;
-    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
+    const top = Math.max(...series.map((p) => p[1]), peak && peakValue != null ? peakValue : 0), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
     // the current value's pill gets a fixed slot (as wide as "1.23k"), the peak label starts after it
     const slot = Math.max(pw, 5 * 7.2 + 12);
     const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + slot + 8 + ptw + 4) : 0);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
-    const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
+    const max = Math.max(...series.map((p) => p[1]), peak ? top : 0) * 1.12 || 1;
     const x = (t) => L + ((t - t0) / (t1 - t0 || 1)) * (W - L - R);
     const y = (v) => T + (1 - v / max) * (H - T - B);
     const line = series.map((p) => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' L');
@@ -307,7 +308,7 @@
       </div>
       <section class="panel">
         <div class="panel-head"><h2 class="panel-title">${cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate'}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
-        ${areaChart(stats.chart, { title: cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate', range, peak: true })}
+        ${areaChart(stats.chart, { title: cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate', range, peak: true, peakValue: stats.chartPeak })}
       </section>
       <section class="panel">
         <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="/blocks">all blocks →</a></div></div>
@@ -518,7 +519,7 @@
         ${tile('Paid in blocks', int(m.coinbase.blocks), `${int(m.coinbase.minedPairs)} outputs, ${beam(m.coinbase.minedValue, 2)}`)}
         ${tile('Stock expires', m.coinbase.expiresAt ? `#${int(m.coinbase.expiresAt)}` : '—', m.coinbase.expiredPairs ? `${int(m.coinbase.expiredPairs)} pairs expired unspent` : 'pairs live 30 days; top-up renews them')}
       </div></section>` : ''}
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate${modeNote}</h2><div class="panel-meta">${modeSwitch(mm, 'data-miner-mode', 'Miner mode', MINERS_MODES)}${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true })}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate${modeNote}</h2><div class="panel-meta">${modeSwitch(mm, 'data-miner-mode', 'Miner mode', MINERS_MODES)}${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true, peakValue: m.chartPeak })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers${modeNote}</h2></div>
           ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th>Mode</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
