@@ -81,6 +81,8 @@
   // ---------- views ----------
   function signIn(err) {
     $('#tabs').hidden = true;
+    nextPay = null; // the countdown sits outside the menu: hidden with it
+    tick();
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Operator sign-in</h1></div>
       <section class="panel">
