@@ -376,6 +376,7 @@
   // One state per table, kept across the page's live refresh: a miner's own blocks (for the same
   // address) and the pool's found blocks.
   const BL_SORTS = {
+    height: (a, b) => a.height - b.height,
     mode: (a, b) => a.mode.localeCompare(b.mode),
     finder: (a, b) => String(a.finder || '').localeCompare(String(b.finder || ''), 'en', { numeric: true }),
     effort: (a, b) => (a.effort ?? Infinity) - (b.effort ?? Infinity),
@@ -408,7 +409,7 @@
           ${ddHtml(`${k}-mode`, 'Filter by mode', st.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml(`${k}-finder`, 'Filter by finder', st.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
       <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
-        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Reward</th><th class="num">Status</th></tr></thead>
+        <thead><tr>${th('height', 'Height')}<th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Reward</th><th class="num">Status</th></tr></thead>
         <tbody id="${k}-body"></tbody></table></div>
       <div class="more" id="${k}-more" hidden><button class="btn ghost">Show more</button></div></section>`;
   }

@@ -267,6 +267,7 @@
   const FB_PAGE = 10;
   const fb = { id: 0, blocks: [], credit: new Map(), mode: '', finder: '', sort: '', dir: 1, shown: FB_PAGE };
   const FB_SORTS = {
+    height: (a, b) => a.height - b.height,
     mode: (a, b) => a.mode.localeCompare(b.mode),
     finder: (a, b) => String(a.finder || '').localeCompare(String(b.finder || ''), 'en', { numeric: true }),
     effort: (a, b) => (a.effort ?? Infinity) - (b.effort ?? Infinity),
@@ -293,7 +294,7 @@
           ${ddHtml('fb-mode', 'Filter by mode', fb.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml('fb-finder', 'Filter by finder', fb.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
       <div class="table-wrap"><table class="fb-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-c"><col class="w-s"></colgroup>
-        <thead><tr><th>Height</th><th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Earned</th><th class="num">Credit</th><th class="num">Status</th></tr></thead>
+        <thead><tr>${th('height', 'Height')}<th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Earned</th><th class="num">Credit</th><th class="num">Status</th></tr></thead>
         <tbody id="fb-body"></tbody></table></div>
       <div class="more" id="fb-more" hidden><button class="btn ghost">Show more</button></div></section>`;
   }
