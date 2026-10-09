@@ -22,7 +22,7 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
               "networkhashps": "45570", "lastBeat": "1791321596" }],
   "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0, "minPayout": 10000000, "payoutScheme": "PPLNS",
               "pplnsWindow": 2.0, "blockReward": 2500000000, "maturity": 240, "payoutInterval": 7200 },
-  "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]] },
+  "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]], "peak": [1791300420, 6890.4] },
   "modes": {
     "pplns": { "hashrate": 5180.2, "miners": 39, "workers": 94, "blocks24h": 30, "lastBlockFound": 1791321278,
                "series": [[1791234000, 5011.7]] },
@@ -62,6 +62,9 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   the span: one point per minute, per hour or per four hours, each the average over its interval.
   Samples are kept for 31 days. `?mode=pplns` or `?mode=solo` draws one mode's hashrate; without it
   the chart is both together.
+- `charts.peak` is the range's highest one-minute hashrate, `[unix seconds, Sol/s]` (null without
+  data). The `7d` and `30d` points are hourly and four-hourly averages, which flatten a short peak;
+  this one is not, so the week's peak is never below the day's.
 - `modes` splits the pool into its PPLNS side and its solo side, as two pools: hashrate, miners and
   workers over the last 10 minutes, blocks in 24 hours, the last block, and `series`, hourly averages
   over 24 hours for a sparkline.
@@ -119,7 +122,7 @@ guessed.
   "immature": 125000000, "paid": 12500000000, "lastShare": 1791321590,
   "workers": [{ "name": "rig1", "hashrate": 52.1, "hashrate24h": 50.7, "lastShare": 1791321590,
                 "online": true, "stale": 0.012, "rejected": 0.001, "modes": ["pplns"] }],
-  "charts": { "hashrate": [[1791300000, 49.8]] },
+  "charts": { "hashrate": [[1791300000, 49.8]], "peak": [1791300060, 61.2] },
   "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }],
   "addressType": "offline", "coinbase": null }
 ```

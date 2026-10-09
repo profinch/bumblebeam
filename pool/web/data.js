@@ -59,6 +59,8 @@ const BB = (() => {
   const series = (s) => (Array.isArray(s)
     ? s.map((p) => (Array.isArray(p) ? [num(p[0]), num(p[1])] : [num(p && p.ts), num(p && p.value)])).filter((p) => p[0] != null && p[1] != null)
     : []);
+  // the range's highest one-minute hashrate, [ts, value], from servers that send it
+  const peakOf = (p) => (Array.isArray(p) && num(p[1]) != null ? num(p[1]) : null);
   const tsOf = (x) => (typeof x === 'string' && /[^\d.]/.test(x) ? num(Date.parse(x) / 1000) : num(x));
 
   async function getJSON(url, timeoutMs = 8000) {
@@ -164,7 +166,7 @@ const BB = (() => {
         pplns: num(c.ports && c.ports.pplns) ?? 3333, solo: num(c.ports && c.ports.solo) ?? 3334,
         pplnsTls: num(c.ports && c.ports.pplnsTls) ?? 3443, soloTls: num(c.ports && c.ports.soloTls) ?? 3444,
       },
-      chart: series(r.charts && r.charts.hashrate),
+      chart: series(r.charts && r.charts.hashrate), chartPeak: peakOf(r.charts && r.charts.peak),
       blocks24h: num(r.blocks24h), effort24h: num(r.effort24h),
       // PPLNS and solo as two pools; null from servers that do not split them
       modes: r.modes && r.modes.pplns && r.modes.solo ? Object.fromEntries(['pplns', 'solo'].map((k) => {
@@ -196,7 +198,7 @@ const BB = (() => {
     address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,
     modes: normModes(m.modes),
     immature: num(m.immature) || 0, paid: num(m.paid) || 0, lastShare: num(m.lastShare),
-    workers: (Array.isArray(m.workers) ? m.workers : []).map(normWorker), chart: series(m.charts && m.charts.hashrate),
+    workers: (Array.isArray(m.workers) ? m.workers : []).map(normWorker), chart: series(m.charts && m.charts.hashrate), chartPeak: peakOf(m.charts && m.charts.peak),
     payments: (Array.isArray(m.payments) ? m.payments : []).map(normPayment),
     blocksFound: num(m.blocksFound) || 0, blocks24h: num(m.blocks24h) || 0, lastBlockAt: num(m.lastBlockAt),
     blocks: (Array.isArray(m.blocks) ? m.blocks : []).map(normBlock),
