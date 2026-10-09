@@ -124,7 +124,9 @@
   const isOurs = (name) => /^bumblebeam\b/i.test(String(name || ''));
   function poolColours(net) {
     if (!net || !net.ok || !Array.isArray(net.pools)) return [];
-    const others = PALETTE.filter((c) => c !== OUR_COLOUR);
+    // the others: no yellow (next to our yellow-green it is hard to tell apart), and pink and
+    // purple kept apart by orange, so neighbours in the legend always differ
+    const others = ['#00f6d2', '#24c1ff', '#ff51ff', '#ff7a21', '#d885ff'];
     let k = 0;
     return net.pools.filter((p) => p.blocks24h).sort((a, b) => b.blocks24h - a.blocks24h)
       .map((p) => ({ name: p.name, n: p.blocks24h, color: isOurs(p.name) ? OUR_COLOUR : others[k++ % others.length] }));
