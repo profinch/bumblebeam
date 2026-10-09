@@ -816,17 +816,23 @@
     render(true);
   }
 
+  function markNav(route, arg) {
+    const navKey = route === 'miners' && arg ? (cleanAddress(arg) === myAddress() ? 'my' : 'miners') : route;
+    document.querySelectorAll('#main-nav a, .cta-top').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
+  }
+
   let seq = 0;
   async function render(scrollTop = true) {
     const { route, arg } = parse();
     const my = ++seq;
-    const navKey = route === 'miners' && arg ? (arg === myAddress() ? 'my' : 'miners') : route;
-    document.querySelectorAll('#main-nav a, .cta-top').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
+    markNav(route, arg);
     if (scrollTop && !view.innerHTML) view.innerHTML = '<div class="empty">Loading…</div>';
     try {
       const html = await views[route](arg);
       if (my !== seq) return;
       view.innerHTML = html;
+      // a miner page can make its address "my stats" while loading, so mark the tab again
+      markNav(route, arg);
       setBanner();
       setFooter();
       if (route === 'connect') bindConnect();
