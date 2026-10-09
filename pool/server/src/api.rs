@@ -353,6 +353,15 @@ async fn admin_miner(State(api): State<Api>, Path(id): Path<i64>) -> Response {
 
 async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, Json(b): Json<ActionBody>) -> Response {
     let s = &api.shared;
+    let to: String = b.to.chars().filter(|c| !c.is_whitespace()).collect();
+    match s.db.client().await {
+        Ok(c) => match c.query_opt("SELECT 1 FROM miners WHERE address=$1", &[&to]).await {
+            Ok(Some(_)) => {}
+            Ok(None) => return outcome(Err(anyhow::anyhow!("not a miner of this pool: log in once with this address (any miner, or the rental profile), then move to it"))),
+            Err(e) => return ApiError(e.into()).into_response(),
+        },
+        Err(e) => return ApiError(e).into_response(),
+    }
     // end the miner's connections first: their next shares would recreate the old account
     let kicked = s.conns.kick_miner(id);
     for _ in 0..50 {
@@ -361,8 +370,7 @@ async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, 
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    let wallet = s.cfg.wallet_enabled().then(|| crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone()));
-    let r = crate::admin::merge(&s.db, wallet.as_ref(), id, &b.to).await;
+    let r = crate::admin::merge(&s.db, id, &b.to).await;
     info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
     outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
 }

@@ -25,7 +25,7 @@ pub async fn run(db: &Db, cfg: &Config, http: reqwest::Client, args: &[String]) 
         ["merge", from, to] => {
             let c = db.client().await?;
             let Some(r) = c.query_opt("SELECT id FROM miners WHERE address=$1", &[from]).await? else { bail!("no miner {from}") };
-            Ok(println!("{}", merge(db, wallet.as_ref(), r.get(0), to).await?))
+            Ok(println!("{}", merge(db, r.get(0), to).await?))
         }
         ["probe-txid", ..] => {
             let Some(w) = wallet.as_ref() else { bail!("probe-txid needs wallet_api.url in the config") };
@@ -153,15 +153,16 @@ pub async fn payment(db: &Db, wallet: Option<&Wallet>, tx_id: &str, action: &str
     }
 }
 
-/// Moves what miner `from_id` mined to the account of address `to` (created if new): shares, share
+/// Moves what miner `from_id` mined to the account of address `to`, a miner of this pool: shares, share
 /// events, hashrate samples, block credits (pending ones are paid to `to` when they mature), found
 /// blocks and the unpaid balance. Payout history stays where it was paid: a miner that was already
 /// paid keeps its row with a zero balance, one never paid is deleted. Refused while a payment of
 /// `from` is in flight, and for coinbase accounts (their pairs are made with the miner's own keys).
-/// The caller ends `from`'s connections first, or their next shares would recreate it. An address
-/// that is not a miner yet must pass the wallet's validate_address: a typo in a long address would
-/// otherwise open an account nobody can be paid to.
-pub async fn merge(db: &Db, wallet: Option<&Wallet>, from_id: i64, to: &str) -> Result<String> {
+/// The caller ends `from`'s connections first, or their next shares would recreate it. Never to a
+/// new account: a typo in a long address can pass even the wallet's check (the tail of a new-style
+/// regular address is not covered) and would open an account nobody is paid to. An address becomes
+/// a miner with one stratum login, so a fresh one is logged in once before the move.
+pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
     let to: String = to.chars().filter(|c| !c.is_whitespace()).collect();
     let mut c = db.client().await?;
     let tx = c.transaction().await?;
@@ -170,24 +171,13 @@ pub async fn merge(db: &Db, wallet: Option<&Wallet>, from_id: i64, to: &str) -> 
     if src_addr.starts_with("cb:") {
         bail!("coinbase accounts cannot be merged: their pairs pay the miner's own keys");
     }
-    let to_id: i64 = match tx.query_opt("SELECT id FROM miners WHERE address=$1 FOR UPDATE", &[&to]).await? {
-        Some(r) => r.get(0),
-        None => {
-            let Some(kind) = crate::stratum::address_type(&to) else { bail!("not a Beam address") };
-            if kind == "coinbase" {
-                bail!("cannot merge into a coinbase account");
-            }
-            let Some(w) = wallet else { bail!("the address is not a miner of this pool, and without the wallet it cannot be checked") };
-            let v = w.validate_address(&to).await.map_err(|e| anyhow::anyhow!("cannot check the address with the wallet: {e}"))?;
-            if v["is_valid"].as_bool() != Some(true) {
-                bail!("the wallet does not accept this address");
-            }
-            let t = v["type"].as_str().unwrap_or("regular").to_string();
-            tx.query_one("INSERT INTO miners (address, first_seen, address_type, type_checked) VALUES ($1,$2,$3,$2) RETURNING id", &[&to, &crate::state::now(), &t])
-                .await?
-                .get(0)
-        }
+    if to.starts_with("cb:") {
+        bail!("cannot merge into a coinbase account");
+    }
+    let Some(dst) = tx.query_opt("SELECT id FROM miners WHERE address=$1 FOR UPDATE", &[&to]).await? else {
+        bail!("not a miner of this pool: log in once with this address (any miner, or the rental profile), then move to it");
     };
+    let to_id: i64 = dst.get(0);
     if to_id == from_id {
         bail!("both addresses are the same miner");
     }

@@ -301,7 +301,7 @@ address; every action is logged.
 | `POST connections/<id>/kick` | ends a connection |
 | `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address |
 | `GET miners/<id>` | one miner: workers over 7 days, block credits, payments, live connections |
-| `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another address (ends the miner's connections first) |
+| `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another miner of this pool, never to a new address (ends the miner's connections first) |
 | `POST blocks/<height>` `{"action": "confirm"\|"orphan", "force": false}` | as `admin block` |
 | `POST payments/<txid>` `{"action": "sent"\|"refund", "force": false}` | as `admin payment` |
 | `POST payouts` `{}` or `{"miner": <id>}` | a payout run now, done by the payout loop and answered with a line per miner: everyone at the threshold, or one miner's whole balance even below it |
