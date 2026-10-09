@@ -273,7 +273,6 @@
   async function render() {
     clearTimeout(timer);
     if (!memToken) return signIn();
-    $('#tabs').hidden = false;
     const h = location.hash.replace(/^#/, '') || 'attention';
     const [tab, arg] = h.split('/');
     document.querySelectorAll('#tabs [data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === (tab === 'miner' ? 'miners' : tab)));
@@ -284,6 +283,8 @@
       } else if (tab === 'miners') await miners();
       else if (tab === 'miner') await miner(Number(arg));
       else await attention();
+      // the menu only once the token has been accepted
+      $('#tabs').hidden = false;
     } catch (e) {
       if (e instanceof AuthError) {
         memToken = '';
