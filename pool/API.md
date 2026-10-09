@@ -47,7 +47,8 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   (`calc_change`) at payout time; `txFee` holds the fallbacks. This is why `minPayout` defaults to
   1 BEAM.
 - `blockFeesTo`: the transaction fees inside a found block go to the pool, not into PPLNS; they are
-  recorded per block (`fees`) for transparency and are close to zero on Beam today.
+  recorded per block (`fees`) for transparency. The coinbase holds the reward plus the fees, so
+  `fees` is known once the wallet confirms the block and is 0 until then.
 - `blockReward` is the miner reward at the current height from the core's emission rule (80 BEAM
   in year one, then 40, **25 today**, 12.5 from height 4,730,400, halving every 2,102,400 blocks).
   When the field is missing the UI derives it from `nodes[0].height` with the same rule.

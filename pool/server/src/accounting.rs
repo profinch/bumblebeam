@@ -214,8 +214,9 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
         let hash: String = r.get::<_, Option<String>>(1).unwrap_or_default();
         let reward: i64 = r.get(2);
 
+        let coinbase = utxos.as_ref().and_then(|u| coinbase_in(u, height as u64, reward as u64));
         let wallet_says = match &utxos {
-            Some(u) if wallet_height >= height + maturity => Some(coinbase_in(u, height as u64, reward as u64)),
+            Some(_) if wallet_height >= height + maturity => Some(coinbase.is_some()),
             Some(_) => {
                 warn!(height, wallet_height, "wallet not yet at this block's maturity, waits");
                 continue;
@@ -262,6 +263,11 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
             continue;
         }
         if status == "confirmed" {
+            // the coinbase holds the reward plus the block's fees; the fees stay with the pool
+            if let Some(amount) = coinbase {
+                let fees = (amount as i64 - reward).max(0);
+                tx.execute("UPDATE blocks SET fees=$2 WHERE height=$1", &[&height, &fees]).await?;
+            }
             tx.execute(
                 "UPDATE miners m SET balance = m.balance + s.sum FROM (SELECT miner_id, SUM(amount)::BIGINT AS sum FROM credits WHERE block_height=$1 GROUP BY miner_id) s WHERE m.id = s.miner_id",
                 &[&height],

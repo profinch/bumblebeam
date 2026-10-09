@@ -168,17 +168,33 @@ impl Wallet {
     }
 }
 
-/// Is the coinbase of the block at `height` in the wallet? Coinbase UTXOs have type "mine" and
-/// mature COINBASE_MATURITY blocks after their height. The block's fee output is a separate UTXO
-/// whose maturity rule differs; fees are not attributed here (they stay with the pool).
-pub fn coinbase_in(utxos: &[Value], height: u64, min_amount: u64) -> bool {
+/// The amount of the coinbase of the block at `height` if it is in the wallet. Coinbase UTXOs have
+/// type "mine" and mature COINBASE_MATURITY blocks after their height. Since fork 6 (mainnet height
+/// 3928666) the node puts the block's transaction fees into the coinbase too, so the amount is the
+/// reward plus the fees.
+pub fn coinbase_in(utxos: &[Value], height: u64, min_amount: u64) -> Option<u64> {
     let maturity = height + COINBASE_MATURITY;
-    utxos.iter().any(|u| u["type"].as_str() == Some("mine") && u["maturity"].as_u64() == Some(maturity) && u["amount"].as_u64().unwrap_or(0) >= min_amount)
+    utxos
+        .iter()
+        .filter(|u| u["type"].as_str() == Some("mine") && u["maturity"].as_u64() == Some(maturity))
+        .filter_map(|u| u["amount"].as_u64())
+        .find(|&a| a >= min_amount)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn coinbase_amount_includes_fees() {
+        let utxos = vec![
+            serde_json::json!({ "type": "regular", "maturity": 4072221, "amount": 9_000_000_000u64 }),
+            serde_json::json!({ "type": "mine", "maturity": 4072221, "amount": 2_501_000_000u64 }),
+        ];
+        assert_eq!(coinbase_in(&utxos, 4071981, 2_500_000_000), Some(2_501_000_000));
+        assert_eq!(coinbase_in(&utxos, 4071982, 2_500_000_000), None);
+        assert_eq!(coinbase_in(&utxos, 4071981, 2_600_000_000), None);
+    }
+
     #[test]
     fn normalizes_ids() {
         assert_eq!(normalize("Unknown transaction ID 0123456789abcdef0123456789abcdef."), "Unknown transaction ID <hex>.");
