@@ -283,6 +283,13 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             send(&mut wr, result(&id, -32003, "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port")).await?;
                             anyhow::bail!("login refused: {}", "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port");
                         }
+                        // `<worker>+<N>` asks for a starting and lowest difficulty N: a rented rig
+                        // (MiningRigRentals) that will not work below its own minimum
+                        let (wk, fixed) = worker_diff(wk);
+                        if let Some(n) = fixed {
+                            vd.floor = n.clamp(vd_cfg.min, vd_cfg.max);
+                            vd.diff = vd.floor;
+                        }
                         worker = wk.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(32).collect();
                         if worker.is_empty() { worker = "default".into(); }
                         let kind_label = if kind == "coinbase" { kind.to_string() } else { format!("{kind}?") };
@@ -304,7 +311,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         sess.worker = worker.clone();
                         let agent: String = msg["agent"].as_str().unwrap_or("").chars().take(64).collect();
                         if agent.to_ascii_lowercase().contains("nicehash") {
-                            vd.floor = vd_cfg.nicehash_min.max(vd_cfg.min);
+                            vd.floor = vd.floor.max(vd_cfg.nicehash_min);
                             vd.diff = vd.diff.max(vd.floor);
                         }
                         info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, %agent, diff = vd.diff, "login");
@@ -443,6 +450,18 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     }
 }
 
+/// Splits `rig1+8192` into the worker name and the difficulty it asks for; no `+`, or what follows
+/// it not a positive number, leaves the name as it was and asks for nothing.
+fn worker_diff(wk: &str) -> (&str, Option<f64>) {
+    match wk.rsplit_once('+') {
+        Some((name, n)) => match n.trim().parse::<f64>() {
+            Ok(d) if d.is_finite() && d > 0.0 => (name, Some(d)),
+            _ => (wk, None),
+        },
+        None => (wk, None),
+    }
+}
+
 async fn push_job<S: AsyncWrite + Unpin>(wr: &mut WriteHalf<S>, jobs: &mut VecDeque<MinerJob>, job: &Arc<Job>, seq: &mut u64, diff: f64) -> Result<()> {
     *seq += 1;
     let id = seq.to_string();
@@ -456,7 +475,17 @@ async fn push_job<S: AsyncWrite + Unpin>(wr: &mut WriteHalf<S>, jobs: &mut VecDe
 
 #[cfg(test)]
 mod tests {
-    use super::proxy_header;
+    use super::{proxy_header, worker_diff};
+
+    #[test]
+    fn worker_difficulty_suffix() {
+        assert_eq!(worker_diff("mrr+8192"), ("mrr", Some(8192.0)));
+        assert_eq!(worker_diff("+4096"), ("", Some(4096.0)));
+        assert_eq!(worker_diff("rig1"), ("rig1", None));
+        assert_eq!(worker_diff("rig+x"), ("rig+x", None));
+        assert_eq!(worker_diff("rig+0"), ("rig+0", None));
+        assert_eq!(worker_diff("rig+inf"), ("rig+inf", None));
+    }
 
     #[tokio::test]
     async fn proxy_v1_header() {

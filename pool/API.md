@@ -287,7 +287,10 @@ The login is `<wallet address>.<worker name>`, and every Beam miner speaks the p
 Beam's own stratum dialect from `pow/stratum.h` in the core. lolMiner and GMiner default to TLS for
 Beam, so the TLS ports are the ones most miners land on; the certificate is self-signed and miners
 do not verify it. Share difficulty is per worker (vardiff), aimed at about one share every ten
-seconds, starting at 64. The pool assigns each connection a nonce prefix so no two rigs search the
+seconds, starting at 64. A rig that will not work below its own minimum (rented ones on
+MiningRigRentals) asks for it after the worker name, `<wallet address>.<worker name>+8192`: the
+difficulty starts there and vardiff does not go below it; the worker keeps its name without the
+suffix. The pool assigns each connection a nonce prefix so no two rigs search the
 same nonces. The server is `pool/server` (Rust).
 
 ## Operator's API
