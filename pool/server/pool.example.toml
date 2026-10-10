@@ -62,7 +62,7 @@ start = 64.0
 min = 8.0
 max = 4000000.0
 target_secs = 10.0
-nicehash_min = 900.0                      # floor when the login says agent "NiceHash..." (MiningRigRentals sends the same)
+nicehash_min = 2048.0                     # NiceHash's proxy refuses a BeamV3 pool below 2048; applied when its login says agent "NiceHash..."
 
 [http]
 bind = "0.0.0.0:8080"
