@@ -534,9 +534,9 @@
         ${tile('Min payout', beam(stats.minPayout, 2), stats.minerPaysTxFee ? `network fee deducted, about ${beam(stats.shieldedFee, 3)} per payout to an offline address` : 'network fee paid by the pool')}
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout transactions</h2><div class="panel-meta"><span>Every payout is its own Beam transaction: open its kernel in the explorer to see it on the chain</span></div></div>
-      ${payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th class="num">Miners</th><th>Kernels</th></tr></thead><tbody>
-      ${payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount, 2)}</td><td class="num">${int(p.miners)}</td>
-        <td class="dim">${kernelCell(p)}</td></tr>`).join('')}
+      ${payments.length ? `<div class="table-wrap"><table id="payouts-table"><colgroup><col class="w-time"><col class="w-amt"><col class="w-n"><col><col class="w-amt"><col class="w-more"></colgroup>
+      <thead><tr><th>Time</th><th class="num">Total</th><th class="num">Miners</th><th>Transaction</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+      ${payments.map(payoutRow).join('')}
       </tbody></table></div>` : '<div class="empty">No payments yet</div>'}</section>`;
   };
 
@@ -548,14 +548,26 @@
     return p.kernel ? `<a href="${explorerKernel(p.kernel)}" target="_blank" rel="noopener">${esc(short(p.kernel))}</a>` : '—';
   }
   const kernelLink = (k) => `<a href="${explorerKernel(k)}" target="_blank" rel="noopener" class="mono">${esc(short(k))}</a>`;
-  const kernelCell = (p) => {
-    if (p.txs.length > 1) {
-      return `<details class="kernels"><summary>${int(p.txs.length)} transactions</summary>
-        ${p.txs.map((t) => `<div>${kernelLink(t.kernel)} <span class="num">${beam(t.amount, 3)}</span></div>`).join('')}</details>`;
-    }
-    const k = p.txs.length ? p.txs[0].kernel : p.kernel;
-    return k ? kernelLink(k) : '—';
+  // A payout run's transactions, as the explorer's contracts: the first one, and "more" opens the
+  // rest in place (fixed columns, so nothing moves). One still confirming has no kernel yet. Which
+  // runs are open survives the live refresh.
+  const openRuns = new Set();
+  const stack = (list, draw) => (list.length ? list.map((t) => `<div class="stack-line">${draw(t)}</div>`).join('') : '<span class="dim">—</span>');
+  const txRef = (t) => (t.kernel ? kernelLink(t.kernel) : '<span class="dim">confirming</span>');
+  const payoutRow = (p) => {
+    const txs = p.txs.length ? p.txs : (p.kernel ? [{ kernel: p.kernel, amount: p.amount }] : []);
+    const open = openRuns.has(p.ts), shown = open ? txs : txs.slice(0, 1);
+    return `<tr class="${open ? 'open' : ''}"><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount, 2)}</td><td class="num">${int(p.miners)}</td>
+      <td>${stack(shown, txRef)}</td><td class="num">${stack(shown, (t) => beam(t.amount, 3))}</td>
+      <td class="num">${txs.length > 1 ? `<button type="button" class="btn ghost small" data-run="${Number(p.ts)}">${open ? 'less' : `+${txs.length - 1} more`}</button>` : ''}</td></tr>`;
   };
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-run]');
+    if (!b) return;
+    const ts = Number(b.dataset.run);
+    if (openRuns.has(ts)) openRuns.delete(ts); else openRuns.add(ts);
+    render(false);
+  });
 
   // Official download pages of the miners on the connect page; nothing is mirrored here.
   const MINERS = [

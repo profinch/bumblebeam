@@ -435,9 +435,16 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 
 /* the product name after the logo: "BumbleBeam Pool", "BumbleBeam Explorer" */
 .word .sub-word { font-style: normal; font-weight: 400; color: var(--muted); font-size: 0.8em; margin-left: 4px; }
-.kernels summary { cursor: pointer; color: var(--accent); }
-.kernels[open] summary { margin-bottom: 6px; }
-.kernels div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+/* payout runs: fixed columns, top-aligned, "more" opens a run's transactions without moving the table */
+#payouts-table { table-layout: fixed; min-width: 760px; }
+#payouts-table td { vertical-align: top; }
+#payouts-table col.w-time { width: 120px; }
+#payouts-table col.w-amt { width: 130px; }
+#payouts-table col.w-n { width: 80px; }
+#payouts-table col.w-more { width: 100px; }
+#payouts-table .stack-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#payouts-table .stack-line + .stack-line { margin-top: 4px; }
+#payouts-table tr.open td { background: rgba(255, 255, 255, 0.02); }
 
 /* chart labels stay readable over the bars */
 .bars text { paint-order: stroke; stroke: rgba(4, 37, 72, 0.85); stroke-width: 3px; stroke-linejoin: round; }

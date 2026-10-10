@@ -192,7 +192,8 @@ const BB = (() => {
   });
   const normPayment = (p) => ({
     ts: num(p.ts), amount: num(p.amount) || 0, miners: num(p.miners), kernel: str(p.kernel, 96), status: str(p.status, 16),
-    txs: (Array.isArray(p.txs) ? p.txs : []).slice(0, 500).map((t) => ({ kernel: str(t && t.kernel, 64), amount: num(t && t.amount) || 0 })).filter((t) => t.kernel),
+    // a transaction still confirming has no kernel yet
+    txs: (Array.isArray(p.txs) ? p.txs : []).slice(0, 500).map((t) => ({ kernel: str(t && t.kernel, 64), amount: num(t && t.amount) || 0 })),
   });
   const normMiner = (m) => ({
     address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,

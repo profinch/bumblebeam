@@ -148,8 +148,9 @@ miner can tell a broken kernel from a slow connection.
 
 Pool payouts, newest first, one row per payout run: `{ "payments": [{ "ts", "amount", "miners",
 "kernel", "status", "txs": [{ "kernel", "amount" }] }] }`. Beam pays each miner in its own
-transaction, so a run has one kernel per miner: `txs` lists every one that has a kernel, with its
-amount and without the address, so each payout can be looked up on the chain. `kernel` is the latest,
+transaction, so a run has one per miner: `txs` lists all of them, with the amount and without the
+address; a confirmed one has its kernel, to look it up on the chain, and one still confirming has
+`"kernel": null`. `kernel` is the latest,
 kept for older clients. A miner's own page lists the kernel of each payment to them. Failed payments
 are refunded to the balance and not listed.
 
