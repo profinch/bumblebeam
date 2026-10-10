@@ -181,8 +181,8 @@ pub struct Vardiff {
     pub min: f64,
     pub max: f64,
     pub target_secs: f64,
-    /// Floor for NiceHash's proxy (its login carries an `agent` naming it): it refuses a pool whose
-    /// difficulty is below 2048 for BeamV3.
+    /// Floor for NiceHash's proxy (its login carries an `agent` naming it). MiningRigRentals logs in
+    /// with the same agent, so this floor applies to its rigs too.
     #[serde(default = "nicehash_min")]
     pub nicehash_min: f64,
 }
@@ -191,7 +191,7 @@ impl Default for Vardiff {
         Self { start: 64.0, min: 8.0, max: 4.0e6, target_secs: 10.0, nicehash_min: nicehash_min() }
     }
 }
-fn nicehash_min() -> f64 { 2048.0 }
+fn nicehash_min() -> f64 { 900.0 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Http {
