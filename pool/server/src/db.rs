@@ -45,6 +45,9 @@ impl ChartRange {
 /// `m:<miner id>:<mode>`), averaged per bucket. Samples are taken
 /// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
 /// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
+/// A bucket with no row at all is zero too, so a miner that stopped reads zero up to now instead of
+/// its line ending where it left; the series ends at the pool's own latest sample (taken every
+/// minute), so a running miner's last point is never a sampler that has not come round yet.
 async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
     let (span, bucket) = range.window();
     chart_window(c, scope, now, span, bucket).await
@@ -69,9 +72,11 @@ async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i
     let from = (now - span) / bucket * bucket + bucket;
     let rows = c
         .query(
-            "SELECT t, (s / GREATEST(1, LEAST($3, $4 - t) / 60.0))::FLOAT8 FROM
-               (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b
-             ORDER BY t",
+            "SELECT g.t, COALESCE(b.s / GREATEST(1, LEAST($3, $4 - g.t) / 60.0), 0)::FLOAT8
+             FROM generate_series($2::BIGINT,
+                    COALESCE((SELECT MAX(ts) FROM hashrate_samples WHERE scope='pool' AND ts >= $2), $4) / $3 * $3, $3::BIGINT) AS g(t)
+             LEFT JOIN (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b ON b.t = g.t
+             ORDER BY g.t",
             &[&scope, &from, &bucket, &now],
         )
         .await?;
