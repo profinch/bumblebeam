@@ -126,13 +126,15 @@
   const flashHtml = () => (flash ? `<div class="adm-msg ${flash.ok ? 'ok' : 'err'}">${esc(flash.text)}</div>` : '');
   // an operator action under way (its dialog, the request): the live refresh waits for it
   let busy = 0;
-  async function act(path, body, q) {
+  // The page itself shows what an action did (the row is gone, the status changed), so only a
+  // refusal or an error gets a message; `report` keeps the answer of one that has nowhere else to show.
+  async function act(path, body, q, { report = false } = {}) {
     busy++;
     try {
       if (q && !(await ask(q.title, q.text, q))) return;
       try {
         const r = await api(path, body);
-        flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
+        flash = r.ok ? (report ? { ok: true, text: r.message } : null) : { ok: false, text: r.error || 'refused' };
       } catch (e) {
         flash = { ok: false, text: e.message };
       }
@@ -149,7 +151,8 @@
       if (!(await ask('Payout', text, { ok: 'Pay now' }))) return;
       btn.disabled = true;
       btn.textContent = 'Paying…';
-      await act('payouts', body);
+      // the run's line per miner is the only record of who was paid and who was refused
+      await act('payouts', body, null, { report: true });
     } finally {
       busy--;
     }
@@ -359,8 +362,8 @@
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th><th></th></tr></thead><tbody>
         ${a.blocks.map((b) => `<tr>
           <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
-          <td>${ago(b.ts)}</td><td>${esc(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td>
-          <td class="adm-row"><button class="btn small" data-block="${Number(b.height)}" data-action="confirm">Confirm</button>
+          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td>
+          <td class="adm-row"><button class="btn small danger" data-block="${Number(b.height)}" data-action="confirm">Confirm</button>
               <button class="btn small danger" data-block="${Number(b.height)}" data-action="orphan">Orphan</button></td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No unverified blocks.</p>';
@@ -368,7 +371,7 @@
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th></tr></thead><tbody>
         ${a.orphaned.map((b) => `<tr>
           <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
-          <td>${ago(b.ts)}</td><td>${esc(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td></tr>`).join('')}
+          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No orphaned blocks in the last 7 days.</p>';
     const pays = a.payments.length
@@ -402,8 +405,11 @@
     view.querySelectorAll('[data-block]').forEach((b) => b.addEventListener('click', () => {
       const h = b.dataset.block, action = b.dataset.action;
       act(`blocks/${h}`, { action, force: force() }, {
-        title: `${action} block`, ok: action === 'orphan' ? 'Orphan' : 'Confirm', danger: action === 'orphan',
-        text: `${action === 'orphan' ? 'Drop' : 'Confirm'} block ${h}${force() ? ' (forced)' : ''}? ${action === 'orphan' ? 'Its credits are not paid.' : 'Its credits go into the miners\' balances.'}`,
+        // both are final; a wrong confirm pays out a reward the pool never got, from the other miners' money
+        title: `${action} block`, ok: action === 'orphan' ? 'Orphan' : 'Confirm', danger: true,
+        text: action === 'orphan'
+          ? `Drop block ${h}${force() ? ' (forced)' : ''}? Its credits are not paid.`
+          : `Confirm block ${h}${force() ? ' (forced)' : ''}? Its credits go into the miners' balances and the next payout sends them, even if the block is not in the chain. Confirm only when you have found its coinbase in the wallet yourself.`,
       });
     }));
     view.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => {
@@ -569,8 +575,9 @@
         `) of miner #${m.id}?\n\nFrom: `, m.address, '\n\nTo (', { b: toWhat }, '): ', to, '\n\nIts connections are ended first.'], { ok: 'Move everything', danger: true }))) return;
       try {
         const r = await api(`miners/${m.id}/merge`, { to });
-        flash = r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error || 'refused' };
-        if (r.ok) { minerQuery = to.slice(0, 16); keepFlash = true; location.hash = 'miners'; return; }
+        // done: the list shows the address it went to; only a refusal gets a message
+        flash = r.ok ? null : { ok: false, text: r.error || 'refused' };
+        if (r.ok) { minerQuery = to.slice(0, 16); location.hash = 'miners'; return; }
       } catch (err) {
         flash = { ok: false, text: err.message };
       }
