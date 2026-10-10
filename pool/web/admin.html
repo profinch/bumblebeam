@@ -20,6 +20,10 @@
   .adm-tabs .n { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px; border-radius: 8px; font-size: 10px; text-align: center; background: rgba(242, 95, 91, .2); color: var(--color-red); }
   .adm-field { width: 100%; max-width: 520px; background: var(--field-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font: 12px var(--font-mono); }
   .adm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .tile .v.bad, .panel-meta .bad { color: var(--color-red); }
+  #miners-table td { vertical-align: top; }
+  #miners-table .stack-line { white-space: nowrap; }
+  #miners-table .stack-line + .stack-line { margin-top: 4px; }
   .adm-msg { margin: 0 0 16px; padding: 10px 12px; border-radius: 6px; font: 12px var(--font-mono); line-height: 1.5; word-break: break-word; white-space: pre-line; }
   .adm-msg.ok { color: var(--accent); background: rgba(0, 246, 210, .08); border: 1px solid rgba(0, 246, 210, .3); }
   .adm-msg.err { color: var(--color-red); background: rgba(242, 95, 91, .08); border: 1px solid rgba(242, 95, 91, .35); }

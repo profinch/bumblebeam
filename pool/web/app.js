@@ -554,12 +554,14 @@
   const openRuns = new Set();
   const stack = (list, draw) => (list.length ? list.map((t) => `<div class="stack-line">${draw(t)}</div>`).join('') : '<span class="dim">—</span>');
   const txRef = (t) => (t.kernel ? kernelLink(t.kernel) : '<span class="dim">confirming</span>');
+  // an amount with its unit in grey, as the explorer's contracts show their funds
+  const beamAmt = (g, d) => { const s = beam(g, d); return s.endsWith(' BEAM') ? `${s.slice(0, -5)} <span class="dim">BEAM</span>` : s; };
   const payoutRow = (p) => {
     const txs = p.txs.length ? p.txs : (p.kernel ? [{ kernel: p.kernel, amount: p.amount }] : []);
     const open = openRuns.has(p.ts), shown = open ? txs : txs.slice(0, 1);
-    return `<tr class="${open ? 'open' : ''}"><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount, 2)}</td><td class="num">${int(p.miners)}</td>
-      <td>${stack(shown, txRef)}</td><td class="num">${stack(shown, (t) => beam(t.amount, 3))}</td>
-      <td class="num">${txs.length > 1 ? `<button type="button" class="btn ghost small" data-run="${Number(p.ts)}">${open ? 'less' : `+${txs.length - 1} more`}</button>` : ''}</td></tr>`;
+    return `<tr class="${open ? 'open' : ''}"><td class="dim">${ago(p.ts)}</td><td class="num">${beamAmt(p.amount, 2)}</td><td class="num">${int(p.miners)}</td>
+      <td>${stack(shown, txRef)}</td><td class="num">${stack(shown, (t) => beamAmt(t.amount, 3))}</td>
+      <td class="num">${txs.length > 1 ? `<button type="button" class="btn ghost small" data-run="${Number(p.ts)}">${open ? 'less' : 'more'}</button>` : ''}</td></tr>`;
   };
   view.addEventListener('click', (e) => {
     const b = e.target.closest('[data-run]');

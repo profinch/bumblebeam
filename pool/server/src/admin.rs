@@ -77,6 +77,41 @@ pub async fn attention(db: &Db) -> Result<Value> {
     Ok(json!({ "blocks": blocks, "orphaned": orphaned, "payments": payments, "txidHonored": txid }))
 }
 
+/// What the pool owes its miners and what it earned itself, for the wallet panel. The wallet may
+/// hold the operator's own money too, so the pool's part is counted from its records: of each
+/// confirmed block, the reward and its tx fees less what was credited to miners (the pool fee, the
+/// rounding dust), less any network fee the pool paid on payouts beyond what the miner was debited.
+pub async fn wallet_books(db: &Db) -> Result<Value> {
+    let c = db.client().await?;
+    let now = crate::state::now();
+    let owed = c
+        .query_one(
+            "SELECT (SELECT COALESCE(SUM(balance),0) FROM miners)::BIGINT,
+                    (SELECT COALESCE(SUM(c.amount),0) FROM credits c JOIN blocks b ON b.height=c.block_height WHERE b.status IN ('pending','unverified'))::BIGINT,
+                    (SELECT COALESCE(SUM(amount + fee),0) FROM payments WHERE status IN ('created','sending','pending','review') AND cb_height IS NULL)::BIGINT",
+            &[],
+        )
+        .await?;
+    let earned = |since: i64| {
+        let c = &c;
+        async move {
+            let r = c
+                .query_one(
+                    "SELECT (SELECT COALESCE(SUM(b.reward + b.fees - COALESCE((SELECT SUM(amount) FROM credits WHERE block_height=b.height),0)),0)
+                             FROM blocks b WHERE b.status='confirmed' AND b.ts > $1)::BIGINT,
+                            (SELECT COALESCE(SUM(GREATEST(amount + fee - debit, 0)),0) FROM payments WHERE status='completed' AND cb_height IS NULL AND ts > $1)::BIGINT",
+                    &[&since],
+                )
+                .await?;
+            Ok::<i64, anyhow::Error>(r.get::<_, i64>(0) - r.get::<_, i64>(1))
+        }
+    };
+    Ok(json!({
+        "owed": { "balances": owed.get::<_, i64>(0), "immature": owed.get::<_, i64>(1), "inFlight": owed.get::<_, i64>(2) },
+        "earned": { "day": earned(now - 86400).await?, "week": earned(now - 7 * 86400).await?, "all": earned(0).await? },
+    }))
+}
+
 async fn list(db: &Db) -> Result<()> {
     let a = attention(db).await?;
     println!("blocks waiting for an operator (unverified):");
