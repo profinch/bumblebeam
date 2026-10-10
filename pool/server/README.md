@@ -17,7 +17,7 @@ How it works, in the order a share travels:
    network difficulty, height).
 2. A miner logs in with `<address>.<worker>`; the pool assigns a nonce prefix so no two miners
    search the same nonces, and sends the job with the worker's own difficulty (vardiff, about one
-   share every ten seconds).
+   share every ten seconds; `<address>.<worker>+N` starts at N and never goes below it).
 3. Each `solution` is checked structurally and against the share difficulty by the oracle. A
    rejected share carries the reason (`collision`, `duplicate index`, `index order`,
    `nonzero result`, `difficulty not reached`, `stale`, `duplicate share`).
