@@ -354,6 +354,28 @@
     $('#tok').focus();
   }
 
+  // The wallet is shared with the operator's own money: its totals, what of it the miners are owed,
+  // and what the pool itself earned by its records. Loaded apart, so a silent wallet costs only this panel.
+  async function walletPanel() {
+    let w;
+    try { w = await api('wallet'); } catch (e) { w = { error: e.message }; }
+    const el = $('#wallet-panel');
+    if (!el) return;
+    if (w.error && !w.owed) { el.querySelector('.hint').textContent = w.error; return; }
+    const ws = w.wallet || {}, o = w.owed, e = w.earned;
+    const free = ws.error ? null : ws.available - o.balances;
+    el.innerHTML = `<div class="panel-head"><h2 class="panel-title">Wallet</h2>
+        <span class="panel-meta">${ws.error ? `<span class="bad">${esc(ws.error)}</span>` : `height ${int(ws.height)}${ws.inSync ? '' : ' · <b>not in sync</b>'}`}</span></div>
+      <div class="tiles">
+        ${tile('Pool earned', beam(e.all), `${beam(e.day)} in 24 h · ${beam(e.week)} in 7 days`, 'accent')}
+        ${tile('Owed to miners', beam(o.balances), `unpaid balances; ${beam(o.immature)} more when blocks mature, ${beam(o.inFlight)} in payouts on the way`)}
+        ${tile('Wallet available', ws.error ? '—' : beam(ws.available), ws.error ? '' : `${beam(ws.maturing)} maturing · ${beam(ws.sending)} sending · ${beam(ws.receiving)} receiving`)}
+        ${tile('Not owed', free == null ? '—' : beam(free), 'available less the unpaid balances: the pool\'s earnings and your own money', free != null && free < 0 ? 'bad' : '')}
+      </div>
+      ${free != null && free < 0 ? '<div class="adm-msg err">The wallet holds less than the miners\' unpaid balances: payouts will fail.</div>' : ''}
+      <p class="hint">Pool earned counts from the pool's records, not the wallet: of each confirmed block, the reward and its tx fees less what the miners were credited, less network fees the pool paid itself.</p>`;
+  }
+
   async function attention() {
     const a = await api('attention');
     setCount(a.blocks.length + a.payments.length);
@@ -390,6 +412,7 @@
         <p class="hint">Blocks the automatic checks could not settle. Confirm credits the miners' balances; orphan drops the block.</p>${blocks}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Orphaned blocks</h2><span class="panel-meta">last 7 days</span></div>
         <p class="hint">Another block made it into the chain at this height, so the miners' credits were not paid. Nothing to do here: listed so a run of orphans stands out.</p>${orphans}</section>
+      <section class="panel" id="wallet-panel"><div class="panel-head"><h2 class="panel-title">Wallet</h2></div><p class="hint">Asking the wallet…</p></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2>
         <span class="panel-meta">${a.nextPayout ? `<b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
         <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>
@@ -400,6 +423,7 @@
         <label class="chk"><input type="checkbox" id="force"> force (pending blocks, sending payments, skip the wallet check)</label></section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Wallet txId deduplication</h2>
         <span class="panel-meta">${a.txidHonored ? `proven: <b>${esc(a.txidHonored)}</b>` : 'not proven: run <b>admin probe-txid</b>'}</span></div></section>`;
+    walletPanel();
     const force = () => $('#force').checked;
     $('#pay-all').addEventListener('click', (e) => payNow(e.target, {}, 'Run a payout now for every miner at the payout threshold?'));
     view.querySelectorAll('[data-block]').forEach((b) => b.addEventListener('click', () => {
@@ -456,6 +480,14 @@
   }
 
   let minerQuery = '';
+  // a miner's workers as on the pool's payments page: the first one, "more" opens the rest in place;
+  // which rows are open survives the live refresh
+  const openWorkers = new Set();
+  const workersCells = (m) => {
+    const all = m.workers24h, open = openWorkers.has(m.id), shown = open ? all : all.slice(0, 1);
+    return `<td>${shown.length ? shown.map((w) => `<div class="stack-line">${esc(w)}</div>`).join('') : '<span class="dim">—</span>'}</td>
+      <td class="num">${all.length > 1 ? `<button type="button" class="btn ghost small" data-workers="${Number(m.id)}">${open ? 'less' : 'more'}</button>` : ''}</td>`;
+  };
   async function miners() {
     const r = await api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`);
     const day = Date.now() / 1000 - 86400;
@@ -473,16 +505,27 @@
           <input class="adm-field" id="mq-in" placeholder="part of an address" value="${esc(minerQuery)}" aria-label="Search by address">
           <button class="btn" type="submit">Search</button>
         </form>
-        <div class="table-wrap"><table><thead><tr><th>Miner</th><th>Flags</th><th>Workers 24h</th><th class="num">Hashrate 24h</th><th>First seen</th><th>Last share</th><th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead><tbody>
+        <div class="table-wrap"><table id="miners-table"><thead><tr><th>Miner</th><th>Flags</th><th>Workers 24h</th><th></th><th class="num">Hashrate 24h</th><th>First seen</th><th>Last share</th><th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead><tbody>
         ${r.miners.map((m) => `<tr class="clickable" data-miner="${Number(m.id)}">
           <td><a href="#miner/${Number(m.id)}">${esc(short(m.address))}</a><span class="sub">#${Number(m.id)} · ${esc(m.type || '?')}</span></td>
-          <td>${flags(m)}</td><td class="wrap">${esc(m.workers24h.join(', ')) || '<span class="dim">—</span>'}</td>
+          <td>${flags(m)}</td>${workersCells(m)}
           <td class="num">${hr(m.hashrate24h)}</td><td>${ago(m.firstSeen)}</td><td>${ago(m.lastShare)}</td>
-          <td class="num">${beam(m.balance)}</td><td class="num">${beam(m.immature)}</td><td class="num">${beam(m.paid)}</td></tr>`).join('') || '<tr><td colspan="9" class="dim">No miners.</td></tr>'}
+          <td class="num">${beam(m.balance)}</td><td class="num">${beam(m.immature)}</td><td class="num">${beam(m.paid)}</td></tr>`).join('') || '<tr><td colspan="10" class="dim">No miners.</td></tr>'}
         </tbody></table></div></section>`;
     $('#mq').addEventListener('submit', (e) => { e.preventDefault(); minerQuery = $('#mq-in').value.trim(); render(); });
+    // Esc clears the search (and shows everyone again), then leaves the field
+    $('#mq-in').addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (e.target.value || minerQuery) { e.target.value = ''; minerQuery = ''; render(); } else e.target.blur();
+    });
+    view.querySelectorAll('[data-workers]').forEach((b) => b.addEventListener('click', () => {
+      const id = Number(b.dataset.workers);
+      if (openWorkers.has(id)) openWorkers.delete(id); else openWorkers.add(id);
+      render();
+    }));
     view.querySelectorAll('tr[data-miner]').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (e.target.closest('a')) return;
+      if (e.target.closest('a, button')) return;
       location.hash = `miner/${tr.dataset.miner}`;
     }));
   }

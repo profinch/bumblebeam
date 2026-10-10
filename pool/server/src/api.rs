@@ -250,6 +250,7 @@ fn admin_router(api: Api) -> Router<Api> {
     Router::new()
         .route("/api/admin/attention", get(admin_attention))
         .route("/api/admin/connections", get(admin_connections))
+        .route("/api/admin/wallet", get(admin_wallet))
         .route("/api/admin/connections/:id/kick", post(admin_kick))
         .route("/api/admin/miners", get(admin_miners))
         .route("/api/admin/miners/:id", get(admin_miner))
@@ -318,6 +319,24 @@ async fn admin_attention(State(api): State<Api>) -> R {
     a["payoutsFrozen"] = json!(frozen >= 0);
     a["frozenLeft"] = if frozen >= 0 { json!(frozen) } else { Value::Null };
     a["now"] = json!(now());
+    Ok(Json(a))
+}
+
+/// The wallet's own figures next to the pool's books; a wallet that does not answer is reported,
+/// the books are shown anyway.
+async fn admin_wallet(State(api): State<Api>) -> R {
+    let s = &api.shared;
+    let mut a = crate::admin::wallet_books(&s.db).await?;
+    a["wallet"] = if s.cfg.wallet_enabled() {
+        let w = crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone());
+        match w.status().await {
+            Ok(st) => json!({ "available": st["available"], "maturing": st["maturing"], "sending": st["sending"], "receiving": st["receiving"],
+                              "height": st["current_height"], "inSync": st["is_in_sync"] }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    } else {
+        json!({ "error": "no wallet configured" })
+    };
     Ok(Json(a))
 }
 

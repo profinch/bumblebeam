@@ -304,6 +304,7 @@ address; every action is logged.
 | | |
 |---|---|
 | `GET attention` | unverified blocks, blocks orphaned in the last 7 days (no action needed), payments in review or stuck, txId deduplication proof |
+| `GET wallet` | the wallet's available, maturing, sending and receiving (or why it did not answer), what the miners are owed (unpaid balances, immature credits, payouts on the way) and what the pool earned in 24 h, 7 days and in all (confirmed blocks less the miners' credits, less network fees the pool paid) |
 | `GET connections` | live stratum connections (peer, port, TLS, address, worker, agent, difficulty, shares) and the last 300 that ended before a login, with what they sent first and why they ended |
 | `POST connections/<id>/kick` | ends a connection |
 | `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address |
