@@ -287,8 +287,8 @@
     <td>${explorerBlock(b.height)}</td><td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
     <td class="num" style="color:${effortColor(b.effort)}">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
     <td class="dim">${esc(b.finder || '—')}</td>
-    <td class="num">${beam(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
-    <td class="num">${fb.credit.has(b.height) ? beam(fb.credit.get(b.height)) : '—'}</td><td class="num">${blockStatus(b)}</td></tr>`;
+    <td class="num">${beamAmt(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
+    <td class="num">${fb.credit.has(b.height) ? beamAmt(fb.credit.get(b.height)) : '—'}</td><td class="num">${blockStatus(b)}</td></tr>`;
   function foundPanel() {
     if (!fb.blocks.length) return '<section class="panel"><div class="panel-head"><h2 class="panel-title">Blocks found</h2></div><p class="hint">This miner has not found a block.</p></section>';
     const modes = [...new Set(fb.blocks.map((b) => b.mode))].sort();
@@ -386,7 +386,7 @@
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th><th></th></tr></thead><tbody>
         ${a.blocks.map((b) => `<tr>
           <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
-          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td>
+          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beamAmt(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td>
           <td class="adm-row"><button class="btn small danger" data-block="${Number(b.height)}" data-action="confirm">Confirm</button>
               <button class="btn small danger" data-block="${Number(b.height)}" data-action="orphan">Orphan</button></td></tr>`).join('')}
         </tbody></table></div>`
@@ -395,13 +395,13 @@
       ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th></tr></thead><tbody>
         ${a.orphaned.map((b) => `<tr>
           <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
-          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td></tr>`).join('')}
+          <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td><td class="num">${beamAmt(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No orphaned blocks in the last 7 days.</p>';
     const pays = a.payments.length
       ? `<div class="table-wrap"><table><thead><tr><th>Tx</th><th>Status</th><th>Created</th><th class="num">Amount</th><th class="num">Tries</th><th>To</th><th></th></tr></thead><tbody>
         ${a.payments.map((p) => `<tr>
-          <td>${explorerTx(p)}</td><td>${statusBadge(p.status)}</td><td>${ago(p.created)}</td><td class="num">${beam(p.amount)}</td><td class="num">${int(p.attempts)}</td>
+          <td>${explorerTx(p)}</td><td>${statusBadge(p.status)}</td><td>${ago(p.created)}</td><td class="num">${beamAmt(p.amount)}</td><td class="num">${int(p.attempts)}</td>
           <td><a href="#miner/${Number(p.minerId)}">${esc(short(p.address))}</a></td>
           <td class="adm-row"><button class="btn small" data-pay="${esc(p.txId)}" data-action="sent">Sent</button>
               <button class="btn small danger" data-pay="${esc(p.txId)}" data-action="refund">Refund</button></td></tr>`).join('')}
@@ -553,11 +553,11 @@
       : '<p class="hint">No shares in 7 days.</p>';
     const credits = m.credits.length
       ? paged('<th>Block</th><th>Status</th><th>Found</th><th class="num">Credit</th>',
-        m.credits.map((c) => `<td>${explorerBlock(c.height)}</td><td>${statusBadge(c.status)}</td><td class="dim">${ago(c.ts)}</td><td class="num">${beam(c.amount)}</td>`))
+        m.credits.map((c) => `<td>${explorerBlock(c.height)}</td><td>${statusBadge(c.status)}</td><td class="dim">${ago(c.ts)}</td><td class="num">${beamAmt(c.amount)}</td>`))
       : '<p class="hint">No block credits.</p>';
     const pays = m.payments.length
       ? paged('<th>When</th><th>Status</th><th class="num">Amount</th><th class="num">Fee</th><th>Tx</th>',
-        m.payments.map((p) => `<td class="dim">${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beam(p.amount)}</td><td class="num">${beam(p.fee)}</td><td>${explorerTx(p)}</td>`))
+        m.payments.map((p) => `<td class="dim">${ago(p.ts)}</td><td>${statusBadge(p.status)}</td><td class="num">${beamAmt(p.amount)}</td><td class="num">${beamAmt(p.fee)}</td><td>${explorerTx(p)}</td>`))
       : '<p class="hint">Never paid.</p>';
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Miner #${Number(m.id)}</h1><span class="dim mono adm-seen">first seen ${time(m.firstSeen)}</span>

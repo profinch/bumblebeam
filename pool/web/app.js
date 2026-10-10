@@ -20,6 +20,8 @@
   }
   const beam = (groth, d = 4) => (groth == null || !isFinite(groth) ? '—'
     : `${(groth / BB.GROTH).toLocaleString('en-US', { minimumFractionDigits: Math.min(2, d), maximumFractionDigits: d })} BEAM`);
+  // an amount with its unit in grey, as the explorer's contracts show their funds: for table cells
+  const beamAmt = (g, d) => { const s = beam(g, d); return s.endsWith(' BEAM') ? `${s.slice(0, -5)} <span class="dim">BEAM</span>` : s; };
   const pctFee = (x) => (x == null || !isFinite(x) ? '—' : `${Number(x)}%`);
   function ago(ts) {
     if (!ts) return '—';
@@ -198,7 +200,7 @@
         <td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
         <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
         <td class="num" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
-        <td class="dim">${esc(b.finder || '—')}</td><td class="num">${beam(b.reward + b.fees, 3)}</td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
+        <td class="dim">${esc(b.finder || '—')}</td><td class="num">${beamAmt(b.reward + b.fees, 3)}</td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
@@ -517,7 +519,7 @@
         </section>
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
           ${m.payments.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th class="num">Amount</th><th>Kernel</th></tr></thead><tbody>
-          ${m.payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beam(p.amount)}</td><td class="dim">${paymentRef(p)}</td></tr>`).join('')}
+          ${m.payments.map((p) => `<tr><td class="dim">${ago(p.ts)}</td><td class="num">${beamAmt(p.amount)}</td><td class="dim">${paymentRef(p)}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No payments yet</div>'}
         </section>
       </div>
@@ -554,8 +556,6 @@
   const openRuns = new Set();
   const stack = (list, draw) => (list.length ? list.map((t) => `<div class="stack-line">${draw(t)}</div>`).join('') : '<span class="dim">—</span>');
   const txRef = (t) => (t.kernel ? kernelLink(t.kernel) : '<span class="dim">confirming</span>');
-  // an amount with its unit in grey, as the explorer's contracts show their funds
-  const beamAmt = (g, d) => { const s = beam(g, d); return s.endsWith(' BEAM') ? `${s.slice(0, -5)} <span class="dim">BEAM</span>` : s; };
   const payoutRow = (p) => {
     const txs = p.txs.length ? p.txs : (p.kernel ? [{ kernel: p.kernel, amount: p.amount }] : []);
     const open = openRuns.has(p.ts), shown = open ? txs : txs.slice(0, 1);
