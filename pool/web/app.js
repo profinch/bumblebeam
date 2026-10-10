@@ -497,7 +497,7 @@
         ${tile(`Hashrate${modeNote}`, hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
         ${m.coinbase ? (m.balance < 0 ? tile('Advance', beam(-m.balance), 'a block that paid you was orphaned; the next blocks work it off') : tile('Unpaid', beam(m.balance), 'goes into the next blocks the pool finds')) : tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.immature), 'blocks still confirming')}
-        ${tile('Paid', beam(m.paid, 2), m.coinbase ? 'in the blocks themselves, to your own outputs' : undefined)}
+        ${tile('Paid', beam(m.paid, 2), m.coinbase ? 'in the blocks themselves, to your own outputs' : (m.sending ? `confirmed; ${beam(m.sending, 2)} more sent, waiting for your wallet` : undefined))}
         ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(m.blocks24h)} in 24h · last ${ago(m.lastBlockAt)}` : 'by your shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>

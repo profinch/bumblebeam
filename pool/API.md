@@ -119,13 +119,16 @@ guessed.
 
 ```json
 { "address": "…", "hashrate": 52.1, "hashrate24h": 50.7, "balance": 812345678,
-  "immature": 125000000, "paid": 12500000000, "lastShare": 1791321590,
+  "immature": 125000000, "paid": 12500000000, "sending": 0, "lastShare": 1791321590,
   "workers": [{ "name": "rig1", "hashrate": 52.1, "hashrate24h": 50.7, "lastShare": 1791321590,
                 "online": true, "stale": 0.012, "rejected": 0.001, "modes": ["pplns"] }],
   "charts": { "hashrate": [[1791300000, 49.8]], "peak": [1791300060, 61.2] },
   "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }],
   "addressType": "offline", "coinbase": null }
 ```
+
+`paid` is what reached the miner's wallet; `sending` is sent and not confirmed yet (a payout the
+wallet gives up on goes back to `balance`).
 
 `addressType` is `regular`, `offline`, `max_privacy`, `public_offline` or `coinbase`; `coinbase` is
 set only for `cb:` accounts (see [coinbase payouts](#coinbase-payouts)).

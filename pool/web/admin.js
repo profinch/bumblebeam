@@ -13,6 +13,8 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const int = (n) => (n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString('en-US'));
   const beam = (g) => (g == null || !isFinite(g) ? '—' : `${(g / GROTH).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} BEAM`);
+  // in a table cell: the unit in grey, as on the pool's payments page
+  const beamAmt = (g) => { const s = beam(g); return s.endsWith(' BEAM') ? `${s.slice(0, -5)} <span class="dim">BEAM</span>` : s; };
   const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-8)}` : s || '—');
   function hr(v) {
     if (v == null || !isFinite(v)) return '—';
@@ -510,7 +512,8 @@
           <td><a href="#miner/${Number(m.id)}">${esc(short(m.address))}</a><span class="sub">#${Number(m.id)} · ${esc(m.type || '?')}</span></td>
           <td>${flags(m)}</td>${workersCells(m)}
           <td class="num">${hr(m.hashrate24h)}</td><td>${ago(m.firstSeen)}</td><td>${ago(m.lastShare)}</td>
-          <td class="num">${beam(m.balance)}</td><td class="num">${beam(m.immature)}</td><td class="num">${beam(m.paid)}</td></tr>`).join('') || '<tr><td colspan="10" class="dim">No miners.</td></tr>'}
+          <td class="num">${beamAmt(m.balance)}</td><td class="num">${beamAmt(m.immature)}</td>
+          <td class="num">${beamAmt(m.paid)}${m.sending ? `<span class="sub">+${beam(m.sending)} sending</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="dim">No miners.</td></tr>'}
         </tbody></table></div></section>`;
     $('#mq').addEventListener('submit', (e) => { e.preventDefault(); minerQuery = $('#mq-in').value.trim(); render(); });
     // Esc clears the search (and shows everyone again), then leaves the field
@@ -566,7 +569,7 @@
         ${tile('Hashrate', hr(p.hashrate), `24h avg ${hr(p.hashrate24h)}`, 'accent')}
         ${tile('Unpaid', beam(m.balance), minPayout ? `owed by the pool · ${Math.round(Math.min(1, m.balance / minPayout) * 100)}% of the ${beam(minPayout)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.credits.filter((c) => c.status === 'pending' || c.status === 'unverified').reduce((s, c) => s + c.amount, 0)), 'blocks still confirming')}
-        ${tile('Paid', beam(m.paid))}
+        ${tile('Paid', beam(m.paid), m.sending ? `confirmed; ${beam(m.sending)} more sent, not confirmed yet` : 'confirmed on the chain')}
         ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(p.blocks24h)} in 24h · last ${ago(p.lastBlockAt)}` : 'by its shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>
