@@ -37,7 +37,8 @@ pub async fn run(db: &Db, cfg: &Config, http: reqwest::Client, args: &[String]) 
 }
 
 /// What waits for an operator: unverified blocks, payments in review or stuck, and whether the
-/// wallet's txId deduplication is proven.
+/// wallet's txId deduplication is proven. Blocks orphaned in the last 7 days come along for review;
+/// they need no action.
 pub async fn attention(db: &Db) -> Result<Value> {
     let c = db.client().await?;
     let now = crate::state::now();
@@ -48,6 +49,15 @@ pub async fn attention(db: &Db) -> Result<Value> {
         .map(|r| {
             json!({ "height": r.get::<_, i64>(0), "hash": r.get::<_, Option<String>>(1), "verifiedBy": r.get::<_, Option<String>>(2),
                     "reward": r.get::<_, i64>(3), "ts": r.get::<_, i64>(4), "mode": r.get::<_, String>(5), "status": r.get::<_, String>(6) })
+        })
+        .collect();
+    let orphaned: Vec<Value> = c
+        .query("SELECT height, hash, verified_by, reward, ts, mode FROM blocks WHERE status='orphaned' AND ts > $1 ORDER BY height DESC", &[&(now - 7 * 86400)])
+        .await?
+        .iter()
+        .map(|r| {
+            json!({ "height": r.get::<_, i64>(0), "hash": r.get::<_, Option<String>>(1), "verifiedBy": r.get::<_, Option<String>>(2),
+                    "reward": r.get::<_, i64>(3), "ts": r.get::<_, i64>(4), "mode": r.get::<_, String>(5) })
         })
         .collect();
     let payments: Vec<Value> = c
@@ -64,7 +74,7 @@ pub async fn attention(db: &Db) -> Result<Value> {
         })
         .collect();
     let txid = c.query_opt("SELECT value FROM meta WHERE key=$1", &[&crate::payouts::META_TXID_HONORED]).await?.map(|r| r.get::<_, String>(0));
-    Ok(json!({ "blocks": blocks, "payments": payments, "txidHonored": txid }))
+    Ok(json!({ "blocks": blocks, "orphaned": orphaned, "payments": payments, "txidHonored": txid }))
 }
 
 async fn list(db: &Db) -> Result<()> {
