@@ -364,6 +364,13 @@
               <button class="btn small danger" data-block="${Number(b.height)}" data-action="orphan">Orphan</button></td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No unverified blocks.</p>';
+    const orphans = (a.orphaned || []).length
+      ? `<div class="table-wrap"><table><thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Reward</th><th>Why</th></tr></thead><tbody>
+        ${a.orphaned.map((b) => `<tr>
+          <td>${explorerBlock(b.height)}<span class="sub">${esc(short(b.hash))}</span></td>
+          <td>${ago(b.ts)}</td><td>${esc(b.mode)}</td><td class="num">${beam(b.reward)}</td><td class="wrap">${esc(b.verifiedBy || '')}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : '<p class="hint">No orphaned blocks in the last 7 days.</p>';
     const pays = a.payments.length
       ? `<div class="table-wrap"><table><thead><tr><th>Tx</th><th>Status</th><th>Created</th><th class="num">Amount</th><th class="num">Tries</th><th>To</th><th></th></tr></thead><tbody>
         ${a.payments.map((p) => `<tr>
@@ -378,6 +385,8 @@
       ${flashHtml()}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Unverified blocks</h2></div>
         <p class="hint">Blocks the automatic checks could not settle. Confirm credits the miners' balances; orphan drops the block.</p>${blocks}</section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Orphaned blocks</h2><span class="panel-meta">last 7 days</span></div>
+        <p class="hint">Another block made it into the chain at this height, so the miners' credits were not paid. Nothing to do here: listed so a run of orphans stands out.</p>${orphans}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout run</h2>
         <span class="panel-meta">${a.nextPayout ? `<b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
         <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>

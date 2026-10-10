@@ -35,9 +35,10 @@ payout_interval_secs = 7200
 pplns_window = 2.0                        # x network difficulty
 maturity = 240
 verify_blocks_with_wallet = true          # coinbase must be in the wallet before credits are paid
-block_check_urls = []                     # cross-check of the block hash by height, tried in order; e.g.
-                                          # ["http://127.0.0.1:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
-                                          # your own explorer-node first, a public one as a fallback; it never confirms alone
+block_check_urls = ["http://explorer-node:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
+                                          # cross-check of the block hash by height, tried in order: our explorer-node on the
+                                          # docker network first, a public one as a fallback; it never confirms alone, but with
+                                          # no coinbase in the wallet a different hash orphans the block without an operator
 public_host = "stratum.bumblebeam.org"
 public_node = "node.bumblebeam.org:10000"  # beam-node p2p for wallets, shown on the connect page; a DNS-only name
 
