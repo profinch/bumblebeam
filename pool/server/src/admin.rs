@@ -272,7 +272,8 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
                   im AS (SELECT c.miner_id, SUM(c.amount)::BIGINT AS sum FROM credits c JOIN blocks b ON b.height=c.block_height
                          WHERE b.status IN ('pending','unverified') GROUP BY c.miner_id)
              SELECT m.id, m.address, m.address_type, m.first_seen, m.last_share, m.balance, m.paid, COALESCE(im.sum,0)::BIGINT,
-                    COALESCE(s.n,0)::BIGINT, COALESCE(s.d,0)::FLOAT8, COALESCE(s.workers, ARRAY[]::TEXT[])
+                    COALESCE(s.n,0)::BIGINT, COALESCE(s.d,0)::FLOAT8, COALESCE(s.workers, ARRAY[]::TEXT[]),
+                    (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed'))
              FROM miners m LEFT JOIN s ON s.miner_id=m.id LEFT JOIN im ON im.miner_id=m.id
              WHERE $2 = '' OR strpos(lower(m.address), lower($2)) > 0
              ORDER BY COALESCE(m.last_share, m.first_seen) DESC, m.id DESC LIMIT $3",
@@ -284,7 +285,8 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
         .map(|r| {
             json!({ "id": r.get::<_, i64>(0), "address": r.get::<_, String>(1), "type": r.get::<_, Option<String>>(2),
                     "firstSeen": r.get::<_, i64>(3), "lastShare": r.get::<_, Option<i64>>(4), "balance": r.get::<_, i64>(5),
-                    "paid": r.get::<_, i64>(6), "immature": r.get::<_, i64>(7), "shares24h": r.get::<_, i64>(8),
+                    // paid counts a payout from the moment it is sent: what is still on the way is apart
+                    "paid": r.get::<_, i64>(6) - r.get::<_, i64>(11), "sending": r.get::<_, i64>(11), "immature": r.get::<_, i64>(7), "shares24h": r.get::<_, i64>(8),
                     "hashrate24h": r.get::<_, f64>(9) / 86400.0, "workers24h": r.get::<_, Vec<String>>(10) })
         })
         .collect())
@@ -294,7 +296,7 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
 pub async fn miner(db: &Db, id: i64) -> Result<Option<Value>> {
     let c = db.client().await?;
     let now = crate::state::now();
-    let Some(m) = c.query_opt("SELECT id, address, address_type, first_seen, last_share, balance, paid FROM miners WHERE id=$1", &[&id]).await? else {
+    let Some(m) = c.query_opt("SELECT id, address, address_type, first_seen, last_share, balance, paid, (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')) FROM miners m WHERE id=$1", &[&id]).await? else {
         return Ok(None);
     };
     let workers: Vec<Value> = c
@@ -332,7 +334,7 @@ pub async fn miner(db: &Db, id: i64) -> Result<Option<Value>> {
     let found: i64 = c.query_one("SELECT COUNT(*) FROM blocks WHERE miner_id=$1", &[&id]).await?.get(0);
     Ok(Some(json!({
         "id": m.get::<_, i64>(0), "address": m.get::<_, String>(1), "type": m.get::<_, Option<String>>(2), "firstSeen": m.get::<_, i64>(3),
-        "lastShare": m.get::<_, Option<i64>>(4), "balance": m.get::<_, i64>(5), "paid": m.get::<_, i64>(6), "blocksFound": found,
+        "lastShare": m.get::<_, Option<i64>>(4), "balance": m.get::<_, i64>(5), "paid": m.get::<_, i64>(6) - m.get::<_, i64>(7), "sending": m.get::<_, i64>(7), "blocksFound": found,
         "workers": workers, "credits": credits, "payments": payments,
     })))
 }

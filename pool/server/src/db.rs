@@ -422,7 +422,7 @@ impl Db {
     /// A miner's page; `mode` narrows hashrate, workers and the chart to PPLNS or solo shares.
     pub async fn miner(&self, address: &str, now: i64, range: ChartRange, mode: Option<&str>) -> Result<Option<Value>> {
         let c = self.client().await?;
-        let Some(m) = c.query_opt("SELECT id, balance, paid, last_share, TRIM(TRAILING '?' FROM address_type) FROM miners WHERE address=$1", &[&address]).await? else { return Ok(None) };
+        let Some(m) = c.query_opt("SELECT id, balance, paid, last_share, TRIM(TRAILING '?' FROM address_type), (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')) FROM miners m WHERE address=$1", &[&address]).await? else { return Ok(None) };
         let id: i64 = m.get(0);
         let last_share: Option<i64> = c.query_one("SELECT GREATEST($2, (SELECT MAX(ts) FROM shares WHERE miner_id=$1))", &[&id, &m.get::<_, Option<i64>>(3)]).await?.get(0);
         let hr: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/600.0 FROM shares WHERE miner_id=$1 AND ts > $2 AND ($3::TEXT IS NULL OR mode = $3)", &[&id, &(now - 600), &mode]).await?.get(0);
@@ -456,7 +456,8 @@ impl Db {
         Ok(Some(json!({
             "address": address, "addressType": m.get::<_, Option<String>>(4), "coinbase": coinbase,
             "hashrate": hr, "hashrate24h": hr24, "modes": modes,
-            "balance": m.get::<_, i64>(1), "immature": immature, "paid": m.get::<_, i64>(2), "lastShare": last_share,
+                        // paid: confirmed on the chain; sending: sent and not confirmed yet (it comes back to the balance if it fails)
+            "balance": m.get::<_, i64>(1), "immature": immature, "paid": m.get::<_, i64>(2) - m.get::<_, i64>(5), "sending": m.get::<_, i64>(5), "lastShare": last_share,
             "workers": workers.iter().map(|w| {
                 let last: i64 = w.get(3);
                 let n: i64 = w.get(4);

@@ -198,7 +198,7 @@ const BB = (() => {
   const normMiner = (m) => ({
     address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,
     modes: normModes(m.modes),
-    immature: num(m.immature) || 0, paid: num(m.paid) || 0, lastShare: num(m.lastShare),
+    immature: num(m.immature) || 0, paid: num(m.paid) || 0, sending: num(m.sending) || 0, lastShare: num(m.lastShare),
     workers: (Array.isArray(m.workers) ? m.workers : []).map(normWorker), chart: series(m.charts && m.charts.hashrate), chartPeak: peakOf(m.charts && m.charts.peak),
     payments: (Array.isArray(m.payments) ? m.payments : []).map(normPayment),
     blocksFound: num(m.blocksFound) || 0, blocks24h: num(m.blocks24h) || 0, lastBlockAt: num(m.lastBlockAt),
