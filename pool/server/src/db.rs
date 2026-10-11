@@ -46,8 +46,9 @@ impl ChartRange {
 /// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
 /// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
 /// A bucket with no row at all is zero too, so a miner that stopped reads zero up to now instead of
-/// its line ending where it left; the series ends at the pool's own latest sample (taken every
-/// minute), so a running miner's last point is never a sampler that has not come round yet.
+/// its line ending where it left. The series runs over the pool's own samples (taken every minute):
+/// from its first, so a pool younger than the range has no empty weeks before it, to its latest, so
+/// a running miner's last point is never a sampler that has not come round yet.
 async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
     let (span, bucket) = range.window();
     chart_window(c, scope, now, span, bucket).await
@@ -70,17 +71,27 @@ async fn chart_peak(c: &tokio_postgres::Client, scope: &str, now: i64, range: Ch
 
 async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i64, bucket: i64) -> Result<Vec<Value>> {
     let from = (now - span) / bucket * bucket + bucket;
+    // the pool's own samples bound the series: none before the pool first ran, none past its latest
+    let r = c.query_one("SELECT MIN(ts), MAX(ts) FROM hashrate_samples WHERE scope='pool' AND ts >= $1", &[&from]).await?;
+    let (Some(first), Some(latest)) = (r.get::<_, Option<i64>>(0), r.get::<_, Option<i64>>(1)) else { return Ok(vec![]) };
+    let start = from.max(first / bucket * bucket);
     let rows = c
         .query(
             "SELECT g.t, COALESCE(b.s / GREATEST(1, LEAST($3, $4 - g.t) / 60.0), 0)::FLOAT8
-             FROM generate_series($2::BIGINT,
-                    COALESCE((SELECT MAX(ts) FROM hashrate_samples WHERE scope='pool' AND ts >= $2), $4) / $3 * $3, $3::BIGINT) AS g(t)
+             FROM generate_series($2::BIGINT, $5::BIGINT / $3 * $3, $3::BIGINT) AS g(t)
              LEFT JOIN (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b ON b.t = g.t
              ORDER BY g.t",
-            &[&scope, &from, &bucket, &now],
+            &[&scope, &start, &bucket, &now, &latest],
         )
         .await?;
-    Ok(rows.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect())
+    let mut out: Vec<Value> = rows.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect();
+    // an hour's or four hours' bucket still open is an average that lags a change; the line ends on
+    // the latest one-minute sample, so its last point (the chart's "now") is the current hashrate
+    if bucket > 60 {
+        let cur = c.query_opt("SELECT hashrate FROM hashrate_samples WHERE scope=$1 AND ts=$2", &[&scope, &latest]).await?;
+        out.push(json!([latest, cur.map_or(0.0, |r| r.get::<_, f64>(0))]));
+    }
+    Ok(out)
 }
 
 pub struct Db {
@@ -137,8 +148,20 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS cb_height BIGINT;
 CREATE INDEX IF NOT EXISTS payments_cb_height ON payments(cb_height) WHERE cb_height IS NOT NULL;
 "#;
 
+/// PPLNS rounds, published so a miner can recompute a credit: each credit row keeps the difficulty
+/// it was given for and what it is (share, finder bonus, solo); each block keeps the window it was
+/// split over, the difficulty actually taken, and the fee and bonus in force then. NULL before v7.
+const SCHEMA_ROUNDS: &str = r#"
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS difficulty DOUBLE PRECISION;
+ALTER TABLE credits ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS round_window DOUBLE PRECISION;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS round_total DOUBLE PRECISION;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS fee_percent DOUBLE PRECISION;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS bonus_percent DOUBLE PRECISION;
+"#;
+
 /// Schema version. Older databases are migrated in `migrate`; one without a version is refused.
-pub const SCHEMA_VERSION: i32 = 6;
+pub const SCHEMA_VERSION: i32 = 7;
 
 /// Statements that bring a database from version `from` to `from + 1`.
 fn migration(from: i32) -> Option<&'static str> {
@@ -146,6 +169,7 @@ fn migration(from: i32) -> Option<&'static str> {
         2 => Some("ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0"),
         3 => Some("ALTER TABLE payments ADD COLUMN IF NOT EXISTS accepted_at BIGINT"),
         4 | 5 => Some(SCHEMA_COINBASE),
+        6 => Some(SCHEMA_ROUNDS),
         _ => None,
     }
 }
@@ -195,10 +219,10 @@ impl Db {
             None => {
                 let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares'", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
             }
-            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}")).await.context("schema")?,
+            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?,
             Some(mut v) if v < SCHEMA_VERSION => {
                 while v < SCHEMA_VERSION {
                     let Some(sql) = migration(v) else { anyhow::bail!("no migration from schema version {v}") };
@@ -207,7 +231,7 @@ impl Db {
                     c.execute("UPDATE meta SET value=$1 WHERE key='schema'", &[&v.to_string()]).await?;
                     tracing::info!(version = v, "database schema migrated");
                 }
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?;
             }
             Some(v) => anyhow::bail!("database schema version {v} is newer than this binary ({SCHEMA_VERSION})"),
         }
@@ -369,6 +393,56 @@ impl Db {
         let c = self.client().await?;
         let rows = c.query("SELECT height, mode, status FROM blocks WHERE status <> 'orphaned' ORDER BY height DESC", &[]).await?;
         Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect())
+    }
+
+    /// One block and how it was split: the block's figures and every credit row, without
+    /// addresses. `me` marks the rows of that miner. None for a height the pool did not find.
+    pub async fn round(&self, height: i64, me: Option<i64>) -> Result<Option<Value>> {
+        let c = self.client().await?;
+        let Some(b) = c
+            .query_opt(
+                "SELECT hash, ts, mode, status, reward, fees, effort, net_difficulty, round_window, round_total, fee_percent, bonus_percent
+                 FROM blocks WHERE height=$1",
+                &[&height],
+            )
+            .await?
+        else {
+            return Ok(None);
+        };
+        let rows = c
+            .query("SELECT miner_id, amount, difficulty, kind FROM credits WHERE block_height=$1 ORDER BY difficulty DESC NULLS LAST, amount DESC, id", &[&height])
+            .await?;
+        let credits: Vec<Value> = rows
+            .iter()
+            .map(|r| {
+                let mut v = json!({ "kind": r.get::<_, Option<String>>(3), "difficulty": r.get::<_, Option<f64>>(2), "amount": r.get::<_, i64>(1) });
+                if me == Some(r.get::<_, i64>(0)) {
+                    v["you"] = json!(true);
+                }
+                v
+            })
+            .collect();
+        let reward: i64 = b.get(4);
+        let fee: Option<f64> = b.get(10);
+        let bonus_pct: Option<f64> = b.get(11);
+        let mode: String = b.get(2);
+        // the same arithmetic as accounting::pplns_split, so a reader can check it against these
+        let (pot, bonus) = match (mode.as_str(), fee, bonus_pct) {
+            ("pplns", Some(f), Some(bp)) => {
+                let pot = reward as f64 * (1.0 - f / 100.0);
+                let bonus = (pot * bp / 100.0).floor();
+                (Some(pot), Some(bonus as i64))
+            }
+            _ => (None, None),
+        };
+        Ok(Some(json!({
+            "height": height, "hash": b.get::<_, Option<String>>(0), "ts": b.get::<_, i64>(1), "mode": mode,
+            "status": b.get::<_, String>(3), "reward": reward, "fees": b.get::<_, i64>(5), "effort": b.get::<_, Option<f64>>(6),
+            "netDifficulty": b.get::<_, f64>(7), "recorded": b.get::<_, Option<f64>>(9).is_some() || (mode == "solo" && fee.is_some()),
+            "feePercent": fee, "finderBonusPercent": bonus_pct, "window": b.get::<_, Option<f64>>(8), "total": b.get::<_, Option<f64>>(9),
+            "pot": pot, "finderBonus": bonus, "shared": pot.zip(bonus).map(|(p, b)| p - b as f64),
+            "credits": credits,
+        })))
     }
 
     /// Blocks still waiting for maturity or an operator's verdict, over all blocks, not a page.
