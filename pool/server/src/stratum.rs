@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
-use tokio_util::codec::{FramedRead, LinesCodec};
+use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 
 /// Longest line a miner may send; a login or solution is well under 1 KB.
 pub const MAX_LINE: usize = 8192;
@@ -81,12 +81,18 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
             let r = match tls {
                 Some(acceptor) => match tokio::time::timeout(Duration::from_secs(15), acceptor.accept(sock)).await {
                     Ok(Ok(stream)) => connection(shared.clone(), stream, mode, &mut s, kick).await,
+                    // a first byte that is not a TLS record: plain stratum (or a scanner) on a TLS port
+                    Ok(Err(e)) if e.to_string().contains("InvalidContentType") => Err(anyhow::anyhow!("not TLS: plain text on a TLS port, or a scanner")),
                     Ok(Err(e)) => Err(anyhow::anyhow!("tls: {e}")),
                     Err(_) => Err(anyhow::anyhow!("tls handshake timeout")),
                 },
                 None => connection(shared.clone(), sock, mode, &mut s, kick).await,
             };
-            let reason = match &r { Ok(()) => "closed by the miner".to_string(), Err(e) => format!("{e:#}") };
+            let reason = match &r {
+                Ok(()) if s.miner.is_empty() => "closed by the other side".to_string(),
+                Ok(()) => "closed by the miner".to_string(),
+                Err(e) => format!("{e:#}"),
+            };
             shared.conns.close(s.id, &s.first, &reason);
             if s.miner.is_empty() {
                 // scanners and failed handshakes: only with RUST_LOG=debug
@@ -235,8 +241,20 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     loop {
         tokio::select! {
             line = tokio::time::timeout(idle, lines.next()) => {
-                let Some(line) = line.map_err(|_| anyhow::anyhow!("idle"))? else { return Ok(()) };
-                let line = line.map_err(|e| anyhow::anyhow!("line: {e}"))?; // over MAX_LINE closes the connection
+                let Some(line) = line.map_err(|_| anyhow::anyhow!("silent for {} min", idle.as_secs() / 60))? else { return Ok(()) };
+                let line = match line {
+                    Ok(l) => l,
+                    // binary where text lines are due: most often a TLS handshake on a plain port
+                    Err(LinesCodecError::Io(e)) if e.kind() == std::io::ErrorKind::InvalidData => {
+                        if sess.first.is_empty() {
+                            sess.first = "binary data, not text".into();
+                        }
+                        anyhow::bail!("not text: TLS on a plain port, or a scanner")
+                    }
+                    Err(LinesCodecError::Io(e)) if e.kind() == std::io::ErrorKind::ConnectionReset => anyhow::bail!("reset by the other side"),
+                    Err(LinesCodecError::Io(e)) => anyhow::bail!("read: {e}"),
+                    Err(LinesCodecError::MaxLineLengthExceeded) => anyhow::bail!("a line over {} KB", MAX_LINE / 1024),
+                };
                 if line.trim().is_empty() { continue; }
                 let msg: Value = match serde_json::from_str(&line) {
                     Ok(v) => v,
@@ -244,7 +262,9 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         if address.is_empty() {
                             info!(peer = %sess.peer, line = %line.chars().take(120).collect::<String>(), "not JSON before login");
                             if sess.first.is_empty() {
-                                sess.first = format!("not JSON: {}", line.chars().take(60).collect::<String>());
+                                // control bytes shown as \xNN, so a binary probe reads as one and not as blank space
+                                let shown: String = line.chars().take(60).map(|c| if c.is_control() { format!("\\x{:02x}", c as u32) } else { c.to_string() }).collect();
+                                sess.first = format!("not JSON: {shown}");
                             }
                         }
                         send(&mut wr, result(&json!(""), -32000, "message corrupted")).await?;
