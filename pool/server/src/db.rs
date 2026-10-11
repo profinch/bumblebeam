@@ -42,13 +42,12 @@ impl ChartRange {
 }
 
 /// Hashrate chart for one scope (`pool`, a mode `pplns` or `solo`, `m:<miner id>`, or
-/// `m:<miner id>:<mode>`), averaged per bucket. Samples are taken
-/// once a minute and a miner without shares gets no row, so a bucket's sum is divided by the
-/// minutes it covers (the last one only up to now), which counts the missing minutes as zero.
-/// A bucket with no row at all is zero too, so a miner that stopped reads zero up to now instead of
-/// its line ending where it left. The series runs over the pool's own samples (taken every minute):
-/// from its first, so a pool younger than the range has no empty weeks before it, to its latest, so
-/// a running miner's last point is never a sampler that has not come round yet.
+/// `m:<miner id>:<mode>`), averaged per bucket. The pool samples every minute it runs, and a miner
+/// without shares gets no row, so a bucket's sum is divided by the pool's samples in it: a minute
+/// the pool sampled and the miner did not counts as zero (a miner that stopped reads zero up to
+/// now), and a minute the pool was down counts as nothing. Buckets are the ones the pool sampled,
+/// so a pool younger than the range has no empty weeks before it, and a running miner's last point
+/// is never a sampler that has not come round yet.
 async fn chart(c: &tokio_postgres::Client, scope: &str, now: i64, range: ChartRange) -> Result<Vec<Value>> {
     let (span, bucket) = range.window();
     chart_window(c, scope, now, span, bucket).await
@@ -71,25 +70,27 @@ async fn chart_peak(c: &tokio_postgres::Client, scope: &str, now: i64, range: Ch
 
 async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i64, bucket: i64) -> Result<Vec<Value>> {
     let from = (now - span) / bucket * bucket + bucket;
-    // the pool's own samples bound the series: none before the pool first ran, none past its latest
-    let r = c.query_one("SELECT MIN(ts), MAX(ts) FROM hashrate_samples WHERE scope='pool' AND ts >= $1", &[&from]).await?;
-    let (Some(first), Some(latest)) = (r.get::<_, Option<i64>>(0), r.get::<_, Option<i64>>(1)) else { return Ok(vec![]) };
-    let start = from.max(first / bucket * bucket);
     let rows = c
         .query(
-            "SELECT g.t, COALESCE(b.s / GREATEST(1, LEAST($3, $4 - g.t) / 60.0), 0)::FLOAT8
-             FROM generate_series($2::BIGINT, $5::BIGINT / $3 * $3, $3::BIGINT) AS g(t)
-             LEFT JOIN (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b ON b.t = g.t
-             ORDER BY g.t",
-            &[&scope, &start, &bucket, &now, &latest],
+            "SELECT p.t, (COALESCE(b.s, 0) / p.n)::FLOAT8
+             FROM (SELECT ts / $3 * $3 AS t, COUNT(*) AS n FROM hashrate_samples WHERE scope='pool' AND ts >= $2 GROUP BY 1) p
+             LEFT JOIN (SELECT ts / $3 * $3 AS t, SUM(hashrate) AS s FROM hashrate_samples WHERE scope=$1 AND ts >= $2 GROUP BY 1) b ON b.t = p.t
+             ORDER BY p.t",
+            &[&scope, &from, &bucket],
         )
         .await?;
     let mut out: Vec<Value> = rows.iter().map(|r| json!([r.get::<_, i64>(0), r.get::<_, f64>(1)])).collect();
     // an hour's or four hours' bucket still open is an average that lags a change; the line ends on
     // the latest one-minute sample, so its last point (the chart's "now") is the current hashrate
-    if bucket > 60 {
-        let cur = c.query_opt("SELECT hashrate FROM hashrate_samples WHERE scope=$1 AND ts=$2", &[&scope, &latest]).await?;
-        out.push(json!([latest, cur.map_or(0.0, |r| r.get::<_, f64>(0))]));
+    if bucket > 60 && !out.is_empty() {
+        let cur = c
+            .query_one(
+                "SELECT l.ts, COALESCE((SELECT hashrate FROM hashrate_samples WHERE scope=$1 AND ts=l.ts), 0)::FLOAT8
+                 FROM (SELECT MAX(ts) AS ts FROM hashrate_samples WHERE scope='pool' AND ts >= $2) l",
+                &[&scope, &from],
+            )
+            .await?;
+        out.push(json!([cur.get::<_, i64>(0), cur.get::<_, f64>(1)]));
     }
     Ok(out)
 }
