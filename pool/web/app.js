@@ -283,15 +283,17 @@
     },
   };
 
-  // ---------- chart range (24h / 7d / 30d) and pool mode (PPLNS / Solo) ----------
+  // ---------- chart range (24h / 7d / 30d) and pool mode (all / PPLNS / Solo) ----------
   const RANGE_KEY = 'bb.chartRange';
   function chartRange() {
     const r = prefs.get(RANGE_KEY);
     return RANGES[r] ? r : '24h';
   }
-  const MODES = { pplns: 'Pool', solo: 'Solo' };
+  // all by default, as the hashrate tile and the explorer count the pool; Pool is PPLNS, as on a miner's page
+  const MODES = { all: 'All', pplns: 'Pool', solo: 'Solo' };
   const MODE_KEY = 'bb.chartMode';
-  const chartMode = () => (prefs.get(MODE_KEY) === 'solo' ? 'solo' : 'pplns');
+  const MODE_TITLES = { all: 'Pool hashrate', pplns: 'PPLNS hashrate', solo: 'Solo hashrate' };
+  const chartMode = () => (MODES[prefs.get(MODE_KEY)] ? prefs.get(MODE_KEY) : 'all');
   const modeSwitch = (cur, attr = 'data-chart-mode', label = 'Chart mode', modes = MODES) => `<div class="seg range" role="group" aria-label="${label}">${Object.keys(modes).map((k) =>
     `<button type="button" ${attr}="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${modes[k]}</button>`).join('')}</div>`;
   const rangeSwitch = (cur) => `<div class="seg range" role="group" aria-label="Chart range">${Object.keys(RANGES).map((k) =>
@@ -302,7 +304,7 @@
 
   views.dashboard = async () => {
     const range = chartRange(), cmode = chartMode();
-    const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}&mode=${cmode}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
+    const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}${cmode === 'all' ? '' : `&mode=${cmode}`}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
     const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
     const expectedPerDay = share != null ? share * 1440 : null;
     return `
@@ -316,8 +318,8 @@
         ${tile('Min payout', beam(stats.minPayout, 2), `every ${dur(stats.payoutInterval)}, after ${int(stats.maturity)} confirmations`)}
       </div>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">${cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate'}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
-        ${areaChart(stats.chart, { title: cmode === 'solo' ? 'Solo hashrate' : 'Pool hashrate', range, peak: true, peakAt: stats.chartPeak })}
+        <div class="panel-head"><h2 class="panel-title">${MODE_TITLES[cmode]}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
+        ${areaChart(stats.chart, { title: MODE_TITLES[cmode], range, peak: true, peakAt: stats.chartPeak })}
       </section>
       <section class="panel">
         <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="/blocks">all blocks →</a></div></div>
