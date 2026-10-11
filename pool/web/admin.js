@@ -475,9 +475,9 @@
       <div class="page-head"><h1 class="page-title">Connections</h1><div class="actions"><span class="dim mono">refreshes every 10 s</span></div></div>
       ${flashHtml()}
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Live</h2><span class="panel-meta"><b>${int(c.live.length)}</b> open</span></div>${live}</section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Ended before a login</h2><span class="panel-meta">since the pool started, newest first</span></div>
-        <p class="hint">Rental services' checkers, TLS on a plain port or the other way round, wrong addresses, port scanners.
-        "nothing" with no error is a plain port probe.</p>${recent}</section>`;
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Ended before a login</h2><span class="panel-meta">the last ${int(c.recent.length)} since the pool started, newest first</span></div>
+        <p class="hint">Rental services' checkers, TLS on a plain port or the other way round, wrong addresses, port and web scanners.
+        "nothing", closed or reset by the other side, is a plain port probe; "binary data" is TLS on a plain port or a scanner's probe.</p>${recent}</section>`;
     bindKick();
   }
 
