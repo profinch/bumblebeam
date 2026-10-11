@@ -260,10 +260,12 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                     Ok(v) => v,
                     Err(_) => {
                         if address.is_empty() {
-                            info!(peer = %sess.peer, line = %line.chars().take(120).collect::<String>(), "not JSON before login");
+                            // only the first line: an HTTP request's later lines are headers, and one may
+                            // carry a credential meant for somewhere else
                             if sess.first.is_empty() {
                                 // control bytes shown as \xNN, so a binary probe reads as one and not as blank space
                                 let shown: String = line.chars().take(60).map(|c| if c.is_control() { format!("\\x{:02x}", c as u32) } else { c.to_string() }).collect();
+                                info!(peer = %sess.peer, line = %shown, "not JSON before login");
                                 sess.first = format!("not JSON: {shown}");
                             }
                         }
