@@ -98,8 +98,10 @@
       const t = t0 + ((t1 - t0) / xTicks) * i, xx = x(t).toFixed(1);
       const d = new Date(t * 1000);
       if (i > 0 && i < xTicks) grid += `<line class="grid" x1="${xx}" x2="${xx}" y1="${T}" y2="${H - B}"/>`;
-      const when = range === '24h' ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-        : `${MONTHS[d.getMonth()]} ${d.getDate()}${range === '7d' ? ` ${String(d.getHours()).padStart(2, '0')}:00` : ''}`;
+      // the format follows the time the line covers, not the range picked: a pool younger than the
+      // month has ticks less than a day apart, and dates alone would repeat
+      const when = t1 - t0 <= 36 * 3600 ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        : `${MONTHS[d.getMonth()]} ${d.getDate()}${(t1 - t0) / xTicks < 2 * 86400 ? ` ${String(d.getHours()).padStart(2, '0')}:00` : ''}`;
       grid += `<text x="${xx}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === xTicks ? 'end' : 'middle'}">${when}</text>`;
     }
     const ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
@@ -200,7 +202,7 @@
         <td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
         <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
         <td class="num" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
-        <td class="dim">${esc(b.finder || '—')}</td><td class="num">${beamAmt(b.reward + b.fees, 3)}</td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
+        <td class="dim">${esc(b.finder || '—')}</td><td class="num"><a href="/blocks/${Math.round(b.height)}" title="How this block was split">${beamAmt(b.reward + b.fees, 3)}</a></td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
@@ -357,7 +359,64 @@
       ${recent}`;
   };
 
-  views.blocks = async () => {
+  // One block and how its reward was split, recomputed here from what the API publishes:
+  // each share row is floor(shared x difficulty / total), shared = reward x (1 - fee) - finder bonus.
+  async function roundView(arg) {
+    const height = Number(arg);
+    if (!Number.isInteger(height) || height <= 0) return views.notfound();
+    const me = myAddress();
+    let rd;
+    try {
+      rd = await BB.pool(`blocks/${height}${me ? `?address=${encodeURIComponent(me)}` : ''}`);
+    } catch (e) {
+      if (!/^404/.test(e.message)) throw e;
+      return `<div class="page-head"><h1 class="page-title">Block ${int(height)}</h1></div>
+        <section class="panel"><div class="empty">The pool did not find a block at this height. <a href="${explorerBlock(height)}" target="_blank" rel="noopener">Open it in the explorer</a></div></section>`;
+    }
+    const credits = rd.credits || [];
+    const shares = credits.filter((c) => c.kind === 'share');
+    const paid = credits.reduce((s, c) => s + c.amount, 0);
+    const mine = credits.filter((c) => c.you).reduce((s, c) => s + c.amount, 0);
+    const recompute = (c) => Math.floor(rd.shared * c.difficulty / rd.total);
+    const bad = shares.filter((c) => recompute(c) !== c.amount);
+    const head = `<div class="page-head"><h1 class="page-title">Block ${int(height)}</h1></div>
+      <div class="tiles">
+        ${tile('Mode', modeBadge(rd.mode), `${roundStatus(rd.status)} · <a href="${explorerBlock(height)}" target="_blank" rel="noopener">explorer</a>`)}
+        ${tile('Reward', beamAmt(rd.reward, 4), rd.fees ? `+ ${beam(rd.fees, 4)} fees, kept by the pool` : 'fees kept by the pool')}
+        ${tile('Effort', pct(rd.effort, 0), 'shares spent / expected')}
+        ${tile('Paid to miners', beamAmt(paid, 4), me && mine ? `you: ${beam(mine, 4)}` : `${int(credits.length)} credit${credits.length === 1 ? '' : 's'}`)}
+      </div>`;
+    if (!rd.recorded) {
+      return head + `<section class="panel"><div class="note warn">This block was credited before the pool published rounds (2026-10-11): its credits are listed, the window they were split over was not kept.</div>
+        ${roundTable(credits, null)}</section>`;
+    }
+    if (rd.mode === 'solo') {
+      return head + `<section class="panel"><div class="panel-head"><h2 class="panel-title">Solo block</h2></div>
+        <p class="hint">The whole reward minus the ${pctFee(rd.feePercent)} solo fee goes to the rig that found it: ${beam(rd.reward, 4)} × ${fix(1 - rd.feePercent / 100, 4)} = ${beam(Math.floor(rd.reward * (1 - rd.feePercent / 100)), 8)}.</p>
+        ${roundTable(credits, null)}</section>`;
+    }
+    return head + `<section class="panel">
+      <div class="panel-head"><h2 class="panel-title">PPLNS round</h2><div class="panel-meta"><span>Window: <b>${bigNum(rd.window)}</b></span><span>Taken: <b>${bigNum(rd.total)}</b></span><span>Miners: <b>${int(shares.length)}</b></span></div></div>
+      <p class="hint">The last ${fix(rd.window / rd.netDifficulty, 1)} × network difficulty of shares before the block. Taken is the difficulty actually split: a little over the window, since the share that crosses the line counts whole, or under it when the pool had not yet mined a full window.
+        Pot = ${beam(rd.reward, 4)} × (1 − ${pctFee(rd.feePercent)} fee) = ${beam(rd.pot, 8)}; finder bonus ${pctFee(rd.finderBonusPercent)} of it = ${beam(rd.finderBonus, 8)};
+        each miner gets floor((pot − bonus) × difficulty ÷ taken).</p>
+      <div class="note ${bad.length ? 'warn' : 'ok'}">${bad.length ? `${int(bad.length)} of ${int(shares.length)} rows do not recompute: please report it.` : `Recomputed in your browser from the figures above: all ${int(shares.length)} share rows match.`}</div>
+      ${roundTable(credits, rd)}</section>`;
+  }
+  const bigNum = (n) => (n >= 1e6 ? `${fix(n / 1e6, 2)}M` : int(n));
+  const roundStatus = (st) => st === 'confirmed' ? '<span class="badge ok">confirmed</span>'
+    : st === 'orphaned' ? '<span class="badge bad">orphaned</span>' : `<span class="badge pending">${esc(st)}</span>`;
+  function roundTable(credits, rd) {
+    if (!credits.length) return '<div class="empty">No credits</div>';
+    const kind = (c) => (c.kind === 'bonus' ? 'finder bonus' : c.kind === 'solo' ? 'solo' : c.kind === 'share' ? 'shares' : '—');
+    return `<div class="table-wrap"><table><thead><tr><th>#</th><th>For</th><th class="num">Difficulty</th><th class="num">Of the window</th><th class="num">Amount</th></tr></thead><tbody>
+      ${credits.map((c, i) => `<tr${c.you ? ' class="you"' : ''}><td class="dim">${i + 1}</td><td>${kind(c)}${c.you ? ' <span class="badge ok">you</span>' : ''}</td>
+        <td class="num">${c.difficulty != null ? int(c.difficulty) : '—'}</td><td class="num dim">${rd && c.difficulty != null ? pct(c.difficulty / rd.total, 2) : '—'}</td>
+        <td class="num">${beamAmt(c.amount, 8)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  views.blocks = async (arg) => {
+    if (arg) return roundView(arg);
     // the latest 500 blocks, so the filters and sorting see them all
     const [{ blocks }, stats] = await Promise.all([BB.pool('blocks?limit=500'), BB.pool('stats')]);
     blSet(allBlocks, 'pool', blocks, stats.maturity);
