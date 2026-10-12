@@ -64,7 +64,7 @@
   // also marks the highest point of the period.
   // `peakAt`: the range's true peak, [ts, value] of one-minute samples. The week's and the month's
   // points are hourly averages that flatten a short peak, so it goes into the line at its moment.
-  function areaChart(series, { color = '#0bccf7', label = axis, title = 'Hashrate', range = '24h', peak = false, peakAt = null } = {}) {
+  function areaChart(series, { color = '#00f6d2', label = axis, title = 'Hashrate', range = '24h', peak = false, peakAt = null } = {}) {
     const span = RANGES[range] || RANGES['24h'];
     if (peak && peakAt && series && series.length >= 2 && peakAt[1] > Math.max(...series.map((p) => p[1]))) {
       // inside the line: a peak in the last, still open interval sits just before its point, which
@@ -116,14 +116,14 @@
       <text class="peak-text" x="${(W - R + 4 + slot + 8).toFixed(1)}" y="${ty.toFixed(1)}" dominant-baseline="central">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
-      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.45"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
       ${grid}
       <line class="grid" x1="${W - R}" x2="${W - R}" y1="${T}" y2="${H - B}"/>
       <path d="M${line} L${x(t1).toFixed(1)},${y(0)} L${x(t0).toFixed(1)},${y(0)} Z" fill="url(#${id})"/>
       <path d="M${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
       <line class="now" x1="${L}" x2="${W - R}" y1="${y(last).toFixed(1)}" y2="${y(last).toFixed(1)}" vector-effect="non-scaling-stroke"/>
       ${peakMark}
-      <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="#00f6d2"/>
+      <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="${color}"/>
       <text class="pill-text" x="${W - R + 4 + pw / 2}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${esc(pillText)}</text>
     </svg>`;
   }
