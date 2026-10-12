@@ -11,3 +11,4 @@ pool/server/pool.toml
 /tools/coinbase/coinbase_test
 /tools/coinbase/bb-finalizer
 /tools/coinbase/bb-coinbase
+/deploy/docker/containers/nginx/conf/private/
