@@ -5,6 +5,11 @@
 //! chain does not know: the Beam Terminal's list, which keeps their blocks of the day, with each
 //! pool's own API laid over it where it has one, for hashrate, miners, workers and the last block
 //! as the pool reports them now. A pool whose API does not answer keeps the terminal's numbers.
+//!
+//! The network's hashrate is the pools' current figures, which they measure from thousands of
+//! shares, over the part of the network they cover: what the rest (solo nodes, pools with no API)
+//! mines can only be seen in its blocks, so its part is its share of the day's blocks. The chain's
+//! own estimate, from 24 h of blocks, is `chainHashrate`; an hour of blocks is ±13% on luck alone.
 
 use crate::config::ORACLE2;
 use crate::state::Shared;
@@ -45,17 +50,24 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
             Ok(p) => pools = Some(p),
             Err(e) => debug!("pools: {e:#}"),
         }
-        let direct = fetch_direct(&shared.http).await;
+        let mut direct = fetch_direct(&shared.http).await;
+        if let Some(ours) = ours(&shared).await {
+            direct.push(ours);
+        }
         if chain.is_some() || pools.is_some() || !direct.is_empty() {
             let mut t = pools.clone().unwrap_or(json!({}));
             overlay(&mut t, direct);
             let c = chain.clone().unwrap_or(json!({}));
             // the chain's numbers from the node; the terminal's only while the node has none
             let pick = |k: &str| if c[k].is_null() { t[k].clone() } else { c[k].clone() };
+            let list = t["pools"].as_array().cloned().unwrap_or_default();
+            let (blocks24h, chain_hr) = (pick("blocks24h"), pick("hashrate24h"));
+            let (hashrate, others) = network(&list, blocks24h.as_f64(), chain_hr.as_f64().or(pick("hashrate").as_f64()));
             let v = json!({
-                "hashrate": pick("hashrate"), "height": pick("height"), "blocks24h": pick("blocks24h"),
+                "hashrate": hashrate, "chainHashrate": chain_hr, "height": pick("height"), "blocks24h": blocks24h,
                 "difficulty": c["difficulty"], "avgBlock": c["avgBlock"], "priceUsd": price,
-                "pools": t["pools"].as_array().cloned().unwrap_or_default(),
+                "othersHashrate": others.map(|o| o.0), "othersBlocks24h": others.map(|o| o.1),
+                "pools": list,
             });
             if let Some(h) = v["height"].as_u64() {
                 shared.net_height.store(h, Ordering::Relaxed);
@@ -64,6 +76,42 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
         }
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
+}
+
+/// The network's current hashrate and the part no listed pool claims, (hashrate, blocks of the day):
+/// the pools' sum over 1 - the others' share of the day's blocks. Without every active pool's blocks
+/// the chain's estimate stands and the others are what the pools leave of it.
+fn network(pools: &[Value], blocks24h: Option<f64>, chain: Option<f64>) -> (Option<f64>, Option<(f64, f64)>) {
+    let sum: f64 = pools.iter().filter_map(|p| num(&p["hashrate"])).sum();
+    let known = pools.iter().all(|p| num(&p["hashrate"]).unwrap_or(0.0) == 0.0 || num(&p["blocks24h"]).is_some());
+    let claimed: f64 = pools.iter().filter_map(|p| num(&p["blocks24h"])).sum();
+    match blocks24h.filter(|b| *b > 0.0 && known && sum > 0.0) {
+        Some(b) => {
+            let rest = (b - claimed).max(0.0);
+            let f = rest / b;
+            if f < 0.9 {
+                let total = sum / (1.0 - f);
+                return (Some(total), Some((total * f, rest)));
+            }
+            (chain, chain.map(|c| ((c - sum).max(0.0), rest)))
+        }
+        None => (chain, chain.map(|c| ((c - sum).max(0.0), blocks24h.map_or(0.0, |b| (b - claimed).max(0.0))))),
+    }
+}
+
+/// BumbleBeam's own row from its own shares and blocks, the last 10 min as on /api/stats.
+async fn ours(shared: &Shared) -> Option<Value> {
+    let t = chrono::Utc::now().timestamp();
+    let db = &shared.db;
+    let r = async {
+        let (miners, workers) = db.pool_counts(t).await?;
+        anyhow::Ok(json!({
+            "id": "bumblebeam", "name": "BumbleBeam", "website": "https://pool.bumblebeam.org", "scheme": "PPLNS / SOLO",
+            "fee": shared.cfg.pool.fee_percent, "hashrate": db.pool_hashrate(t).await?, "miners": miners, "workers": workers,
+            "blocks24h": db.blocks_24h(t).await?.0, "lastTs": db.last_block_ts(None, None).await?,
+        }))
+    }.await;
+    r.map_err(|e| debug!("ours: {e:#}")).ok()
 }
 
 /// The first of `urls` that answers, or the last error.
@@ -112,8 +160,13 @@ async fn fetch_chain(http: &reqwest::Client, base: String) -> anyhow::Result<Val
     let (height, newest, difficulty) = rows[0];
     let avg_block = (newest - rows[AVG_HEADERS].1) / AVG_HEADERS as f64;
     let avg_diff = rows[..AVG_HEADERS].iter().map(|r| r.2).sum::<f64>() / AVG_HEADERS as f64;
-    let blocks24h = rows.iter().filter(|r| r.1 > newest - 86400.0).count();
+    let day: Vec<_> = rows.iter().filter(|r| r.1 > newest - 86400.0).collect();
+    let blocks24h = day.len();
+    // the day's work over the day's time: the oldest block's own time is that of the one before it
+    let span = day.last().map(|r| newest - r.1).unwrap_or(0.0);
+    let hashrate24h = (span > 0.0).then(|| day[..day.len() - 1].iter().map(|r| r.2).sum::<f64>() / span);
     Ok(json!({
+        "hashrate24h": hashrate24h,
         "height": height as u64, "difficulty": difficulty, "avgBlock": avg_block,
         "hashrate": if avg_block > 0.0 { Some(avg_diff / avg_block) } else { None }, "blocks24h": blocks24h,
     }))

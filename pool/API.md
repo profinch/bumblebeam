@@ -165,23 +165,32 @@ while the pool has no block template, for example while the node syncs.
 ## `GET /api/network`
 
 The network as the pool page shows it, cached by the pool server for 30 seconds for all visitors.
-`height`, `difficulty`, `avgBlock` (seconds, over the last 60 blocks), `hashrate` (difficulty over
-block time, Sol/s) and `blocks24h` come from an explorer-node, the pool's own first
-(`pool.explorer_urls`); `priceUsd` is BEAM's price in USD, the median of Beam's on-chain price
-oracle (Oracle2) from the same node, refreshed every 5 minutes. `pools`, which the chain does not
-know: each pool's own API where it has a public one (2Miners, 2Miners Solo, HeroMiners, SunPool) for
-`hashrate`, `miners`, `workers` and `lastTs`, the Beam Terminal's list for the rest and for every
-pool's `blocks24h` (SunPool reports its own) and `series`. HeroMiners' row counts its solo miners too, as ours does. Each part
-keeps its last good value while its source is down; a pool whose API does not answer shows the
-terminal's numbers. The network's `hashrate` less the pools' is the miners no pool lists (the site's
-`Others` row). The UI falls back to the explorer directly when this endpoint
-is absent.
+`height`, `difficulty`, `avgBlock` (seconds, over the last 60 blocks) and `blocks24h` come from an
+explorer-node, the pool's own first (`pool.explorer_urls`); `priceUsd` is BEAM's price in USD, the
+median of Beam's on-chain price oracle (Oracle2) from the same node, refreshed every 5 minutes.
+
+`pools`, which the chain does not know: each pool's own API where it has a public one (2Miners,
+2Miners Solo, HeroMiners, SunPool) for `hashrate`, `miners`, `workers` and `lastTs`, BumbleBeam
+from its own shares and blocks, the Beam Terminal's list for the rest and for the other pools'
+`blocks24h` (SunPool reports its own) and `series`. HeroMiners' row counts its solo miners too, as
+ours does. Each part keeps its last good value while its source is down; a pool whose API does not
+answer shows the terminal's numbers.
+
+`hashrate` is the network now, in Sol/s: the pools' current figures, which they measure from
+thousands of shares, over the part of the network they cover. The rest, `othersHashrate` and
+`othersBlocks24h` (solo nodes, pools with no API), can only be seen in its blocks, so its part is
+its share of the 24 h of blocks: `hashrate` = sum of `pools` / (1 - `othersBlocks24h` / `blocks24h`).
+`chainHashrate` is the chain's own estimate, the difficulty of the last 24 h of blocks over their
+time; `hashrate` falls back to it while an active pool's blocks are unknown. An hour of blocks is
+±13% on luck alone, too few for a current figure. The UI falls back to the explorer directly when
+this endpoint is absent.
 
 ```json
-{ "hashrate": 49160.2, "height": 4068807, "difficulty": 2800123.0, "avgBlock": 57.0, "blocks24h": 1405, "priceUsd": 0.01,
+{ "hashrate": 61920.4, "chainHashrate": 53480.1, "othersHashrate": 10860.2, "othersBlocks24h": 243,
+  "height": 4077447, "difficulty": 3210000.0, "avgBlock": 74.8, "blocks24h": 1382, "priceUsd": 0.0098,
   "pools": [{ "id": "2miners", "name": "2Miners", "website": "https://beam.2miners.com", "scheme": "PPLNS",
-              "fee": 1, "hashrate": 35540.0, "miners": 95, "workers": 306, "blocks24h": 1048,
-              "lastTs": 1791327800, "series": [[1791300000, 45031.5]] }] }
+              "fee": 1, "hashrate": 31460.0, "miners": 88, "workers": 282, "blocks24h": 838,
+              "lastTs": 1791845143, "series": [[1791840000, 31500.5]] }] }
 ```
 
 ## `GET /api/miningboard`
