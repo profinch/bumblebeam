@@ -1,22 +1,35 @@
-# BumbleBeam Miner for Mac: changes
+# BumbleBeam Miner: changes
 
-## 0.3.3 (2026-10-13)
+BumbleBeam Miner is the console miner `bumblebeam-miner` (Linux, Windows, macOS; the CPU) and the
+Mac app BumbleBeam Miner.app (the menu bar; MXBM on the GPU or this miner on the CPU), released
+together under one version with tags `miner-vX.Y.Z`. Before 0.4.0 the app had its own versions,
+kept below as "Mac app".
+
+## 0.4.0 (2026-10-13)
+
+- One product, one version: the console miner and the Mac app come in the same release.
+- Console miner: a macOS Intel (x86_64) build; the macOS builds run on macOS 12 and later;
+  archives are named `bumblebeam-miner-<version>-<os>-<arch>`.
+- Mac app: lives in `miner/mac/`; installs are `BumbleBeam-Miner-<version>-macOS-AppleSilicon.dmg`
+  and `-macOS-Intel.dmg`; the app itself is as in Mac app 0.3.3.
+
+## Mac app 0.3.3 (2026-10-13)
 
 - Links keep the ordinary arrow cursor: the pointing hand landed off target inside the popover.
 - Build copies of the app are kept out of Spotlight and Launchpad, so only the installed app shows.
 
-## 0.3.2 (2026-10-13)
+## Mac app 0.3.2 (2026-10-13)
 
 - Link cursor set the SwiftUI way (did not hold inside the popover; dropped in 0.3.3).
 
-## 0.3.1 (2026-10-13)
+## Mac app 0.3.1 (2026-10-13)
 
 - Links are plain buttons that open the browser.
 - The MXBM line at the bottom of Settings is split in two: "GPU mining runs MXBM by maxnflaxl"
   and "MXBM dev fee: 1%, 36 sec per hour".
 - Shorter caption under "Share average speed".
 
-## 0.3.0 (2026-10-13)
+## Mac app 0.3.0 (2026-10-13)
 
 - Runs on macOS 12 and later. Two installs: Apple Silicon and Intel.
 - mxbm is built with OpenSSL linked in and its Metal kernels for Metal 2.4, so it needs no
@@ -33,7 +46,7 @@
   Ctrl-C stop the miner before the app exits.
 - No speeds of one particular Mac built into the app.
 
-## 0.2.0 (2026-10-12)
+## Mac app 0.2.0 (2026-10-12)
 
 - The logo moves as on the pool site: the bee bobs, its wings flutter, the trail streams, the
   eye blinks.
@@ -47,7 +60,7 @@
 - Shares and speed reach the window as the miner reports them (the miner writes to a
   pseudo-terminal, not a block-buffered pipe).
 
-## 0.1.0 (2026-10-12)
+## Mac app 0.1.0 (2026-10-12)
 
 - First build: a menu bar app for pool.bumblebeam.org.
 - GPU mining with MXBM on Metal, CPU mining with bumblebeam-miner.
@@ -56,3 +69,11 @@
   10.5 sol/s at 19.6 W at 100%, 0.9 sol/s at 3.7 W at 10%. For the CPU it picks the threads.
 - First-run setup, the balance from the pool's API, keep-awake while mining, menu bar icon
   with play, pause and no-connection badges.
+
+## 0.1.0 (2026-10-07)
+
+- The console miner: BeamHash III on the CPU with bucketed rounds, about a hundred times faster
+  than the Beam core's reference solver, every solution checked by the oracle before it is sent.
+- Beam stratum to any pool, TLS by default; `bench` and `check` commands; refuses to start without
+  about 7 GB of free memory rather than dying mid-run.
+- Builds for Linux x86-64, macOS (Apple Silicon) and Windows x86-64.

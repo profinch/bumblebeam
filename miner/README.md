@@ -1,4 +1,7 @@
-# bumblebeam-miner
+# BumbleBeam Miner
+
+The console miner `bumblebeam-miner` (this directory) and the Mac app BumbleBeam Miner.app
+([`mac/`](mac)), released together under one version; changes in [CHANGELOG.md](CHANGELOG.md).
 
 BeamHash III on the CPU: a miner whose solver finds every solution the Beam core's reference finds, about
 a hundred times faster than that reference, and a miner that speaks Beam's stratum to any pool.
@@ -12,8 +15,11 @@ without a GPU, and a load generator for the pool. GPU mining belongs to
 
 ## Download and run
 
-Archives for Linux x86-64, macOS (Apple Silicon) and Windows x86-64 are on the
-[releases page](https://github.com/profinch/bumblebeam/releases). Unpack, then:
+The [latest release](https://github.com/profinch/bumblebeam/releases/latest) has the console miner
+for Linux x86-64, Windows x86-64 and macOS (Apple Silicon and Intel, macOS 12+) as
+`bumblebeam-miner-<version>-<os>-<arch>` archives, and the Mac app as
+`BumbleBeam-Miner-<version>-macOS-AppleSilicon.dmg` and `-macOS-Intel.dmg` (see [`mac/`](mac)).
+Unpack the console miner, then:
 
 ```sh
 ./bumblebeam-miner mine --pool <pool host>:3443 --user <your Beam address>.<worker name>
