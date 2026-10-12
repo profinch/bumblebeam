@@ -64,8 +64,10 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
 
     match sub.mode {
         Mode::Solo => {
-            let amount = (reward as f64 * (1.0 - shared.cfg.pool.solo_fee_percent / 100.0)).floor() as i64;
-            tx.execute("INSERT INTO credits (block_height, miner_id, amount) VALUES ($1,$2,$3)", &[&height, &sub.miner_id, &amount]).await?;
+            let fee = shared.cfg.pool.solo_fee_percent;
+            let amount = (reward as f64 * (1.0 - fee / 100.0)).floor() as i64;
+            tx.execute("INSERT INTO credits (block_height, miner_id, amount, kind) VALUES ($1,$2,$3,'solo')", &[&height, &sub.miner_id, &amount]).await?;
+            tx.execute("UPDATE blocks SET fee_percent=$2, bonus_percent=0, round_window=NULL, round_total=NULL WHERE height=$1", &[&height, &fee]).await?;
             info!(height, miner = %crate::state::Short(&sub.address), amount, "solo block credited");
         }
         Mode::Pplns => {
@@ -82,11 +84,25 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
                 total = pplns.iter().map(|(_, d)| d).sum();
             }
             let (per, total) = if total > 0.0 { (pplns, total) } else { (vec![(sub.miner_id, 1.0)], 1.0) };
-            let (amounts, bonus) = pplns_split(reward, shared.cfg.pool.fee_percent, shared.cfg.pool.finder_bonus_percent, &per, total);
-            for (miner_id, amount) in amounts.iter().chain(std::iter::once(&(sub.miner_id, bonus))) {
+            let (fee, bonus_pct) = (shared.cfg.pool.fee_percent, shared.cfg.pool.finder_bonus_percent);
+            let (amounts, bonus) = pplns_split(reward, fee, bonus_pct, &per, total);
+            // what the round was split over, published by /api/blocks/<height> for anyone to recompute
+            tx.execute(
+                "UPDATE blocks SET fee_percent=$2, bonus_percent=$3, round_window=$4, round_total=$5 WHERE height=$1",
+                &[&height, &fee, &bonus_pct, &window, &total],
+            )
+            .await?;
+            for ((miner_id, amount), (_, difficulty)) in amounts.iter().zip(per.iter()) {
                 if *amount > 0 {
-                    tx.execute("INSERT INTO credits (block_height, miner_id, amount) VALUES ($1,$2,$3)", &[&height, miner_id, amount]).await?;
+                    tx.execute(
+                        "INSERT INTO credits (block_height, miner_id, amount, difficulty, kind) VALUES ($1,$2,$3,$4,'share')",
+                        &[&height, miner_id, amount, difficulty],
+                    )
+                    .await?;
                 }
+            }
+            if bonus > 0 {
+                tx.execute("INSERT INTO credits (block_height, miner_id, amount, kind) VALUES ($1,$2,$3,'bonus')", &[&height, &sub.miner_id, &bonus]).await?;
             }
             info!(height, miners = per.len(), window, total, lookback, finder = %crate::state::Short(&sub.address), finder_bonus = bonus, "pplns block credited");
         }

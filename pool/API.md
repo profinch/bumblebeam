@@ -101,6 +101,40 @@ small request. The Beam Explorer and explorer.bumblebeam.org use it to badge our
 { "count": 2, "blocks": [[4072327, "pplns", "pending"], [4071981, "pplns", "confirmed"]] }
 ```
 
+## `GET /api/blocks/<height>?address=`
+
+One block the pool found and how its reward was split, so anyone can recompute every credit. The
+site shows it at `/blocks/<height>` and checks the arithmetic in the browser. Credits carry no
+address; `address=<a>` marks that miner's rows with `"you": true`. 404 for a height the pool did
+not find, 400 for one that is not a number.
+
+```json
+{
+  "height": 4068500, "hash": "…", "ts": 1791675000, "mode": "pplns", "status": "confirmed",
+  "reward": 2500000000, "fees": 0, "effort": 0.91, "netDifficulty": 2977786.1, "recorded": true,
+  "feePercent": 0.5, "finderBonusPercent": 1.0, "window": 5955572.2, "total": 5955601.0,
+  "pot": 2487500000.0, "finderBonus": 24875000, "shared": 2462625000.0,
+  "credits": [
+    { "kind": "share", "difficulty": 3972064.0, "amount": 1642437783, "you": true },
+    { "kind": "share", "difficulty": 1983537.0, "amount": 820187216 },
+    { "kind": "bonus", "difficulty": null, "amount": 24875000 }
+  ]
+}
+```
+
+- `window` is `pplnsWindow` × the block's network difficulty: the shares counted, newest first,
+  back from the block. `total` is the difficulty actually taken: a little over `window` because the
+  share that crosses the line counts whole, or under it while the pool has not yet mined a full window.
+- `pot` = `reward` × (1 − `feePercent`/100); `finderBonus` = floor(`pot` × `finderBonusPercent`/100), credited
+  to the rig whose share found the block; `shared` = `pot` − `finderBonus`.
+- Each `share` row: `amount` = floor(`shared` × `difficulty` / `total`). Rows add up to at most `pot`;
+  the rounding dust stays with the pool, as do the block's transaction `fees`.
+- A solo block has one `solo` row, floor(`reward` × (1 − `feePercent`/100)), and no window.
+- `recorded: false`: credited before rounds were kept (schema 7, 2026-10-11). The amounts are listed,
+  `difficulty`, `window`, `total` and the percentages are null.
+- `status` is the block's: credits reach balances only once it is `confirmed`; an orphaned block's
+  credits are never paid.
+
 ## `GET /api/miners?limit=50&mode=`
 
 Miners by current hashrate, **without addresses**. Beam is a private chain and the pool keeps it
@@ -146,6 +180,28 @@ that was already found when it arrived; it is not credited. The
 stratum server tells the miner *why* a share was rejected, using the oracle's own error names
 (`collision`, `duplicate index`, `index order`, `nonzero result`, `difficulty not reached`), so a
 miner can tell a broken kernel from a slow connection.
+
+`?worker=<name>&since=<unix seconds>` adds `blocksSince`: the blocks that worker of this miner found
+since then, orphans not counted. The Mac miner app uses it for its per-session count, which the 10
+latest `blocks` cannot always give.
+
+## `GET /api/benchmarks` and `POST /api/benchmarks`
+
+Speed reports from the BumbleBeam Miner Mac app, sent only when its user turns on "Share average
+speed" (off by default). A report carries the machine and the speed, never an address; the IP
+is used only to allow one report per 10 minutes and is not stored.
+
+```json
+{ "app": "0.2.0", "os": "macOS 26.7.1", "arch": "arm64", "model": "Mac17,1", "chip": "Apple M5 Pro",
+  "gpuCores": 16, "cpuThreads": 15, "device": "gpu", "power": 80, "solPerSec": 8.6,
+  "gpuWatts": 17.5, "minutes": 30 }
+```
+
+`device` is `gpu` or `cpu`, `power` the app's slider (1-100), `solPerSec` the average over
+`minutes` of mining, `gpuWatts` the miner's share of the GPU's draw when known. Text fields are
+printable ASCII up to 64 characters. Answers: 200 `{ "ok": true }`, 400 with the reason, 429 for a
+second report within 10 minutes. `GET` returns the last 90 days grouped by chip, device and power:
+`{ "benchmarks": [{ "chip", "device", "power", "reports", "avg", "best", "gpuWatts" }] }`.
 
 ## `GET /api/payments?limit=50`
 
@@ -343,6 +399,7 @@ address; every action is logged.
 |---|---|
 | `pool_stats` | pool hashrate, miners, workers, blocks in 24h, effort, fee, PPLNS and solo split, chart and its peak; `mode` for one mode's chart |
 | `pool_blocks` | blocks the pool found, with status and finder |
+| `pool_block_round` | how one block was split: fee, finder bonus, PPLNS window, every credit; `address` marks a miner's rows |
 | `pool_miner` | one miner by payout address: hashrate and its peak, balances, workers and their modes, payments, blocks |
 | `pool_miners` | top miners by hashrate with their modes; `mode` for PPLNS or solo only |
 | `pool_payments` | payout runs |

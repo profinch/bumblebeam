@@ -161,8 +161,30 @@ ALTER TABLE blocks ADD COLUMN IF NOT EXISTS fee_percent DOUBLE PRECISION;
 ALTER TABLE blocks ADD COLUMN IF NOT EXISTS bonus_percent DOUBLE PRECISION;
 "#;
 
+/// Speed reports from the Mac miner app, sent only when its user turns sharing on: the machine and
+/// the speed, no address and no IP. They become per-model expectations for the app later.
+const SCHEMA_BENCH: &str = r#"
+CREATE TABLE IF NOT EXISTS benchmarks (
+    id BIGSERIAL PRIMARY KEY,
+    ts BIGINT NOT NULL,
+    app TEXT NOT NULL,
+    os TEXT NOT NULL,
+    arch TEXT NOT NULL,
+    model TEXT NOT NULL,
+    chip TEXT NOT NULL,
+    gpu_cores INT,
+    cpu_threads INT,
+    device TEXT NOT NULL,
+    power INT NOT NULL,
+    sol_s DOUBLE PRECISION NOT NULL,
+    gpu_watts DOUBLE PRECISION,
+    minutes DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS benchmarks_machine ON benchmarks (chip, device, power);
+"#;
+
 /// Schema version. Older databases are migrated in `migrate`; one without a version is refused.
-pub const SCHEMA_VERSION: i32 = 7;
+pub const SCHEMA_VERSION: i32 = 8;
 
 /// Statements that bring a database from version `from` to `from + 1`.
 fn migration(from: i32) -> Option<&'static str> {
@@ -171,8 +193,25 @@ fn migration(from: i32) -> Option<&'static str> {
         3 => Some("ALTER TABLE payments ADD COLUMN IF NOT EXISTS accepted_at BIGINT"),
         4 | 5 => Some(SCHEMA_COINBASE),
         6 => Some(SCHEMA_ROUNDS),
+        7 => Some(SCHEMA_BENCH),
         _ => None,
     }
+}
+
+/// One speed report from the Mac app, already checked by the API.
+pub struct Benchmark {
+    pub app: String,
+    pub os: String,
+    pub arch: String,
+    pub model: String,
+    pub chip: String,
+    pub gpu_cores: Option<i32>,
+    pub cpu_threads: Option<i32>,
+    pub device: String,
+    pub power: i32,
+    pub sol_s: f64,
+    pub gpu_watts: Option<f64>,
+    pub minutes: f64,
 }
 
 /// A verified pair as the finalizer reports it, ready to store.
@@ -220,10 +259,10 @@ impl Db {
             None => {
                 let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares'", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
             }
-            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?,
+            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?,
             Some(mut v) if v < SCHEMA_VERSION => {
                 while v < SCHEMA_VERSION {
                     let Some(sql) = migration(v) else { anyhow::bail!("no migration from schema version {v}") };
@@ -232,7 +271,7 @@ impl Db {
                     c.execute("UPDATE meta SET value=$1 WHERE key='schema'", &[&v.to_string()]).await?;
                     tracing::info!(version = v, "database schema migrated");
                 }
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?;
             }
             Some(v) => anyhow::bail!("database schema version {v} is newer than this binary ({SCHEMA_VERSION})"),
         }
@@ -470,6 +509,51 @@ impl Db {
         drop(c);
         let list = self.blocks(limit, None, maturity, tip, Some(id)).await?;
         Ok(json!({ "blocksFound": row.get::<_, i64>(0), "blocks24h": row.get::<_, i64>(1), "lastBlockAt": row.get::<_, Option<i64>>(2), "blocks": list }))
+    }
+
+    /// Blocks one worker of one miner found since `since` (orphans not counted): the Mac app's
+    /// per-session count, which the 10 latest blocks of the miner page cannot always give.
+    pub async fn worker_blocks_since(&self, address: &str, worker: &str, since: i64) -> Result<i64> {
+        let c = self.client().await?;
+        Ok(c.query_one(
+            "SELECT COUNT(*) FROM blocks b JOIN miners m ON m.id = b.miner_id
+             WHERE m.address = $1 AND b.worker = $2 AND b.ts >= $3 AND b.status <> 'orphaned'",
+            &[&address, &worker, &since],
+        )
+        .await?
+        .get(0))
+    }
+
+    pub async fn add_benchmark(&self, ts: i64, b: &Benchmark) -> Result<()> {
+        let c = self.client().await?;
+        c.execute(
+            "INSERT INTO benchmarks (ts, app, os, arch, model, chip, gpu_cores, cpu_threads, device, power, sol_s, gpu_watts, minutes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+            &[&ts, &b.app, &b.os, &b.arch, &b.model, &b.chip, &b.gpu_cores, &b.cpu_threads, &b.device, &b.power, &b.sol_s, &b.gpu_watts, &b.minutes],
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Speed reports of the last 90 days by chip, device and power: count, mean and best sol/s,
+    /// mean GPU watts.
+    pub async fn benchmarks(&self, now: i64) -> Result<Value> {
+        let c = self.client().await?;
+        let rows = c
+            .query(
+                "SELECT chip, device, power, COUNT(*), AVG(sol_s), MAX(sol_s), AVG(gpu_watts)
+                 FROM benchmarks WHERE ts > $1 GROUP BY chip, device, power ORDER BY chip, device, power",
+                &[&(now - 90 * 86400)],
+            )
+            .await?;
+        Ok(json!(rows
+            .iter()
+            .map(|r| json!({
+                "chip": r.get::<_, String>(0), "device": r.get::<_, String>(1), "power": r.get::<_, i32>(2),
+                "reports": r.get::<_, i64>(3), "avg": r.get::<_, f64>(4), "best": r.get::<_, f64>(5),
+                "gpuWatts": r.get::<_, Option<f64>>(6),
+            }))
+            .collect::<Vec<_>>()))
     }
 
     pub async fn blocks_24h(&self, now: i64) -> Result<(i64, Option<f64>)> {
