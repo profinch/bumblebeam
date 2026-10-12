@@ -77,11 +77,11 @@
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
     // phones get a narrower canvas, so the labels are not scaled down to nothing
     // the right margin holds the axis, the current value's pill and, right of it, the peak
-    const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 7.2 + 12;
+    const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 6.2 + 8;
     const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
     // the current value's pill gets a fixed slot (as wide as "1.23k"), the peak label starts after it
-    const slot = Math.max(pw, 5 * 7.2 + 12);
+    const slot = Math.max(pw, 5 * 6.2 + 8);
     const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + slot + 8 + ptw + 4) : 0);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
