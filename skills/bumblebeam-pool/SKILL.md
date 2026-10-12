@@ -20,7 +20,7 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 | top miners by hashrate (no addresses) | `/api/miners?limit=50` |
 | one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments, `blocksFound`) |
 | payout runs | `/api/payments?limit=50` |
-| Beam network and every Beam pool | `/api/network` |
+| Beam network, BEAM price, every Beam pool | `/api/network` (`height`, `difficulty`, `avgBlock`, `hashrate`, `blocks24h` from the chain; `priceUsd`; `pools`) |
 
 ```sh
 curl -s https://pool.bumblebeam.org/api/stats | jq '{hashrate, minersTotal, workersTotal, blocks24h}'
@@ -35,6 +35,8 @@ curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balan
   blocks (about 4 hours); then it moves to `balance` (unpaid) and is paid at the next run once
   above `minPayout`. An orphaned block's share disappears.
 - A miner's address is private on Beam; the pool shows a miner only to whoever has the address.
+- A pool's reward a day ≈ `blocks24h` × 25 BEAM; in USD × `priceUsd`. Network `hashrate` less the
+  sum of `pools` is miners no pool lists (solo nodes, private pools).
 - Block `status`: `pending` (confirming), `confirmed`, `orphaned`, `unverified` (waits for the
   operator).
 
