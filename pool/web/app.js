@@ -123,7 +123,7 @@
       <path d="M${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
       <line class="now" x1="${L}" x2="${W - R}" y1="${y(last).toFixed(1)}" y2="${y(last).toFixed(1)}" vector-effect="non-scaling-stroke"/>
       ${peakMark}
-      <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="${color}"/>
+      <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="#00f6d2"/>
       <text class="pill-text" x="${W - R + 4 + pw / 2}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${esc(pillText)}</text>
     </svg>`;
   }
