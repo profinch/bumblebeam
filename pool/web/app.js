@@ -251,7 +251,11 @@
     // day at the current reward, less its fee; in USD at the on-chain oracle's price
     const price = net.priceUsd;
     const perDay = (p) => (total && stats.blockReward ? (p.hashrate / total) * 1440 * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
-    const usd = (g) => (price && g != null ? `$${(g / BB.GROTH * price).toLocaleString('en-US', { maximumFractionDigits: g / BB.GROTH * price < 10 ? 2 : 0 })}` : '');
+    const usd = (g) => {
+      if (!price || g == null) return '';
+      const v = (g / BB.GROTH) * price, d = v && v < 10 ? 2 : 0; // cents under $10: $2.90, not $2.9
+      return `$${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+    };
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
