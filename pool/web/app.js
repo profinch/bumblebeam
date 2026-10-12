@@ -246,7 +246,7 @@
       scheme: sameFee ? `${stats.scheme} / SOLO` : `${pctFee(stats.fee)} ${stats.scheme} · ${pctFee(stats.soloFee)} SOLO`,
       hashrate: stats.hashrate, miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
     rows.sort((a, b) => b.hashrate - a.hashrate);
-    const total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
+    let total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
     // what a pool's miners together can expect a day: its share of the network's 1440 blocks of a
     // day at the current reward, less its fee; in USD at the on-chain oracle's price
     const price = net.priceUsd;
@@ -257,10 +257,17 @@
       return `$${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
     };
     // the rest of the network, which no listed pool claims: solo miners on their own nodes, pools
-    // that publish no API; always last
+    // that publish no API; always last. Its part of the network is its part of the day's blocks: the
+    // network's hashrate, from an hour of blocks, swings with luck far more than the pools' own
+    // figures, so the network less the pools went below zero on a lucky hour. The pools then are
+    // the rest, and every share is of their sum and the Others row, adding up to 100%.
+    const pools = rows.reduce((s, r) => s + (r.hashrate || 0), 0);
+    const othersBlocks = net.blocks24h ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null;
+    const f = othersBlocks != null ? othersBlocks / net.blocks24h : null;
+    if (f != null && f < 1 && pools > 0) total = pools / (1 - f);
     const others = net.hashrate ? {
-      hashrate: Math.max(0, net.hashrate - rows.reduce((s, r) => s + (r.hashrate || 0), 0)),
-      blocks24h: net.blocks24h != null ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null,
+      hashrate: f != null ? total * f : Math.max(0, net.hashrate - pools),
+      blocks24h: othersBlocks,
     } : null;
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
