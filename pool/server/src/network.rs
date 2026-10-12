@@ -124,12 +124,17 @@ const DIRECT: &[(&str, &str, &str, &str, f64)] = &[
     ("2miners", "2Miners", "https://beam.2miners.com", "PPLNS", 1.0),
     ("2miners-solo", "2Miners (Solo)", "https://solo-beam.2miners.com", "SOLO", 1.5),
     ("herominers", "HeroMiners", "https://beam.herominers.com", "PROP / SOLO", 0.9),
+    ("sunpool", "SunPool", "https://beam.sunpool.top", "PPLNS", 0.0),
 ];
 
 /// Every pool in `DIRECT` that answered, in the /api/network row shape, only the fields it gave.
 async fn fetch_direct(http: &reqwest::Client) -> Vec<Value> {
     let all = futures_util::future::join_all(DIRECT.iter().map(|&(id, name, site, scheme, fee)| async move {
-        let r = if id == "herominers" { herominers(http, site).await } else { two_miners(http, site).await };
+        let r = match id {
+            "herominers" => herominers(http, site).await,
+            "sunpool" => sunpool(http, site).await,
+            _ => two_miners(http, site).await,
+        };
         match r {
             Ok(mut v) => {
                 for (k, x) in [("id", json!(id)), ("name", json!(name)), ("website", json!(site)), ("scheme", json!(scheme))] {
@@ -173,6 +178,16 @@ async fn herominers(http: &reqwest::Client, site: &str) -> anyhow::Result<Value>
         "hashrate": hashrate + num(&p["soloHashrate"]).unwrap_or(0.0),
         "miners": add("miners", "soloMiners").map(|x| x as u64), "workers": add("workers", "soloWorkers").map(|x| x as u64),
         "lastTs": last.map(|ms| (ms / 1000.0) as i64), "fee": v["config"]["fee"],
+    }))
+}
+
+/// SunPool's report for miningpoolstats.com, the one JSON its PHP site has; with its blocks of the day.
+async fn sunpool(http: &reqwest::Client, site: &str) -> anyhow::Result<Value> {
+    let v = get(http, &format!("{site}/pool-info.php?miningpoolstats")).await?;
+    let hashrate = num(&v["hashrate"]).ok_or_else(|| anyhow::anyhow!("no hashrate"))?;
+    Ok(json!({
+        "hashrate": hashrate, "miners": v["miners"], "workers": v["workers"], "blocks24h": v["blocksFound24H"],
+        "lastTs": num(&v["lastBlocksFound"][0]["timestampMilliSeconds"]).map(|ms| (ms / 1000.0) as i64), "fee": v["feePercent"],
     }))
 }
 
