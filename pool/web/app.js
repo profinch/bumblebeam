@@ -233,17 +233,20 @@
 
   function poolsTable(stats, net, { meta = true } = {}) {
     if (!net || !net.ok) return '<section class="panel"><div class="empty err">Network data unavailable</div></section>';
-    // other sites list BumbleBeam too (from /api/miningboard): ours come from the pool itself,
-    // PPLNS and solo as two pools, the way 2Miners shows its solo side
+    // other sites list BumbleBeam too (from /api/miningboard): ours comes from the pool itself, one
+    // row for PPLNS and solo together, as the explorer lists it
     const rows = net.pools.filter((p) => p.id !== 'bumblebeam' && p.name !== 'BumbleBeam').map((p) => ({ ...p, ours: false }));
+    const sameFee = stats.soloFee == null || stats.soloFee === stats.fee;
+    let series = stats.chart.filter((_, i) => i % 6 === 0);
     if (stats.modes) {
-      const own = (m, name, scheme, fee) => ({ id: `bumblebeam-${m}`, name, scheme, fee, hashrate: stats.modes[m].hashrate, miners: stats.modes[m].miners,
-        workers: stats.modes[m].workers, blocks24h: stats.modes[m].blocks24h, lastTs: stats.modes[m].lastBlockFound, series: stats.modes[m].series, ours: true });
-      rows.push(own('pplns', 'BumbleBeam', stats.scheme, stats.fee), own('solo', 'BumbleBeam (Solo)', 'SOLO', stats.soloFee));
-    } else {
-      rows.push({ id: 'bumblebeam', name: 'BumbleBeam', scheme: stats.scheme, fee: stats.fee, hashrate: stats.hashrate, miners: stats.minersTotal,
-        workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series: stats.chart.filter((_, i) => i % 6 === 0), ours: true });
+      // the two modes' hourly series share their hours: summed, they are the pool's
+      const sum = new Map();
+      for (const m of ['pplns', 'solo']) for (const [t, v] of stats.modes[m].series || []) sum.set(t, (sum.get(t) || 0) + v);
+      series = [...sum].sort((x, y) => x[0] - y[0]);
     }
+    rows.push({ id: 'bumblebeam', name: 'BumbleBeam', fee: sameFee ? stats.fee : null,
+      scheme: sameFee ? `${stats.scheme} / SOLO` : `${pctFee(stats.fee)} ${stats.scheme} · ${pctFee(stats.soloFee)} SOLO`,
+      hashrate: stats.hashrate, miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
     rows.sort((a, b) => b.hashrate - a.hashrate);
     const total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>`;
