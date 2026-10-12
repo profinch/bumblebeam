@@ -38,9 +38,9 @@ verify_blocks_with_wallet = true          # coinbase must be in the wallet befor
 block_check_urls = []                     # cross-check of the block hash by height, tried in order; e.g.
                                           # ["http://127.0.0.1:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
                                           # your own explorer-node first, a public one as a fallback; it never confirms alone
-# price_urls = ["http://127.0.0.1:8888/contract?id=4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b&nMaxTxs=0"]
-                                          # BEAM/USD for the site: the median of the on-chain Oracle2 from an explorer-node,
-                                          # tried in order; defaults to the public explorer, [] shows no USD
+# explorer_urls = ["http://127.0.0.1:8888", "https://explorer.0xmx.net/api"]
+                                          # explorer-node API roots for the site's network numbers and BEAM/USD (median of
+                                          # the on-chain Oracle2), tried in order; defaults to the public explorer
 public_host = "pool.example.com"
 public_node = ""                          # host:port of the node's p2p port for wallets, shown in the UI; empty hides it
 

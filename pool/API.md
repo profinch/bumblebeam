@@ -164,11 +164,14 @@ while the pool has no block template, for example while the node syncs.
 
 ## `GET /api/network`
 
-The pool server's cache of the Beam Explorer's mining data, refreshed every 30 seconds for all
-visitors, so a busy pool page does not hit the community explorer once per visitor. The UI falls
-back to the explorer directly when this endpoint is absent. `priceUsd` is BEAM's price in USD: the median
-of Beam's on-chain price oracle (Oracle2) read from an explorer-node, refreshed every 5 minutes (the
-last one that came, null until one has).
+The network as the pool page shows it, cached by the pool server for 30 seconds for all visitors.
+`height`, `difficulty`, `avgBlock` (seconds, over the last 60 blocks), `hashrate` (difficulty over
+block time, Sol/s) and `blocks24h` come from an explorer-node, the pool's own first
+(`pool.explorer_urls`); `priceUsd` is BEAM's price in USD, the median of Beam's on-chain price
+oracle (Oracle2) from the same node, refreshed every 5 minutes. `pools`, which the chain does not
+know, comes from the Beam Terminal's list, which polls each pool's own API. Each part keeps its last
+good value while its source is down. The UI falls back to the explorer directly when this endpoint
+is absent.
 
 ```json
 { "hashrate": 49160.2, "height": 4068807, "difficulty": 2800123.0, "avgBlock": 57.0, "blocks24h": 1405, "priceUsd": 0.01,
