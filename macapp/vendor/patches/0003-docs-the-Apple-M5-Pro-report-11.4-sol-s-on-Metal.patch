@@ -1,0 +1,50 @@
+From 4e311e21b2a658221b569011fa2e37a517e92980 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Sat, 10 Oct 2026 23:32:54 +0100
+Subject: [PATCH 3/5] docs: the Apple M5 Pro report, 11.4 sol/s on Metal
+
+---
+ docs/benchmarks.md | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index ecf83ba..5dff4e8 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -5,9 +5,9 @@ reproduced with the scripts in `benchmarks/`; the command is given under each ta
+ This page is the results. How to measure a miner without fooling yourself is in
+ [benchmarking.md](benchmarking.md).
+ 
+-MXBM has been measured on seven GPUs: the RTX 4070 Ti SUPER it is developed on, an M3 Max
+-via Metal, and a contributed RTX 5080, RTX 4070 SUPER, RTX 3090, RTX 3060 Ti and
+-GTX 1660 Ti. To add yours, see [send us your numbers](#send-us-your-numbers).
++MXBM has been measured on eight GPUs: the RTX 4070 Ti SUPER it is developed on, an M3 Max
++via Metal, and a contributed RTX 5080, RTX 4070 SUPER, RTX 3090, RTX 3060 Ti,
++GTX 1660 Ti and M5 Pro (Metal). To add yours, see [send us your numbers](#send-us-your-numbers).
+ 
+ ---
+ 
+@@ -40,6 +40,7 @@ One row per backend per card, each at the card's stock power cap.
+ | RTX 3060 Ti | 8 GiB GDDR6 | 610.88 · Windows | CUDA | 26.5 | 75.4 | 192 | 0.138 | ZumZum, `--report` 120 s ※ |
+ | GTX 1660 Ti | 6 GiB GDDR6 | 595.97 · Windows | CUDA | 9.48 | 210.6 | 106 | 0.089 | ZumZum, `--report` 120 s ◇ ◆ |
+ | Apple M3 Max (40-core) | 128 GB unified | macOS 26.5 · Metal 3 | Metal | 16.3 | 128.0 | — | — | ours, `--benchmark` |
++| Apple M5 Pro (16-core) | 48 GB unified | macOS 26.7.1 · Metal 4 | Metal | 11.4 | 172.6 | — | — | profinch, `--report` 120 s ■ |
+ 
+ ‡ CUDA is the 285 W point of the 2026-09-09 power sweep below (90 s, released clocks).
+ OpenCL was taken 2026-08-17 and its kernels are unchanged since. The published headline
+@@ -68,6 +69,12 @@ cap. Overclocked by its owner, so not a stock figure.
+ ▲ 120 s `--report` on MXBM 0.8.452, 2026-10-08. Nothing else on the card, but clocks were
+ limited by `sw_power_cap` and `sw_thermal`, so its top end is partly a cooling figure.
+ 
++■ 120 s `--report` on MXBM 218cecb, 2026-10-10, a MacBook Pro on its own cooling with
++nothing else mining. 1.99 verified solutions/solve, p5/p95 170.0/186.6 ms. Mining on a
++pool alone, its own counter held 11.0–11.8 sol/s and the Pool column 9.7–9.9. With a CPU
++miner on the same chip it fell to 9.0–9.6 sol/s: the two share one memory bus. 161 shares
++accepted, 0 rejected over both.
++
+ The M3 Max's pipeline alone runs 101.5 ms/solve (18.8 sol/s); sustained is lower because
+ the laptop throttles. macOS exposes no GPU power API, so there is no power column.
+ 
+-- 
+2.54.0 (Apple Git-157)
+

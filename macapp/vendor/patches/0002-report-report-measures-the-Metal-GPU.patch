@@ -1,0 +1,35 @@
+From 25150ca289d411d3668c017568981b63bab2e7a2 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Sat, 10 Oct 2026 23:32:54 +0100
+Subject: [PATCH 2/5] report: --report measures the Metal GPU
+
+On a Mac cards is cleared for Metal, so the report loop skipped every
+device on pos >= cards.size(), and make_solver (CUDA/OpenCL only)
+could not rebuild the Metal solver anyway: --report printed the device
+list and exited without a report. Bound by device_count and keep the
+solver already built.
+---
+ src/main.cpp | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index dac68a7..4f344d6 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1115,8 +1115,11 @@ int main(int argc, char** argv) {
+         // cards measured at once would each be reporting the other's contention.
+         for (size_t i = 0; i < selected_devices.size(); ++i) {
+             const unsigned pos = selected_devices[i];
+-            if (pos >= cards.size()) continue;
+-            if (solver_positions.empty() || solver_positions.front() != pos) {
++            // device_count, not cards: on a Mac cards is cleared for Metal, whose
++            // solver is built outside make_solver (CUDA/OpenCL only) and is reused
++            // here rather than rebuilt into nothing.
++            if (pos >= device_count) continue;
++            if (!solver || (!solver_positions.empty() && solver_positions.front() != pos)) {
+                 solver.reset();          // free the previous card before taking the next
+                 s_live.store(nullptr, std::memory_order_relaxed);
+                 BuiltSolver b = make_solver(pos);
+-- 
+2.54.0 (Apple Git-157)
+

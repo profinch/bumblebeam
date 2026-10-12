@@ -1,0 +1,6 @@
+/build/
+/.build/
+/.swiftpm/
+# mxbm binaries: rebuilt by tools/build-mxbm.sh, shipped inside the .dmg of each release
+/vendor/arm64/
+/vendor/x86_64/

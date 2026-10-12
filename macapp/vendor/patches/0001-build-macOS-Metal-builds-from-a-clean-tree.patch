@@ -1,0 +1,58 @@
+From 575d7411c8dc0de83c0816ade0a3afd508430555 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Sat, 10 Oct 2026 23:32:54 +0100
+Subject: [PATCH 1/5] build: macOS Metal builds from a clean tree
+
+The APPLE set_tests_properties named gpu_rounds_lds and gpu_solver_lds,
+which no longer exist, so configure failed on every Mac with OpenCL.
+An unset MXBM_METAL_ABL_DERIVE compared unquoted is its own name, not
+"", so the kernels got an empty -DMXBM_METAL_ABL_DERIVE= and
+fused_round.metal failed ("( & 2)"). generated/ is created before
+metal -c writes into it, which a parallel build did not guarantee.
+---
+ CMakeLists.txt            | 2 +-
+ cmake/BuildMetallib.cmake | 8 +++++++-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 920e807..46dfcbc 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -539,7 +539,7 @@ if(OpenCL_FOUND)
+   # run implying coverage that was never there. On a Mac the equivalent coverage is
+   # the Metal backend, which runs the same fused algorithm and the same goldens.
+   if(APPLE)
+-    set_tests_properties(lds_collide gpu_rounds_lds gpu_solver_lds
++    set_tests_properties(lds_collide
+                          gpu_rounds_rowbucket gpu_solver_rowbucket
+                          gpu_recover_rowbucket
+                          gpu_solver_octo gpu_solver_octo_split
+diff --git a/cmake/BuildMetallib.cmake b/cmake/BuildMetallib.cmake
+index ba1e792..571e030 100644
+--- a/cmake/BuildMetallib.cmake
++++ b/cmake/BuildMetallib.cmake
+@@ -23,7 +23,10 @@ set(MXBM_METAL_R1FCAP  "" CACHE STRING "Metal round-1 stage cap (default 288)")
+ function(mxbm_build_metallib OUT_LIB)
+   set(MXBM_METAL_DEFS "")
+   foreach(_k WG FCAP R1FCAP ABL_DERIVE)
+-    if(NOT MXBM_METAL_${_k} STREQUAL "")
++    # Quoted: ABL_DERIVE is not a cache variable, and an unset name compared
++    # unquoted is the literal "MXBM_METAL_ABL_DERIVE", which is not "" -- the
++    # kernels then got an empty -DMXBM_METAL_ABL_DERIVE= and failed to compile.
++    if(NOT "${MXBM_METAL_${_k}}" STREQUAL "")
+       list(APPEND MXBM_METAL_DEFS -DMXBM_METAL_${_k}=${MXBM_METAL_${_k}})
+     endif()
+   endforeach()
+@@ -31,6 +34,9 @@ function(mxbm_build_metallib OUT_LIB)
+     message(STATUS "Metal tuning: ${MXBM_METAL_DEFS}")
+   endif()
+   set(_airs "")
++  # metal -c does not create its output directory, and nothing orders this step
++  # after the other generated/ outputs under a parallel build.
++  file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
+   foreach(_src ${ARGN})
+     get_filename_component(_name ${_src} NAME_WE)
+     set(_air ${CMAKE_BINARY_DIR}/generated/${_name}.air)
+-- 
+2.54.0 (Apple Git-157)
+

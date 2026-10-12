@@ -1,0 +1,574 @@
+From fcc20ae741cee8c66aae9a5b41e49f97d1a3f543 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Mon, 12 Oct 2026 23:51:34 +0100
+Subject: [PATCH 4/5] metal: a load limit, MXBM_METAL_LOAD=1..100
+
+Below 100 every round launches fewer threadgroups and each one loops over
+its share of the buckets (gtotal, threadgroups_per_grid), so fewer GPU
+cores run at once and the GPU draws less power; the solve takes longer
+rather than the solver pausing between solves. At 100 the launch is the
+full grid as before. MXBM_METAL_LOAD_FILE names a file holding the number,
+re-read before every solve, so a front end can move the limit while mining;
+MXBM_METAL_SLOTS sets the threadgroups in flight directly, for tuning.
+
+The table of threadgroups per load step was measured on an M5 Pro
+(16 cores) and scales by core count elsewhere:
+
+  load   sol/s   GPU W        load   sol/s   GPU W
+  100%   10.5    19.6          50%    5.2    11.1
+   90%    9.6    18.8          40%    4.3     9.5
+   80%    8.6    17.5          30%    3.1     7.5
+   70%    7.6    14.9          20%    2.2     5.8
+   60%    6.5    12.8          10%    0.9     3.7
+
+test_metal_solver (the KAT goldens) passes at every load.
+---
+ kernels/metal/entry.metal            |   9 +-
+ kernels/metal/fused_round.metal      | 126 ++++++++++++++++---------
+ kernels/metal/pipeline_kernels.metal | 134 ++++++++++++++-------------
+ src/gpu/metal_solver.mm              |  70 ++++++++++++--
+ 4 files changed, 222 insertions(+), 117 deletions(-)
+
+diff --git a/kernels/metal/entry.metal b/kernels/metal/entry.metal
+index e8ee6ee..42b1eff 100644
+--- a/kernels/metal/entry.metal
++++ b/kernels/metal/entry.metal
+@@ -52,8 +52,11 @@ kernel void entry_scatter(const device uint64_t* pp4      [[buffer(0)]],
+                           device atomic_uint*    counts   [[buffer(5)]],
+                           device uint64_t*       belem    [[buffer(6)]],
+                           device atomic_uint*    drops    [[buffer(7)]],
+-                          uint g [[thread_position_in_grid]])
++                          uint g0    [[thread_position_in_grid]],
++                          uint gridN [[threads_per_grid]])
+ {
+-    if (g >= count) return;
+-    mxbm::metalk::entry_body(begin + g, pp4, bkt_bits, bkt_cap, counts, belem, drops);
++    // Load limit: the host may launch fewer threads than elements; each then takes
++    // every gridN-th element.
++    for (uint g = g0; g < count; g += gridN)
++        mxbm::metalk::entry_body(begin + g, pp4, bkt_bits, bkt_cap, counts, belem, drops);
+ }
+diff --git a/kernels/metal/fused_round.metal b/kernels/metal/fused_round.metal
+index 09dc9f2..4c96709 100644
+--- a/kernels/metal/fused_round.metal
++++ b/kernels/metal/fused_round.metal
+@@ -440,8 +440,10 @@ kernel void fused_round_r1(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kR1FCap;
+@@ -456,11 +458,16 @@ kernel void fused_round_r1(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r1 threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<7, 7, 1, LM_SEED, 424u, 2u, 1u, 2u, 2u, 1u, 2u, F>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<7, 7, 1, LM_SEED, 424u, 2u, 1u, 2u, 2u, 1u, 2u, F>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+ // Round 2: LM_RD2. Packed 9-u64 output record (8 inline + a 9th-word plane).
+@@ -475,8 +482,10 @@ kernel void fused_round_r2(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kFCap;
+@@ -491,11 +500,16 @@ kernel void fused_round_r2(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r2 threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<7, 7, 2, LM_RD2, 400u, 4u, 2u, 4u, 4u, 2u, 8u, F>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<7, 7, 2, LM_RD2, 400u, 4u, 2u, 4u, 4u, 2u, 8u, F>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+ // Round 3: LM_EMIT. The tightest round -- 26 148 B on CUDA, the figure that pinned
+@@ -511,8 +525,10 @@ kernel void fused_round_r3(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kFCap;
+@@ -527,11 +543,16 @@ kernel void fused_round_r3(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r3 threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<7, 6, 4, LM_EMIT, 376u, 6u, 4u, 2u, 8u, 8u, 8u, F>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<7, 6, 4, LM_EMIT, 376u, 6u, 4u, 2u, 8u, 8u, 8u, F>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+ // Round 4: LM_USE. INW=6, and the leaf payload is the packed leftContrib rather than
+@@ -547,8 +568,10 @@ kernel void fused_round_r4(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kFCap;
+@@ -563,11 +586,16 @@ kernel void fused_round_r4(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r4 threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<6, 1, 2, LM_USE, 288u, 9u, 2u, 0u, 0u, 8u, 2u, F>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<6, 1, 2, LM_USE, 288u, 9u, 2u, 0u, 0u, 8u, 2u, F>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+ // ---------------------------------------------------------------------------------
+@@ -592,8 +620,10 @@ kernel void fused_round_r1_seedf(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kR1FCap;
+@@ -608,11 +638,16 @@ kernel void fused_round_r1_seedf(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r1-seedf threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<7, 7, 1, LM_SEED, 424u, 2u, 1u, 2u, 2u, 1u, 9u, F, true>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<7, 7, 1, LM_SEED, 424u, 2u, 1u, 2u, 2u, 1u, 9u, F, true>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+ 
+@@ -627,8 +662,10 @@ kernel void fused_round_r2_seedf(
+         device atomic_uint*    gi_counter [[buffer(7)]],
+         device atomic_uint*    drops      [[buffer(8)]],
+         const device uint64_t* pp4        [[buffer(9)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(10)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm::metalk;
+     constexpr uint32_t F = kFCap;
+@@ -643,10 +680,15 @@ kernel void fused_round_r2_seedf(
+     static_assert(sizeof(lwork) + sizeof(lgi) + sizeof(lleaf) + sizeof(llead)
+                   + sizeof(lchain) + sizeof(tab) + 36u <= 32768u,
+                   "r2-seedf threadgroup allocation exceeds Apple's 32 KB ceiling");
+-    fused_round_body<7, 7, 2, LM_RD2, 400u, 4u, 2u, 4u, 4u, 9u, 8u, F, true>(
+-        cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right,
+-        gi_counter, drops, pp4,
+-        lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++    // Load limit (MXBM_METAL_LOAD): the host may launch fewer groups than buckets;
++    // each then works through every gridGroups-th bucket, so fewer GPU cores are busy.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        fused_round_body<7, 7, 2, LM_RD2, 400u, 4u, 2u, 4u, 4u, 9u, 8u, F, true>(
++            cfg[0], cfg[1], cfg[2], cfg[3], cfg[4],
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right,
++            gi_counter, drops, pp4,
++            lwork, lgi, lleaf, llead, lchain, tab, gcount, cnt8, lId, groupId);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
++    }
+ }
+ 
+diff --git a/kernels/metal/pipeline_kernels.metal b/kernels/metal/pipeline_kernels.metal
+index e6c6d2e..8080f82 100644
+--- a/kernels/metal/pipeline_kernels.metal
++++ b/kernels/metal/pipeline_kernels.metal
+@@ -34,8 +34,10 @@ kernel void terminal_round(
+         device uint32_t*       surv_slots [[buffer(5)]],
+         device atomic_uint*    surv_count [[buffer(6)]],
+         device atomic_uint*    drops      [[buffer(7)]],
+-        uint lId     [[thread_position_in_threadgroup]],
+-        uint groupId [[threadgroup_position_in_grid]])
++        constant uint32_t&     gtotal     [[buffer(8)]],
++        uint lId        [[thread_position_in_threadgroup]],
++        uint groupId0   [[threadgroup_position_in_grid]],
++        uint gridGroups [[threadgroups_per_grid]])
+ {
+     using namespace mxbm;
+     using namespace mxbm::metalk;
+@@ -52,79 +54,83 @@ kernel void terminal_round(
+     threadgroup atomic_uint tab[kTabSizeT];
+     threadgroup atomic_uint gcount;
+ 
+-    const uint32_t submaskCount = 1u << submask_bits;
+-    const uint32_t bucket = groupId / submaskCount;
+-    const uint32_t mask   = groupId % submaskCount;
++    // Load limit: as in the fused rounds, one launched group may serve several buckets.
++    for (uint groupId = groupId0; groupId < gtotal; groupId += gridGroups) {
++        const uint32_t submaskCount = 1u << submask_bits;
++        const uint32_t bucket = groupId / submaskCount;
++        const uint32_t mask   = groupId % submaskCount;
+ 
+-    if (lId == 0) atomic_store_explicit(&gcount, 0u, memory_order_relaxed);
+-    for (uint32_t i = lId; i < kTabSizeT; i += kWGT)
+-        atomic_store_explicit(&tab[i], kEmptyT, memory_order_relaxed);
+-    threadgroup_barrier(mem_flags::mem_threadgroup);
++        if (lId == 0) atomic_store_explicit(&gcount, 0u, memory_order_relaxed);
++        for (uint32_t i = lId; i < kTabSizeT; i += kWGT)
++            atomic_store_explicit(&tab[i], kEmptyT, memory_order_relaxed);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
+ 
+-    uint32_t cnt = in_counts[bucket];
+-    if (cnt > in_bucket_cap) cnt = in_bucket_cap;
+-    const size_t base = (size_t)bucket * in_bucket_cap;
++        uint32_t cnt = in_counts[bucket];
++        if (cnt > in_bucket_cap) cnt = in_bucket_cap;
++        const size_t base = (size_t)bucket * in_bucket_cap;
+ 
+-    for (uint32_t p = lId; p < cnt; p += kWGT) {
+-        const size_t d = (base + p) * 2u;                 // the round-5 record stride
+-        const uint64_t w0 = in_belem[d];
+-        const uint32_t key = (uint32_t)(w0 & 0xFFFFFFu);
+-        if ((key & (submaskCount - 1u)) != mask) continue;
+-        const uint32_t pos = atomic_fetch_add_explicit(&gcount, 1u, memory_order_relaxed);
+-        if (pos >= kTCap) {
+-            atomic_fetch_add_explicit(&drops[1], 1u, memory_order_relaxed);
+-            continue;
++        for (uint32_t p = lId; p < cnt; p += kWGT) {
++            const size_t d = (base + p) * 2u;                 // the round-5 record stride
++            const uint64_t w0 = in_belem[d];
++            const uint32_t key = (uint32_t)(w0 & 0xFFFFFFu);
++            if ((key & (submaskCount - 1u)) != mask) continue;
++            const uint32_t pos = atomic_fetch_add_explicit(&gcount, 1u, memory_order_relaxed);
++            if (pos >= kTCap) {
++                atomic_fetch_add_explicit(&drops[1], 1u, memory_order_relaxed);
++                continue;
++            }
++            const uint64_t meta = in_belem[d + 1];
++            lwork[pos] = w0;
++            lgi[pos]   = (uint32_t)(meta >> 32);
++            llead[pos] = (uint32_t)meta;
++            lkey[pos]  = key;
+         }
+-        const uint64_t meta = in_belem[d + 1];
+-        lwork[pos] = w0;
+-        lgi[pos]   = (uint32_t)(meta >> 32);
+-        llead[pos] = (uint32_t)meta;
+-        lkey[pos]  = key;
+-    }
+-    threadgroup_barrier(mem_flags::mem_threadgroup);
++        threadgroup_barrier(mem_flags::mem_threadgroup);
+ 
+-    const uint32_t g = atomic_load_explicit(&gcount, memory_order_relaxed);
+-    const uint32_t total = g < kTCap ? g : kTCap;
++        const uint32_t g = atomic_load_explicit(&gcount, memory_order_relaxed);
++        const uint32_t total = g < kTCap ? g : kTCap;
+ 
+-    for (uint32_t pos = lId; pos < total; pos += kWGT) {
+-        const uint32_t hk = (lkey[pos] >> submask_bits) & (kTabSizeT - 1u);
+-        lchain[pos] = atomic_exchange_explicit(&tab[hk], pos, memory_order_relaxed);
+-    }
+-    threadgroup_barrier(mem_flags::mem_threadgroup);
++        for (uint32_t pos = lId; pos < total; pos += kWGT) {
++            const uint32_t hk = (lkey[pos] >> submask_bits) & (kTabSizeT - 1u);
++            lchain[pos] = atomic_exchange_explicit(&tab[hk], pos, memory_order_relaxed);
++        }
++        threadgroup_barrier(mem_flags::mem_threadgroup);
+ 
+-    for (uint32_t pos = lId; pos < total; pos += kWGT) {
+-        const uint32_t key = lkey[pos];
+-        uint32_t oth = lchain[pos], walk = 0;
+-        while (oth != kEmptyT) {
+-            if (++walk > 64u) {
+-                atomic_fetch_add_explicit(&drops[3], 1u, memory_order_relaxed);
+-                break;
+-            }
+-            if (lkey[oth] == key) {
+-                const uint32_t la = llead[pos], lb = llead[oth];
+-                const uint32_t ga = lgi[pos],   gb = lgi[oth];
+-                uint32_t L = pos, R = oth;
+-                if (lb < la || (lb == la && gb < ga)) { L = oth; R = pos; }
+-                bh3::Elem a, b, c;
+-                for (int w = 0; w < 7; ++w) { a.w[w] = 0; b.w[w] = 0; }
+-                a.w[0] = lwork[L]; b.w[0] = lwork[R];
+-                bh3::combine(a, b, 24u, c);
+-                uint64_t z = 0;
+-                for (int w = 0; w < 7; ++w) z |= c.w[w];
+-                if (z == 0) {
+-                    const uint32_t si = atomic_fetch_add_explicit(surv_count, 1u,
+-                                                                  memory_order_relaxed);
+-                    if (si < surv_cap) {
+-                        all_left [out_off + si] = lgi[L];
+-                        all_right[out_off + si] = lgi[R];
+-                        surv_slots[si] = si;
+-                    } else {
+-                        atomic_fetch_add_explicit(&drops[2], 1u, memory_order_relaxed);
++        for (uint32_t pos = lId; pos < total; pos += kWGT) {
++            const uint32_t key = lkey[pos];
++            uint32_t oth = lchain[pos], walk = 0;
++            while (oth != kEmptyT) {
++                if (++walk > 64u) {
++                    atomic_fetch_add_explicit(&drops[3], 1u, memory_order_relaxed);
++                    break;
++                }
++                if (lkey[oth] == key) {
++                    const uint32_t la = llead[pos], lb = llead[oth];
++                    const uint32_t ga = lgi[pos],   gb = lgi[oth];
++                    uint32_t L = pos, R = oth;
++                    if (lb < la || (lb == la && gb < ga)) { L = oth; R = pos; }
++                    bh3::Elem a, b, c;
++                    for (int w = 0; w < 7; ++w) { a.w[w] = 0; b.w[w] = 0; }
++                    a.w[0] = lwork[L]; b.w[0] = lwork[R];
++                    bh3::combine(a, b, 24u, c);
++                    uint64_t z = 0;
++                    for (int w = 0; w < 7; ++w) z |= c.w[w];
++                    if (z == 0) {
++                        const uint32_t si = atomic_fetch_add_explicit(surv_count, 1u,
++                                                                      memory_order_relaxed);
++                        if (si < surv_cap) {
++                            all_left [out_off + si] = lgi[L];
++                            all_right[out_off + si] = lgi[R];
++                            surv_slots[si] = si;
++                        } else {
++                            atomic_fetch_add_explicit(&drops[2], 1u, memory_order_relaxed);
++                        }
+                     }
+                 }
++                oth = lchain[oth];
+             }
+-            oth = lchain[oth];
+         }
++        threadgroup_barrier(mem_flags::mem_threadgroup);
+     }
+ }
+ 
+diff --git a/src/gpu/metal_solver.mm b/src/gpu/metal_solver.mm
+index faf9e88..cffa12f 100644
+--- a/src/gpu/metal_solver.mm
++++ b/src/gpu/metal_solver.mm
+@@ -35,6 +35,12 @@
+ #define MXBM_METAL_WG 256
+ #endif
+ constexpr uint32_t kWG = MXBM_METAL_WG;
++// Load limit: threadgroups in flight per 16 GPU cores at a load of 0, 10, ..., 100%, each
++// step about a tenth of full speed. Measured on an M5 Pro (16 cores), sol/s and GPU watts:
++// 3 -> 1.3 / 4.6 W, 8 -> 2.1 / 5.9, 12 -> 3.2 / 7.4, 22 -> ~5.3 / ~11, 32 -> 7.6 / 14.2,
++// 512 -> ~8.8 / ~17.5, 2048 -> ~9.8 / ~19, and the full launch 10.9 / 19.3. Scaled by the
++// core count on other chips. The last entry is only the end point loads above 90 approach.
++constexpr uint32_t kLoadGroups16[11] = { 1, 3, 8, 12, 18, 22, 27, 32, 512, 2048, 8192 };
+ }
+ 
+ namespace mxbm { namespace gpu {
+@@ -153,6 +159,17 @@ RbGeometry pick_geometry(uint64_t global_mem) {
+     id<MTLComputePipelineState> psR1F = nil, psR2F = nil;
+     bool seedf = false;
+ 
++    // Load limit (MXBM_METAL_LOAD, 1..100): how much of the GPU a solve may occupy. Below
++    // 100 every round launches slots * load / 100 threadgroups and each one works through
++    // its share of the buckets, so fewer GPU cores run at once and the GPU draws less power
++    // -- the solve takes longer instead of pausing between solves. MXBM_METAL_LOAD_FILE
++    // names a file holding the number, re-read before every solve, so a front end can move
++    // the limit while mining.
++    int load = 100, loadShown = -1;
++    const char* loadFile = nullptr;
++    uint32_t cores = 16;  // GPU cores, to scale kLoadGroups16
++    uint32_t slots = 0;   // MXBM_METAL_SLOTS: exact threadgroups in flight below 100%, for tuning
++
+     uint32_t bb = 16, sm = 1, nb = 1u << 16;
+     uint32_t cap = 0; size_t nslots = 0;
+ 
+@@ -209,9 +226,13 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+         if (index < 0 || (NSUInteger)index >= devs.count)
+             throw std::runtime_error("Metal: no device at index " + std::to_string(index));
+         p_->timing = std::getenv("MXBM_METAL_TIMING") != nullptr;
++        if (const char* e = std::getenv("MXBM_METAL_LOAD")) p_->load = std::atoi(e);
++        p_->loadFile = std::getenv("MXBM_METAL_LOAD_FILE");
+         p_->dev   = devs[index];
+         p_->queue = [p_->dev newCommandQueue];
+         p_->info  = info_for(p_->dev, index);
++        p_->cores = p_->info.compute_units ? p_->info.compute_units : 16u;
++        if (const char* e = std::getenv("MXBM_METAL_SLOTS")) p_->slots = (uint32_t)std::atoi(e);
+ 
+         NSError* err = nil;
+         dispatch_data_t blob = dispatch_data_create(kMxbmMetallib, kMxbmMetallibSize,
+@@ -340,8 +361,34 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+         // One command buffer per round. That granularity is what gives the abort poll
+         // its seam, and it matches the CUDA path's implicit stream ordering.
+         int phase = 0;
++        if (I.loadFile) {
++            if (FILE* f = std::fopen(I.loadFile, "r")) {
++                int v = 0;
++                if (std::fscanf(f, "%d", &v) == 1) I.load = v;
++                std::fclose(f);
++            }
++        }
++        const int load = I.load < 1 ? 1 : (I.load > 100 ? 100 : I.load);
++        // Threadgroups to launch for a dispatch of `full` groups at this load.
++        auto limit = [&](NSUInteger full) -> NSUInteger {
++            if (load >= 100) return full;
++            double n;
++            if (I.slots) {
++                n = I.slots;
++            } else {
++                const int i = load / 10;
++                const double f = (load % 10) / 10.0;
++                n = (kLoadGroups16[i] + f * (kLoadGroups16[i + 1] - (double)kLoadGroups16[i]))
++                    * I.cores / 16.0;
++            }
++            const NSUInteger g = n < 1 ? 1 : (NSUInteger)(n + 0.5);
++            return g < full ? g : full;
++        };
++
++        // gtotal: the groups the kernel must cover, passed after its buffers; 0 for the
++        // kernels that take no load limit.
+         auto encode = [&](id<MTLComputePipelineState> ps, NSUInteger groups,
+-                          NSUInteger threadsPerGroup, NSArray* bufs) {
++                          NSUInteger threadsPerGroup, NSArray* bufs, uint32_t gtotal) {
+             id<MTLCommandBuffer> cb = [I.queue commandBuffer];
+             id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+             [enc setComputePipelineState:ps];
+@@ -350,6 +397,7 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+                 [enc setBuffer:(b == [NSNull null] ? nil : (id<MTLBuffer>)b)
+                         offset:0 atIndex:i];
+             }
++            if (gtotal) [enc setBytes:&gtotal length:sizeof gtotal atIndex:bufs.count];
+             [enc dispatchThreadgroups:MTLSizeMake(groups, 1, 1)
+                 threadsPerThreadgroup:MTLSizeMake(threadsPerGroup, 1, 1)];
+             [enc endEncoding];
+@@ -369,12 +417,17 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+         };
+         const auto wall0 = std::chrono::steady_clock::now();
+ 
+-        if (!encode(I.psEntry, (kElems + 255) / 256, 256,
++        if (!encode(I.psEntry, limit((kElems + 255) / 256), 256,
+                     @[ I.dpp, I.entryCfg[0], I.entryCfg[1], I.entryCfg[2], I.entryCfg[3],
+-                       I.counts[0], I.elem[0], I.drops ]))
++                       I.counts[0], I.elem[0], I.drops ], 0))
+             return out;
+ 
+         const NSUInteger groups = (NSUInteger)I.nb << I.sm;
++        if (load != I.loadShown) {
++            std::fprintf(stderr, "Metal load %d%%: %lu of %lu threadgroups in flight\n", load,
++                         (unsigned long)limit(groups), (unsigned long)groups);
++            I.loadShown = load;
++        }
+         int inSet = 0;
+         // r1 and r2 switch together: r1's OUTSTR is r2's INSTR, so a mixed pair would
+         // have the second read a record the first never wrote.
+@@ -385,17 +438,18 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+             const int o = inSet ^ 1;
+             std::memset(I.counts[o].contents, 0, (size_t)I.nb * 4);
+             std::memset(I.gictr.contents, 0, 4);
+-            if (!encode(rounds[r], groups, kWG,
++            if (!encode(rounds[r], limit(groups), kWG,
+                         @[ I.cfg[r], I.counts[inSet], I.elem[inSet], I.counts[o],
+-                           I.elem[o], I.left, I.right, I.gictr, I.drops, I.dpp ]))
++                           I.elem[o], I.left, I.right, I.gictr, I.drops, I.dpp ],
++                        (uint32_t)groups))
+                 return out;
+             inSet = o;
+             if (I.abort_.load(std::memory_order_relaxed)) return out;
+         }
+ 
+-        if (!encode(I.psTerm, groups, kWG,
++        if (!encode(I.psTerm, limit(groups), kWG,
+                     @[ I.cfg[4], I.counts[inSet], I.elem[inSet], I.left, I.right,
+-                       I.survSlots, I.survCount, I.drops ]))
++                       I.survSlots, I.survCount, I.drops ], (uint32_t)groups))
+             return out;
+ 
+         // Report BEFORE the survivor check: a solve that finds nothing still took the
+@@ -420,7 +474,7 @@ bool alloc_geometry(uint32_t bb_, uint32_t sm_) {
+ 
+         std::memcpy(I.recCfg[0].contents, &hs, 4);
+         if (!encode(I.psRecover, (hs + 63) / 64, 64,
+-                    @[ I.recCfg[0], I.recCfg[1], I.survSlots, I.left, I.right, I.dleaves ]))
++                    @[ I.recCfg[0], I.recCfg[1], I.survSlots, I.left, I.right, I.dleaves ], 0))
+             return out;
+ 
+         // The CPU verify gate: the distinct-leaf and indexAfter checks the GPU rounds
+-- 
+2.54.0 (Apple Git-157)
+

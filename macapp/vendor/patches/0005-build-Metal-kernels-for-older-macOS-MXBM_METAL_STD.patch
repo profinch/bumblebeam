@@ -1,0 +1,57 @@
+From a047de4dbd1b57e3ece4ac86b0275b0abd958367 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Mon, 12 Oct 2026 23:51:34 +0100
+Subject: [PATCH 5/5] build: Metal kernels for older macOS (MXBM_METAL_STD)
+
+metal -c compiled for the SDK's newest Metal language and the build
+machine's macOS, so on a macOS 26 SDK the library loaded only on macOS 26.
+MXBM_METAL_STD names the language (macos-metal2.4 for macOS 12) and the
+kernels follow CMAKE_OSX_DEPLOYMENT_TARGET. Built with
+-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DMXBM_METAL_STD=macos-metal2.4 the
+goldens pass and the speed is unchanged (10.2 sol/s on an M5 Pro); the
+same for x86_64 passes under Rosetta.
+---
+ cmake/BuildMetallib.cmake | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/cmake/BuildMetallib.cmake b/cmake/BuildMetallib.cmake
+index 571e030..28ecc37 100644
+--- a/cmake/BuildMetallib.cmake
++++ b/cmake/BuildMetallib.cmake
+@@ -14,6 +14,10 @@
+ set(MXBM_METAL_WG      "" CACHE STRING "Metal threadgroup size (default 256)")
+ set(MXBM_METAL_FCAP    "" CACHE STRING "Metal per-group stage cap (default 320)")
+ set(MXBM_METAL_R1FCAP  "" CACHE STRING "Metal round-1 stage cap (default 288)")
++# Left empty, metal compiles for the SDK's newest Metal language and the build machine's macOS, so
++# the library loads only there. A build for older Macs names the language (macos-metal2.4 is
++# macOS 12) and sets CMAKE_OSX_DEPLOYMENT_TARGET, which the kernels then follow too.
++set(MXBM_METAL_STD     "" CACHE STRING "Metal language standard, e.g. macos-metal2.4 (default: the SDK's)")
+ # Attribution build: pass -DMXBM_METAL_ABL_DERIVE=2 at configure time to ablate a
+ # re-derivation (2 = round 2's rebuild). RESULTS ARE INTENTIONALLY WRONG when
+ # non-zero; the goldens will fail, which is the point -- it isolates what a stage
+@@ -33,6 +37,13 @@ function(mxbm_build_metallib OUT_LIB)
+   if(MXBM_METAL_DEFS)
+     message(STATUS "Metal tuning: ${MXBM_METAL_DEFS}")
+   endif()
++  set(_target_flags "")
++  if(NOT "${MXBM_METAL_STD}" STREQUAL "")
++    list(APPEND _target_flags -std=${MXBM_METAL_STD})
++  endif()
++  if(NOT "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
++    list(APPEND _target_flags -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET})
++  endif()
+   set(_airs "")
+   # metal -c does not create its output directory, and nothing orders this step
+   # after the other generated/ outputs under a parallel build.
+@@ -44,7 +55,7 @@ function(mxbm_build_metallib OUT_LIB)
+       COMMAND xcrun metal -c ${_src} -o ${_air}
+               -I ${CMAKE_SOURCE_DIR}/src
+               -I ${CMAKE_SOURCE_DIR}/src/beamhash
+-              -O3 ${MXBM_METAL_DEFS}
++              -O3 ${MXBM_METAL_DEFS} ${_target_flags}
+       DEPENDS ${_src}
+               ${CMAKE_SOURCE_DIR}/src/beamhash/bh3_primitives.h
+               ${CMAKE_SOURCE_DIR}/src/beamhash/bh3_types.h
+-- 
+2.54.0 (Apple Git-157)
+
