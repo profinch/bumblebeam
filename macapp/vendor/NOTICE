@@ -1,0 +1,22 @@
+MXBM
+Copyright 2026 Maxnflaxl
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes and/or is derived from the following third-party material:
+
+- Beam (https://github.com/BeamMW/beam) — Apache License 2.0,
+  Copyright The Beam Team / BeamMW. Portions of MXBM's stratum protocol
+  handling (src/stratum/) and proof-of-work difficulty test (src/pow/) are
+  ported from Beam source (pow/stratum.cpp, core/difficulty.cpp). The
+  BeamHash III reference implementation is used, under the same license, as
+  a correctness oracle in the test suite when a Beam checkout is supplied.
+
+- nlohmann/json — JSON for Modern C++. Copyright (c) 2013-2025 Niels Lohmann.
+  MIT License. Vendored single-header (third_party/nlohmann/json.hpp).
+
+- BLAKE2 reference implementation — Creative Commons CC0 1.0 (public domain
+  dedication). Vendored in third_party/blake2b/.
+
+- SHA-256 reference implementation — public domain (FIPS 180-4). Vendored in
+  third_party/sha256/.
