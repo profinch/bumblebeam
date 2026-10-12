@@ -256,6 +256,12 @@
       const v = (g / BB.GROTH) * price, d = v && v < 10 ? 2 : 0; // cents under $10: $2.90, not $2.9
       return `$${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
     };
+    // the rest of the network, which no listed pool claims: solo miners on their own nodes, pools
+    // that publish no API; always last
+    const others = net.hashrate ? {
+      hashrate: Math.max(0, net.hashrate - rows.reduce((s, r) => s + (r.hashrate || 0), 0)),
+      blocks24h: net.blocks24h != null ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null,
+    } : null;
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
@@ -270,6 +276,15 @@
         <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${int(p.blocks24h)}</td>
         <td class="num">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
+      ${others ? `<tr class="others">
+        <td></td>
+        <td><span class="name">Others</span><span class="sub">Unknown miners</span></td>
+        <td><div class="hashcell"><span>${hr(others.hashrate)}</span></div>
+            <div class="bar"><i style="width:${Math.min(100, (others.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
+        <td class="num">${pct(others.hashrate / total, 1)}</td>
+        <td class="num dim">—</td><td class="num dim">—</td><td class="num">${others.blocks24h != null ? int(others.blocks24h) : '—'}</td>
+        <td class="num">${beamAmt(perDay(others), 0)}${price ? `<span class="sub">${usd(perDay(others))}</span>` : ''}</td>
+        <td class="num dim">—</td><td></td></tr>` : ''}
       </tbody></table></div></section>`;
   }
 
