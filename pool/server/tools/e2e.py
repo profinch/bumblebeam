@@ -123,4 +123,43 @@ print("api block heights:", hs)
 assert hs["count"] == 1 and hs["blocks"][0][0] == hdr["height"] and hs["blocks"][0][1] in ("pplns", "solo") and hs["blocks"][0][2] == "pending"
 print("stats: blocks pending", stats["blocksPending"])
 assert stats["blocksPending"] == 1
+
+# the round is published and recomputes: each share row is floor(shared x difficulty / total)
+rd = json.load(urllib.request.urlopen(a.api + f"/api/blocks/{hdr['height']}?address={addr}"))
+print("round:", {k: rd[k] for k in ("mode", "recorded", "feePercent", "finderBonusPercent", "window", "total", "finderBonus")}, rd["credits"])
+assert rd["recorded"] and rd["mode"] == "pplns" and rd["total"] > 0
+assert all("miner" not in c and "address" not in c for c in rd["credits"]), "a round must not list addresses"
+assert all(c.get("you") for c in rd["credits"]), "the only miner's rows are marked as theirs"
+for c in rd["credits"]:
+    if c["kind"] == "share":
+        assert c["amount"] == int(rd["shared"] * c["difficulty"] / rd["total"]), c
+assert sum(c["amount"] for c in rd["credits"]) <= rd["pot"]
+assert sum(c["amount"] for c in rd["credits"]) == m["immature"], "credits add up to what the miner's page shows"
+other = json.load(urllib.request.urlopen(a.api + f"/api/blocks/{hdr['height']}"))
+assert not any(c.get("you") for c in other["credits"])
+try:
+    urllib.request.urlopen(a.api + f"/api/blocks/{hdr['height'] + 1000}")
+    raise AssertionError("a height the pool did not find must be 404")
+except urllib.error.HTTPError as e:
+    assert e.code == 404
+# the Mac app's session count: this worker's blocks since a time
+bs = json.load(urllib.request.urlopen(a.api + f"/api/miners/{addr}?worker=e2e&since=0"))["blocksSince"]
+none = json.load(urllib.request.urlopen(a.api + f"/api/miners/{addr}?worker=e2e&since={int(time.time()) + 60}"))["blocksSince"]
+print("blocks since 0:", bs, "since later:", none); assert bs == 1 and none == 0
+
+# speed reports from the Mac app: checked, stored without the address, one per 10 minutes, aggregated
+def post(body):
+    req = urllib.request.Request(a.api + "/api/benchmarks", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    try:
+        return urllib.request.urlopen(req).status
+    except urllib.error.HTTPError as e:
+        return e.code
+rep = {"app": "0.2.0", "os": "macOS 26.7.1", "arch": "arm64", "model": "Mac17,1", "chip": "Apple M5 Pro",
+       "gpuCores": 16, "cpuThreads": 15, "device": "gpu", "power": 80, "solPerSec": 8.6, "gpuWatts": 17.5, "minutes": 30}
+assert post(dict(rep, device="tpu")) == 400, "an unknown device is refused"
+assert post(dict(rep, solPerSec=-1)) == 400, "a negative speed is refused"
+assert post(rep) == 200
+assert post(rep) == 429, "a second report within 10 minutes is refused"
+agg = json.load(urllib.request.urlopen(a.api + "/api/benchmarks"))["benchmarks"]
+print("benchmarks:", agg); assert agg and agg[0]["chip"] == "Apple M5 Pro" and agg[0]["reports"] == 1 and abs(agg[0]["avg"] - 8.6) < 1e-9
 print("E2E OK")

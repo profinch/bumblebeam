@@ -358,6 +358,30 @@ const BB = (() => {
       };
     }
 
+    // A found block's split, in the shape of /api/blocks/<height>: the demo miners share the
+    // window in proportion to their hashrate, give or take luck.
+    function round(w, height) {
+      const b = w.blocks.find((x) => x.height === height);
+      if (!b) throw new Error(`404 demo: no block at ${height}`);
+      const r = rng(height);
+      const netDifficulty = Number(w.stats.nodes[0].difficulty);
+      const base = { height, hash: b.hash, ts: b.ts, mode: b.mode, status: b.status, reward: b.reward, fees: b.fees, effort: b.effort, netDifficulty, recorded: true, feePercent: FEE };
+      if (b.mode === 'solo') {
+        return { ...base, finderBonusPercent: 0, window: null, total: null, pot: null, finderBonus: null, shared: null,
+          credits: [{ kind: 'solo', difficulty: null, amount: Math.floor(b.reward * (1 - FEE / 100)) }] };
+      }
+      const window = 2 * netDifficulty;
+      const weights = w.miners.map((m) => m.hashrate * (0.6 + r() * 0.8));
+      const sum = weights.reduce((s, x) => s + x, 0);
+      const diffs = weights.map((x) => Math.round((x / sum) * window * (1 + r() * 0.002)));
+      const total = diffs.reduce((s, x) => s + x, 0);
+      const pot = b.reward * (1 - FEE / 100), finderBonus = Math.floor(pot / 100), shared = pot - finderBonus;
+      const credits = diffs.map((d) => ({ kind: 'share', difficulty: d, amount: Math.floor(shared * d / total) }))
+        .filter((c) => c.amount > 0).sort((x, y) => y.difficulty - x.difficulty);
+      credits.push({ kind: 'bonus', difficulty: null, amount: finderBonus });
+      return { ...base, finderBonusPercent: 1, window, total, pot, finderBonus, shared, credits };
+    }
+
     function get(path, net) {
       const w = build(net);
       const [p, q] = path.split('?');
@@ -370,6 +394,7 @@ const BB = (() => {
       if (p === 'payments') return { payments: w.payments.slice(0, limit) };
       if (p === 'miners') return { miners: w.miners.slice(0, limit).map(({ address, ...m }) => m) };
       if (p.startsWith('miners/')) return miner(w, decodeURIComponent(p.slice(7)), range);
+      if (p.startsWith('blocks/')) return round(w, Number(p.slice(7)));
       throw new Error(`demo: unknown path ${path}`);
     }
 

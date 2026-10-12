@@ -17,6 +17,7 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 | is it up, does it have work | `/api/health` |
 | blocks the pool found, status and confirmations | `/api/blocks?limit=50&before=<height>` |
 | every height the pool found, compact: is this block ours? how many confirmed? | `/api/blocks/heights` (`[height, mode, status]`, orphans left out) |
+| how a block was split, to recompute a credit | `/api/blocks/{height}?address=` (fee, bonus, `window`, `total`, credits with `difficulty` and `amount`; share credit = floor(`shared` × `difficulty` / `total`)) |
 | top miners by hashrate (no addresses) | `/api/miners?limit=50` |
 | one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments, `blocksFound`) |
 | payout runs | `/api/payments?limit=50` |

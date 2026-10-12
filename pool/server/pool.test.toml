@@ -17,6 +17,7 @@ min_payout_groth = 10000000
 block_check_url = ""
 payout_interval_secs = 7200
 pplns_window = 2.0
+finder_bonus_percent = 1.0               # exercised by the round check in tools/e2e.py
 maturity = 240
 verify_blocks_with_wallet = false
 

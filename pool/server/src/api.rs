@@ -46,6 +46,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/stats", get(stats))
         .route("/api/blocks", get(blocks))
         .route("/api/blocks/heights", get(block_heights))
+        .route("/api/blocks/:height", get(block_round))
         .route("/api/miners", get(miners))
         .route("/api/miners/:address", get(miner))
         .route("/api/payments", get(payments))
@@ -54,6 +55,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/coinbase", get(coinbase_info))
         .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
         .route("/api/miningboard", get(miningboard))
+        .route("/api/benchmarks", get(benchmarks).post(benchmark_report))
         .layer(CorsLayer::permissive())
         // the operator's API is added after the CORS layer: no other site may call it from a browser
         .merge(admin_router(api.clone()))
@@ -147,6 +149,27 @@ async fn block_heights(State(api): State<Api>) -> R {
     Ok(Json(json!({ "count": rows.len(), "blocks": rows })))
 }
 
+/// One block and how its reward was split (pool/API.md, "Rounds"). `address=<a>` marks that
+/// miner's rows; addresses are never listed.
+async fn block_round(State(api): State<Api>, Path(height): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
+    let Ok(height) = height.parse::<i64>() else {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "not a block height" }))).into_response();
+    };
+    let s = &api.shared;
+    let me = match q.get("address").and_then(|a| clean_address(a)) {
+        Some(a) => match s.db.miner_lookup(&a).await {
+            Ok(id) => id,
+            Err(e) => return ApiError(e).into_response(),
+        },
+        None => None,
+    };
+    match s.db.round(height, me).await {
+        Ok(Some(v)) => Json(v).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "the pool did not find a block at this height" }))).into_response(),
+        Err(e) => ApiError(e).into_response(),
+    }
+}
+
 async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
     Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now(), mode(&q)).await? })))
 }
@@ -173,7 +196,70 @@ async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Qu
     for k in ["blocksFound", "blocks24h", "lastBlockAt", "blocks"] {
         v[k] = found[k].clone();
     }
+    // ?worker=<name>&since=<unix seconds>: that worker's blocks since then (the Mac app's session count)
+    if let (Some(w), Some(since)) = (q.get("worker"), q.get("since").and_then(|v| v.parse::<i64>().ok())) {
+        if w.len() <= 64 {
+            v["blocksSince"] = json!(s.db.worker_blocks_since(&address, w, since).await?);
+        }
+    }
     Ok(Json(v))
+}
+
+async fn benchmarks(State(api): State<Api>) -> R {
+    Ok(Json(json!({ "benchmarks": api.shared.db.benchmarks(now()).await? })))
+}
+
+/// A speed report from the Mac app (its "Share average speed" switch, off by default). Checked
+/// field by field; one report per address per 10 minutes; the address itself is not stored.
+async fn benchmark_report(State(api): State<Api>, headers: HeaderMap, body: axum::body::Bytes) -> Response {
+    let bad = |msg: &str| (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+    if body.len() > 4096 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({ "error": "report over 4 KB" }))).into_response();
+    }
+    let Ok(v) = serde_json::from_slice::<Value>(&body) else { return bad("body is not JSON") };
+    let text = |k: &str| {
+        v[k].as_str()
+            .filter(|s| !s.is_empty() && s.len() <= 64 && s.chars().all(|c| c.is_ascii_graphic() || c == ' '))
+            .map(str::to_string)
+    };
+    let num = |k: &str, lo: f64, hi: f64| v[k].as_f64().filter(|x| x.is_finite() && *x >= lo && *x <= hi);
+    let (Some(app), Some(os), Some(arch), Some(model), Some(chip)) = (text("app"), text("os"), text("arch"), text("model"), text("chip")) else {
+        return bad("app, os, arch, model and chip are short printable strings");
+    };
+    let Some(device) = text("device").filter(|d| d == "gpu" || d == "cpu") else { return bad("device is gpu or cpu") };
+    let (Some(power), Some(sol_s), Some(minutes)) = (num("power", 1.0, 100.0), num("solPerSec", 0.0, 1000.0), num("minutes", 1.0, 100_000.0)) else {
+        return bad("power 1..100, solPerSec 0..1000 and minutes 1.. are required");
+    };
+    if !v["gpuWatts"].is_null() && num("gpuWatts", 0.0, 1000.0).is_none() {
+        return bad("gpuWatts is 0..1000 when given");
+    }
+    let ip = client_ip(&headers);
+    {
+        static SEEN: std::sync::OnceLock<std::sync::Mutex<HashMap<String, i64>>> = std::sync::OnceLock::new();
+        let mut seen = SEEN.get_or_init(Default::default).lock().unwrap();
+        let t = now();
+        seen.retain(|_, at| t - *at < 600);
+        if seen.contains_key(&ip) {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "one report per 10 minutes" }))).into_response();
+        }
+        seen.insert(ip, t);
+    }
+    let b = crate::db::Benchmark {
+        app, os, arch, model, chip, device,
+        gpu_cores: num("gpuCores", 1.0, 1024.0).map(|x| x as i32),
+        cpu_threads: num("cpuThreads", 1.0, 4096.0).map(|x| x as i32),
+        power: power.round() as i32,
+        sol_s,
+        gpu_watts: num("gpuWatts", 0.0, 1000.0),
+        minutes,
+    };
+    match api.shared.db.add_benchmark(now(), &b).await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            error!("benchmark report: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "internal error" }))).into_response()
+        }
+    }
 }
 
 async fn payments(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
