@@ -80,7 +80,8 @@
     const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 6.2 + 8;
     const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
-    const R = narrow ? 84 : 96;
+    // just the axis labels and the pill (at least as wide as "1.23k"), so the line runs on to the axis
+    const R = Math.ceil(4 + Math.max(pw, 5 * 6.2 + 8) + 6);
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
