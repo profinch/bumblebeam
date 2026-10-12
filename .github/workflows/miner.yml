@@ -1,4 +1,7 @@
 name: miner
+# BumbleBeam Miner: the console miner for Linux, Windows and macOS, built and tested here. A tag
+# miner-vX.Y.Z publishes the release, its notes taken from miner/CHANGELOG.md; the Mac app's .dmg
+# files (miner/mac/build.sh, which needs the Metal toolchain and MXBM) are added to the same release.
 on:
   push:
     branches: [main]
@@ -17,22 +20,42 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: linux-x86_64
+            test: true
           - os: macos-latest
             target: aarch64-apple-darwin
             name: macos-arm64
+            test: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: macos-x86_64
+            test: false   # built on an Apple Silicon runner; the arm64 job runs the tests
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: windows-x86_64
+            test: true
     runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Version
+        shell: bash
+        run: |
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' miner/Cargo.toml | head -1)
+          if [[ "$GITHUB_REF" == refs/tags/miner-v* ]]; then
+            [ "${GITHUB_REF_NAME#miner-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but miner/Cargo.toml says $v"; exit 1; }
+          else
+            v="$v-dev"
+          fi
+          echo "VER=$v" >> "$GITHUB_ENV"
       - name: Build
         working-directory: miner
         run: cargo build --release --target ${{ matrix.target }}
       - name: Unit tests
+        if: matrix.test
         working-directory: miner
         run: cargo test --release --target ${{ matrix.target }}
       - name: Package
@@ -41,15 +64,31 @@ jobs:
           mkdir -p dist
           bin=bumblebeam-miner; [ "${{ runner.os }}" = Windows ] && bin=bumblebeam-miner.exe
           cp miner/target/${{ matrix.target }}/release/$bin dist/
-          cp miner/README.md dist/README.md; cp LICENSE dist/LICENSE
-          cd dist && if [ "${{ runner.os }}" = Windows ]; then 7z a ../bumblebeam-miner-${{ matrix.name }}.zip .; else tar czf ../bumblebeam-miner-${{ matrix.name }}.tar.gz .; fi
+          cp miner/README.md dist/README.md; cp miner/CHANGELOG.md dist/CHANGELOG.md; cp LICENSE dist/LICENSE
+          a=bumblebeam-miner-$VER-${{ matrix.name }}
+          echo "ARCHIVE=$a" >> "$GITHUB_ENV"
+          cd dist && if [ "${{ runner.os }}" = Windows ]; then 7z a ../$a.zip .; else tar czf ../$a.tar.gz .; fi
       - uses: actions/upload-artifact@v4
         with:
-          name: bumblebeam-miner-${{ matrix.name }}
-          path: bumblebeam-miner-${{ matrix.name }}.*
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}.*
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/miner-v')
+        shell: bash
+        run: |
+          {
+            echo "BumbleBeam Miner $VER: the console miner \`bumblebeam-miner\` for Linux, Windows and macOS, and the Mac app BumbleBeam Miner.app."
+            echo
+            echo "- Console miner: \`bumblebeam-miner-$VER-<os>-<arch>\`; unpack and run \`bumblebeam-miner mine --pool stratum.bumblebeam.org:3443 --user <offline address>.<worker>\`."
+            echo "- Mac app (macOS 12+): \`BumbleBeam-Miner-$VER-macOS-AppleSilicon.dmg\` (M1 and later) or \`-macOS-Intel.dmg\`; open it and drag the app to Applications. Not notarized yet: the first time, right-click the app and choose Open."
+            echo
+            echo "## Changes"
+            awk -v v="$VER" '$0 ~ "^## " v " " {f=1; next} f && /^## / {exit} f' miner/CHANGELOG.md
+          } > notes.md
       - name: Release
         if: startsWith(github.ref, 'refs/tags/miner-v')
         uses: softprops/action-gh-release@v2
         with:
-          files: bumblebeam-miner-${{ matrix.name }}.*
-          generate_release_notes: true
+          name: BumbleBeam Miner ${{ env.VER }}
+          body_path: notes.md
+          files: ${{ env.ARCHIVE }}.*

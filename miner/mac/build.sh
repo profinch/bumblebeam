@@ -1,7 +1,8 @@
 #!/bin/bash
-# Builds BumbleBeam Miner for macOS 12 and later, one install per kind of Mac:
-#   build/BumbleBeam-Miner-<version>-AppleSilicon.dmg
-#   build/BumbleBeam-Miner-<version>-Intel.dmg
+# Builds the BumbleBeam Miner app for macOS 12 and later, one install per kind of Mac:
+#   build/BumbleBeam-Miner-<version>-macOS-AppleSilicon.dmg
+#   build/BumbleBeam-Miner-<version>-macOS-Intel.dmg
+# The version is the console miner's (../Cargo.toml): one product, one version.
 # The apps themselves are put together under build/apps.noindex/: Spotlight skips a folder named
 # *.noindex, so the build copies never show up as more apps next to the installed one.
 #
@@ -9,12 +10,12 @@
 #
 # Inside each app (Contents/MacOS): the menu bar app, mxbm (GPU, Metal; MXBM with our patches,
 # vendor/<arch>/mxbm, built by tools/build-mxbm.sh with OpenSSL linked in) and bumblebeam-miner
-# (CPU, built here from ../miner). The apps are ad-hoc signed: on another Mac the first launch is
+# (CPU, the console miner, built here from ..). The apps are ad-hoc signed: on another Mac the first launch is
 # right-click > Open (or System Settings > Privacy & Security > Open Anyway).
 set -euo pipefail
 cd "$(dirname "$0")"
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
-VERSION=${VERSION:-0.3.3}
+VERSION=${VERSION:-$(sed -nE 's/^version = "(.*)"/\1/p' ../Cargo.toml | head -1)}
 MIN_OS=12.0
 ARCHS=${*:-arm64 x86_64}
 
@@ -28,8 +29,8 @@ for A in $ARCHS; do
 
   swift build -c release --arch "$A"
   BIN=$(swift build -c release --arch "$A" --show-bin-path)/BumbleBeamMiner
-  (cd ../miner && MACOSX_DEPLOYMENT_TARGET=$MIN_OS cargo build --release --target "$RUST" -q)
-  CPU=../miner/target/$RUST/release/bumblebeam-miner
+  (cd .. && MACOSX_DEPLOYMENT_TARGET=$MIN_OS cargo build --release --target "$RUST" -q)
+  CPU=../target/$RUST/release/bumblebeam-miner
 
   APP="build/apps.noindex/$DIR/BumbleBeam Miner.app"
   C="$APP/Contents"
@@ -41,7 +42,7 @@ for A in $ARCHS; do
   strip -x "$C/MacOS/bumblebeam-miner"
   cp vendor/LICENSE vendor/NOTICE "$C/Resources/MXBM/"
   cp vendor/patches/*.patch "$C/Resources/MXBM/"
-  cp ../LICENSE "$C/Resources/LICENSE"
+  cp ../../LICENSE "$C/Resources/LICENSE"
 
   # nothing inside may need a newer macOS than the app says, nor a library outside the system
   for f in "$C"/MacOS/*; do
@@ -54,7 +55,7 @@ for A in $ARCHS; do
   done
 
   # icon
-  swift tools/icon.swift ../pool/web/favicon.svg build/AppIcon.iconset
+  swift tools/icon.swift ../../pool/web/favicon.svg build/AppIcon.iconset
   iconutil -c icns build/AppIcon.iconset -o "$C/Resources/AppIcon.icns"
 
   cat > "$C/Info.plist" <<EOF
@@ -86,7 +87,7 @@ EOF
   codesign --verify --deep --strict "$APP"
 
   # dmg: the app and a link to /Applications
-  DMG="build/BumbleBeam-Miner-$VERSION-$KIND.dmg"
+  DMG="build/BumbleBeam-Miner-$VERSION-macOS-$KIND.dmg"
   STAGE="build/apps.noindex/dmg-$DIR"
   rm -rf "$STAGE" "$DMG"
   mkdir -p "$STAGE"
