@@ -169,8 +169,12 @@ The network as the pool page shows it, cached by the pool server for 30 seconds 
 block time, Sol/s) and `blocks24h` come from an explorer-node, the pool's own first
 (`pool.explorer_urls`); `priceUsd` is BEAM's price in USD, the median of Beam's on-chain price
 oracle (Oracle2) from the same node, refreshed every 5 minutes. `pools`, which the chain does not
-know, comes from the Beam Terminal's list, which polls each pool's own API. Each part keeps its last
-good value while its source is down. The UI falls back to the explorer directly when this endpoint
+know: each pool's own API where it has a public one (2Miners, 2Miners Solo, HeroMiners) for
+`hashrate`, `miners`, `workers` and `lastTs`, the Beam Terminal's list for the rest and for every
+pool's `blocks24h` and `series`. HeroMiners' row counts its solo miners too, as ours does. Each part
+keeps its last good value while its source is down; a pool whose API does not answer shows the
+terminal's numbers. The network's `hashrate` less the pools' is the miners no pool lists (the site's
+`Others` row). The UI falls back to the explorer directly when this endpoint
 is absent.
 
 ```json
@@ -333,7 +337,7 @@ address; every action is logged.
 | `pool_miner` | one miner by payout address: hashrate and its peak, balances, workers and their modes, payments, blocks |
 | `pool_miners` | top miners by hashrate with their modes; `mode` for PPLNS or solo only |
 | `pool_payments` | payout runs |
-| `pool_network` | Beam network and every Beam pool |
+| `pool_network` | Beam network (from the chain), BEAM/USD, every Beam pool |
 | `pool_health` | whether the pool is up and has work |
 
 ```sh
