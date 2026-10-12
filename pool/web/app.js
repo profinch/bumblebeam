@@ -599,16 +599,17 @@
         ${tile('Payout runs 24h', int(day.length), `every ${dur(stats.payoutInterval)}`)}
         ${tile('Min payout', beam(stats.minPayout, 2), stats.minerPaysTxFee ? `network fee deducted, about ${beam(stats.shieldedFee, 3)} per payout to an offline address` : 'network fee paid by the pool')}
       </div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Not received?</h2></div>
+        <div class="why"><span class="dim">The pool pays every ${dur(stats.payoutInterval)} once your balance reaches ${beam(stats.minPayout, 2)}.</span>
+          Your own page shows what it still owes you. To pay out to a regular address, your wallet must be online.
+          If it misses a payout, it returns to your balance and tries again.
+          If your reward still has not arrived, write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> with your payout address.</div>
+      </section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payout transactions</h2><div class="panel-meta"><span>Every payout is its own Beam transaction: open its kernel in the explorer to see it on the chain</span></div></div>
       ${payments.length ? `<div class="table-wrap"><table id="payouts-table"><colgroup><col class="w-time"><col class="w-amt"><col class="w-n"><col><col class="w-amt"><col class="w-more"></colgroup>
       <thead><tr><th>Time</th><th class="num">Total</th><th class="num">Miners</th><th>Transaction</th><th class="num">Amount</th><th></th></tr></thead><tbody>
       ${payments.map(payoutRow).join('')}
-      </tbody></table></div>` : '<div class="empty">No payments yet</div>'}</section>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Not received?</h2></div>
-        <div class="why">The pool pays every ${dur(stats.payoutInterval)} once your balance reaches ${beam(stats.minPayout, 2)}; your own page shows what it still owes you.
-          A payout to a regular address needs your wallet online: one it missed comes back to your balance and goes out again.
-          If your reward still has not arrived, write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> with your payout address.</div>
-      </section>`;
+      </tbody></table></div>` : '<div class="empty">No payments yet</div>'}</section>`;
   };
 
   // One kernel link, or for a run with several transactions a list of all of them with amounts.
