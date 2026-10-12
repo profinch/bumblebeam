@@ -247,10 +247,16 @@
       hashrate: stats.hashrate, miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
     rows.sort((a, b) => b.hashrate - a.hashrate);
     const total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
-    const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>`;
+    // what a pool's miners together can expect a day: its share of the network's 1440 blocks of a
+    // day at the current reward, less its fee; in USD at the on-chain oracle's price
+    const price = net.priceUsd;
+    const perDay = (p) => (total && stats.blockReward ? (p.hashrate / total) * 1440 * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
+    const usd = (g) => (price && g != null ? `$${(g / BB.GROTH * price).toLocaleString('en-US', { maximumFractionDigits: g / BB.GROTH * price < 10 ? 2 : 0 })}` : '');
+    const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
+    const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
       <div class="panel-head"><h2 class="panel-title">Beam mining pools</h2><div class="panel-meta">${head}</div></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="num"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
       ${rows.map((p, i) => `<tr class="${p.ours ? 'ours' : ''}">
         <td class="dim">${i + 1}</td>
         <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}${p.ours && BB.mode === 'demo' ? ' · demo' : ''}</span></td>
@@ -258,6 +264,7 @@
             <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
         <td class="num">${pct(p.hashrate / total, 1)}</td>
         <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${int(p.blocks24h)}</td>
+        <td class="num">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
       </tbody></table></div></section>`;
   }

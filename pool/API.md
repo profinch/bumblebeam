@@ -166,10 +166,12 @@ while the pool has no block template, for example while the node syncs.
 
 The pool server's cache of the Beam Explorer's mining data, refreshed every 30 seconds for all
 visitors, so a busy pool page does not hit the community explorer once per visitor. The UI falls
-back to the explorer directly when this endpoint is absent.
+back to the explorer directly when this endpoint is absent. `priceUsd` is BEAM's price in USD: the median
+of Beam's on-chain price oracle (Oracle2) read from an explorer-node, refreshed every 5 minutes (the
+last one that came, null until one has).
 
 ```json
-{ "hashrate": 49160.2, "height": 4068807, "difficulty": 2800123.0, "avgBlock": 57.0, "blocks24h": 1405,
+{ "hashrate": 49160.2, "height": 4068807, "difficulty": 2800123.0, "avgBlock": 57.0, "blocks24h": 1405, "priceUsd": 0.01,
   "pools": [{ "id": "2miners", "name": "2Miners", "website": "https://beam.2miners.com", "scheme": "PPLNS",
               "fee": 1, "hashrate": 35540.0, "miners": 95, "workers": 306, "blocks24h": 1048,
               "lastTs": 1791327800, "series": [[1791300000, 45031.5]] }] }

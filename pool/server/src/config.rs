@@ -157,6 +157,11 @@ pub struct PoolCfg {
     /// answers; your own explorer-node first, a public one as a fallback. Empty disables the check.
     #[serde(default)]
     pub block_check_urls: Vec<String>,
+    /// Explorer-node endpoints with the state of Beam's on-chain price oracle (Oracle2, whose median
+    /// BEAM/USD Nephrite reads), tried in this order until one answers; your own explorer-node first.
+    /// Empty shows no USD prices.
+    #[serde(default = "price_urls")]
+    pub price_urls: Vec<String>,
     /// Deduct the network fee from each payout (the usual pool rule); false makes the pool pay it
     #[serde(default = "t")]
     pub miner_pays_tx_fee: bool,
@@ -213,6 +218,9 @@ fn three() -> usize { 3 }
 fn name() -> String { "BumbleBeam".into() }
 fn maturity() -> u64 { 240 }
 fn default_fee() -> u64 { 1_000 }
+fn price_urls() -> Vec<String> { vec![format!("https://explorer.0xmx.net/api/contract?id={ORACLE2}&nMaxTxs=0")] }
+/// Beam mainnet's Oracle2 contract
+pub const ORACLE2: &str = "4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b";
 fn default_shielded_fee() -> u64 { 1_000_100 }
 
 impl Config {

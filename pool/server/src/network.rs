@@ -1,5 +1,6 @@
 //! Cache of the Beam Explorer's mining data, refreshed every 30 s for all visitors, in the shape
-//! pool/API.md gives for /api/network.
+//! pool/API.md gives for /api/network, with BEAM's USD price every 5 min: the median of Beam's
+//! on-chain price oracle, read from an explorer-node (`pool.price_urls`), no price service.
 
 use crate::state::Shared;
 use serde_json::{json, Value};
@@ -18,9 +19,18 @@ pub struct NetCache {
 }
 
 pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
-    loop {
+    // the last price that came, kept through a failed fetch: a stale price beats none
+    let mut price: Option<f64> = None;
+    for round in 0u64.. {
+        if round % 10 == 0 {
+            match fetch_price(&shared.http, &shared.cfg.pool.price_urls).await {
+                Ok(p) => price = Some(p),
+                Err(e) => debug!("price: {e:#}"),
+            }
+        }
         match fetch(&shared.http).await {
-            Ok(v) => {
+            Ok(mut v) => {
+                v["priceUsd"] = json!(price);
                 if let Some(h) = v["height"].as_u64() {
                     shared.net_height.store(h, Ordering::Relaxed);
                 }
@@ -38,6 +48,23 @@ fn num(v: &Value) -> Option<f64> {
         Value::String(s) => s.replace(',', "").parse().ok(),
         _ => None,
     }
+}
+
+async fn fetch_price(http: &reqwest::Client, urls: &[String]) -> anyhow::Result<f64> {
+    let mut last = anyhow::anyhow!("no price_urls");
+    for url in urls {
+        let r: anyhow::Result<f64> = async {
+            let v: Value = http.get(url).timeout(Duration::from_secs(10)).send().await?.error_for_status()?.json().await?;
+            // the explorer-node prints the oracle's median as a decimal string
+            num(&v["State"]["Median"]).filter(|p| *p > 0.0).ok_or_else(|| anyhow::anyhow!("no State.Median from {url}"))
+        }
+        .await;
+        match r {
+            Ok(p) => return Ok(p),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
 }
 
 async fn fetch(http: &reqwest::Client) -> anyhow::Result<Value> {

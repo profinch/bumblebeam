@@ -39,6 +39,9 @@ block_check_urls = ["http://explorer-node:8888/block?height=", "https://explorer
                                           # cross-check of the block hash by height, tried in order: our explorer-node on the
                                           # docker network first, a public one as a fallback; it never confirms alone, but with
                                           # no coinbase in the wallet a different hash orphans the block without an operator
+price_urls = ["http://explorer-node:8888/contract?id=4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b&nMaxTxs=0",
+              "https://explorer.0xmx.net/api/contract?id=4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b&nMaxTxs=0"]
+                                          # BEAM/USD for the site: the median of the on-chain Oracle2, tried in order
 public_host = "stratum.bumblebeam.org"
 public_node = "node.bumblebeam.org:10000"  # beam-node p2p for wallets, shown on the connect page; a DNS-only name
 
