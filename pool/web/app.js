@@ -209,9 +209,11 @@
       <tbody id="blocks-body">${blocksRows(blocks, maturity)}</tbody></table></div>${more}`;
   }
 
+  // what the network's hashrate is, wherever it is shown
+  const NET_HR_TIP = 'Now: what the pools report from their shares over the last minutes, scaled up by the part of the last 24 h of blocks no listed pool found (solo nodes, pools with no API). Blocks alone are too few for a current figure: an hour of them is ±13% on luck.';
   function netMeta(net, extra = '') {
     if (!net || !net.ok) return '<span class="err">network data unavailable</span>';
-    return `<span>Network: <b>${hr(net.hashrate)}</b></span><span>Block: <b>${int(net.height)}</b></span>
+    return `<span class="tipped" title="${NET_HR_TIP}">Network: <b>${hr(net.hashrate)}</b></span><span>Block: <b>${int(net.height)}</b></span>
       <span>Diff: <b>${net.difficulty ? fix(net.difficulty / 1e6, 2) + 'M' : '—'}</b></span>
       <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}`;
   }
@@ -385,7 +387,7 @@
     const next = BB.nextRewardChange(net && net.height);
     return `<div class="page-head"><h1 class="page-title">Network</h1></div>
       <div class="tiles">
-        ${tile('Network hashrate', hr(net && net.hashrate), '', 'accent')}
+        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${hr(net && net.hashrate)}</span>`, '', 'accent')}
         ${tile('Difficulty', net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M` : '—', 'solutions per block, expected')}
         ${tile('Block reward', beam(BB.blockReward(net && net.height), 1), `${beam(next.reward, 1)} from height ${int(next.height)}`)}
         ${tile('Blocks 24h', int(net && net.blocks24h), net && net.avgBlock ? `avg block ${fix(net.avgBlock, 1)}s` : '')}

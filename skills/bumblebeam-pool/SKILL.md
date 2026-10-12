@@ -35,8 +35,10 @@ curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balan
   blocks (about 4 hours); then it moves to `balance` (unpaid) and is paid at the next run once
   above `minPayout`. An orphaned block's share disappears.
 - A miner's address is private on Beam; the pool shows a miner only to whoever has the address.
-- A pool's reward a day ≈ `blocks24h` × 25 BEAM; in USD × `priceUsd`. Network `hashrate` less the
-  sum of `pools` is miners no pool lists (solo nodes, private pools).
+- Network `hashrate` is now: the pools' own current figures scaled up by the part of the day's
+  blocks no listed pool found (`othersHashrate`, `othersBlocks24h`: solo nodes, private pools).
+  `chainHashrate` is the chain's 24 h estimate. A pool's share is its `hashrate` / `hashrate`; a
+  pool's reward a day ≈ `blocks24h` × 25 BEAM, in USD × `priceUsd`.
 - Block `status`: `pending` (confirming), `confirmed`, `orphaned`, `unverified` (waits for the
   operator).
 
