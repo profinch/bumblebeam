@@ -76,13 +76,11 @@
     if (!series || series.length < 2) return '<div class="empty">No data yet</div>';
     if (!series.some((p) => p[1] > 0)) return `<div class="empty">No hashrate in the ${span.text}</div>`;
     // phones get a narrower canvas, so the labels are not scaled down to nothing
-    // the right margin holds the axis, the current value's pill and, right of it, the peak
+    // the right margin holds the axis and the current value's pill; the peak's label sits inside the chart
     const last = series[series.length - 1][1], pillText = label(last), pw = pillText.length * 6.2 + 8;
-    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`, ptw = pText.length * 5.7;
+    const top = Math.max(...series.map((p) => p[1])), pText = `max ${top >= 1e3 ? label(top) : top.toFixed(1)}`;
     const narrow = NARROW.matches, W = narrow ? 380 : 1000, H = narrow ? 210 : 260, L = narrow ? 8 : 14, T = 16, B = 30;
-    // the current value's pill gets a fixed slot (as wide as "1.23k"), the peak label starts after it
-    const slot = Math.max(pw, 5 * 6.2 + 8);
-    const R = Math.max(narrow ? 84 : 96, peak ? Math.ceil(4 + slot + 8 + ptw + 4) : 0);
+    const R = narrow ? 84 : 96;
     const yTicks = narrow ? 4 : 5, xTicks = narrow ? (range === '7d' ? 2 : 3) : 6;
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const max = Math.max(...series.map((p) => p[1])) * 1.12 || 1;
@@ -106,14 +104,13 @@
     }
     const ly = Math.max(T + 9, Math.min(H - B - 9, y(last)));
     const id = `g${Math.random().toString(36).slice(2, 8)}`;
-    // the peak: the same guide as the current value, its value in plain text a fixed distance
-    // right of the current value's pill slot, so it does not move with the current value
+    // the peak: the same guide as the current value, ending at the axis, its value inside the chart
+    // over the guide's right end (under it when the guide runs along the top)
     let peakMark = '';
     if (peak) {
-      const py = y(top), ty = Math.max(T + 9, Math.min(H - B - 9, py));
-      // the guide runs on to the text, under the current value's pill (drawn after it)
-      peakMark = `<line class="now" x1="${L}" x2="${(W - R + 4 + slot + 5).toFixed(1)}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
-      <text class="peak-text" x="${(W - R + 4 + slot + 8).toFixed(1)}" y="${ty.toFixed(1)}" dominant-baseline="central">${esc(pText)}</text>`;
+      const py = y(top), ty = py - 6 < T + 8 ? py + 13 : py - 6;
+      peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
+      <text class="peak-text" x="${W - R - 4}" y="${ty.toFixed(1)}" text-anchor="end">${esc(pText)}</text>`;
     }
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
