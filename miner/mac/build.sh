@@ -41,7 +41,7 @@ for A in $ARCHS; do
   cp "$CPU" "$C/MacOS/bumblebeam-miner"
   strip -x "$C/MacOS/bumblebeam-miner"
   cp vendor/LICENSE vendor/NOTICE "$C/Resources/MXBM/"
-  cp vendor/patches/*.patch "$C/Resources/MXBM/"
+  cp ../mxbm-patches/*.patch "$C/Resources/MXBM/"
   cp ../../LICENSE "$C/Resources/LICENSE"
 
   # nothing inside may need a newer macOS than the app says, nor a library outside the system

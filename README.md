@@ -74,8 +74,8 @@ cmake -S . -B build -G Ninja && cmake --build build
 
 The [latest release](https://github.com/profinch/bumblebeam/releases/latest) (tags `miner-v*`) has
 the console miner `bumblebeam-miner` for Linux x86-64, Windows x86-64 and macOS (Apple Silicon and
-Intel), and the Mac app BumbleBeam Miner.app, a menu bar app that mines on the Mac's GPU with MXBM
-or on its CPU ([`miner/mac/`](miner/mac)). The console miner:
+Intel), and tray apps that mine on the GPU with MXBM or on the CPU: for Windows and Linux
+([`miner/desktop/`](miner/desktop)) and for the Mac ([`miner/mac/`](miner/mac)). The console miner:
 
 ```sh
 bumblebeam-miner mine --pool <pool host>:3443 --user <your offline Beam address>.<worker name>

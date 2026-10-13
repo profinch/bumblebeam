@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BumbleBeam Miner",
+  "version": "0.5.0",
+  "identifier": "org.bumblebeam.miner",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "BumbleBeam Miner",
+        "width": 360,
+        "height": 664,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "backgroundColor": "#031d35"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "deb", "appimage"],
+    "publisher": "BumbleBeam",
+    "category": "Utility",
+    "shortDescription": "Mine Beam on pool.bumblebeam.org",
+    "longDescription": "A tray app that mines Beam for pool.bumblebeam.org on the GPU with MXBM or on the CPU with bumblebeam-miner.",
+    "homepage": "https://pool.bumblebeam.org",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.ico"],
+    "externalBin": ["binaries/mxbm", "binaries/bumblebeam-miner", "binaries/bb-power"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/polkit-1/actions/org.bumblebeam.miner.power.policy": "../linux/org.bumblebeam.miner.power.policy"
+        }
+      }
+    }
+  }
+}

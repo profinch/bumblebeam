@@ -77,9 +77,11 @@ jobs:
         shell: bash
         run: |
           {
-            echo "BumbleBeam Miner $VER: the console miner \`bumblebeam-miner\` for Linux, Windows and macOS, and the Mac app BumbleBeam Miner.app."
+            echo "BumbleBeam Miner $VER: apps for Windows, Linux and macOS, and the console miner \`bumblebeam-miner\`."
             echo
             echo "- Console miner: \`bumblebeam-miner-$VER-<os>-<arch>\`; unpack and run \`bumblebeam-miner mine --pool stratum.bumblebeam.org:3443 --user <offline address>.<worker>\`."
+            echo "- Windows app: \`BumbleBeam-Miner-$VER-Windows-x64-setup.exe\`. Not signed yet: SmartScreen may warn, choose More info › Run anyway."
+            echo "- Linux app: \`BumbleBeam-Miner-$VER-Linux-x86_64.deb\` (Debian, Ubuntu, Mint) or \`.AppImage\`."
             echo "- Mac app (macOS 12+): \`BumbleBeam-Miner-$VER-macOS-AppleSilicon.dmg\` (M1 and later) or \`-macOS-Intel.dmg\`; open it and drag the app to Applications. Not notarized yet: the first time, right-click the app and choose Open."
             echo
             echo "## Changes"

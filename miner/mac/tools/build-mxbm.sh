@@ -3,7 +3,7 @@
 #
 #   tools/build-mxbm.sh <MXBM source checkout> [arm64|x86_64 ...]
 #
-# The checkout is MXBM with our patches (vendor/patches/): the macOS build fixes, the Metal load
+# The checkout is MXBM with our patches (../mxbm-patches/): the macOS build fixes, the Metal load
 # limit and the Metal language/deployment-target switch. OpenSSL is built static from the official
 # release (checked against its published SHA-256), so mxbm loads no Homebrew library; the Metal
 # kernels are compiled for Metal 2.4 (macOS 12). Needs Xcode with the Metal toolchain and CMake.

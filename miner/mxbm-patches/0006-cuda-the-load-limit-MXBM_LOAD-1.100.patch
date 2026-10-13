@@ -1,0 +1,464 @@
+From 5665930fea0ce33c412a9f23e00f9385f4c33fa0 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Tue, 13 Oct 2026 00:44:56 +0100
+Subject: [PATCH] cuda: the load limit, MXBM_LOAD=1..100
+
+The Metal load limit for the CUDA path: below 100 every round, the terminal
+round and the entry launch fewer blocks and each loops over its share of the
+groups (or elements), and the solve takes the plain path (no speculative
+entry beside the rounds). At 100 the launches are as before and each loop runs
+once. MXBM_LOAD_FILE names a file re-read before every solve, MXBM_LOAD_BLOCKS
+sets the blocks in flight directly, for tuning.
+
+test_cuda_solver passes at 100, 50 and 10 % on an RTX 3090, every geometry
+3/3 goldens. Speed by blocks in flight there (82 SMs):
+
+  blocks   sol/s   W        blocks   sol/s   W
+  20        8.9   221       164      44.3   331
+  41       19.4   283       1640     49.1   334
+  82       35.2   318       full     50.9   337
+
+So on NVIDIA it lowers the speed but hardly the draw: the board keeps its
+clocks and memory power with few SMs busy. The board power limit (--pl) is
+what lowers the draw there (250 W: 46.3 sol/s, 200 W: 32.4, 150 W: 15.6);
+this is for when that is not possible (no administrator rights).
+---
+ kernels/cuda/fused_round.cuh      |  18 ++-
+ kernels/cuda/pipeline_kernels.cuh | 215 +++++++++++++++---------------
+ src/gpu/cuda_solver.cu            |  70 ++++++++--
+ 3 files changed, 181 insertions(+), 122 deletions(-)
+
+diff --git a/kernels/cuda/fused_round.cuh b/kernels/cuda/fused_round.cuh
+index 475052c..9f39811 100644
+--- a/kernels/cuda/fused_round.cuh
++++ b/kernels/cuda/fused_round.cuh
+@@ -1693,11 +1693,19 @@ void fused_round(uint32_t bucket_bits, uint32_t submask_bits,
+     }
+ 
+     __shared__ RoundShared<INW, LEAFW, LMODE, FCAP, SUBPASS, MFIRST, ARENA, N6> shm;
+-    fused_round_body<INW, OUTW, LEAFW, LMODE, LOUT, PADN, SIN, SOUT, SBUILD,
+-                     INSTR, OUTSTR, FCAP, SUBPASS, MFIRST, IMPB, ARENA, REFS, N6>(
+-        shm, bid, bucket_bits, submask_bits, in_bucket_cap, out_bucket_cap, out_off,
+-        in_counts, in_belem, out_counts, out_belem, all_left, all_right, gi_counter,
+-        drops, pp4, in_ahead, in_anext, out_actr, out_atag);
++    // Load limit (MXBM_LOAD): the host may launch fewer blocks than the round has groups;
++    // each block then works through every gridDim-th group, so fewer SMs are busy. At a
++    // full launch the loop runs once. Co-block launches are never limited.
++    const uint32_t nGroups = (1u << bucket_bits) << submask_bits;
++    const uint32_t step = COBLOCKS ? nGroups : gridDim.x;
++    for (; bid < nGroups; bid += step) {
++        fused_round_body<INW, OUTW, LEAFW, LMODE, LOUT, PADN, SIN, SOUT, SBUILD,
++                         INSTR, OUTSTR, FCAP, SUBPASS, MFIRST, IMPB, ARENA, REFS, N6>(
++            shm, bid, bucket_bits, submask_bits, in_bucket_cap, out_bucket_cap, out_off,
++            in_counts, in_belem, out_counts, out_belem, all_left, all_right, gi_counter,
++            drops, pp4, in_ahead, in_anext, out_actr, out_atag);
++        __syncthreads();   // the next group reuses the shared arrays
++    }
+ 
+     // Co-tenant: the next nonce's entry pass, in THIS launch. Grid-strided rather than
+     // one-element-per-thread, so it stays correct if the geometry or kWG ever makes
+diff --git a/kernels/cuda/pipeline_kernels.cuh b/kernels/cuda/pipeline_kernels.cuh
+index 6d2deb8..e804c73 100644
+--- a/kernels/cuda/pipeline_kernels.cuh
++++ b/kernels/cuda/pipeline_kernels.cuh
+@@ -14,11 +14,11 @@ void entry_scatter(const uint64_t* __restrict__ pp4, uint32_t begin, uint32_t co
+                    uint32_t* __restrict__ drops,
+                    uint32_t* __restrict__ actr = nullptr,
+                    uint32_t* __restrict__ atag = nullptr) {
+-    const uint32_t g = blockIdx.x*blockDim.x + threadIdx.x;
+-    if (g >= count) return;
+-    // Body shared with fused_round's COTENANT path, so the co-resident entry cannot
+-    // drift from the standalone one.
+-    entry_body(begin + g, pp4, bucket_bits, bucket_cap, counts, belem, drops, actr, atag);
++    // Grid-strided for the load limit (MXBM_LOAD), which may launch fewer threads than
++    // elements. Body shared with fused_round's COTENANT path, so the co-resident entry
++    // cannot drift from the standalone one.
++    for (uint32_t g = blockIdx.x*blockDim.x + threadIdx.x; g < count; g += gridDim.x*blockDim.x)
++        entry_body(begin + g, pp4, bucket_bits, bucket_cap, counts, belem, drops, actr, atag);
+ }
+ 
+ // The same pass beside a round, on a higher-priority stream (cuda_solver.cu). A grid of
+@@ -140,115 +140,120 @@ void terminal_round(uint32_t bucket_bits, uint32_t submask_bits, uint32_t in_buc
+     __shared__ uint32_t gcount;
+     const uint32_t lId = threadIdx.x;
+     const uint32_t submaskCount = 1u << submask_bits;
+-    const uint32_t bucket = blockIdx.x / submaskCount, mask = blockIdx.x % submaskCount;
+-    if (lId == 0) gcount = 0;
+-    for (uint32_t i = lId; i < kTermTab; i += kWG) tab[i] = kEmpty;
+-    __syncthreads();
+-    uint32_t cnt = in_counts[bucket];
+-    if (cnt > in_bucket_cap) cnt = in_bucket_cap;
+-    const size_t base = (size_t)bucket * in_bucket_cap;
+-    // Same chain walk as the fused rounds'. Declared at 1 rather than 0 off the arena
+-    // rungs -- nvcc rejects a zero-sized shared variable -- and unused there, so ptxas
+-    // drops it exactly as it drops lkey above.
+-    [[maybe_unused]] const size_t nbcap_in = ((size_t)1u << bucket_bits) * in_bucket_cap;
+-    __shared__ uint16_t aidx[ARENA ? kAMax : 1];
+-    __shared__ uint32_t acnt_sh[1];
+-    uint32_t acnt = 0u;
+-    if constexpr (ARENA) {
+-        if (lId == 0) {
+-            uint32_t n_ = 0;
+-            if (in_ahead)
+-                for (uint32_t a_ = in_ahead[bucket]; a_ != 0xFFFFFFFFu; a_ = in_anext[a_]) {
+-                    if (n_ >= kAMax) { atomicAdd(&drops[1], 1u); break; }
+-                    aidx[n_++] = (uint16_t)a_;
+-                }
+-            acnt_sh[0] = n_;
+-        }
++    // Load limit (MXBM_LOAD): fewer blocks than groups may be launched; each block then
++    // works through every gridDim-th group. At a full launch the loop runs once.
++    for (uint32_t grp = blockIdx.x; grp < ((1u << bucket_bits) << submask_bits); grp += gridDim.x) {
++        const uint32_t bucket = grp / submaskCount, mask = grp % submaskCount;
++        if (lId == 0) gcount = 0;
++        for (uint32_t i = lId; i < kTermTab; i += kWG) tab[i] = kEmpty;
+         __syncthreads();
+-        acnt = acnt_sh[0];
+-    }
+-    // Every record load of a chunk is issued before the first is filtered, so a block
+-    // pays one DRAM latency for its bucket rather than one per pass: the kernel is
+-    // short enough that its blocks' lifetimes, not its bytes, set its time. kPre
+-    // covers kTermCap.
+-    constexpr int kPre = 4;
+-    const uint32_t nIn = cnt + acnt;
+-    for (uint32_t p0 = 0; p0 < nIn; p0 += kWG * kPre) {
+-        uint64_t w0s[kPre]; size_t idxs[kPre];
+-        #pragma unroll
+-        for (int u = 0; u < kPre; ++u) {
+-            const uint32_t p = p0 + lId + (uint32_t)u * kWG;
+-            size_t idx_ = base + p;
+-            if (p < nIn) {
+-                if constexpr (ARENA)
+-                    if (p >= cnt) idx_ = nbcap_in + aidx[p - cnt];
+-                const uint64_t rec = in_belem[idx_ * (size_t)STRIDE];
+-                w0s[u] = STRIDE == 1 ? t5_work(rec) : rec;
++        uint32_t cnt = in_counts[bucket];
++        if (cnt > in_bucket_cap) cnt = in_bucket_cap;
++        const size_t base = (size_t)bucket * in_bucket_cap;
++        // Same chain walk as the fused rounds'. Declared at 1 rather than 0 off the arena
++        // rungs -- nvcc rejects a zero-sized shared variable -- and unused there, so ptxas
++        // drops it exactly as it drops lkey above.
++        [[maybe_unused]] const size_t nbcap_in = ((size_t)1u << bucket_bits) * in_bucket_cap;
++        __shared__ uint16_t aidx[ARENA ? kAMax : 1];
++        __shared__ uint32_t acnt_sh[1];
++        uint32_t acnt = 0u;
++        if constexpr (ARENA) {
++            if (lId == 0) {
++                uint32_t n_ = 0;
++                if (in_ahead)
++                    for (uint32_t a_ = in_ahead[bucket]; a_ != 0xFFFFFFFFu; a_ = in_anext[a_]) {
++                        if (n_ >= kAMax) { atomicAdd(&drops[1], 1u); break; }
++                        aidx[n_++] = (uint16_t)a_;
++                    }
++                acnt_sh[0] = n_;
+             }
+-            idxs[u] = idx_;
++            __syncthreads();
++            acnt = acnt_sh[0];
+         }
+-        #pragma unroll
+-        for (int u = 0; u < kPre; ++u) {
+-            const uint32_t p = p0 + lId + (uint32_t)u * kWG;
+-            if (p >= nIn) continue;
+-            const uint64_t w0  = w0s[u];
+-            const uint32_t key = (uint32_t)(w0 & 0xFFFFFFu);
+-            if ((key & (submaskCount - 1u)) != mask) continue;
+-            const uint32_t pos = atomicAdd(&gcount, 1u);
+-            if (pos >= kTermCap) { atomicAdd(&drops[1], 1u); continue; }
+-            lwork[pos] = w0; lslot[pos] = (uint32_t)idxs[u];
+-            if constexpr (STRIDE == 2) {
+-                const uint64_t meta = in_belem[idxs[u] * (size_t)STRIDE + 1];
+-                // gi is 26 bits; bit 63 carries the replay's 17th bucket bit, so mask it off.
+-                lgi[pos] = (uint32_t)(meta >> 32) & 0x3FFFFFFu;
+-                llead[pos] = (uint32_t)meta;
++        // Every record load of a chunk is issued before the first is filtered, so a block
++        // pays one DRAM latency for its bucket rather than one per pass: the kernel is
++        // short enough that its blocks' lifetimes, not its bytes, set its time. kPre
++        // covers kTermCap.
++        constexpr int kPre = 4;
++        const uint32_t nIn = cnt + acnt;
++        for (uint32_t p0 = 0; p0 < nIn; p0 += kWG * kPre) {
++            uint64_t w0s[kPre]; size_t idxs[kPre];
++            #pragma unroll
++            for (int u = 0; u < kPre; ++u) {
++                const uint32_t p = p0 + lId + (uint32_t)u * kWG;
++                size_t idx_ = base + p;
++                if (p < nIn) {
++                    if constexpr (ARENA)
++                        if (p >= cnt) idx_ = nbcap_in + aidx[p - cnt];
++                    const uint64_t rec = in_belem[idx_ * (size_t)STRIDE];
++                    w0s[u] = STRIDE == 1 ? t5_work(rec) : rec;
++                }
++                idxs[u] = idx_;
+             }
+-            if constexpr (!MXBM_PERFECT_TAB) lkey[pos] = key;
+-        }
+-    }
+-    __syncthreads();
+-    const uint32_t total = gcount < kTermCap ? gcount : kTermCap;
+-    for (uint32_t pos = lId; pos < total; pos += kWG) {
+-        // lwork[pos] is word 0, whose low 24 bits ARE the key.
+-        const uint32_t k_ = MXBM_PERFECT_TAB ? (uint32_t)(lwork[pos] & 0xFFFFFFu)
+-                                             : lkey[pos];
+-        const uint32_t hk = (k_ >> submask_bits) & (kTermTab - 1u);
+-        lchain[pos] = atomicExch(&tab[hk], pos);
+-    }
+-    __syncthreads();
+-    for (uint32_t pos = lId; pos < total; pos += kWG) {
+-        const uint32_t key = MXBM_PERFECT_TAB ? 0u : lkey[pos];
+-        uint32_t oth = lchain[pos], walk = 0;
+-        while (oth != kEmpty) {
+-            if (++walk > 64u) { atomicAdd(&drops[3], 1u); break; }
+-            if (MXBM_PERFECT_TAB || lkey[oth] == key) {
+-                uint32_t L = pos, R = oth;
++            #pragma unroll
++            for (int u = 0; u < kPre; ++u) {
++                const uint32_t p = p0 + lId + (uint32_t)u * kWG;
++                if (p >= nIn) continue;
++                const uint64_t w0  = w0s[u];
++                const uint32_t key = (uint32_t)(w0 & 0xFFFFFFu);
++                if ((key & (submaskCount - 1u)) != mask) continue;
++                const uint32_t pos = atomicAdd(&gcount, 1u);
++                if (pos >= kTermCap) { atomicAdd(&drops[1], 1u); continue; }
++                lwork[pos] = w0; lslot[pos] = (uint32_t)idxs[u];
+                 if constexpr (STRIDE == 2) {
+-                    const uint32_t la = llead[pos], lb = llead[oth];
+-                    const uint32_t ga = lgi[pos],  gb = lgi[oth];
+-                    if (lb < la || (lb == la && gb < ga)) { L = oth; R = pos; }
++                    const uint64_t meta = in_belem[idxs[u] * (size_t)STRIDE + 1];
++                    // gi is 26 bits; bit 63 carries the replay's 17th bucket bit, so mask it off.
++                    lgi[pos] = (uint32_t)(meta >> 32) & 0x3FFFFFFu;
++                    llead[pos] = (uint32_t)meta;
+                 }
+-                bh3::Elem a{}, b{}, c;
+-                a.w[0] = lwork[L]; b.w[0] = lwork[R];
+-                bh3::combine(a, b, 24u, c);
+-                uint64_t z = 0; for (int w = 0; w < 7; ++w) z |= c.w[w];
+-                if (z == 0) {
+-                    const uint32_t si = atomicAdd(surv_count, 1u);
+-                    if (si < surv_cap) {
+-                        // Null off the reference rows: the replay path names the two
+-                        // round-4 parents by slot instead, and rows 4 and 5 do not exist.
+-                        if constexpr (STRIDE == 2)
+-                            if (all_left) {
+-                                all_left[out_off + si] = lgi[L];
+-                                all_right[out_off + si] = lgi[R];
+-                            }
+-                        surv_slots[si] = si;
+-                        if (surv_l4) { surv_l4[2u*si] = lslot[L]; surv_l4[2u*si + 1u] = lslot[R]; }
+-                    } else atomicAdd(&drops[2], 1u);
++                if constexpr (!MXBM_PERFECT_TAB) lkey[pos] = key;
++            }
++        }
++        __syncthreads();
++        const uint32_t total = gcount < kTermCap ? gcount : kTermCap;
++        for (uint32_t pos = lId; pos < total; pos += kWG) {
++            // lwork[pos] is word 0, whose low 24 bits ARE the key.
++            const uint32_t k_ = MXBM_PERFECT_TAB ? (uint32_t)(lwork[pos] & 0xFFFFFFu)
++                                                 : lkey[pos];
++            const uint32_t hk = (k_ >> submask_bits) & (kTermTab - 1u);
++            lchain[pos] = atomicExch(&tab[hk], pos);
++        }
++        __syncthreads();
++        for (uint32_t pos = lId; pos < total; pos += kWG) {
++            const uint32_t key = MXBM_PERFECT_TAB ? 0u : lkey[pos];
++            uint32_t oth = lchain[pos], walk = 0;
++            while (oth != kEmpty) {
++                if (++walk > 64u) { atomicAdd(&drops[3], 1u); break; }
++                if (MXBM_PERFECT_TAB || lkey[oth] == key) {
++                    uint32_t L = pos, R = oth;
++                    if constexpr (STRIDE == 2) {
++                        const uint32_t la = llead[pos], lb = llead[oth];
++                        const uint32_t ga = lgi[pos],  gb = lgi[oth];
++                        if (lb < la || (lb == la && gb < ga)) { L = oth; R = pos; }
++                    }
++                    bh3::Elem a{}, b{}, c;
++                    a.w[0] = lwork[L]; b.w[0] = lwork[R];
++                    bh3::combine(a, b, 24u, c);
++                    uint64_t z = 0; for (int w = 0; w < 7; ++w) z |= c.w[w];
++                    if (z == 0) {
++                        const uint32_t si = atomicAdd(surv_count, 1u);
++                        if (si < surv_cap) {
++                            // Null off the reference rows: the replay path names the two
++                            // round-4 parents by slot instead, and rows 4 and 5 do not exist.
++                            if constexpr (STRIDE == 2)
++                                if (all_left) {
++                                    all_left[out_off + si] = lgi[L];
++                                    all_right[out_off + si] = lgi[R];
++                                }
++                            surv_slots[si] = si;
++                            if (surv_l4) { surv_l4[2u*si] = lslot[L]; surv_l4[2u*si + 1u] = lslot[R]; }
++                        } else atomicAdd(&drops[2], 1u);
++                    }
+                 }
++                oth = lchain[oth];
+             }
+-            oth = lchain[oth];
+         }
++        __syncthreads();   // the next group reuses the shared arrays
+     }
+ }
+ 
+diff --git a/src/gpu/cuda_solver.cu b/src/gpu/cuda_solver.cu
+index 2aa1430..6d0ba3f 100644
+--- a/src/gpu/cuda_solver.cu
++++ b/src/gpu/cuda_solver.cu
+@@ -168,7 +168,21 @@ RbGeometry pick_geometry(uint64_t usable_mem, unsigned power_limit_w = 0,
+ }
+ } // namespace
+ 
++// Load limit (MXBM_LOAD=1..100): blocks in flight per SM at a load of 0, 10, ..., 100%, each
++// step about a tenth of full speed; the last entry is only the end point loads above 90
++// approach. Below 100 the solve also takes the plain path (no speculative entry), so the
++// rounds' blocks are all there is. Measured on an RTX 3090 (82 SMs): 20 blocks 8.9 sol/s,
++// 41 19.4, 82 35.2, 164 44.3, 1640 49.1, the full launch 50.9. On NVIDIA this lowers the speed
++// but hardly the draw (221 W at 8.9 sol/s against 337 W at full): the board keeps its clocks.
++// Where the power itself must come down, the board power limit (--pl) is the knob.
++constexpr float kLoadBlocksPerSM[11] = { 0.05f, 0.15f, 0.28f, 0.39f, 0.52f, 0.7f, 0.85f, 1.02f, 1.7f, 3.0f, 16.0f };
++
+ struct CudaSolver::Impl {
++    // Load limit: MXBM_LOAD (1..100), MXBM_LOAD_FILE re-read before every solve so a front
++    // end can move it while mining, MXBM_LOAD_BLOCKS for an exact block count when tuning.
++    int load = 100, loadShown = -1;
++    const char* loadFile = nullptr;
++    uint32_t loadBlocks = 0;
+     uint32_t bb = 16, sm = 1, nb = 1u << 16;
+     bool quad = false;                  // 24 B round-2 record; see rowbucket_geom.h
+     bool impb = false;                  // 64 B round-2 record with address-implied key
+@@ -534,6 +548,9 @@ CudaSolver::CudaSolver(int index, unsigned power_limit_w, unsigned mem_clock_mhz
+         throw std::runtime_error("cudaSetDevice(" + std::to_string(index) + ") failed");
+     p_->device_index = index;
+     p_->info = device_info(index);
++    if (const char* e = std::getenv("MXBM_LOAD")) p_->load = std::atoi(e);
++    p_->loadFile = std::getenv("MXBM_LOAD_FILE");
++    if (const char* e = std::getenv("MXBM_LOAD_BLOCKS")) p_->loadBlocks = (uint32_t)std::atoi(e);
+     {
+         cudaDeviceProp dp{};
+         if (cudaGetDeviceProperties(&dp, index) == cudaSuccess) {
+@@ -817,6 +834,35 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+     cudaMemcpy(I.dpp, pp, 32, cudaMemcpyHostToDevice);
+     cudaMemset(I.drops, 0, 16); cudaMemset(I.survCount, 0, 4);
+ 
++    if (I.loadFile) {
++        if (FILE* f = std::fopen(I.loadFile, "r")) {
++            int v = 0;
++            if (std::fscanf(f, "%d", &v) == 1) I.load = v;
++            std::fclose(f);
++        }
++    }
++    const int load = I.load < 1 ? 1 : (I.load > 100 ? 100 : I.load);
++    // Blocks to launch for a grid of `full` blocks at this load.
++    auto lim = [&](uint32_t full) -> uint32_t {
++        if (load >= 100) return full;
++        double n;
++        if (I.loadBlocks) {
++            n = I.loadBlocks;
++        } else {
++            const int i = load / 10;
++            const double f = (load % 10) / 10.0;
++            const double sms = I.info.compute_units > 0 ? I.info.compute_units : 1;
++            n = (kLoadBlocksPerSM[i] + f * (kLoadBlocksPerSM[i + 1] - kLoadBlocksPerSM[i])) * sms;
++        }
++        const uint32_t g = n < 1 ? 1u : (uint32_t)(n + 0.5);
++        return g < full ? g : full;
++    };
++    if (load != I.loadShown) {
++        std::fprintf(stderr, "CUDA load %d%%: %u of %u blocks in flight\n", load,
++                     lim(I.nb << I.sm), I.nb << I.sm);
++        I.loadShown = load;
++    }
++
+     // Speculative entry co-scheduling. The engine walks nonces at a fixed stride
+     // within a job, so consecutive calls teach the solver the delta; each solve then
+     // seeds (nonce + delta) beside its later rounds, and the next call skips its
+@@ -829,7 +875,7 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+     const bool hit = I.specOn && I.specValid && I.specNonceLE == nLE
+                   && std::memcmp(I.specInput, input, 32) == 0;
+     I.specValid = false;
+-    const bool spec = I.specOn && I.haveDelta;  // seed nonce + delta this solve
++    const bool spec = I.specOn && I.haveDelta && load >= 100;  // seed nonce + delta this solve
+     const bool specStrm = spec && I.specStream != nullptr;
+     // The next nonce's entry pass beside rounds 3 and 4, once round 1 has read the
+     // buffers it writes. The next call waits on evSpecDone before touching them.
+@@ -868,7 +914,7 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+         cudaMemset(I.kcen, 0, (size_t)1u << 22);
+ #endif
+         arenaClear(0);
+-        entry_scatter<<<(kElems+255)/256,256>>>(I.dpp, 0, kElems, I.bb, I.cap,
++        entry_scatter<<<lim((kElems+255)/256),256>>>(I.dpp, 0, kElems, I.bb, I.cap,
+                                                 r1Counts, r1Elem, I.drops,
+                                                 I.arena ? I.actr[0] : nullptr,
+                                                 I.arena ? I.atag[0] : nullptr);
+@@ -907,7 +953,7 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+     // its own launch line; ROUND_L is that line, with only those two spelled out.
+     #define ROUND_L(MF, AR, RF, N6, R, IMPB, ...)                                    \
+             fused_round<__VA_ARGS__, false, false, false, MF, IMPB, AR, RF, N6>      \
+-              <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, (uint32_t)((R)-1)*kCapacity,\
++              <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, (uint32_t)((R)-1)*kCapacity,\
+                   inC, inE, I.counts[o], I.elem[o],                                  \
+                   I.left, I.right, I.gictr, I.drops, I.dpp,                          \
+                   arIn ? I.ahead[inSet] : nullptr, arIn ? I.anext[inSet] : nullptr,  \
+@@ -1019,32 +1065,32 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+                 I.specPp, kElems, I.cap, I.specCounts, I.specElem, 3u); \
+       } else if (I.octo && I.matchFirst) { \
+           fused_round<R4OA, false, false, false, true, 0u, true, true, false, MXBM_MB_OCTO> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp, R4_ARENA_ARGS); \
+       } else if (I.octo) { \
+           fused_round<R4OA, false, false, false, false, 0u, true, true, false, MXBM_MB_OCTO> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp, R4_ARENA_ARGS); \
+       } else if (I.arena && I.matchFirst) { \
+           fused_round<R4A, false, false, false, true, 0u, true> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp, R4_ARENA_ARGS); \
+       } else if (I.arena) { \
+           fused_round<R4A, false, false, false, false, 0u, true> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp, R4_ARENA_ARGS); \
+       } else if (I.matchFirst) { \
+           fused_round<R4A, false, false, false, true> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp); \
+       } else { \
+           fused_round<R4A> \
+-            <<<I.nb << I.sm, kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
++            <<<lim(I.nb << I.sm), kWG, I.smemPad>>>(I.bb, I.sm, I.cap, I.cap, r4Off, \
+                 I.counts[inSet], I.elem[inSet], r4C, r4E, \
+                 I.left, I.right, I.gictr, I.drops, I.dpp); \
+       }
+@@ -1067,18 +1113,18 @@ std::vector<std::array<uint8_t,104>> CudaSolver::solve(const uint8_t input[32],
+     // table stays a perfect hash; the sub-mask split otherwise (see kTermCap).
+     const uint32_t tsm = (I.bb >= 16u && I.cap + kAMax <= kTermCap) ? 0u : I.sm;
+     if (I.octo)
+-        terminal_round<true, 2u><<<I.nb << tsm, kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
++        terminal_round<true, 2u><<<lim(I.nb << tsm), kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
+                                         termC, termE, I.left, I.right,
+                                         I.survSlots, I.survCount, kSurvCap, I.drops,
+                                         termAh, termAn);
+     else if (I.arena)
+-        terminal_round<true><<<I.nb << tsm, kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
++        terminal_round<true><<<lim(I.nb << tsm), kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
+                                         termC, termE,
+                                         r5 ? I.left : nullptr, r5 ? I.right : nullptr,
+                                         I.survSlots, I.survCount, kSurvCap, I.drops,
+                                         termAh, termAn, I.survL4);
+     else
+-        terminal_round<false><<<I.nb << tsm, kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
++        terminal_round<false><<<lim(I.nb << tsm), kWG, I.smemPad>>>(I.bb, tsm, I.cap, r5Off,
+                                         termC, termE,
+                                         r5 ? I.left : nullptr, r5 ? I.right : nullptr,
+                                         I.survSlots, I.survCount, kSurvCap, I.drops,
+-- 
+2.54.0 (Apple Git-157)
+

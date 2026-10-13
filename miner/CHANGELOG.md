@@ -5,6 +5,20 @@ Mac app BumbleBeam Miner.app (the menu bar; MXBM on the GPU or this miner on the
 together under one version with tags `miner-vX.Y.Z`. Before 0.4.0 the app had its own versions,
 kept below as "Mac app".
 
+## 0.5.0 (2026-10-13)
+
+- BumbleBeam Miner for Windows and Linux: the Mac app's tray app (miner/desktop, Tauri), with
+  MXBM on NVIDIA (CUDA) and other GPUs (OpenCL) or the console miner on the CPU. Installers:
+  `BumbleBeam-Miner-<version>-Windows-x64-setup.exe`, `-Linux-x86_64.deb` and `.AppImage`.
+- The power slider on NVIDIA sets the board's power limit, which is what lowers the draw there
+  (an RTX 3090 at 239 W draws 238 W); it needs administrator rights once per mining session (UAC
+  on Windows; on Linux the .deb's polkit rule allows it without a password, the AppImage asks).
+  The limit goes back to the default when mining stops or the app is gone. Without the rights
+  the slider runs fewer GPU blocks at once (MXBM_LOAD), and the window says that this lowers the
+  speed but hardly the draw.
+- MXBM patches in `miner/mxbm-patches/`, now with the CUDA load limit (0006).
+- The Mac app is as in 0.4.0, under the new version.
+
 ## 0.4.0 (2026-10-13)
 
 - One product, one version: the console miner and the Mac app come in the same release.

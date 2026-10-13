@@ -679,7 +679,7 @@
     { name: 'MXBM', url: 'https://git.maxnflaxl.dev/maxnflaxl/MXBM', what: 'open source (Apache-2.0), NVIDIA, AMD, Apple; built from source' },
     { name: 'lolMiner', url: 'https://github.com/Lolliedieb/lolMiner-releases/releases', what: 'NVIDIA, AMD; Windows, Linux' },
     { name: 'GMiner', url: 'https://github.com/develsoftware/GMinerRelease/releases', what: 'NVIDIA, AMD; Windows, Linux' },
-    { name: 'BumbleBeam Miner', url: 'https://github.com/profinch/bumblebeam/releases/latest', what: 'open source; a Mac menu bar app (GPU via MXBM, or CPU; Apple Silicon and Intel) and a console CPU miner for Linux, Windows, macOS' },
+    { name: 'BumbleBeam Miner', url: 'https://github.com/profinch/bumblebeam/releases/latest', what: 'open source; tray apps for Windows, Linux and Mac (GPU via MXBM, or CPU) and a console CPU miner' },
   ];
 
   views.connect = async () => {
@@ -703,7 +703,7 @@
                 <div class="seg" id="tls"><button data-v="0">TCP</button><button class="on" data-v="1">TLS</button></div>
                 <span class="dim mono" id="portline"></span>
               </div></div>
-            <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. <a href="https://git.maxnflaxl.dev/maxnflaxl/MXBM" target="_blank" rel="noopener">MXBM</a> is the open-source GPU miner (CUDA, OpenCL, Metal), <a href="https://github.com/profinch/bumblebeam/releases/latest" target="_blank" rel="noopener">BumbleBeam Miner</a> is a Mac menu bar app that mines on the Mac's GPU or CPU, and a console miner for any CPU with 8 GB of memory; lolMiner and GMiner work too. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
+            <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. <a href="https://git.maxnflaxl.dev/maxnflaxl/MXBM" target="_blank" rel="noopener">MXBM</a> is the open-source GPU miner (CUDA, OpenCL, Metal), <a href="https://github.com/profinch/bumblebeam/releases/latest" target="_blank" rel="noopener">BumbleBeam Miner</a> is a tray app for Windows, Linux and Mac that mines on the GPU or CPU, and a console miner for any CPU with 8 GB of memory; lolMiner and GMiner work too. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
               <div class="stack" id="cmds" style="gap:8px"></div></div>
           </div>
         </section>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- BumbleBeam Miner, installed by the .deb: the active desktop user may run bb-power as root
+     without a password. bb-power only sets the NVIDIA power limit between the card's own minimum
+     and maximum (nvidia-smi -pl) and puts the default back when the app stops or is gone. -->
+<policyconfig>
+  <vendor>BumbleBeam</vendor>
+  <vendor_url>https://pool.bumblebeam.org</vendor_url>
+  <action id="org.bumblebeam.miner.power">
+    <description>Set the GPU power limit for BumbleBeam Miner</description>
+    <message>BumbleBeam Miner needs to set the GPU's power limit</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bb-power</annotate>
+  </action>
+</policyconfig>
