@@ -341,6 +341,7 @@ fn admin_router(api: Api) -> Router<Api> {
         .route("/api/admin/miners", get(admin_miners))
         .route("/api/admin/miners/:id", get(admin_miner))
         .route("/api/admin/miners/:id/merge", post(admin_merge))
+        .route("/api/admin/miners/:id/hold", post(admin_hold))
         .route("/api/admin/address", get(admin_address))
         .route("/api/admin/blocks/:height", post(admin_block))
         .route("/api/admin/payments/:tx_id", post(admin_payment))
@@ -392,6 +393,10 @@ struct ActionBody {
     miner: Option<i64>,
     #[serde(default)]
     freeze: bool,
+    #[serde(default)]
+    hold: bool,
+    #[serde(default)]
+    note: String,
 }
 
 async fn admin_attention(State(api): State<Api>) -> R {
@@ -481,6 +486,13 @@ async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, 
     outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
 }
 
+/// `{"hold": true, "note": "…"}` holds one miner's payouts, `{"hold": false}` releases them.
+async fn admin_hold(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::admin::hold(&api.shared.db, id, b.hold, &b.note).await;
+    info!(ip = %client_ip(&h), id, hold = b.hold, ok = r.is_ok(), "admin: hold payouts");
+    outcome(r)
+}
+
 async fn admin_block(State(api): State<Api>, h: HeaderMap, Path(height): Path<i64>, Json(b): Json<ActionBody>) -> Response {
     let r = crate::admin::block(&api.shared.db, height, &b.action, b.force).await;
     info!(ip = %client_ip(&h), height, action = %b.action, force = b.force, ok = r.is_ok(), "admin: block");
@@ -498,6 +510,16 @@ async fn admin_payment(State(api): State<Api>, h: HeaderMap, Path(tx_id): Path<S
 /// A payout run now, by the payout loop itself (so it never overlaps a scheduled one): every miner
 /// at the threshold, or `miner` alone whatever its balance against the threshold.
 async fn admin_pay_now(State(api): State<Api>, h: HeaderMap, Json(b): Json<ActionBody>) -> Response {
+    if let Some(id) = b.miner {
+        match api.shared.db.client().await {
+            Ok(c) => match c.query_opt("SELECT 1 FROM miners WHERE id=$1 AND payouts_held_at IS NOT NULL", &[&id]).await {
+                Ok(Some(_)) => return outcome(Err(anyhow::anyhow!("payouts to this miner are held: release them first"))),
+                Ok(None) => {}
+                Err(e) => return ApiError(e.into()).into_response(),
+            },
+            Err(e) => return ApiError(e).into_response(),
+        }
+    }
     let (reply, rx) = tokio::sync::oneshot::channel();
     let r = if api.shared.payout_tx.try_send(crate::payouts::PayNow { only: b.miner, reply }).is_err() {
         Err(anyhow::anyhow!("payouts are off (no wallet_api) or a run is already queued"))

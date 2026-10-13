@@ -407,6 +407,12 @@
               <button class="btn small danger" data-pay="${esc(p.txId)}" data-action="refund">Refund</button></td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">No payments waiting.</p>';
+    const held = (a.held || []).length
+      ? `<div class="table-wrap"><table><thead><tr><th>Miner</th><th>Held</th><th>Note</th><th class="num">Unpaid</th></tr></thead><tbody>
+        ${a.held.map((m) => `<tr><td><a href="#miner/${Number(m.id)}">${esc(short(m.address))}</a></td><td class="dim">${ago(m.at)}</td>
+          <td class="wrap">${esc(m.note || '')}</td><td class="num">${beamAmt(m.balance)}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : '<p class="hint">No miner is held.</p>';
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Needs an operator</h1></div>
       ${flashHtml()}
@@ -419,6 +425,8 @@
         <span class="panel-meta">${a.nextPayout ? `<b id="next-pay-panel"></b> · every ${Math.round(a.payoutInterval / 60)} min` : 'payouts are off'}</span></div>
         <p class="hint">Pays every miner at the payout threshold now, without waiting for the next scheduled run. A miner below the threshold is paid from its own page.</p>
         <button class="btn" id="pay-all">Pay all due now</button></section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Held payouts</h2></div>
+        <p class="hint">Miners no payout run pays until you release them on their page; they still mine and their balance grows.</p>${held}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2></div>
         <p class="hint">In review, or created/sending for over an hour. <b>Sent</b>: the transaction is out, the pool polls its kernel.
         <b>Refund</b>: the debit goes back to the miner (refused while the wallet still knows the transaction).</p>${pays}
@@ -494,6 +502,7 @@
     const r = await api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`);
     const day = Date.now() / 1000 - 86400;
     const flags = (m) => [
+      m.held ? badge('payouts held', 'bad') : '',
       m.firstSeen > day ? badge('new', 'pending') : '',
       m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending') : '',
       (m.type || '').startsWith('regular') ? badge('regular addr', 'bad') : '',
@@ -573,9 +582,15 @@
         ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(p.blocks24h)} in 24h · last ${ago(p.lastBlockAt)}` : 'by its shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Pay now</h2></div>
-        <p class="hint">Sends the whole unpaid balance now, even below the payout threshold (the network fee comes out of it).</p>
-        <button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay now</button></section>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payouts</h2>${m.held ? `<span class="panel-meta"><span class="badge bad">held</span> ${esc(ago(m.held.at))}</span>` : ''}</div>
+        ${m.held
+          ? `<p class="hint">No payout run pays this miner, scheduled or yours, until you release it; it still mines and its balance grows. A payout already sent goes on.${m.held.note ? ` Note: <b>${esc(m.held.note)}</b>` : ''}</p>
+            <div class="adm-row"><button class="btn" id="release">Release payouts</button></div>`
+          : `<p class="hint"><b>Pay now</b> sends the whole unpaid balance now, even below the payout threshold (the network fee comes out of it).
+            <b>Hold</b> stops every payout to this miner until you release it; it still mines and its balance grows.</p>
+            <div class="adm-row"><button class="btn" id="pay-one"${m.balance > 0 ? '' : ' disabled'}>Pay now</button>
+              <form class="adm-row" id="hold"><input class="adm-field" id="hold-note" maxlength="200" placeholder="why (for you; optional)" autocomplete="off">
+                <button class="btn danger" type="submit">Hold payouts</button></form></div>`}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Live connections</h2></div>
         ${m.connections.length ? `<div class="table-wrap"><table>${connHead(false)}<tbody>${m.connections.map((c) => connRow(c, false)).join('')}</tbody></table></div>` : '<p class="hint">None.</p>'}</section>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers, 7 days</h2></div>${workers}</section>
@@ -595,7 +610,17 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Payments</h2>${m.payments.length ? `<span class="panel-meta">${int(m.payments.length)}</span>` : ''}</div>${pays}</section>`;
     bindKick();
     bindFound();
-    $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, ['Pay ', { b: beam(m.balance) }, ' now?\nAddress: ', m.address]));
+    if (m.held) {
+      $('#release').addEventListener('click', () => act(`miners/${m.id}/hold`, { hold: false },
+        { title: 'Release payouts', ok: 'Release', text: ['Pay this miner again? The next run pays it once its balance of ', { b: beam(m.balance) }, ' is at the threshold.'] }));
+    } else {
+      $('#pay-one').addEventListener('click', (e) => payNow(e.target, { miner: m.id }, ['Pay ', { b: beam(m.balance) }, ' now?\nAddress: ', m.address]));
+      $('#hold').addEventListener('submit', (e) => {
+        e.preventDefault();
+        act(`miners/${m.id}/hold`, { hold: true, note: $('#hold-note').value }, { title: 'Hold payouts', ok: 'Hold', danger: true,
+          text: ['Stop every payout to this miner until you release it? Its balance of ', { b: beam(m.balance) }, ' stays and keeps growing.\nAddress: ', m.address] });
+      });
+    }
     bindSuggest(m.id);
     $('#merge').addEventListener('submit', async (e) => {
       e.preventDefault();
