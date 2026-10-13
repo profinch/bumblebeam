@@ -13,8 +13,9 @@ permissions:
 env:
   MXBM_REPO: https://git.maxnflaxl.dev/maxnflaxl/MXBM.git
   MXBM_BASE: 218cecb
-  # Pascal (GTX 10xx) to Blackwell (RTX 50xx), and PTX for what comes after
-  CUDA_ARCHS: "61-real;75-real;80-real;86-real;89-real;120"
+  # Turing (GTX 16xx, RTX 20xx) to Blackwell (RTX 50xx), and PTX for what comes after. MXBM
+  # needs sm_70 or newer (__nanosleep), so Pascal (GTX 10xx) is out.
+  CUDA_ARCHS: "75-real;80-real;86-real;89-real;120"
 
 jobs:
   mxbm:
