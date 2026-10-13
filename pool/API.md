@@ -380,12 +380,13 @@ address; every action is logged.
 
 | | |
 |---|---|
-| `GET attention` | unverified blocks, blocks orphaned in the last 7 days (no action needed), payments in review or stuck, txId deduplication proof |
+| `GET attention` | unverified blocks, blocks orphaned in the last 7 days (no action needed), payments in review or stuck, miners whose payouts are held, txId deduplication proof |
 | `GET wallet` | the wallet's available, maturing, sending and receiving (or why it did not answer), what the miners are owed (unpaid balances, immature credits, payouts on the way) and what the pool earned in 24 h, 7 days and in all (confirmed blocks less the miners' credits, less network fees the pool paid) |
 | `GET connections` | live stratum connections (peer, port, TLS, address, worker, agent, difficulty, shares) and the last 300 that ended before a login, with what they sent first and why they ended |
 | `POST connections/<id>/kick` | ends a connection |
 | `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address |
-| `GET miners/<id>` | one miner: workers over 7 days, block credits, payments, live connections |
+| `GET miners/<id>` | one miner: workers over 7 days, block credits, payments, live connections, `held` (`{at, note}` or null) |
+| `POST miners/<id>/hold` `{"hold": true, "note": "…"}` or `{"hold": false}` | holds one miner's payouts or releases them: held, no run pays it, scheduled or the operator's, while it still mines and is credited; a payout already sent goes on; a move (`merge`) takes the hold along; not for coinbase accounts (paid in blocks) |
 | `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another miner of this pool, never to a new address (ends the miner's connections first) |
 | `POST blocks/<height>` `{"action": "confirm"\|"orphan", "force": false}` | as `admin block` |
 | `POST payments/<txid>` `{"action": "sent"\|"refund", "force": false}` | as `admin payment` |

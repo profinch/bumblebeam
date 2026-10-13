@@ -37,7 +37,7 @@ pub async fn run(db: &Db, cfg: &Config, http: reqwest::Client, args: &[String]) 
 }
 
 /// What waits for an operator: unverified blocks, payments in review or stuck, and whether the
-/// wallet's txId deduplication is proven. Blocks orphaned in the last 7 days come along for review;
+/// wallet's txId deduplication is proven, and the miners whose payouts are held. Blocks orphaned in the last 7 days come along for review;
 /// they need no action.
 pub async fn attention(db: &Db) -> Result<Value> {
     let c = db.client().await?;
@@ -74,7 +74,16 @@ pub async fn attention(db: &Db) -> Result<Value> {
         })
         .collect();
     let txid = c.query_opt("SELECT value FROM meta WHERE key=$1", &[&crate::payouts::META_TXID_HONORED]).await?.map(|r| r.get::<_, String>(0));
-    Ok(json!({ "blocks": blocks, "orphaned": orphaned, "payments": payments, "txidHonored": txid }))
+    let held: Vec<Value> = c
+        .query("SELECT id, address, balance, payouts_held_at, payouts_held_note FROM miners WHERE payouts_held_at IS NOT NULL ORDER BY payouts_held_at", &[])
+        .await?
+        .iter()
+        .map(|r| {
+            json!({ "id": r.get::<_, i64>(0), "address": r.get::<_, String>(1), "balance": r.get::<_, i64>(2),
+                    "at": r.get::<_, i64>(3), "note": r.get::<_, Option<String>>(4) })
+        })
+        .collect();
+    Ok(json!({ "blocks": blocks, "orphaned": orphaned, "payments": payments, "held": held, "txidHonored": txid }))
 }
 
 /// What the pool owes its miners and what it earned itself, for the wallet panel. The wallet may
@@ -211,8 +220,8 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
     let to: String = to.chars().filter(|c| !c.is_whitespace()).collect();
     let mut c = db.client().await?;
     let tx = c.transaction().await?;
-    let Some(src) = tx.query_opt("SELECT address, balance FROM miners WHERE id=$1 FOR UPDATE", &[&from_id]).await? else { bail!("no miner {from_id}") };
-    let (src_addr, balance): (String, i64) = (src.get(0), src.get(1));
+    let Some(src) = tx.query_opt("SELECT address, balance, payouts_held_at, payouts_held_note FROM miners WHERE id=$1 FOR UPDATE", &[&from_id]).await? else { bail!("no miner {from_id}") };
+    let (src_addr, balance, held_at, held_note): (String, i64, Option<i64>, Option<String>) = (src.get(0), src.get(1), src.get(2), src.get(3));
     if src_addr.starts_with("cb:") {
         bail!("coinbase accounts cannot be merged: their pairs pay the miner's own keys");
     }
@@ -243,6 +252,11 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
         &[&to_id, &balance, &from_id],
     )
     .await?;
+    // a held balance stays held where it goes: a move is no way around a hold
+    if let Some(at) = held_at {
+        let note = format!("moved from miner #{from_id}{}", held_note.map(|n| format!(": {n}")).unwrap_or_default());
+        tx.execute("UPDATE miners SET payouts_held_at=COALESCE(payouts_held_at,$2), payouts_held_note=COALESCE(payouts_held_note,$3) WHERE id=$1", &[&to_id, &at, &note]).await?;
+    }
     let paid: i64 = tx.query_one("SELECT COUNT(*) FROM payments WHERE miner_id=$1", &[&from_id]).await?.get(0);
     if paid == 0 {
         tx.execute("DELETE FROM miners WHERE id=$1", &[&from_id]).await?;
@@ -258,7 +272,7 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
         "moved {shares} shares, {credits} block credits, {blocks} found blocks and a balance of {balance} groth to {}; {}",
         crate::state::Short(&to),
         if paid == 0 { "the old account is deleted" } else { "the old account keeps its payout history" }
-    ))
+    ) + if held_at.is_some() { "; its payouts were held, and so are the new address's" } else { "" })
 }
 
 /// Miners for the operator, the most recently active first; `q` filters by a piece of the address.
@@ -273,7 +287,8 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
                          WHERE b.status IN ('pending','unverified') GROUP BY c.miner_id)
              SELECT m.id, m.address, m.address_type, m.first_seen, m.last_share, m.balance, m.paid, COALESCE(im.sum,0)::BIGINT,
                     COALESCE(s.n,0)::BIGINT, COALESCE(s.d,0)::FLOAT8, COALESCE(s.workers, ARRAY[]::TEXT[]),
-                    (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed'))
+                    (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')),
+                    m.payouts_held_at, m.payouts_held_note
              FROM miners m LEFT JOIN s ON s.miner_id=m.id LEFT JOIN im ON im.miner_id=m.id
              WHERE $2 = '' OR strpos(lower(m.address), lower($2)) > 0
              ORDER BY COALESCE(m.last_share, m.first_seen) DESC, m.id DESC LIMIT $3",
@@ -287,16 +302,50 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
                     "firstSeen": r.get::<_, i64>(3), "lastShare": r.get::<_, Option<i64>>(4), "balance": r.get::<_, i64>(5),
                     // paid counts a payout from the moment it is sent: what is still on the way is apart
                     "paid": r.get::<_, i64>(6) - r.get::<_, i64>(11), "sending": r.get::<_, i64>(11), "immature": r.get::<_, i64>(7), "shares24h": r.get::<_, i64>(8),
-                    "hashrate24h": r.get::<_, f64>(9) / 86400.0, "workers24h": r.get::<_, Vec<String>>(10) })
+                    "hashrate24h": r.get::<_, f64>(9) / 86400.0, "workers24h": r.get::<_, Vec<String>>(10),
+                    "held": held(r.get(12), r.get(13)) })
         })
         .collect())
+}
+
+/// A held miner's hold, `{at, note}`, or null.
+fn held(at: Option<i64>, note: Option<String>) -> Value {
+    at.map_or(Value::Null, |at| json!({ "at": at, "note": note }))
+}
+
+/// Holds one miner's payouts, or releases them. Held, it still mines and is credited, but no run
+/// pays it, scheduled or the operator's; a payout already sent goes on. Coinbase accounts are paid
+/// in the blocks themselves, so there is nothing to hold.
+pub async fn hold(db: &Db, id: i64, on: bool, note: &str) -> Result<String> {
+    let c = db.client().await?;
+    let Some(m) = c.query_opt("SELECT address, payouts_held_at FROM miners WHERE id=$1", &[&id]).await? else { bail!("no miner {id}") };
+    let (address, at): (String, Option<i64>) = (m.get(0), m.get(1));
+    if on {
+        if address.starts_with("cb:") {
+            bail!("a coinbase account is paid in the blocks it mines: there is no payout to hold");
+        }
+        if at.is_some() {
+            bail!("payouts to this miner are already held");
+        }
+        let note: String = note.trim().chars().take(200).collect();
+        c.execute("UPDATE miners SET payouts_held_at=$2, payouts_held_note=$3 WHERE id=$1", &[&id, &crate::state::now(), &(!note.is_empty()).then_some(note)]).await?;
+        tracing::warn!(miner = %crate::state::Short(&address), "payouts held by the operator");
+        Ok("payouts to this miner are held".into())
+    } else {
+        if at.is_none() {
+            bail!("payouts to this miner are not held");
+        }
+        c.execute("UPDATE miners SET payouts_held_at=NULL, payouts_held_note=NULL WHERE id=$1", &[&id]).await?;
+        tracing::info!(miner = %crate::state::Short(&address), "payouts released by the operator");
+        Ok("payouts to this miner are released".into())
+    }
 }
 
 /// One miner for the operator: its row, workers over 7 days, block credits and payments.
 pub async fn miner(db: &Db, id: i64) -> Result<Option<Value>> {
     let c = db.client().await?;
     let now = crate::state::now();
-    let Some(m) = c.query_opt("SELECT id, address, address_type, first_seen, last_share, balance, paid, (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')) FROM miners m WHERE id=$1", &[&id]).await? else {
+    let Some(m) = c.query_opt("SELECT id, address, address_type, first_seen, last_share, balance, paid, (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')), payouts_held_at, payouts_held_note FROM miners m WHERE id=$1", &[&id]).await? else {
         return Ok(None);
     };
     let workers: Vec<Value> = c
@@ -335,6 +384,6 @@ pub async fn miner(db: &Db, id: i64) -> Result<Option<Value>> {
     Ok(Some(json!({
         "id": m.get::<_, i64>(0), "address": m.get::<_, String>(1), "type": m.get::<_, Option<String>>(2), "firstSeen": m.get::<_, i64>(3),
         "lastShare": m.get::<_, Option<i64>>(4), "balance": m.get::<_, i64>(5), "paid": m.get::<_, i64>(6) - m.get::<_, i64>(7), "sending": m.get::<_, i64>(7), "blocksFound": found,
-        "workers": workers, "credits": credits, "payments": payments,
+        "held": held(m.get(8), m.get(9)), "workers": workers, "credits": credits, "payments": payments,
     })))
 }

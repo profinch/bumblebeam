@@ -163,6 +163,12 @@ ALTER TABLE blocks ADD COLUMN IF NOT EXISTS bonus_percent DOUBLE PRECISION;
 
 /// Speed reports from the Mac miner app, sent only when its user turns sharing on: the machine and
 /// the speed, no address and no IP. They become per-model expectations for the app later.
+/// v9: the operator holds one miner's payouts (`payouts_held_at` set); its balance still grows.
+const SCHEMA_HOLD: &str = r#"
+ALTER TABLE miners ADD COLUMN IF NOT EXISTS payouts_held_at BIGINT;
+ALTER TABLE miners ADD COLUMN IF NOT EXISTS payouts_held_note TEXT;
+"#;
+
 const SCHEMA_BENCH: &str = r#"
 CREATE TABLE IF NOT EXISTS benchmarks (
     id BIGSERIAL PRIMARY KEY,
@@ -184,7 +190,7 @@ CREATE INDEX IF NOT EXISTS benchmarks_machine ON benchmarks (chip, device, power
 "#;
 
 /// Schema version. Older databases are migrated in `migrate`; one without a version is refused.
-pub const SCHEMA_VERSION: i32 = 8;
+pub const SCHEMA_VERSION: i32 = 9;
 
 /// Statements that bring a database from version `from` to `from + 1`.
 fn migration(from: i32) -> Option<&'static str> {
@@ -194,6 +200,7 @@ fn migration(from: i32) -> Option<&'static str> {
         4 | 5 => Some(SCHEMA_COINBASE),
         6 => Some(SCHEMA_ROUNDS),
         7 => Some(SCHEMA_BENCH),
+        8 => Some(SCHEMA_HOLD),
         _ => None,
     }
 }
@@ -259,10 +266,10 @@ impl Db {
             None => {
                 let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares'", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
             }
-            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?,
+            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?,
             Some(mut v) if v < SCHEMA_VERSION => {
                 while v < SCHEMA_VERSION {
                     let Some(sql) = migration(v) else { anyhow::bail!("no migration from schema version {v}") };
@@ -271,7 +278,7 @@ impl Db {
                     c.execute("UPDATE meta SET value=$1 WHERE key='schema'", &[&v.to_string()]).await?;
                     tracing::info!(version = v, "database schema migrated");
                 }
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}")).await.context("schema")?;
+                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?;
             }
             Some(v) => anyhow::bail!("database schema version {v} is newer than this binary ({SCHEMA_VERSION})"),
         }
@@ -715,14 +722,14 @@ impl Db {
 
     /// Miners at or above the payout threshold: (id, address, balance, cached address type). An
     /// `invalid` verdict older than a day is returned as unknown so it gets checked again. Coinbase
-    /// accounts have no address: they are paid in blocks. `only` narrows to one miner (an operator's
-    /// payout, below the threshold too).
+    /// accounts have no address: they are paid in blocks. A miner the operator holds is never due,
+    /// not even alone. `only` narrows to one miner (an operator's payout, below the threshold too).
     pub async fn miners_due(&self, min_payout: i64, now: i64, only: Option<i64>) -> Result<Vec<DuePayout>> {
         let c = self.client().await?;
         let rows = c
             .query(
                 "SELECT id, address, balance, CASE WHEN address_type='invalid' AND COALESCE(type_checked,0) < $2 THEN NULL ELSE address_type END
-                 FROM miners WHERE balance >= $1 AND address NOT LIKE 'cb:%'
+                 FROM miners WHERE balance >= $1 AND address NOT LIKE 'cb:%' AND payouts_held_at IS NULL
                    AND NOT (COALESCE(address_type,'') = 'invalid' AND COALESCE(type_checked,0) >= $2)
                    AND ($3::BIGINT IS NULL OR id = $3) ORDER BY balance DESC",
                 &[&min_payout, &(now - 86400), &only],
