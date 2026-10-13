@@ -1,0 +1,29 @@
+[package]
+name = "bumblebeam-miner-desktop"
+# One product, one version: the same as ../../Cargo.toml (the console miner) and the Mac app.
+version = "0.5.0"
+edition = "2021"
+description = "BumbleBeam Miner for Windows and Linux: a tray app for pool.bumblebeam.org"
+license = "Apache-2.0"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+portable-pty = "0.9"
+regex = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Power", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_Foundation", "Win32_Security"] }
+winreg = "0.56"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

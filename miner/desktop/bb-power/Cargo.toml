@@ -1,0 +1,13 @@
+[package]
+name = "bb-power"
+version = "0.5.0"
+edition = "2021"
+description = "BumbleBeam Miner's helper: sets the NVIDIA power limit with administrator rights"
+license = "Apache-2.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Threading", "Win32_Foundation"] }
+
+[profile.release]
+strip = true
+lto = true

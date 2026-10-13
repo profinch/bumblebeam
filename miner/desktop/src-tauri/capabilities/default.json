@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The tray window: the app's own commands and events, nothing from the file system or the shell.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

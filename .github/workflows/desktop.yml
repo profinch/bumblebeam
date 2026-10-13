@@ -1,0 +1,150 @@
+name: desktop
+# BumbleBeam Miner for Windows and Linux (miner/desktop, Tauri): MXBM built with our patches
+# (miner/mxbm-patches) for CUDA and OpenCL, the console miner, the bb-power helper, then the
+# installers. A tag miner-vX.Y.Z adds them to that version's release.
+on:
+  push:
+    branches: [main]
+    paths: ['miner/desktop/**', 'miner/mxbm-patches/**', 'miner/src/**', '.github/workflows/desktop.yml']
+    tags: ['miner-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  MXBM_REPO: https://git.maxnflaxl.dev/maxnflaxl/MXBM.git
+  MXBM_BASE: 218cecb
+  # Pascal (GTX 10xx) to Blackwell (RTX 50xx), and PTX for what comes after
+  CUDA_ARCHS: "61-real;75-real;80-real;86-real;89-real;120"
+
+jobs:
+  mxbm:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux
+          - os: windows-2022
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: '12.8.0'
+          method: ${{ matrix.name == 'linux' && 'network' || 'local' }}
+          sub-packages: ${{ matrix.name == 'linux' && '["nvcc", "cudart", "nvrtc", "cccl", "nvml-dev"]' || '[]' }}
+      - name: Linux packages
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev ocl-icd-opencl-dev opencl-headers ninja-build
+      - name: OpenSSL (Windows, static libraries)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: |
+          "$VCPKG_INSTALLATION_ROOT/vcpkg" install openssl:x64-windows-static-md
+          echo "OPENSSL_ROOT_DIR=$VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md" >> "$GITHUB_ENV"
+      - name: MXBM with our patches
+        shell: bash
+        run: |
+          git clone -q "$MXBM_REPO" mxbm-src
+          cd mxbm-src && git checkout -q "$MXBM_BASE"
+          git -c user.name=ci -c user.email=ci@localhost am -q ../miner/mxbm-patches/*.patch
+          git log --oneline -1
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          cmake -S mxbm-src -B mxbm-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMXBM_METAL_ABL_DERIVE=0 \
+            -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" -DOPENSSL_USE_STATIC_LIBS=TRUE
+          cmake --build mxbm-build --target mxbm
+          ldd mxbm-build/mxbm
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          cmake -S mxbm-src -B mxbm-build -DCMAKE_BUILD_TYPE=Release -DMXBM_METAL_ABL_DERIVE=0 `
+            "-DCMAKE_CUDA_ARCHITECTURES=$env:CUDA_ARCHS" "-DOPENSSL_ROOT_DIR=$env:OPENSSL_ROOT_DIR" -DOPENSSL_USE_STATIC_LIBS=TRUE
+          cmake --build mxbm-build --config Release --target mxbm
+          Get-ChildItem -Recurse mxbm-build -Filter mxbm.exe | Select-Object -First 1 | ForEach-Object { Copy-Item $_.FullName mxbm-build/mxbm.exe }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mxbm-${{ matrix.name }}
+          path: mxbm-build/mxbm${{ matrix.name == 'windows' && '.exe' || '' }}
+
+  app:
+    needs: mxbm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux
+            target: x86_64-unknown-linux-gnu
+            exe: ''
+          - os: windows-2022
+            name: windows
+            target: x86_64-pc-windows-msvc
+            exe: '.exe'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        shell: bash
+        run: |
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' miner/Cargo.toml | head -1)
+          for f in miner/desktop/src-tauri/Cargo.toml miner/desktop/bb-power/Cargo.toml; do
+            [ "$(sed -nE 's/^version = "(.*)"/\1/p' $f | head -1)" = "$v" ] || { echo "$f is not at $v"; exit 1; }
+          done
+          grep -q "\"version\": \"$v\"" miner/desktop/src-tauri/tauri.conf.json || { echo "tauri.conf.json is not at $v"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/miner-v* ]]; then
+            [ "${GITHUB_REF_NAME#miner-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but the miner is $v"; exit 1; }
+          fi
+          echo "VER=$v" >> "$GITHUB_ENV"
+      - name: Linux packages
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: actions/download-artifact@v4
+        with:
+          name: mxbm-${{ matrix.name }}
+          path: mxbm-bin
+      - name: The bundled programs
+        shell: bash
+        run: |
+          (cd miner && cargo build --release --target ${{ matrix.target }})
+          (cd miner/desktop/bb-power && cargo build --release --target ${{ matrix.target }})
+          B=miner/desktop/src-tauri/binaries
+          cp mxbm-bin/mxbm${{ matrix.exe }} $B/mxbm-${{ matrix.target }}${{ matrix.exe }}
+          cp miner/target/${{ matrix.target }}/release/bumblebeam-miner${{ matrix.exe }} $B/bumblebeam-miner-${{ matrix.target }}${{ matrix.exe }}
+          cp miner/desktop/bb-power/target/${{ matrix.target }}/release/bb-power${{ matrix.exe }} $B/bb-power-${{ matrix.target }}${{ matrix.exe }}
+          chmod +x $B/* || true
+          ls -la $B
+      - name: Unit tests
+        working-directory: miner/desktop/src-tauri
+        run: cargo test --release
+      - name: Build the installers
+        working-directory: miner/desktop
+        run: npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }}
+      - name: Name them
+        shell: bash
+        run: |
+          mkdir -p dist
+          R=miner/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
+          if [ "${{ matrix.name }}" = windows ]; then
+            cp "$(ls $R/nsis/*.exe | head -1)" "dist/BumbleBeam-Miner-$VER-Windows-x64-setup.exe"
+          else
+            cp "$(ls $R/deb/*.deb | head -1)" "dist/BumbleBeam-Miner-$VER-Linux-x86_64.deb"
+            cp "$(ls $R/appimage/*.AppImage | head -1)" "dist/BumbleBeam-Miner-$VER-Linux-x86_64.AppImage"
+          fi
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: dist/*
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/miner-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

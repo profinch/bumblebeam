@@ -22,13 +22,13 @@ runs MXBM, whose author takes a 1% dev fee (36 seconds an hour). The pool's fee 
 Needs Xcode with the Metal toolchain, CMake and Rust (targets aarch64- and x86_64-apple-darwin).
 
 ```sh
-git clone https://git.maxnflaxl.dev/maxnflaxl/MXBM.git && cd MXBM && git am ../bumblebeam/miner/mac/vendor/patches/*.patch
+git clone https://git.maxnflaxl.dev/maxnflaxl/MXBM.git && cd MXBM && git am ../bumblebeam/miner/mxbm-patches/*.patch
 cd ../bumblebeam/miner/mac
 tools/build-mxbm.sh ../../../MXBM  # vendor/arm64/mxbm and vendor/x86_64/mxbm, OpenSSL linked in
 ./build.sh                         # build/BumbleBeam-Miner-<version>-macOS-AppleSilicon.dmg and -macOS-Intel.dmg
 ```
 
-`vendor/patches/` holds the MXBM changes the app relies on (macOS build fixes, `--report` on
+`../mxbm-patches/` holds the MXBM changes the apps rely on (macOS build fixes, `--report` on
 Metal, the Metal load limit behind the power slider, Metal kernels for older macOS); they are sent
 upstream. `build.sh` refuses a binary that needs a newer macOS than 12 or a library outside the
 system. `--snapshot <dir>` renders the windows to PNG files without opening the menu bar.
