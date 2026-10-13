@@ -109,7 +109,7 @@ jobs:
           echo "VER=$v" >> "$GITHUB_ENV"
       - name: Linux packages
         if: matrix.name == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file
       - uses: actions/download-artifact@v4
         with:
           name: mxbm-${{ matrix.name }}
@@ -130,7 +130,12 @@ jobs:
         run: cargo test --release
       - name: Build the installers
         working-directory: miner/desktop
-        run: npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }}
+        env:
+          # linuxdeploy is itself an AppImage: run it unpacked (no FUSE on the runner), and leave
+          # the bundled binaries as they are (its old strip fails on newer ELF sections)
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          NO_STRIP: 'true'
+        run: npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }} --verbose
       - name: Name them
         shell: bash
         run: |
