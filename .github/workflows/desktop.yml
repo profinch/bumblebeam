@@ -33,21 +33,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: Jimver/cuda-toolkit@v0.2.24
+      # MXBM takes 25 minutes to build; it changes only with its base and the patches (bump v1 to rebuild)
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: mxbm-build/mxbm${{ matrix.name == 'windows' && '.exe' || '' }}
+          key: mxbm-v1-${{ matrix.name }}-${{ env.MXBM_BASE }}-${{ hashFiles('miner/mxbm-patches/*.patch') }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: Jimver/cuda-toolkit@v0.2.24
         with:
           cuda: '12.8.0'
           method: ${{ matrix.name == 'linux' && 'network' || 'local' }}
           sub-packages: ${{ matrix.name == 'linux' && '["nvcc", "cudart", "nvrtc", "cccl", "nvml-dev", "cuobjdump"]' || '[]' }}
       - name: Linux packages
-        if: matrix.name == 'linux'
+        if: matrix.name == 'linux' && steps.cache.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y libssl-dev ocl-icd-opencl-dev opencl-headers ninja-build
       - name: OpenSSL (Windows, static libraries)
-        if: matrix.name == 'windows'
+        if: matrix.name == 'windows' && steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           "$VCPKG_INSTALLATION_ROOT/vcpkg" install openssl:x64-windows-static-md
           echo "OPENSSL_ROOT_DIR=$VCPKG_INSTALLATION_ROOT/installed/x64-windows-static-md" >> "$GITHUB_ENV"
       - name: MXBM with our patches
+        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           git clone -q "$MXBM_REPO" mxbm-src
@@ -55,14 +63,14 @@ jobs:
           git -c user.name=ci -c user.email=ci@localhost am -q ../miner/mxbm-patches/*.patch
           git log --oneline -1
       - name: Build (Linux)
-        if: matrix.name == 'linux'
+        if: matrix.name == 'linux' && steps.cache.outputs.cache-hit != 'true'
         run: |
           cmake -S mxbm-src -B mxbm-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMXBM_METAL_ABL_DERIVE=0 \
             -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" -DOPENSSL_USE_STATIC_LIBS=TRUE -DMXBM_CUDA_RESOURCE_GUARD=OFF
           cmake --build mxbm-build --target mxbm
           ldd mxbm-build/mxbm
       - name: Build (Windows)
-        if: matrix.name == 'windows'
+        if: matrix.name == 'windows' && steps.cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           cmake -S mxbm-src -B mxbm-build -DCMAKE_BUILD_TYPE=Release -DMXBM_METAL_ABL_DERIVE=0 `
@@ -109,7 +117,7 @@ jobs:
           echo "VER=$v" >> "$GITHUB_ENV"
       - name: Linux packages
         if: matrix.name == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file ocl-icd-libopencl1
       - uses: actions/download-artifact@v4
         with:
           name: mxbm-${{ matrix.name }}
