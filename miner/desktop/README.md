@@ -12,6 +12,8 @@ From the [latest release](https://github.com/profinch/bumblebeam/releases/latest
 
 - Windows 10/11 x64: `BumbleBeam-Miner-<version>-Windows-x64-setup.exe`, installed for the current
   user. It is not code-signed yet, so SmartScreen may warn: More info › Run anyway.
+  Or `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`: unpack it anywhere and run
+  `BumbleBeam Miner.exe`, nothing to install (settings and logs go to the same places).
 - Linux x86-64: `BumbleBeam-Miner-<version>-Linux-x86_64.deb` (Debian, Ubuntu, Mint:
   `sudo apt install ./BumbleBeam-Miner-*.deb`) or the `.AppImage` (`chmod +x` and run). The tray
   icon needs AppIndicator support: built into Cinnamon, KDE and most desktops; GNOME needs the

@@ -10,6 +10,8 @@ kept below as "Mac app".
 - Windows: the app answers the terminal's cursor position query that ConPTY sends as the miner
   starts. Without the answer ConPTY held all of the miner's output, so the window stayed at
   Starting with no speed or shares (0.5.0 was withdrawn for this).
+- Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
+  programs in one folder, run without installing.
 
 ## 0.5.0 (2026-10-13, withdrawn)
 
