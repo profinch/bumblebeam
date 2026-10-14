@@ -229,12 +229,10 @@
     const live = BB.mode === 'live';
     el.className = `pill-status ${live ? '' : BB.mode === 'demo' ? 'demo' : 'off'}`;
     txt.textContent = `${live ? 'pool live' : BB.mode === 'demo' ? 'demo' : 'offline'}${net && net.ok && net.height ? ` · ${int(net.height)}` : ''}`;
-    // BEAM's price in the header on every page, from the same network data
-    const chip = $('#beam-price'), price = net && net.ok ? net.priceUsd : null;
-    if (chip) {
-      chip.hidden = !price;
-      if (price) $('#beam-price-v').textContent = `$${price.toFixed(4)}`;
-    }
+    // BEAM's price in the header on every page, from the same network data; the chip is there from
+    // the start (… while loading, — without a price), so the header does not move when it arrives
+    const price = net && net.ok ? net.priceUsd : null, v = $('#beam-price-v');
+    if (v) v.textContent = price ? `$${price.toFixed(4)}` : '—';
   }
 
   function poolsTable(stats, net, { meta = true } = {}) {

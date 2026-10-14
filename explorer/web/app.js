@@ -1176,15 +1176,15 @@
   }
 
   // BEAM's price in the header, as the pool shows it (its /network, the on-chain oracle's median);
-  // asked at most once a minute, hidden while the pool does not answer
+  // asked at most once a minute; the chip is there from the start (… while loading, — while the pool
+  // does not answer), so the header does not move when the price arrives
   const price = { at: 0 };
   async function setPrice() {
     if (Date.now() - price.at < 60000) return;
     price.at = Date.now();
     const d = await fetch(`${POOL_API}/network`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    const v = d ? num(d.priceUsd) : null, chip = $('#beam-price');
-    chip.hidden = !v;
-    if (v) $('#beam-price-v').textContent = `$${v.toFixed(4)}`;
+    const v = d ? num(d.priceUsd) : null;
+    $('#beam-price-v').textContent = v ? `$${v.toFixed(4)}` : '—';
   }
 
   // ---------- search: block height, kernel or contract ID, asset number, name or ticker ----------
