@@ -3,7 +3,8 @@
 //! The miner writes to a pseudo-terminal (ConPTY on Windows): into a pipe its C library buffers
 //! whole blocks, so shares and speed would reach the window minutes late. The terminal is also
 //! the miner's controlling terminal, so on Linux the miner gets SIGHUP if the app dies; on
-//! Windows a job object kills it with the app.
+//! Windows a job object kills it with the app. ConPTY asks for the cursor position (ESC[6n) as
+//! it starts and holds all output until it gets an answer, so the app answers it.
 
 use crate::settings::{Device, Mode, Settings};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
@@ -246,6 +247,7 @@ impl Miner {
             Ok(r) => r,
             Err(e) => return self.retry(gen, format!("Could not read the miner: {e}"), s.clone()),
         };
+        let writer = pair.master.take_writer().ok();
         {
             let mut i = self.inner.lock().unwrap();
             i.child = Some(child);
@@ -258,7 +260,7 @@ impl Miner {
         let master = pair.master; // kept alive with the reader: dropping it hangs up the miner
         std::thread::spawn(move || {
             let _master = master;
-            me.read_output(gen, reader, log);
+            me.read_output(gen, reader, writer, log);
         });
         // exit
         let me = self.clone();
@@ -310,14 +312,26 @@ impl Miner {
         });
     }
 
-    fn read_output(&self, gen: u64, mut reader: Box<dyn Read + Send>, mut log: Log) {
+    fn read_output(&self, gen: u64, mut reader: Box<dyn Read + Send>, mut writer: Option<Box<dyn Write + Send>>, mut log: Log) {
         let mut buf = [0u8; 4096];
         let mut line: Vec<u8> = Vec::new();
+        let mut tail: Vec<u8> = Vec::new(); // the last bytes read, for a query split across reads
         loop {
             let n = match reader.read(&mut buf) {
                 Ok(0) | Err(_) => return,
                 Ok(n) => n,
             };
+            // the terminal's cursor position query: answered, or ConPTY shows nothing more
+            tail.extend_from_slice(&buf[..n]);
+            if tail.windows(4).any(|w| w == b"\x1b[6n") {
+                if let Some(w) = writer.as_mut() {
+                    let _ = w.write_all(b"\x1b[1;1R");
+                    let _ = w.flush();
+                }
+                tail.clear();
+            } else if tail.len() > 3 {
+                tail.drain(..tail.len() - 3);
+            }
             log.write_all_rotating(&buf[..n], &self.log_path);
             if self.generation.load(Ordering::SeqCst) != gen {
                 continue; // a replaced process: kept in the log, not in the window
