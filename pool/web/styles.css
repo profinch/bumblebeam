@@ -114,6 +114,11 @@ input:focus { outline: none; }
 }
 .main-nav a.nav-cta:hover { background: var(--accent-dim); color: var(--accent); }
 .top-row .cta-top { display: none; }
+.price-chip {
+  flex: none; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: default;
+  font: 700 11px var(--font-mono); letter-spacing: 0.04em; color: var(--muted); white-space: nowrap;
+}
+.price-chip b { color: var(--accent); letter-spacing: 0.02em; }
 .cta-top.active { background: rgba(0, 246, 210, 0.15); }
 .main-nav a.nav-cta.active { background: rgba(0, 246, 210, 0.15); border-bottom-color: rgba(0, 246, 210, 0.6); }
 
@@ -377,12 +382,18 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 @media (min-width: 1181px) {
   .brand { flex: none; width: 236px; }
   .search { flex: none; width: clamp(160px, calc(min(100vw - 2 * var(--page-padding-x), var(--page-width)) - 960px), 380px); }
+  /* the price chip takes its room from the search, the menu keeps its own */
+  .price-chip { margin-left: auto; }
+  .price-chip:not([hidden]) ~ .main-nav { margin-left: 0; flex: none; }
+  .top-row:has(.price-chip:not([hidden])) .search { flex: 0 1 380px; width: auto; min-width: 160px; }
 }
 @media (max-width: 1180px) {
   .top-row { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
   .search { order: 3; flex: 1 1 100%; }
   /* the menu takes its own full-width row and fits, no sideways scroll */
   .main-nav { order: 2; flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; justify-content: space-between; }
+  /* the price goes to the right end of the brand's row */
+  .price-chip { order: 1; margin-left: auto; }
 }
 @media (max-width: 560px) {
   .main-nav a { padding: 8px 8px; font-size: 12px; }
@@ -428,6 +439,9 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 @media (max-width: 700px) {
   .top-row .cta-top { display: inline-flex; order: 1; margin-left: auto; padding: 6px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
   .main-nav a.nav-cta { display: none; }
+  /* the logo's row is full: the price shares the search's row */
+  .search { flex: 1 1 0; }
+  .price-chip { order: 4; margin-left: 0; }
 }
 
 /* copy buttons keep one width for "copy", "copied" and "failed" (monospace, 7ch), so the text

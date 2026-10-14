@@ -1172,6 +1172,19 @@
     txt.textContent = !st ? 'offline' : `${behind ? 'syncing' : 'live'}${st.height ? ` · ${int(st.height)}` : ''}`;
     banner.hidden = !(st && behind);
     if (st && behind) banner.innerHTML = `<b>Syncing.</b> Our explorer node is at block ${int(st.height)}${st.ts ? `, mined ${esc(ago(st.ts))}` : ''}; newer blocks appear once it catches up.`;
+    setPrice();
+  }
+
+  // BEAM's price in the header, as the pool shows it (its /network, the on-chain oracle's median);
+  // asked at most once a minute, hidden while the pool does not answer
+  const price = { at: 0 };
+  async function setPrice() {
+    if (Date.now() - price.at < 60000) return;
+    price.at = Date.now();
+    const d = await fetch(`${POOL_API}/network`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const v = d ? num(d.priceUsd) : null, chip = $('#beam-price');
+    chip.hidden = !v;
+    if (v) $('#beam-price-v').textContent = `$${v.toFixed(4)}`;
   }
 
   // ---------- search: block height, kernel or contract ID, asset number, name or ticker ----------
