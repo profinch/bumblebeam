@@ -1,6 +1,6 @@
 [package]
 name = "bb-power"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "BumbleBeam Miner's helper: sets the NVIDIA power limit with administrator rights"
 license = "Apache-2.0"

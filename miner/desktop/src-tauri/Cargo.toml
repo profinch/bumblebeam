@@ -1,7 +1,7 @@
 [package]
 name = "bumblebeam-miner-desktop"
 # One product, one version: the same as ../../Cargo.toml (the console miner) and the Mac app.
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "BumbleBeam Miner for Windows and Linux: a tray app for pool.bumblebeam.org"
 license = "Apache-2.0"
