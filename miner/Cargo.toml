@@ -1,6 +1,6 @@
 [package]
 name = "bumblebeam-miner"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "BumbleBeam: open CPU miner for Beam's BeamHash III, every solution checked by the oracle"
