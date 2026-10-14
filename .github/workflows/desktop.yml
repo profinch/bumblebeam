@@ -151,6 +151,15 @@ jobs:
           R=miner/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
           if [ "${{ matrix.name }}" = windows ]; then
             cp "$(ls $R/nsis/*.exe | head -1)" "dist/BumbleBeam-Miner-$VER-Windows-x64-setup.exe"
+            # portable: the app with its programs next to it, nothing to install (settings and
+            # logs still in %APPDATA%, the WebView2 runtime of Windows 10/11)
+            P="BumbleBeam-Miner-$VER-Windows-x64-portable"
+            T=miner/desktop/src-tauri/target/${{ matrix.target }}/release
+            B=miner/desktop/src-tauri/binaries
+            mkdir -p "$P"
+            cp $T/bumblebeam-miner-desktop.exe "$P/BumbleBeam Miner.exe"
+            for n in mxbm bumblebeam-miner bb-power; do cp $B/$n-${{ matrix.target }}.exe "$P/$n.exe"; done
+            7z a -tzip "dist/$P.zip" "$P" >/dev/null
           else
             cp "$(ls $R/deb/*.deb | head -1)" "dist/BumbleBeam-Miner-$VER-Linux-x86_64.deb"
             cp "$(ls $R/appimage/*.AppImage | head -1)" "dist/BumbleBeam-Miner-$VER-Linux-x86_64.AppImage"
