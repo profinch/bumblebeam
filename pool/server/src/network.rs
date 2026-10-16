@@ -86,6 +86,12 @@ impl Finds {
         (*self.from.get(id)? <= start).then(|| self.by_height.range(start..).filter(|(_, (p, _))| p == id).count())
     }
 
+    /// Before a whole day is known: the pool's blocks since it is followed, the height that began.
+    fn partial(&self, id: &str) -> Option<(u64, usize)> {
+        let from = *self.from.get(id)?;
+        Some((from, self.by_height.range(from..).filter(|(_, (p, _))| p == id).count()))
+    }
+
     fn prune(&mut self, below: u64) {
         self.by_height = self.by_height.split_off(&below);
     }
@@ -126,12 +132,25 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
             // the chain's numbers from the node; the terminal's only while the node has none
             let pick = |k: &str| if c[k].is_null() { t[k].clone() } else { c[k].clone() };
             let mut list = t["pools"].as_array().cloned().unwrap_or_default();
-            // a pool's blocks of the day from its own lists once a whole day of them is known
-            let day = hdrs.first().map(|n| n.ts - 86400.0);
-            if let Some(start) = day.and_then(|d| hdrs.iter().filter(|h| h.ts > d).map(|h| h.height).min()) {
+            // a pool's blocks of the day from its own lists once a whole day of them is known; before
+            // that, with no other figure (the terminal down), the rate over the part known, scaled to a
+            // day, its hours in `blocks24hHours`
+            let newest = hdrs.first().map(|n| n.ts);
+            if let Some(start) = newest.and_then(|n| hdrs.iter().filter(|h| h.ts > n - 86400.0).map(|h| h.height).min()) {
+                let ts_of: HashMap<u64, f64> = hdrs.iter().map(|h| (h.height, h.ts)).collect();
                 for p in list.iter_mut().filter(|p| p["id"] != "bumblebeam") {
-                    if let Some(n) = p["id"].as_str().and_then(|id| finds.count_from(id, start)) {
+                    let Some(id) = p["id"].as_str().map(str::to_string) else { continue };
+                    if let Some(n) = finds.count_from(&id, start) {
                         p["blocks24h"] = json!(n);
+                    } else if p["blocks24h"].is_null() {
+                        let est = finds.partial(&id).and_then(|(from, n)| {
+                            let span = newest? - ts_of.get(&from)?;
+                            (span >= 3600.0).then(|| (n as f64 * 86400.0 / span, span / 3600.0))
+                        });
+                        if let Some((b, hours)) = est {
+                            p["blocks24h"] = json!(b.round());
+                            p["blocks24hHours"] = json!((hours * 10.0).round() / 10.0);
+                        }
                     }
                 }
             }

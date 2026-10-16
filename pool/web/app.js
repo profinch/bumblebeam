@@ -268,11 +268,14 @@
     // figures, so the network less the pools went below zero on a lucky hour. The pools then are
     // the rest, and every share is of their sum and the Others row, adding up to 100%.
     const pools = rows.reduce((s, r) => s + (r.hashrate || 0), 0);
-    const othersBlocks = net.blocks24h ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null;
+    // only with every active pool's blocks of the day known: else the pools without a figure would
+    // count as the others; the server's figures then (the chain's estimate less the pools)
+    const allKnown = rows.every((r) => !r.hashrate || r.blocks24h != null);
+    const othersBlocks = net.blocks24h && allKnown ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null;
     const f = othersBlocks != null ? othersBlocks / net.blocks24h : null;
     if (f != null && f < 1 && pools > 0) total = pools / (1 - f);
     const others = net.hashrate ? {
-      hashrate: f != null ? total * f : Math.max(0, net.hashrate - pools),
+      hashrate: f != null ? total * f : net.othersHashrate != null && !allKnown ? net.othersHashrate : Math.max(0, net.hashrate - pools),
       blocks24h: othersBlocks,
     } : null;
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
@@ -286,7 +289,7 @@
         <td><div class="hashcell"><span>${hr(p.hashrate)}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
             <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
         <td class="num">${pct(p.hashrate / total, 1)}</td>
-        <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${int(p.blocks24h)}</td>
+        <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${p.blocks24hHours ? `<span class="tipped" title="Estimated: the pool's blocks over the last ${fix(p.blocks24hHours, 1)} h, from its own API, scaled to a day. Counted exactly once a whole day of its blocks is known.">≈${int(p.blocks24h)}</span>` : int(p.blocks24h)}</td>
         <td class="num">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
       ${others ? `<tr class="others">
