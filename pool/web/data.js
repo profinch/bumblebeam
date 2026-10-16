@@ -7,7 +7,7 @@
 //    feed the page foreign data.
 //  - live Beam network data: the pool server's /api/network cache when it exists, else the Beam
 //    Explorer's public APIs (CORS open): beamterminal.0xmx.net/api/mining/* and
-//    explorer.0xmx.net/api/hdrs.
+//    explorer.0xmx.net/api/hdrs; the latest blocks fall back to our explorer (explorer.bumblebeam.org).
 //
 // Everything that leaves this file is typed: numbers are finite numbers or null, strings are
 // length-capped strings. Views still escape strings before putting them in HTML.
@@ -19,6 +19,7 @@ const BB = (() => {
   const POOL_API = ((DEV && params.get('api')) || (location.protocol.startsWith('http') ? location.origin : '')).replace(/\/$/, '');
   const TERMINAL = 'https://beamterminal.0xmx.net/api';
   const EXPLORER = 'https://explorer.0xmx.net/api';
+  const OUR_EXPLORER = 'https://explorer.bumblebeam.org/api';
 
   const GROTH = 1e8;
   const MATURITY = 240;          // coinbase maturity, blocks
@@ -138,9 +139,23 @@ const BB = (() => {
     return out;
   }
 
+  // The latest blocks with the pool that mined each, from the Beam Terminal. When it does not
+  // answer: heights and times from our own explorer, and only our blocks named (the pool knows them)
   async function networkBlocks(limit = 30) {
-    const r = await getJSON(`${TERMINAL}/mining/blocks?limit=${limit}`);
-    return (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.mined_by, 40) }));
+    try {
+      const r = await getJSON(`${TERMINAL}/mining/blocks?limit=${limit}`);
+      const bl = (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.mined_by, 40) }));
+      if (bl.length) return bl;
+    } catch (e) { /* our own below */ }
+    const [hdrs, ours] = await Promise.all([
+      getJSON(`${OUR_EXPLORER}/hdrs?nMax=${Math.min(100, limit)}&cols=T`),
+      POOL_API && mode !== 'demo' ? getJSON(`${POOL_API}/api/blocks/heights`, 5000).catch(() => null) : null,
+    ]);
+    const mine = new Set((ours && Array.isArray(ours.blocks) ? ours.blocks : []).filter((b) => Array.isArray(b) && b[2] !== 'orphaned').map((b) => num(b[0])));
+    return (hdrs.value || []).slice(1).map((row) => {
+      const height = num(row[0] && row[0].value);
+      return { height, ts: tsOf(row[1] && row[1].value), by: mine.has(height) ? 'BumbleBeam' : null };
+    }).filter((b) => b.height != null);
   }
 
   // ---------- pool API: normalisation ----------
