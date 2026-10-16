@@ -51,6 +51,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/miners/:address", get(miner))
         .route("/api/payments", get(payments))
         .route("/api/network", get(network))
+        .route("/api/network/blocks", get(network_blocks))
         .route("/api/health", get(health))
         .route("/api/coinbase", get(coinbase_info))
         .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
@@ -268,6 +269,20 @@ async fn payments(State(api): State<Api>, Query(q): Query<HashMap<String, String
 
 async fn network(State(api): State<Api>) -> R {
     Ok(Json(api.net.data.read().await.clone()))
+}
+
+/// The latest blocks of the chain from our node, newest first, each with the pool that found it
+/// when one is known (pool/API.md, "Network blocks"). `before=<height>` pages, `pool=<id>` filters.
+async fn network_blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let n = limit(&q, 50, crate::network::RECENT_BLOCKS as i64) as usize;
+    let before: Option<u64> = q.get("before").and_then(|v| v.parse().ok());
+    let pool = q.get("pool").map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty());
+    let all = api.net.blocks.read().await;
+    let list: Vec<Value> = all.iter()
+        .filter(|b| before.is_none_or(|h| b["height"].as_u64().is_some_and(|x| x < h)))
+        .filter(|b| pool.as_deref().is_none_or(|p| b["pool"].as_str() == Some(p)))
+        .take(n).cloned().collect();
+    Ok(Json(json!({ "count": list.len(), "blocks": list })))
 }
 
 /// The pool in MiningBoard's `miningboard-pool-v1` shape (miningboard.com/pools/submit.md).

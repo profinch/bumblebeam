@@ -38,7 +38,7 @@ DEX, BANS names, and BEAM's supply.
 | `GET /v1/status` | tip `height`, `hash`, `time`, `peers`, shielded output counts |
 | `GET /v1/supply` | BEAM `issued` so far by the emission schedule, `max_supply` 262,800,000 |
 | `GET /v1/search?q=` | what `q` is: `block` (a height), `kernel`, `contract`, `asset` (`#7`, `asset 7`, `beam`), `assets` (name or ticker), `name` (BANS), `contracts` (kind), or `none` |
-| `GET /v1/blocks?limit=20&before=` | block headers, newest first: `height`, `hash`, `time`, `difficulty`, `transactions`, `outputs`, `inputs`, `shielded_outputs`, `shielded_inputs`, `contract_calls`, `fees_beam`; page with `before=next_before` |
+| `GET /v1/blocks?limit=20&before=` | block headers, newest first: `height`, `hash`, `time`, `difficulty`, `transactions`, `outputs`, `inputs`, `shielded_outputs`, `shielded_inputs`, `contract_calls`, `fees_beam`, `mined_by` (`{pool, name}` of the pool that found it, for the latest 500 blocks, else `null`); page with `before=next_before` |
 | `GET /v1/blocks/{height}` | one block: header, `reward_beam`, `fees_beam`, `kernels` (with decoded contract calls in `data`), `outputs` (coinbase value, maturity, `spent_height`), `inputs` (`created_height`) |
 | `GET /v1/kernels/{id}` | a kernel and the block it is in |
 | `GET /v1/assets?q=` | assets: `asset_id`, `name`, `ticker`, `unit`, `decimals`, `nth_ratio`, `supply`, `owner_key`, `deposit_beam`, `lock_height`, `short_description`, links; `q` filters by name, ticker, `#id` or owner key (6+ characters) |
@@ -49,6 +49,8 @@ DEX, BANS names, and BEAM's supply.
 | `GET /v1/contracts?q=&kind=` | contracts: `kind` (when Beam's parser knows it, else `null`), `shader`, `deployed_height`, `locked_funds`, `owned_assets` |
 | `GET /v1/contracts/{id}?calls=20` | one contract: decoded `state`, `locked_funds`, `owned_assets`, `versions`, recent `calls` (a call with sub-calls is `{"calls": […]}`), `calls_next_before` |
 | `GET /v1/peers` | the node's peers as `ip` and `port` |
+| `GET /v1/network` | the network and every Beam mining pool: `height`, `difficulty`, `avg_block_seconds`, `blocks_24h`, `hashrate` (Sol/s, now), `chain_hashrate_24h`, `price_usd` (on-chain oracle), `others` (what no listed pool claims), and `pools` with `hashrate`, `miners`, `workers`, `blocks_24h`, `fee_percent`, `scheme`, `last_block_time` |
+| `GET /v1/network/blocks?limit=50&before=&pool=` | the latest blocks (up to 500) with `mined_by`: each pool's own API checked against our node's hash at that height (orphans never credited), BumbleBeam's from its own database; `null` when no listed pool claims a block |
 
 ```sh
 curl -s https://explorer.bumblebeam.org/v1/status
@@ -70,7 +72,8 @@ protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
 |---|---|
 | `explorer_status` | chain tip, peers, shielded counts |
 | `explorer_search` | what a height, kernel, contract, asset or name is |
-| `explorer_latest_blocks` | block headers, newest first, with paging |
+| `explorer_latest_blocks` | block headers, newest first, with paging, each with the pool that found it |
+| `explorer_mining_pools` | the network and every Beam mining pool: hashrate, miners, workers, blocks in 24h, fee, BEAM/USD |
 | `explorer_block` | one block with kernels, outputs, inputs |
 | `explorer_kernel` | a transaction kernel and its block |
 | `explorer_supply` | BEAM issued and maximum supply |

@@ -268,8 +268,39 @@ async function v1Blocks(q) {
   const limit = clampLimit(q.get('limit'), 20, 500);
   const before = q.get('before') ? Number(q.get('before')) : null;
   const top = before != null ? before - 1 : num((await status()).height);
-  const t = await node(`hdrs?hMax=${top}&nMax=${limit}`);
-  const blocks = rowsOf(t).slice(0, limit).map(headerRow);
+  const [t, by] = await Promise.all([node(`hdrs?hMax=${top}&nMax=${limit}`), minedBy()]);
+  const blocks = rowsOf(t).slice(0, limit).map(headerRow).map((b) => ({ ...b, mined_by: by.get(b.height) || null }));
+  return { blocks, next_before: blocks.length ? blocks[blocks.length - 1].height : null };
+}
+
+// Who found the latest blocks, as the pool server works it out (each pool's own API checked against
+// our node's hashes, the pool's own database for ours): height -> { pool, name }. Best effort: a
+// pool server that does not answer leaves mined_by null.
+const minedByCache = cached(20000, async () => {
+  const r = await pool('network/blocks?limit=500');
+  return new Map((r.blocks || []).filter((b) => b.pool).map((b) => [num(b.height), { pool: String(b.pool), name: String(b.poolName || b.pool) }]));
+});
+const minedBy = () => minedByCache().catch(() => new Map());
+
+// The network and every Beam mining pool, from the pool server's cache (chain numbers from our node).
+async function v1Network() {
+  const n = await pool('network');
+  return {
+    height: num(n.height), difficulty: num(n.difficulty), avg_block_seconds: num(n.avgBlock), blocks_24h: num(n.blocks24h),
+    hashrate: num(n.hashrate), chain_hashrate_24h: num(n.chainHashrate), price_usd: num(n.priceUsd),
+    others: { hashrate: num(n.othersHashrate), blocks_24h: num(n.othersBlocks24h) },
+    pools: (n.pools || []).map((x) => ({ id: x.id, name: x.name, website: x.website || null, scheme: x.scheme || null, fee_percent: num(x.fee),
+      hashrate: num(x.hashrate), miners: num(x.miners), workers: num(x.workers), blocks_24h: num(x.blocks24h),
+      last_block_time: iso(num(x.lastTs)), last_block_timestamp: num(x.lastTs) })),
+  };
+}
+
+// The latest blocks with the pool that found each (null: no listed pool claims it).
+async function v1NetworkBlocks(q) {
+  const limit = clampLimit(q.get('limit'), 50, 500);
+  const r = await pool(`network/blocks${query({ limit, before: q.get('before') || undefined, pool: q.get('pool') || undefined })}`);
+  const blocks = (r.blocks || []).map((b) => ({ height: num(b.height), hash: hex(b.hash), time: iso(num(b.ts)), timestamp: num(b.ts), difficulty: num(b.difficulty),
+    mined_by: b.pool ? { pool: String(b.pool), name: String(b.poolName || b.pool) } : null }));
   return { blocks, next_before: blocks.length ? blocks[blocks.length - 1].height : null };
 }
 
@@ -442,6 +473,8 @@ const ROUTES = [
   ['/v1/contracts', (m, q) => v1Contracts(q)],
   [/^\/v1\/contracts\/([^/]+)$/, (m, q) => v1Contract(m[1], q)],
   ['/v1/peers', () => v1Peers()],
+  ['/v1/network', () => v1Network()],
+  ['/v1/network/blocks', (m, q) => v1NetworkBlocks(q)],
 ];
 function index() {
   return { name: 'BumbleBeam API', version: VERSION, docs: 'https://github.com/profinch/bumblebeam/blob/main/explorer/API.md', openapi: `${PUBLIC}/v1/openapi.json`, mcp: `${PUBLIC}/mcp`,
@@ -466,7 +499,7 @@ function withPeak(out, range) {
 const TOOLS = [
   ['explorer_status', 'Beam chain tip as seen by BumbleBeam\'s own node: height, hash, time, peers, shielded output counts.', {}, () => v1Status()],
   ['explorer_search', 'Resolve anything: a block height, kernel ID, contract ID, asset number (#7), asset name or ticker, or a BANS name.', { q: str('what to look up') }, (a) => v1Search(new URLSearchParams({ q: a.q || '' })), ['q']],
-  ['explorer_latest_blocks', 'Latest Beam block headers, newest first: height, hash, time, difficulty, transactions, outputs/inputs, shielded counts, contract calls, fees.', { limit: intp('how many, 1-500 (default 20)'), before: intp('only blocks below this height, for paging') }, (a) => v1Blocks(new URLSearchParams(Object.entries(a).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])))],
+  ['explorer_latest_blocks', 'Latest Beam block headers, newest first: height, hash, time, difficulty, transactions, outputs/inputs, shielded counts, contract calls, fees, and `mined_by` (the pool that found it, when one claims it).', { limit: intp('how many, 1-500 (default 20)'), before: intp('only blocks below this height, for paging') }, (a) => v1Blocks(new URLSearchParams(Object.entries(a).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])))],
   ['explorer_block', 'One Beam block by height: hash, time, reward, fees, kernels (with decoded contract calls), outputs and inputs. Amounts and parties stay private by design.', { height: intp('block height') }, (a) => v1Block(String(a.height)), ['height']],
   ['explorer_kernel', 'A transaction kernel by its 64-hex ID: fee, valid heights, decoded contract calls and the block it is in.', { id: str('kernel ID, 64 hex characters') }, (a) => v1Kernel(String(a.id || '')), ['id']],
   ['explorer_supply', 'BEAM supply: issued so far by the emission schedule and the maximum (262,800,000).', {}, () => v1Supply()],
@@ -484,6 +517,8 @@ const TOOLS = [
   ['pool_miners', 'Top miners on the BumbleBeam pool by hashrate, with the modes they mine in (no addresses: Beam is private).', { limit: intp('how many, 1-500 (default 50)'), mode: str('optional: pplns or solo only') }, (a) => pool(`miners${query({ limit: clampLimit(a.limit, 50, 500), mode: a.mode })}`)],
   ['pool_payments', 'Payout runs of the BumbleBeam pool with amounts and kernels.', { limit: intp('how many, 1-500 (default 50)') }, (a) => pool(`payments?limit=${clampLimit(a.limit, 50, 500)}`)],
   ['pool_network', 'Beam network from the chain (height, difficulty, block time, hashrate in Sol/s, blocks in 24h), BEAM/USD (`priceUsd`, the on-chain Oracle2 median), and every Beam mining pool with hashrate, miners, workers, blocks in 24h, fee and scheme. Network hashrate less the pools\' is miners no pool lists (solo nodes, private pools).', {}, () => pool('network')],
+  ['pool_network_blocks', 'The latest Beam blocks (up to 500) with the pool that found each: every listed pool\'s own API checked against BumbleBeam\'s node (hash by height, orphans dropped), BumbleBeam\'s own blocks from its database. `mined_by` null: no listed pool claims it (solo miners, private pools).', { limit: intp('how many, 1-500 (default 50)'), before: intp('only blocks below this height'), pool: str('optional pool id, e.g. 2miners, herominers, bumblebeam') }, (a) => v1NetworkBlocks(new URLSearchParams(Object.entries(a).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])))],
+  ['explorer_mining_pools', 'Beam network and every Beam mining pool: height, difficulty, block time, network hashrate (Sol/s), blocks in 24h, BEAM/USD (on-chain oracle), and per pool hashrate, miners, workers, blocks in 24h, fee, scheme, last block.', {}, () => v1Network()],
   ['pool_health', 'Whether the BumbleBeam pool is up and has work from its node.', {}, () => pool('health')],
 ].map(([name, description, properties, run, required]) => ({ name, description, inputSchema: { type: 'object', properties, ...(required ? { required } : {}), additionalProperties: false }, run, annotations: { readOnlyHint: true, openWorldHint: true } }));
 
@@ -552,6 +587,8 @@ const OPENAPI = {
     '/v1/contracts': op('Deployed contracts', [p('q', 'query', 'filter by kind, ID or shader'), p('kind', 'query', 'kind prefix')]),
     '/v1/contracts/{id}': op('One contract', [p('id', 'path', '64 hex characters'), p('calls', 'query', 'recent calls, 1-500', 'integer')]),
     '/v1/peers': op('Peers of the node'),
+    '/v1/network': op('The network and every Beam mining pool: hashrate, miners, workers, blocks in 24 h, fee, BEAM/USD'),
+    '/v1/network/blocks': op('Latest blocks with the pool that found each', [p('limit', 'query', '1-500, default 50', 'integer'), p('before', 'query', 'only blocks below this height', 'integer'), p('pool', 'query', 'pool id, e.g. 2miners')]),
   },
 };
 
