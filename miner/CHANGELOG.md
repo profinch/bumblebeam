@@ -10,6 +10,11 @@ kept below as "Mac app".
 - Windows: the app answers the terminal's cursor position query that ConPTY sends as the miner
   starts. Without the answer ConPTY held all of the miner's output, so the window stayed at
   Starting with no speed or shares (0.5.0 was withdrawn for this).
+- Windows: "Best performance while mining" (Settings, on by default): the Windows power mode on
+  mains power is Best performance while mining and the user's own comes back after. Laptops
+  cap the CPU and GPU together below it: an RTX 3060 Laptop in Best power efficiency fell from
+  60 W and 11 sol/s to 32 W and 2-3 sol/s for minutes at a time, the console miner as much as
+  the app.
 - Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
   programs in one folder, run without installing.
 

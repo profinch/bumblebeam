@@ -35,6 +35,15 @@ address from your Beam wallet.
   0006), which lowers the speed but hardly the draw; the window says so.
 - CPU: the number of threads.
 
+## Best performance while mining (Windows)
+
+Laptops cap the CPU and GPU together below Windows' "Best performance" power mode: an RTX 3060
+Laptop in "Best power efficiency" fell from 60 W and 11 sol/s to 32 W and 2-3 sol/s for
+minutes at a time (the console miner too). So while mining the app sets the power mode on
+mains power to Best performance and puts the user's own back when mining stops, the app quits,
+or after a crash at the next launch. A mode the user changes while mining stays as they set it.
+Settings › "Best performance while mining" turns this off.
+
 ## Build
 
 Needs Rust and Node (for the Tauri CLI); on Linux `libwebkit2gtk-4.1-dev

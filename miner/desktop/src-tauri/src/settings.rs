@@ -32,6 +32,8 @@ pub struct Settings {
     pub start_at_login: bool,
     /// send average speeds to the pool (POST /api/benchmarks); off unless turned on
     pub share_speed: bool,
+    /// Windows: "Best performance" power mode on mains while mining (laptops cap below it)
+    pub best_performance: bool,
 }
 
 impl Default for Settings {
@@ -46,6 +48,7 @@ impl Default for Settings {
             show_rate: true,
             start_at_login: false,
             share_speed: false,
+            best_performance: true,
         }
     }
 }

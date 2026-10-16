@@ -108,6 +108,7 @@ input { font: inherit; color: inherit; user-select: text; -webkit-user-select: t
 .switchrow > span:first-child { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .switchrow .t { font-size: 12px; } .switchrow .s { font-size: 10px; color: var(--muted); }
 .switchrow > .t { flex: 1; }
+.switchrow[hidden] { display: none; }
 .switch { position: relative; width: 38px; height: 22px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; }
 .switch span { position: absolute; inset: 0; border-radius: 11px; background: rgba(255, 255, 255, .2); transition: background .15s; }

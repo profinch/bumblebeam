@@ -340,6 +340,113 @@ impl PowerLimit {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Windows' power mode on mains power
+//
+// Laptops cap the CPU and GPU together below "Best performance": a ThinkBook 16p (RTX 3060
+// Laptop, 60 W) in "Best power efficiency" fell to 32 W and a quarter of the speed within 20 s
+// and stayed there most of the time, the console miner as much as the app; in "Best
+// performance" it held 55-60 W for the hour measured. So while mining the mains power mode is
+// "Best performance" and the user's own comes back when mining stops, the app quits or, after a
+// crash, at the next launch (kept in a file meanwhile). Only the mains setting is touched, and
+// one the user changed while mining is left as they set it. The calls are powrprof.dll's
+// PowerGet/SetUserConfiguredACPowerMode, what Settings itself uses; where Windows lacks them
+// this does nothing.
+
+pub struct PowerMode {
+    file: PathBuf,
+    held: Mutex<bool>,
+}
+
+/// "Best performance" (Settings › System › Power › Power mode)
+#[cfg(windows)]
+const BEST_PERFORMANCE: u128 = 0xded574b5_45a0_4f42_8737_46345c09c238;
+
+#[cfg(windows)]
+mod ac_mode {
+    use windows_sys::core::GUID;
+    use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+
+    type Get = unsafe extern "system" fn(*mut GUID) -> u32;
+    type Set = unsafe extern "system" fn(*const GUID) -> u32;
+
+    fn proc(name: &[u8]) -> Option<unsafe extern "system" fn() -> isize> {
+        let dll: Vec<u16> = "powrprof.dll\0".encode_utf16().collect();
+        unsafe {
+            let h = LoadLibraryW(dll.as_ptr());
+            if h.is_null() {
+                return None;
+            }
+            GetProcAddress(h, name.as_ptr())
+        }
+    }
+
+    fn to_u128(g: &GUID) -> u128 {
+        (g.data1 as u128) << 96 | (g.data2 as u128) << 80 | (g.data3 as u128) << 64 | u64::from_be_bytes(g.data4) as u128
+    }
+
+    pub fn get() -> Option<u128> {
+        let f: Get = unsafe { std::mem::transmute(proc(b"PowerGetUserConfiguredACPowerMode\0")?) };
+        let mut g: GUID = unsafe { std::mem::zeroed() };
+        (unsafe { f(&mut g) } == 0).then(|| to_u128(&g))
+    }
+
+    pub fn set(mode: u128) -> bool {
+        let Some(p) = proc(b"PowerSetUserConfiguredACPowerMode\0") else { return false };
+        let f: Set = unsafe { std::mem::transmute(p) };
+        let g = GUID::from_u128(mode);
+        unsafe { f(&g) == 0 }
+    }
+}
+
+impl PowerMode {
+    pub fn new(work_dir: &Path) -> PowerMode {
+        PowerMode { file: work_dir.join("power-mode"), held: Mutex::new(false) }
+    }
+
+    /// Whether this Windows lets the app set the power mode.
+    pub fn available() -> bool {
+        #[cfg(windows)]
+        return ac_mode::get().is_some();
+        #[allow(unreachable_code)]
+        false
+    }
+
+    /// Mining starts (or the switch is turned on): "Best performance" on mains power.
+    pub fn hold(&self) {
+        let mut held = self.held.lock().unwrap();
+        if *held {
+            return;
+        }
+        #[cfg(windows)]
+        if let Some(mine) = ac_mode::get() {
+            if mine != BEST_PERFORMANCE && std::fs::write(&self.file, format!("{mine:032x}\n")).is_ok() && !ac_mode::set(BEST_PERFORMANCE) {
+                let _ = std::fs::remove_file(&self.file);
+            }
+        }
+        *held = true;
+    }
+
+    /// Mining stops (or the switch is turned off): the user's own power mode comes back.
+    pub fn release(&self) {
+        *self.held.lock().unwrap() = false;
+        self.recover();
+    }
+
+    /// At launch: a power mode left by a crash goes back to the user's.
+    pub fn recover(&self) {
+        let Ok(saved) = std::fs::read_to_string(&self.file) else { return };
+        #[cfg(windows)]
+        if let Ok(mine) = u128::from_str_radix(saved.trim(), 16) {
+            if ac_mode::get() == Some(BEST_PERFORMANCE) {
+                ac_mode::set(mine);
+            }
+        }
+        let _ = saved;
+        let _ = std::fs::remove_file(&self.file);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // a miner never outlives the app
 
 #[cfg(windows)]
