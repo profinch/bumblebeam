@@ -230,7 +230,8 @@ median of Beam's on-chain price oracle (Oracle2) from the same node, refreshed e
 from its own shares and blocks, the Beam Terminal's list for the rest and for `series`. A pool's
 `blocks24h` is counted from its own block lists (see `/api/network/blocks`) once the pool server has
 followed that pool for a whole day without a gap; until then it is the terminal's (SunPool reports
-its own). HeroMiners' row counts its solo miners too, as
+its own), and without that either, the pool's rate over the hours already followed scaled to a
+day, with those hours in `blocks24hHours` (absent on a counted figure). HeroMiners' row counts its solo miners too, as
 ours does. Each part keeps its last good value while its source is down; a pool whose API does not
 answer shows the terminal's numbers.
 
