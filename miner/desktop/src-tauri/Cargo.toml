@@ -20,7 +20,7 @@ portable-pty = "0.9"
 regex = "1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_Power", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_Foundation", "Win32_Security"] }
+windows-sys = { version = "0.61", features = ["Win32_System_Power", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_Foundation", "Win32_Security"] }
 winreg = "0.56"
 
 [profile.release]

@@ -9,7 +9,7 @@ mod settings;
 
 use miner::Miner;
 use pool::Pool;
-use power::{Awake, Gpu, LimitMode, PowerLimit};
+use power::{Awake, Gpu, LimitMode, PowerLimit, PowerMode};
 use serde::Serialize;
 use settings::{Device, Settings};
 use std::path::PathBuf;
@@ -30,6 +30,7 @@ pub struct App {
     awake_on_battery: Mutex<bool>,
     gpu: Mutex<Option<Gpu>>,
     limit: PowerLimit,
+    power_mode: PowerMode,
     gpu_watts: Mutex<Option<f64>>,
     load_file: PathBuf,
     tray: Mutex<Option<TrayIcon>>,
@@ -53,6 +54,7 @@ struct View {
     on_ac: bool,
     keep_awake_on: bool,
     autostart_available: bool,
+    power_mode_available: bool,
 }
 
 fn cpu_name() -> String {
@@ -96,6 +98,7 @@ impl App {
             on_ac: power::on_ac(),
             keep_awake_on: self.awake.active(),
             autostart_available: true,
+            power_mode_available: PowerMode::available(),
             settings: s,
         }
     }
@@ -134,6 +137,9 @@ impl App {
         ]);
         let _ = std::fs::write(&self.load_file, "100\n");
         self.miner.start(&s);
+        if s.best_performance {
+            self.power_mode.hold();
+        }
         self.pool.start_session(miner::now_unix());
         self.apply_power();
         self.update_awake();
@@ -142,6 +148,7 @@ impl App {
     fn stop(&self) {
         self.miner.stop();
         self.limit.release();
+        self.power_mode.release();
         self.update_awake();
     }
 }
@@ -226,9 +233,15 @@ fn save_settings(app: AppHandle, new: Settings, first_run: bool, st: tauri::Stat
         s.show_rate = new.show_rate;
         s.share_speed = new.share_speed;
         s.start_at_login = new.start_at_login;
+        s.best_performance = new.best_performance;
         s.save(&st.settings_path);
         changed
     };
+    if !new.best_performance {
+        st.power_mode.release();
+    } else if st.miner.running() {
+        st.power_mode.hold();
+    }
     let al = app.autolaunch();
     let _ = if new.start_at_login { al.enable() } else { al.disable() };
     let pool = st.pool.clone();
@@ -371,6 +384,8 @@ pub fn run() {
             }
             let miner = Miner::new(bin.clone(), data.clone(), logs);
             let limit = PowerLimit::new(&data, &bin);
+            let power_mode = PowerMode::new(&data);
+            power_mode.recover();
             if let Some(g) = gpu.as_ref() {
                 limit.recover(g);
             }
@@ -383,6 +398,7 @@ pub fn run() {
                 awake_on_battery: Mutex::new(false),
                 gpu: Mutex::new(gpu),
                 limit,
+                power_mode,
                 gpu_watts: Mutex::new(None),
                 load_file: data.join("gpu-load"),
                 tray: Mutex::new(None),

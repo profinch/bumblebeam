@@ -139,6 +139,8 @@ function openSetup(firstRun) {
   $('show-rate').checked = s.showRate;
   $('at-login').checked = s.startAtLogin;
   $('share-speed').checked = s.shareSpeed;
+  $('best-perf').checked = s.bestPerformance;
+  $('best-perf-row').hidden = !v.powerModeAvailable;
   $('more').hidden = firstRun;
   $('cancel').hidden = firstRun;
   $('save').textContent = firstRun ? 'Start mining' : 'Save';
@@ -173,7 +175,8 @@ async function checkAddress() {
 async function save() {
   const firstRun = v.settings.address.trim() === '';
   const s = { ...v.settings, address: $('address').value.trim(), worker: $('worker').value.trim(), mode,
-              showRate: $('show-rate').checked, startAtLogin: $('at-login').checked, shareSpeed: $('share-speed').checked };
+              showRate: $('show-rate').checked, startAtLogin: $('at-login').checked, shareSpeed: $('share-speed').checked,
+              bestPerformance: $('best-perf').checked };
   await invoke('save_settings', { new: s, firstRun });
   editing = false;
   $('setup').dataset.first = '';
