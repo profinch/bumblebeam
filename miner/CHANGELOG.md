@@ -15,6 +15,10 @@ kept below as "Mac app".
   cap the CPU and GPU together below it: an RTX 3060 Laptop in Best power efficiency fell from
   60 W and 11 sol/s to 32 W and 2-3 sol/s for minutes at a time, the console miner as much as
   the app.
+- GPU (NVIDIA): MXBM sleeps while the GPU works instead of spinning. CUDA's default kept one
+  CPU core at 100 % for the whole run, and on a laptop that core's power comes out of the
+  budget the GPU shares: the RTX 3060 Laptop above was capped with MXBM where lolMiner, with
+  no core busy, held 60 W.
 - Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
   programs in one folder, run without installing.
 

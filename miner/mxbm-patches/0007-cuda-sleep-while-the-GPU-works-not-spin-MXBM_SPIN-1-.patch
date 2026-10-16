@@ -1,0 +1,39 @@
+From 6c32d2037bc9ff3e0632d8e76b4399b8dcc4fbbb Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Fri, 16 Oct 2026 23:02:07 +0100
+Subject: [PATCH] cuda: sleep while the GPU works, not spin (MXBM_SPIN=1 to
+ spin)
+
+CUDA's default scheduling (auto) spins whenever there are more cores than
+contexts, so the solve's blocking copies kept one CPU core at 100 % for the
+whole run. On a laptop that core's power comes out of the budget the GPU
+shares: a Ryzen 9 5900HX with an RTX 3060 Laptop (60 W) was capped to 32 W,
+CPU and GPU together, for minutes at a time, where lolMiner (no core busy)
+held 60 W. cudaDeviceScheduleBlockingSync puts the thread to sleep in the
+driver instead. MXBM_SPIN=1 restores the spin, for comparison.
+---
+ src/gpu/cuda_solver.cu | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/gpu/cuda_solver.cu b/src/gpu/cuda_solver.cu
+index 6d0ba3f..f1f7e20 100644
+--- a/src/gpu/cuda_solver.cu
++++ b/src/gpu/cuda_solver.cu
+@@ -546,6 +546,14 @@ CudaSolver::CudaSolver(int index, unsigned power_limit_w, unsigned mem_clock_mhz
+     // otherwise use device 0's context against this device's pointers.
+     if (cudaSetDevice(index) != cudaSuccess)
+         throw std::runtime_error("cudaSetDevice(" + std::to_string(index) + ") failed");
++    // Sleep in the driver while the GPU works rather than spin. CUDA's default (auto) spins
++    // whenever there are more cores than contexts, so the solve's blocking copies kept one
++    // core at 100 % for the whole run; on a laptop that core's power comes out of the
++    // budget the GPU shares, and the platform caps both. MXBM_SPIN=1 restores the spin.
++    {
++        const char* e = std::getenv("MXBM_SPIN");
++        cudaSetDeviceFlags(e && atoi(e) != 0 ? cudaDeviceScheduleSpin : cudaDeviceScheduleBlockingSync);
++    }
+     p_->device_index = index;
+     p_->info = device_info(index);
+     if (const char* e = std::getenv("MXBM_LOAD")) p_->load = std::atoi(e);
+-- 
+2.47.3
+
