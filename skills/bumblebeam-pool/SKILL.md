@@ -22,6 +22,7 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 | one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments, `blocksFound`) |
 | payout runs | `/api/payments?limit=50` |
 | Beam network, BEAM price, every Beam pool | `/api/network` (`height`, `difficulty`, `avgBlock`, `hashrate`, `blocks24h` from the chain; `priceUsd`; `pools`) |
+| the latest network blocks and which pool found each | `/api/network/blocks?limit=50&before=<height>&pool=<id>` (`pool`, `poolName`; `null` = no listed pool) |
 
 ```sh
 curl -s https://pool.bumblebeam.org/api/stats | jq '{hashrate, minersTotal, workersTotal, blocks24h}'
@@ -42,6 +43,9 @@ curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balan
   pool's reward a day ≈ `blocks24h` × 25 BEAM, in USD × `priceUsd`.
 - Block `status`: `pending` (confirming), `confirmed`, `orphaned`, `unverified` (waits for the
   operator).
+- Everything network-wide comes from BumbleBeam's own Beam node (chain numbers, the oracle price,
+  block hashes) and each pool's own API checked against it; a third-party aggregator (the Beam
+  Terminal) only fills what no pool reports. MCP: `pool_network`, `pool_network_blocks`.
 
 ## Connecting a miner
 

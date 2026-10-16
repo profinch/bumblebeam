@@ -227,8 +227,10 @@ median of Beam's on-chain price oracle (Oracle2) from the same node, refreshed e
 
 `pools`, which the chain does not know: each pool's own API where it has a public one (2Miners,
 2Miners Solo, HeroMiners, SunPool) for `hashrate`, `miners`, `workers` and `lastTs`, BumbleBeam
-from its own shares and blocks, the Beam Terminal's list for the rest and for the other pools'
-`blocks24h` (SunPool reports its own) and `series`. HeroMiners' row counts its solo miners too, as
+from its own shares and blocks, the Beam Terminal's list for the rest and for `series`. A pool's
+`blocks24h` is counted from its own block lists (see `/api/network/blocks`) once the pool server has
+followed that pool for a whole day without a gap; until then it is the terminal's (SunPool reports
+its own). HeroMiners' row counts its solo miners too, as
 ours does. Each part keeps its last good value while its source is down; a pool whose API does not
 answer shows the terminal's numbers.
 
@@ -247,6 +249,25 @@ this endpoint is absent.
   "pools": [{ "id": "2miners", "name": "2Miners", "website": "https://beam.2miners.com", "scheme": "PPLNS",
               "fee": 1, "hashrate": 31460.0, "miners": 88, "workers": 282, "blocks24h": 838,
               "lastTs": 1791845143, "series": [[1791840000, 31500.5]] }] }
+```
+
+## `GET /api/network/blocks`
+
+The latest blocks of the chain (up to 500, newest first) from the pool's explorer-node, each with
+the pool that found it, refreshed every 30 seconds. Who found a block: each listed pool's own API
+names its latest blocks with their hashes (2Miners and 2Miners Solo: `/api/blocks`; HeroMiners:
+`/api/stats`; SunPool: its miningpoolstats report, heights only), checked against the node's hash
+at that height, so an orphan is never credited; BumbleBeam's from its own database. The Beam
+Terminal's block list only fills a height no pool claims. `pool` and `poolName` are `null` for a
+block no listed pool claims (solo miners, private pools).
+
+Parameters: `limit` (1-500, default 50), `before=<height>` (only blocks below it), `pool=<id>`
+(only that pool's, e.g. `2miners`, `herominers`, `bumblebeam`).
+
+```json
+{ "count": 2, "blocks": [
+  { "height": 4082320, "hash": "aade819a…", "ts": 1792137956, "difficulty": 3123207.0, "pool": "2miners", "poolName": "2Miners" },
+  { "height": 4082319, "hash": "5c01e2b4…", "ts": 1792137901, "difficulty": 3130014.0, "pool": null, "poolName": null } ] }
 ```
 
 ## `GET /api/miningboard`
@@ -405,6 +426,7 @@ address; every action is logged.
 | `pool_miners` | top miners by hashrate with their modes; `mode` for PPLNS or solo only |
 | `pool_payments` | payout runs |
 | `pool_network` | Beam network (from the chain), BEAM/USD, every Beam pool |
+| `pool_network_blocks` | the latest network blocks with the pool that found each, `pool` to filter |
 | `pool_health` | whether the pool is up and has work |
 
 ```sh

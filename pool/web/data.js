@@ -5,9 +5,10 @@
 //    yet, a seeded generator stands in and the UI says so. From localhost, ?api=<url> points the
 //    UI at another server; on a public host the parameter is ignored, so a crafted link cannot
 //    feed the page foreign data.
-//  - live Beam network data: the pool server's /api/network cache when it exists, else the Beam
-//    Explorer's public APIs (CORS open): beamterminal.0xmx.net/api/mining/* and
-//    explorer.0xmx.net/api/hdrs; the latest blocks fall back to our explorer (explorer.bumblebeam.org).
+//  - live Beam network data: the pool server's /api/network and /api/network/blocks (our node, and
+//    who found each block from the pools' own APIs) when they exist; else our explorer
+//    (explorer.bumblebeam.org), and the Beam Explorer's public APIs (beamterminal.0xmx.net,
+//    explorer.0xmx.net) only as the last resort.
 //
 // Everything that leaves this file is typed: numbers are finite numbers or null, strings are
 // length-capped strings. Views still escape strings before putting them in HTML.
@@ -114,7 +115,7 @@ const BB = (() => {
 
     const [pools, hdrs] = await Promise.allSettled([
       getJSON(`${TERMINAL}/mining/pools`),
-      getJSON(`${EXPLORER}/hdrs?nMax=61&cols=Td`),
+      getJSON(`${OUR_EXPLORER}/hdrs?nMax=61&cols=Td`).catch(() => getJSON(`${EXPLORER}/hdrs?nMax=61&cols=Td`)),
     ]);
     out.source = 'explorer';
     if (pools.status === 'fulfilled') {
@@ -139,23 +140,32 @@ const BB = (() => {
     return out;
   }
 
-  // The latest blocks with the pool that mined each, from the Beam Terminal. When it does not
-  // answer: heights and times from our own explorer, and only our blocks named (the pool knows them)
+  // The latest blocks with the pool that mined each: the pool server's list (our node's headers,
+  // each pool's own API checked against them). Without it: heights and times from our explorer
+  // with only our blocks named; the Beam Terminal last.
   async function networkBlocks(limit = 30) {
+    const pooled = POOL_API && mode !== 'demo';
+    if (pooled) {
+      try {
+        const r = await getJSON(`${POOL_API}/api/network/blocks?limit=${limit}`, 5000);
+        const bl = (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.poolName, 40) }));
+        if (bl.length) return bl;
+      } catch (e) { /* our explorer below */ }
+    }
     try {
-      const r = await getJSON(`${TERMINAL}/mining/blocks?limit=${limit}`);
-      const bl = (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.mined_by, 40) }));
+      const [hdrs, ours] = await Promise.all([
+        getJSON(`${OUR_EXPLORER}/hdrs?nMax=${Math.min(100, limit)}&cols=T`),
+        pooled ? getJSON(`${POOL_API}/api/blocks/heights`, 5000).catch(() => null) : null,
+      ]);
+      const mine = new Set((ours && Array.isArray(ours.blocks) ? ours.blocks : []).filter((b) => Array.isArray(b) && b[2] !== 'orphaned').map((b) => num(b[0])));
+      const bl = (hdrs.value || []).slice(1).map((row) => {
+        const height = num(row[0] && row[0].value);
+        return { height, ts: tsOf(row[1] && row[1].value), by: mine.has(height) ? 'BumbleBeam' : null };
+      }).filter((b) => b.height != null);
       if (bl.length) return bl;
-    } catch (e) { /* our own below */ }
-    const [hdrs, ours] = await Promise.all([
-      getJSON(`${OUR_EXPLORER}/hdrs?nMax=${Math.min(100, limit)}&cols=T`),
-      POOL_API && mode !== 'demo' ? getJSON(`${POOL_API}/api/blocks/heights`, 5000).catch(() => null) : null,
-    ]);
-    const mine = new Set((ours && Array.isArray(ours.blocks) ? ours.blocks : []).filter((b) => Array.isArray(b) && b[2] !== 'orphaned').map((b) => num(b[0])));
-    return (hdrs.value || []).slice(1).map((row) => {
-      const height = num(row[0] && row[0].value);
-      return { height, ts: tsOf(row[1] && row[1].value), by: mine.has(height) ? 'BumbleBeam' : null };
-    }).filter((b) => b.height != null);
+    } catch (e) { /* the terminal below */ }
+    const r = await getJSON(`${TERMINAL}/mining/blocks?limit=${limit}`);
+    return (Array.isArray(r.blocks) ? r.blocks : []).map((b) => ({ height: num(b.height), ts: tsOf(b.ts), by: str(b.mined_by, 40) }));
   }
 
   // ---------- pool API: normalisation ----------

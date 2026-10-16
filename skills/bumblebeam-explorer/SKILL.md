@@ -1,6 +1,6 @@
 ---
 name: bumblebeam-explorer
-description: Look up the Beam (BEAM) blockchain through BumbleBeam's explorer API - blocks, kernels (transactions), BEAM supply, confidential assets, DEX pools, BANS names and smart contracts. Use when asked about Beam blocks or transactions, a BEAM or asset amount, a Beam contract or DApp, DEX liquidity or prices, or a BANS name.
+description: Look up the Beam (BEAM) blockchain through BumbleBeam's explorer API - blocks and which mining pool found them, kernels (transactions), BEAM supply, confidential assets, DEX pools, BANS names, smart contracts, and every Beam mining pool's hashrate and blocks. Use when asked about Beam blocks or transactions, who mined a block, Beam pools or network hashrate, a BEAM or asset amount, a Beam contract or DApp, DEX liquidity or prices, or a BANS name.
 ---
 
 # BumbleBeam Explorer
@@ -28,7 +28,9 @@ supply.
 |---|---|
 | chain tip, peers | `/v1/status` |
 | BEAM issued, max supply | `/v1/supply` |
-| latest blocks / paging | `/v1/blocks?limit=20` then `&before=<next_before>` |
+| latest blocks / paging (with `mined_by`, the pool that found each) | `/v1/blocks?limit=20` then `&before=<next_before>` |
+| which pool found the latest blocks, one pool's blocks | `/v1/network/blocks?limit=100`, `&pool=2miners` |
+| every Beam mining pool, network hashrate, BEAM/USD | `/v1/network` |
 | one block | `/v1/blocks/{height}` |
 | a transaction | `/v1/kernels/{kernel_id}` |
 | assets (name, ticker, decimals, supply, issuer, description) | `/v1/assets?q=…`, `/v1/assets/{id}` (0 = BEAM) |
@@ -52,6 +54,9 @@ curl -s 'https://explorer.bumblebeam.org/v1/dex/pools?asset=0' | jq '.pools[:5]'
 - A DEX `rate_1_2` is as the contract reports it; derive prices from `reserve1` / `reserve2` when
   in doubt.
 - There is **no lookup by block hash** on Beam; search by height instead.
+- `mined_by` is known for the latest 500 blocks only, from each pool's own API checked against our
+  node's hashes; `null` means no listed pool claims the block (solo miners, private pools), not
+  that it is unknown which chain it is on.
 - Limits: 20 requests a second per IP (bursts of 40). Page with `before`, do not loop fast.
 
 Full reference: https://github.com/profinch/bumblebeam/blob/main/explorer/API.md
