@@ -1,0 +1,53 @@
+From 386ba368c3c66b546ffe2441ef1f88b0d1261377 Mon Sep 17 00:00:00 2001
+From: Nikita Shliakov <profinch@gmail.com>
+Date: Sun, 18 Oct 2026 12:04:15 +0100
+Subject: [PATCH] cuda: MXBM_TRY_PACKED=1 tries (16,1) packed + dense caps
+ before quad
+
+On Windows cudaMemGetInfo's free figure is below what the allocator gives
+(the display driver pages other processes' surfaces out), so a 6 GB card
+lands on a quad rung though packed (16,1) + dense caps, 5.03 GiB, allocates.
+On an RTX 3060 Laptop (60 W, Windows): packed + dense caps 140 ms a solve,
+14.4 sol/s; quad + dense caps (the default pick) 175 ms, 11.4; quad 4.76 GiB
+(the pick with --keepfree 0 or 64) 9.9. Live on a pool, 14.5 sol/s against
+10.5. With MXBM_TRY_PACKED=1 a card the free figure puts on a (16,1) quad rung
+asks for the packed rung first and keeps the quad one if it is refused. CUDA
+only, and opt-in: MXBM_QUAD is a force, and on OpenCL any value of it turns
+the quad record on.
+---
+ src/gpu/cuda_solver.cu | 19 ++++++++++++++++++-
+ 1 file changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/src/gpu/cuda_solver.cu b/src/gpu/cuda_solver.cu
+index f1f7e20..5e9c498 100644
+--- a/src/gpu/cuda_solver.cu
++++ b/src/gpu/cuda_solver.cu
+@@ -616,7 +616,24 @@ CudaSolver::CudaSolver(int index, unsigned power_limit_w, unsigned mem_clock_mhz
+     if (!forced && g.bb == 17u)
+         std::fprintf(stderr, "CUDA: board power limit %u W is below %u W: selecting the "
+                      "low-power (17,0) geometry\n", power_limit_w, kRbLowPowerW);
+-    bool ok = p_->alloc_geometry(g.bb, g.sm, g.quad, g.arena, g.octo);
++    // MXBM_TRY_PACKED=1: when the free figure put a (16,1) card on a quad rung, ask the
++    // allocator for (16,1) packed + dense caps first, and keep the quad rung if it
++    // refuses. On Windows the free figure is below what the allocator gives (the display
++    // driver pages other processes' surfaces out), so a 6 GB card gets the 5.03 GiB rung:
++    // 140 ms a solve on an RTX 3060 Laptop against 175 on (16,1) quad + dense caps.
++    // CUDA only: MXBM_QUAD is a force, and on OpenCL any value of it turns quad on.
++    bool ok = false;
++    if (!forced && g.quad && !g.octo && g.bb == 16u && g.sm == 1u) {
++        const char* e = std::getenv("MXBM_TRY_PACKED");
++        if (e && std::atoi(e) != 0) {
++            ok = p_->alloc_geometry(g.bb, g.sm, false, true, false);
++            if (ok)
++                std::fprintf(stderr, "CUDA: %u buckets (dense caps) fit, above the quad "
++                             "record the free memory figure chose (MXBM_TRY_PACKED)\n",
++                             1u << g.bb);
++        }
++    }
++    if (!ok) ok = p_->alloc_geometry(g.bb, g.sm, g.quad, g.arena, g.octo);
+     // Keep stepping down the SAME ladder rb_geometry_for walked, rather than
+     // decrementing bb: the rungs interleave the record formats and the dense-cap rows,
+     // so a bb-only retry would stop at the bottom of the packed half and refuse a card
+-- 
+2.47.3
+

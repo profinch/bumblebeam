@@ -19,6 +19,10 @@ kept below as "Mac app".
   CPU core at 100 % for the whole run, and on a laptop that core's power comes out of the
   budget the GPU shares: the RTX 3060 Laptop above was capped with MXBM where lolMiner, with
   no core busy, held 60 W.
+- GPU (NVIDIA, 6 GB cards): MXBM tries the faster packed memory layout before the compact quad
+  one its free memory figure picks (MXBM patch 0008, `MXBM_TRY_PACKED`). On Windows that figure
+  is below what the card gives; an RTX 3060 Laptop went from 10.5 to 14.5 sol/s at the same
+  60 W. When the layout does not fit, the miner keeps the compact one as before.
 - Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
   programs in one folder, run without installing.
 

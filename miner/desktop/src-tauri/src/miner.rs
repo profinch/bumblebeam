@@ -220,6 +220,9 @@ impl Miner {
             i.env.clone()
         };
         if s.device == Device::Gpu {
+            // CUDA: try the packed record before the quad one the free memory figure picks
+            // on a 6 GB card (MXBM patch 0008); 14.5 sol/s against 10.5 on an RTX 3060 Laptop
+            cmd.env("MXBM_TRY_PACKED", "1");
             for (k, v) in &env {
                 cmd.env(k, v);
             }
