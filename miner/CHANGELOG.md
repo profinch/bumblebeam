@@ -23,6 +23,9 @@ kept below as "Mac app".
   one its free memory figure picks (MXBM patch 0008, `MXBM_TRY_PACKED`). On Windows that figure
   is below what the card gives; an RTX 3060 Laptop went from 10.5 to 14.5 sol/s at the same
   60 W. When the layout does not fit, the miner keeps the compact one as before.
+- Windows: "Show sol/s next to the tray icon" shows the speed as the tray icon itself (Windows
+  puts no text beside one), white or black to suit the taskbar.
+- The power scale's numbers sit under the slider's stops (they were 4 px to the right).
 - Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
   programs in one folder, run without installing.
 
