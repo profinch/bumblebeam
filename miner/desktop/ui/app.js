@@ -23,10 +23,12 @@ function layoutTicks() {
   if (w === ticksWidth || w === 0) return;   // a hidden window has no width yet
   ticksWidth = w;
   box.innerHTML = '';
+  // measured, not assumed: where the input starts inside the ticks' box
+  const x0 = input.getBoundingClientRect().left - box.getBoundingClientRect().left;
   for (let i = 0; i < 10; i++) {
     const s = document.createElement('span');
     s.textContent = String((i + 1) * 10);
-    s.style.left = `${4 + thumb / 2 + ((w - thumb) * i) / 9}px`;
+    s.style.left = `${x0 + thumb / 2 + ((w - thumb) * i) / 9}px`;
     box.appendChild(s);
   }
 }
