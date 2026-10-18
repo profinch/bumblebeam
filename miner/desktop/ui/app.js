@@ -216,6 +216,13 @@ document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input')
 
 listen('view', (e) => { v = e.payload; render(); });
 listen('refresh', async () => { v = await invoke('view'); render(); });
+// The logo's parts copied into each <svg class="logo">: through <use> they sit in a shadow tree
+// the page's CSS does not reach in WebView2, and the bee never moved
+for (const svg of document.querySelectorAll('svg.logo')) {
+  svg.setAttribute('viewBox', '0 0 32 32');
+  svg.innerHTML = document.getElementById('logo').innerHTML;
+}
+
 new ResizeObserver(layoutTicks).observe($('power'));
 (async () => {
   v = await invoke('view');
