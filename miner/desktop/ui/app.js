@@ -143,6 +143,7 @@ function openSetup(firstRun) {
   $('share-speed').checked = s.shareSpeed;
   $('best-perf').checked = s.bestPerformance;
   $('best-perf-row').hidden = !v.powerModeAvailable;
+  $('show-rate-row').hidden = !v.trayLabel;
   $('more').hidden = firstRun;
   $('cancel').hidden = firstRun;
   $('save').textContent = firstRun ? 'Start mining' : 'Save';
