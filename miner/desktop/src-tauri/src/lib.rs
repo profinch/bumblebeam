@@ -325,48 +325,6 @@ fn tray_icon(state: &miner::State) -> tauri::image::Image<'static> {
     tauri::image::Image::from_bytes(png).expect("tray icon").to_owned()
 }
 
-/// The speed drawn as the tray icon (Windows): whole sol/s, one decimal below 10, white on a dark
-/// taskbar and black on a light one, in a 5x7 digit font at twice its size on 32x32.
-#[cfg(windows)]
-fn rate_icon(rate: f64, light: bool) -> tauri::image::Image<'static> {
-    const DIGITS: [[u8; 7]; 10] = [
-        [0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e], [0x04, 0x0c, 0x04, 0x04, 0x04, 0x04, 0x0e],
-        [0x0e, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1f], [0x1f, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0e],
-        [0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02], [0x1f, 0x10, 0x1e, 0x01, 0x01, 0x11, 0x0e],
-        [0x06, 0x08, 0x10, 0x1e, 0x11, 0x11, 0x0e], [0x1f, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
-        [0x0e, 0x11, 0x11, 0x0e, 0x11, 0x11, 0x0e], [0x0e, 0x11, 0x11, 0x0f, 0x01, 0x02, 0x0c],
-    ];
-    const N: usize = 32;
-    let text = if rate < 9.95 { format!("{rate:.1}") } else { format!("{}", (rate.round() as u64).min(999)) };
-    // a digit 10 px wide, the point 2, 1 px between: "999" is 32, the most there is
-    let w: usize = text.chars().map(|c| if c == '.' { 2 } else { 10 }).sum::<usize>() + text.len() - 1;
-    let ink = if light { [0u8, 0, 0, 255] } else { [255u8, 255, 255, 255] };
-    let mut px = vec![0u8; N * N * 4];
-    let mut put = |x: usize, y: usize| {
-        if x < N && y < N { px[(y * N + x) * 4..(y * N + x) * 4 + 4].copy_from_slice(&ink); }
-    };
-    let k = 2; // the font's scale: 14 px tall, centred
-    let top = (N - 7 * k) / 2;
-    let mut x = (N - w) / 2;
-    for c in text.chars() {
-        if c == '.' {
-            for dy in 0..k { for dx in 0..k { put(x + dx, top + 6 * k + dy); } }
-            x += k + 1;
-            continue;
-        }
-        let g = DIGITS[c.to_digit(10).unwrap_or(0) as usize];
-        for (row, bits) in g.iter().enumerate() {
-            for col in 0..5 {
-                if bits & (0x10 >> col) != 0 {
-                    for dy in 0..k { for dx in 0..k { put(x + col * k + dx, top + row * k + dy); } }
-                }
-            }
-        }
-        x += 5 * k + 1;
-    }
-    tauri::image::Image::new_owned(px, N as u32, N as u32)
-}
-
 /// Whether the taskbar is light (Windows' "SystemUsesLightTheme"); Linux panels: dark.
 fn light_taskbar() -> bool {
     #[cfg(windows)]
@@ -385,13 +343,8 @@ fn update_tray(app: &AppHandle, st: &App) {
     let m = st.miner.snapshot();
     let show_rate = st.settings.lock().unwrap().show_rate;
     if let Some(t) = st.tray.lock().unwrap().as_ref() {
+        let _ = t.set_icon(Some(tray_icon(&m.state)));
         let rate = if m.state == miner::State::Mining && m.rate > 0.0 { format!("{:.1} sol/s", m.rate) } else { String::new() };
-        // Windows has no text beside a tray icon, so the speed is the icon itself
-        #[cfg(windows)]
-        let icon = if show_rate && !rate.is_empty() { rate_icon(m.rate as f64, light_taskbar()) } else { tray_icon(&m.state) };
-        #[cfg(not(windows))]
-        let icon = tray_icon(&m.state);
-        let _ = t.set_icon(Some(icon));
         let tip = match &m.state {
             miner::State::Stopped => "BumbleBeam Miner: stopped".to_string(),
             miner::State::NoConnection(_) => "BumbleBeam Miner: no connection".to_string(),
