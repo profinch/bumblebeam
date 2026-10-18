@@ -55,6 +55,8 @@ struct View {
     keep_awake_on: bool,
     autostart_available: bool,
     power_mode_available: bool,
+    /// a panel shows text beside a tray icon (Linux); Windows' tray has no room for it
+    tray_label: bool,
 }
 
 fn cpu_name() -> String {
@@ -99,6 +101,7 @@ impl App {
             keep_awake_on: self.awake.active(),
             autostart_available: true,
             power_mode_available: PowerMode::available(),
+            tray_label: cfg!(target_os = "linux"),
             settings: s,
         }
     }

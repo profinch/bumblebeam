@@ -25,6 +25,8 @@ kept below as "Mac app".
   60 W. When the layout does not fit, the miner keeps the compact one as before.
 - Windows and Linux: the logo in the window moves as on the Mac and the pool site (through `<use>`
   the page's CSS never reached it).
+- Windows: no "Show sol/s next to the tray icon" in Settings; Windows puts no text beside a tray
+  icon, so it did nothing there (the speed is in the icon's tooltip).
 - The power scale's numbers sit under the slider's stops (they were 4 px to the right).
 - Windows portable: `BumbleBeam-Miner-<version>-Windows-x64-portable.zip`, the app and its
   programs in one folder, run without installing.
