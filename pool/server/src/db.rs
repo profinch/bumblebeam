@@ -332,8 +332,14 @@ impl Db {
     }
 
     /// The miner's row id, created on first sight. `kind` is the address type seen at login.
+    /// A known address is looked up first: an INSERT .. ON CONFLICT takes a number from the id sequence even when
+    /// the row exists, so every login used to burn one (miner ids near 500 with 6 miners, 2026-10-20).
     pub async fn miner_id(&self, address: &str, kind: &str, now: i64) -> Result<i64> {
         let c = self.client().await?;
+        if let Some(r) = c.query_opt("SELECT id FROM miners WHERE address=$1", &[&address]).await? {
+            c.execute("UPDATE miners SET address_type = COALESCE(address_type, $2) WHERE id=$1 AND address_type IS NULL", &[&r.get::<_, i64>(0), &kind]).await?;
+            return Ok(r.get(0));
+        }
         let row = c
             .query_one(
                 "INSERT INTO miners (address, first_seen, address_type) VALUES ($1,$2,$3)
