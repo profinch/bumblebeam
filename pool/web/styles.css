@@ -181,7 +181,8 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .num { text-align: right; }
 .dim { color: var(--muted); }
 .mono { font-family: var(--font-mono); }
-tr.ours td { background: rgba(0, 246, 210, 0.05); }
+/* our rows (tr.ours) carry no fill: over the fixed page gradient a translucent tint read as a different colour per
+   row and changed while scrolling; they are told by their own accent marks (sparkline, share bar, badges) */
 /* blocks lists: fixed widths, so rows loaded or refreshed later do not shift the columns */
 .blocks-table { table-layout: fixed; min-width: 760px; }
 .blocks-table col.w-h { width: 110px; } .blocks-table col.w-t { width: 120px; } .blocks-table col.w-m { width: 90px; }
