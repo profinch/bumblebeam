@@ -146,6 +146,8 @@ services:
   pool:
     image: bumblebeam-pool
     container_name: bumblebeam-pool
+    # the pool stops gracefully on SIGTERM (connections, queued shares, a block being credited, a payout in hand)
+    stop_grace_period: 30s
     hostname: pool
     build:
       context: ./containers/pool
