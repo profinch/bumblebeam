@@ -400,7 +400,8 @@ the running node, use `up -d --no-deps <service>`.
     NiceHash after ~40 s;
   - both: both, the app first. Schema changes run on start of either half (they are idempotent).
   A rollback is the previous `POOL_REF` and the same `up -d` (the old image tag is still there). `pool-web` takes
-  `POOL_WEB_REF` (falling back to `BUMBLEBEAM_REF`), so UI releases touch neither half.
+  `POOL_WEB_REF` (falling back to `BUMBLEBEAM_REF`), so UI releases touch neither half. A change to the shared `styles.css`
+  rebuilds `pool-web` and `explorer-web`.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
   (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and
