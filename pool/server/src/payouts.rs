@@ -194,6 +194,11 @@ async fn pay_once(shared: &Arc<Shared>, wallet: &Wallet, only: Option<i64>) -> R
     let mut available = st["available"].as_u64().unwrap_or(0);
     let ts = now();
     for (miner_id, address, balance, cached_type) in due {
+        if *shared.stopping.borrow() {
+            // the pool is stopping: finish the miner in hand (the previous iteration), start no new one
+            notes.push("stopped here: the pool is shutting down; the next run goes on".into());
+            break;
+        }
         let Some(kind) = address_type(shared, wallet, miner_id, &address, cached_type).await? else {
             warn!(address = %crate::state::Short(&address), "no valid address type, payout skipped");
             notes.push(format!("{}: skipped, the wallet does not take the address", crate::state::Short(&address)));
@@ -444,7 +449,9 @@ async fn poll_pending(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
             }
             2 | 4 => {
                 if shared.db.refund_payment(&tx_id, "pending").await? {
-                    warn!(address = %crate::state::Short(&address), value, %tx_id, status, reason = %st["failure_reason"], "payout failed, refunded");
+                    let reason = st["failure_reason"].as_str().map(str::to_string).unwrap_or_else(|| if status == 2 { "cancelled".into() } else { st["failure_reason"].to_string() });
+                    let _ = shared.db.set_failure_reason(&tx_id, &reason).await;
+                    warn!(address = %crate::state::Short(&address), value, %tx_id, status, %reason, "payout failed, refunded");
                 }
             }
             _ => {}

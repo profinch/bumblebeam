@@ -418,8 +418,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         let share_diff = pow::difficulty_to_double(packed);
                         let job = mj.job.clone();
                         send(&mut wr, result(&id, 1, "accepted")).await?;
-                        if let Err(e) = shared.db.record_share(crate::state::now(), miner_id, &worker, mode.as_str(), share_diff, job.height as i64).await {
-                            warn!("record share: {e:#}");
+                        // queued for the share writer: a slow database no longer stalls this connection
+                        let row = crate::state::ShareRow { ts: crate::state::now(), miner_id, worker: worker.clone(), mode: mode.as_str(), difficulty: share_diff, height: job.height as i64 };
+                        if shared.share_tx.send(crate::state::ShareMsg::Share(row)).await.is_err() {
+                            warn!("share writer gone: share not recorded");
                         }
                         if pow::difficulty_reached(&hash, job.net_packed) {
                             info!(miner = %crate::state::Short(&address), worker = %worker, height = job.height, "share reaches network difficulty, submitting block");
@@ -546,5 +548,60 @@ mod tests {
         assert!(proxy_header(&mut rd).await.is_err());
         let mut rd: &[u8] = &[b'x'; 200];
         assert!(proxy_header(&mut rd).await.is_err());
+    }
+}
+
+/// The one writer of accepted shares: batches what the connections queue (up to 2000 rows or 200 ms) into a
+/// single INSERT; on a database error it keeps the batch and retries with a growing pause, so shares are delayed,
+/// not lost (above 200 000 waiting rows the oldest go, with an error). Flush answers once all queued rows are in.
+pub async fn share_writer(shared: Arc<Shared>, mut rx: tokio::sync::mpsc::Receiver<crate::state::ShareMsg>) {
+    use crate::state::ShareMsg;
+    let mut buf: Vec<crate::state::ShareRow> = Vec::new();
+    let mut waiters: Vec<tokio::sync::oneshot::Sender<()>> = Vec::new();
+    let mut pause = Duration::from_millis(200);
+    loop {
+        if buf.is_empty() && waiters.is_empty() {
+            match rx.recv().await {
+                Some(ShareMsg::Share(r)) => buf.push(r),
+                Some(ShareMsg::Flush(w)) => waiters.push(w),
+                None => return,
+            }
+        }
+        // gather for up to 200 ms (or until a flush is asked for)
+        let until = tokio::time::Instant::now() + Duration::from_millis(200);
+        while buf.len() < 2000 && waiters.is_empty() {
+            match tokio::time::timeout_at(until, rx.recv()).await {
+                Ok(Some(ShareMsg::Share(r))) => buf.push(r),
+                Ok(Some(ShareMsg::Flush(w))) => waiters.push(w),
+                Ok(None) | Err(_) => break,
+            }
+        }
+        while let Ok(m) = rx.try_recv() {
+            match m {
+                ShareMsg::Share(r) => buf.push(r),
+                ShareMsg::Flush(w) => waiters.push(w),
+            }
+            if buf.len() >= 20_000 { break; }
+        }
+        let n = buf.len().min(20_000);
+        match shared.db.record_shares(&buf[..n]).await {
+            Ok(()) => {
+                buf.drain(..n);
+                pause = Duration::from_millis(200);
+                if buf.is_empty() {
+                    for w in waiters.drain(..) { let _ = w.send(()); }
+                }
+            }
+            Err(e) => {
+                warn!(queued = buf.len(), "recording shares failed, retrying: {e:#}");
+                if buf.len() > 200_000 {
+                    let drop = buf.len() - 200_000;
+                    buf.drain(..drop);
+                    tracing::error!(dropped = drop, "share queue over 200 000 rows: the oldest shares are lost");
+                }
+                tokio::time::sleep(pause).await;
+                pause = (pause * 2).min(Duration::from_secs(10));
+            }
+        }
     }
 }

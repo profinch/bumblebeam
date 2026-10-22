@@ -43,6 +43,22 @@ pub struct Submit {
     pub mode: Mode,
 }
 
+/// An accepted share on its way to the database (crate::stratum::share_writer).
+pub struct ShareRow {
+    pub ts: i64,
+    pub miner_id: i64,
+    pub worker: String,
+    pub mode: &'static str,
+    pub difficulty: f64,
+    pub height: i64,
+}
+
+pub enum ShareMsg {
+    Share(ShareRow),
+    /// write what is queued now and answer (before a block is credited, at shutdown)
+    Flush(tokio::sync::oneshot::Sender<()>),
+}
+
 pub struct Shared {
     pub cfg: Arc<Config>,
     pub db: Db,
@@ -71,9 +87,23 @@ pub struct Shared {
     pub stopping: watch::Sender<bool>,
     /// Held by the payout loop while it talks to the wallet, so a shutdown never cuts a payout in half.
     pub paying: tokio::sync::Mutex<()>,
+    /// Accepted shares go to the database through one writer task in batches, so a slow database never
+    /// stalls a miner's connection (crate::stratum::share_writer).
+    pub share_tx: mpsc::Sender<ShareMsg>,
+    /// Found blocks being credited right now (accounting::credit_found); a shutdown waits for them.
+    pub crediting: AtomicU64,
 }
 
 impl Shared {
+    /// Waits (at most `secs`) until every share queued so far is in the database.
+    pub async fn flush_shares(&self, secs: u64) -> bool {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if self.share_tx.send(ShareMsg::Flush(tx)).await.is_err() {
+            return false;
+        }
+        matches!(tokio::time::timeout(std::time::Duration::from_secs(secs), rx).await, Ok(Ok(())))
+    }
+
     pub fn current_job(&self) -> Option<Arc<Job>> {
         self.job_tx.borrow().clone()
     }

@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
     let (job_tx, _) = watch::channel(None);
     let (submit_tx, submit_rx) = mpsc::channel(256);
     let (payout_tx, payout_rx) = mpsc::channel(4);
+    let (share_tx, share_rx) = mpsc::channel(50_000);
     let http = reqwest::Client::builder()
         .user_agent("bumblebeam-pool/0.1")
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -68,7 +69,10 @@ async fn main() -> Result<()> {
         coinbase: cfg.coinbase.enabled.then(coinbase::Link::new),
         stopping: watch::channel(false).0,
         paying: tokio::sync::Mutex::new(()),
+        crediting: AtomicU64::new(0),
+        share_tx,
     });
+    tokio::spawn(stratum::share_writer(shared.clone(), share_rx));
     tokio::spawn(shutdown_on_signal(shared.clone()));
     if let Some(link) = shared.coinbase.clone() {
         let s = shared.clone();
@@ -101,6 +105,7 @@ async fn main() -> Result<()> {
     tokio::spawn(network::run(net.clone(), shared.clone()));
     tokio::spawn(upstream::run(shared.clone(), submit_rx));
     tokio::spawn(accounting::confirm_loop(shared.clone()));
+    tokio::spawn(accounting::credit_loop(shared.clone()));
     tokio::spawn(payouts::run(shared.clone(), payout_rx));
     {
         let s = shared.clone();
@@ -162,6 +167,14 @@ async fn shutdown_on_signal(shared: Arc<Shared>) {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     let left = shared.connected_workers.load(Ordering::Relaxed);
+    // the shares the closing connections queued reach the database
+    if !shared.flush_shares(2).await {
+        error!("shutdown: the share writer did not finish in 2 s; the newest shares may be lost");
+    }
+    // a block being credited finishes (credit_loop would redo it, but a clean finish is better)
+    while shared.crediting.load(Ordering::SeqCst) > 0 && t0.elapsed() < std::time::Duration::from_secs(5) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     match tokio::time::timeout(std::time::Duration::from_secs(6), shared.paying.lock()).await {
         Ok(_guard) => info!(left, ms = t0.elapsed().as_millis() as u64, "shutdown complete"),
         Err(_) => error!(left, "shutdown: a payout run is still talking to the wallet after 6 s; exiting anyway (recover_created picks it up)"),
