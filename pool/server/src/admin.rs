@@ -288,9 +288,7 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
              SELECT m.id, m.address, m.address_type, m.first_seen, m.last_share, m.balance, m.paid, COALESCE(im.sum,0)::BIGINT,
                     COALESCE(s.n,0)::BIGINT, COALESCE(s.d,0)::FLOAT8, COALESCE(s.workers, ARRAY[]::TEXT[]),
                     (SELECT COALESCE(SUM(amount),0)::BIGINT FROM payments WHERE miner_id=m.id AND status NOT IN ('completed','failed')),
-                    m.payouts_held_at, m.payouts_held_note,
-                    (SELECT COALESCE(json_agg(json_build_object('ip', x.ip, 'worker', x.worker, 'first', x.first, 'last', x.last) ORDER BY x.last DESC), '[]'::json)::TEXT
-                       FROM (SELECT * FROM miner_sessions WHERE miner_id=m.id ORDER BY last DESC LIMIT 8) x)
+                    m.payouts_held_at, m.payouts_held_note
              FROM miners m LEFT JOIN s ON s.miner_id=m.id LEFT JOIN im ON im.miner_id=m.id
              WHERE $2 = '' OR strpos(lower(m.address), lower($2)) > 0
              ORDER BY COALESCE(m.last_share, m.first_seen) DESC, m.id DESC LIMIT $3",
@@ -305,9 +303,7 @@ pub async fn miners(db: &Db, q: &str, limit: i64) -> Result<Vec<Value>> {
                     // paid counts a payout from the moment it is sent: what is still on the way is apart
                     "paid": r.get::<_, i64>(6) - r.get::<_, i64>(11), "sending": r.get::<_, i64>(11), "immature": r.get::<_, i64>(7), "shares24h": r.get::<_, i64>(8),
                     "hashrate24h": r.get::<_, f64>(9) / 86400.0, "workers24h": r.get::<_, Vec<String>>(10),
-                    "held": held(r.get(12), r.get(13)),
-                    // where it connected from (crate::db::miner_seen): the operator's page links miners on one IP + worker
-                    "sessions": serde_json::from_str::<Value>(&r.get::<_, String>(14)).unwrap_or(json!([])) })
+                    "held": held(r.get(12), r.get(13)) })
         })
         .collect())
 }

@@ -131,7 +131,6 @@ CREATE INDEX IF NOT EXISTS payments_ts ON payments(ts);
 CREATE TABLE IF NOT EXISTS share_events (ts BIGINT NOT NULL, miner_id BIGINT NOT NULL, worker TEXT NOT NULL, stale BIGINT NOT NULL, rejected BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS se_miner_ts ON share_events(miner_id, ts);
 ALTER TABLE share_events ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'pplns';
-CREATE TABLE IF NOT EXISTS miner_sessions (miner_id BIGINT NOT NULL, ip TEXT NOT NULL, worker TEXT NOT NULL, first BIGINT NOT NULL, last BIGINT NOT NULL, PRIMARY KEY (miner_id, ip, worker));
 CREATE TABLE IF NOT EXISTS hashrate_samples (ts BIGINT NOT NULL, scope TEXT NOT NULL, hashrate DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS hs_scope_ts ON hashrate_samples(scope, ts);
 "#;
@@ -349,19 +348,6 @@ impl Db {
             )
             .await?;
         Ok(row.get(0))
-    }
-
-    /// Where a miner connects from: one row per (miner, IP, worker) with the first and the last time seen, so the
-    /// operator can spot one person behind several addresses (the same rig moving to a new address).
-    pub async fn miner_seen(&self, miner_id: i64, ip: &str, worker: &str, now: i64) -> Result<()> {
-        let c = self.client().await?;
-        c.execute(
-            "INSERT INTO miner_sessions (miner_id, ip, worker, first, last) VALUES ($1,$2,$3,$4,$4)
-             ON CONFLICT (miner_id, ip, worker) DO UPDATE SET last = GREATEST(miner_sessions.last, EXCLUDED.last)",
-            &[&miner_id, &ip, &worker, &now],
-        )
-        .await?;
-        Ok(())
     }
 
     pub async fn set_address_type(&self, miner_id: i64, kind: &str, now: i64) -> Result<()> {
