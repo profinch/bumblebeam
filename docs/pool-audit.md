@@ -103,6 +103,12 @@ Priorities: **P0** can lose money or a block, fix first; **P1** needed for the s
     `app.js` and `admin.js`, `API.md` fetched from GitHub `main` instead of the deployed copy.
 25. Never pruned: `miner_sessions` (keep 90 days), `benchmarks`, expired coinbase pair `hex`.
 
+## Status
+
+- 2026-10-23 00:40, `5e98561`: **P0 1-7 deployed** (6 only the refund half: coinbase is off; the two-step debit in
+  `cb_pay_block` stays open). The first graceful restart: the old process closed its 5 connections and exited in
+  51 ms, the new one listened 0.7 s later, our miners were back in 0.4-1.2 s.
+
 ## Work order
 
 1. **P0 fixes 1-4 and 7** (blocks, hold, stop during payouts, retry backoff, share writer + DB timeouts), with
