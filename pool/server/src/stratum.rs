@@ -56,8 +56,12 @@ const FORK_HEIGHT2: u64 = 777_777;
 pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAcceptor>) -> Result<()> {
     let listener = TcpListener::bind((shared.cfg.stratum.bind.as_str(), port)).await?;
     info!(port, mode = mode.as_str(), tls = tls.is_some(), "stratum listening");
+    let mut stop = shared.stopping.subscribe();
     loop {
-        let (mut sock, mut peer) = listener.accept().await?;
+        let (mut sock, mut peer) = tokio::select! {
+            r = listener.accept() => r?,
+            _ = stop.changed() => { info!(port, "stratum port closed (shutting down)"); return Ok(()); }
+        };
         let _ = sock.set_nodelay(true);
         let shared = shared.clone();
         let tls = tls.clone();
@@ -210,6 +214,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     let (rd, mut wr) = tokio::io::split(stream);
     let mut lines = FramedRead::new(rd, LinesCodec::new_with_max_length(MAX_LINE));
     let mut job_rx = shared.job_tx.subscribe();
+    let mut stop = shared.stopping.subscribe();
 
     let conn = sess.id;
     let node_prefix = shared.node_prefix.read().await.clone();
@@ -463,6 +468,20 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
             }
             _ = kick.notified() => anyhow::bail!("ended by the operator"),
+            _ = stop.changed() => {
+                // the pool is stopping (main.rs): flush what the minute's flush would have written, then close
+                if !address.is_empty() {
+                    let now = crate::state::now();
+                    if stats.stale > 0 || stats.rejected > 0 {
+                        let _ = shared.db.record_share_events(now, miner_id, &worker, mode.as_str(), stats.stale, stats.rejected).await;
+                    }
+                    if stats.last_share > 0 {
+                        let _ = shared.db.touch_miner(miner_id, stats.last_share).await;
+                    }
+                    let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, now).await;
+                }
+                anyhow::bail!("pool restarting");
+            }
             changed = job_rx.changed() => {
                 if changed.is_err() { return Ok(()); }
                 let job = job_rx.borrow_and_update().clone();
