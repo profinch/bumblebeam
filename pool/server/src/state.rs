@@ -66,6 +66,11 @@ pub struct Shared {
     pub http: reqwest::Client,
     /// The link to bb-finalizer when coinbase payouts are enabled.
     pub coinbase: Option<Arc<crate::coinbase::Link>>,
+    /// Set on SIGTERM / SIGINT (main.rs): the stratum listeners stop accepting, every connection flushes its
+    /// counters and closes, and the process exits once no payout is in progress.
+    pub stopping: watch::Sender<bool>,
+    /// Held by the payout loop while it talks to the wallet, so a shutdown never cuts a payout in half.
+    pub paying: tokio::sync::Mutex<()>,
 }
 
 impl Shared {

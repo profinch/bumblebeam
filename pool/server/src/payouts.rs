@@ -85,16 +85,22 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
         warn!(left, "scheduled payouts are frozen by the operator (dashboard); they wait until resumed");
     }
     loop {
-        if let Err(e) = recover_created(&shared, &wallet).await {
-            warn!("payout recovery: {e:#}");
+        if *shared.stopping.borrow() {
+            return;
         }
-        if let Err(e) = poll_pending(&shared, &wallet).await {
-            warn!("payout status: {e:#}");
-        }
-        if shared.payouts_frozen_left.load(Relaxed) < 0 && now() >= shared.next_payout.load(Relaxed) {
-            shared.next_payout.store(now() + interval, Relaxed);
-            if let Err(e) = pay_once(&shared, &wallet, None).await {
-                warn!("payout run: {e:#}");
+        {
+            let _paying = shared.paying.lock().await;  // a shutdown waits for this (main.rs)
+            if let Err(e) = recover_created(&shared, &wallet).await {
+                warn!("payout recovery: {e:#}");
+            }
+            if let Err(e) = poll_pending(&shared, &wallet).await {
+                warn!("payout status: {e:#}");
+            }
+            if shared.payouts_frozen_left.load(Relaxed) < 0 && now() >= shared.next_payout.load(Relaxed) {
+                shared.next_payout.store(now() + interval, Relaxed);
+                if let Err(e) = pay_once(&shared, &wallet, None).await {
+                    warn!("payout run: {e:#}");
+                }
             }
         }
         // the same loop answers the operator, so a payout run never overlaps another
@@ -102,6 +108,7 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
             _ = tokio::time::sleep(Duration::from_secs(60)) => {}
             Some(req) = requests.recv() => {
                 info!(only = ?req.only, "payout run requested by the operator");
+                let _paying = shared.paying.lock().await;
                 let r = pay_once(&shared, &wallet, req.only).await.map_err(|e| format!("{e:#}"));
                 if let Err(e) = &r {
                     warn!("payout run: {e}");

@@ -66,7 +66,10 @@ async fn main() -> Result<()> {
         started: Instant::now(),
         http: http.clone(),
         coinbase: cfg.coinbase.enabled.then(coinbase::Link::new),
+        stopping: watch::channel(false).0,
+        paying: tokio::sync::Mutex::new(()),
     });
+    tokio::spawn(shutdown_on_signal(shared.clone()));
     if let Some(link) = shared.coinbase.clone() {
         let s = shared.clone();
         tokio::spawn(async move {
@@ -138,4 +141,30 @@ async fn main() -> Result<()> {
     info!(bind = %cfg.http.bind, web = %cfg.http.web_dir, "http listening");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// A graceful stop on SIGTERM (docker stop) or SIGINT: no new connections, every live one flushes its counters
+/// and closes (the miners reconnect to the next process), a payout in progress finishes, then exit 0. Without it
+/// docker waited its 10 s and killed the pool mid-write (2026-10-22). Bounded to stay inside docker's 10 s.
+async fn shutdown_on_signal(shared: Arc<Shared>) {
+    use std::sync::atomic::Ordering;
+    use tokio::signal::unix::{signal, SignalKind};
+    let (Ok(mut term), Ok(mut int)) = (signal(SignalKind::terminate()), signal(SignalKind::interrupt())) else {
+        error!("cannot listen for SIGTERM / SIGINT: no graceful shutdown");
+        return;
+    };
+    let which = tokio::select! { _ = term.recv() => "SIGTERM", _ = int.recv() => "SIGINT" };
+    let workers = shared.connected_workers.load(Ordering::Relaxed);
+    info!(signal = which, workers, "shutting down: closing the stratum ports and connections");
+    let _ = shared.stopping.send(true);
+    let t0 = Instant::now();
+    while shared.connected_workers.load(Ordering::Relaxed) > 0 && t0.elapsed() < std::time::Duration::from_secs(2) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let left = shared.connected_workers.load(Ordering::Relaxed);
+    match tokio::time::timeout(std::time::Duration::from_secs(6), shared.paying.lock()).await {
+        Ok(_guard) => info!(left, ms = t0.elapsed().as_millis() as u64, "shutdown complete"),
+        Err(_) => error!(left, "shutdown: a payout run is still talking to the wallet after 6 s; exiting anyway (recover_created picks it up)"),
+    }
+    std::process::exit(0);
 }
