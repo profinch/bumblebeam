@@ -19,7 +19,26 @@ pub struct Config {
     pub coinbase: Coinbase,
     #[serde(default)]
     pub admin: Admin,
+    #[serde(default)]
+    pub control: Control,
 }
+
+/// The stratum process's control interface for the app process (crate::ctl), when they run apart
+/// (`run stratum` / `run app`). Internal only; the admin token authenticates.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Control {
+    #[serde(default = "default_control_bind")]
+    pub bind: String,
+    #[serde(default = "default_control_url")]
+    pub url: String,
+}
+impl Default for Control {
+    fn default() -> Self {
+        Control { bind: default_control_bind(), url: default_control_url() }
+    }
+}
+fn default_control_bind() -> String { "127.0.0.1:8081".into() }
+fn default_control_url() -> String { "http://127.0.0.1:8081".into() }
 
 /// The operator's dashboard (/admin, /api/admin/*). An empty token, or one under 24 characters,
 /// turns it off.
@@ -203,6 +222,9 @@ fn nicehash_min() -> f64 { 2048.0 }
 #[derive(Debug, Clone, Deserialize)]
 pub struct Http {
     pub bind: String,
+    /// no longer used: the pages are served by pool-web (kept so old configs still load)
+    #[serde(default)]
+    #[allow(dead_code)]
     pub web_dir: String,
 }
 
@@ -219,7 +241,7 @@ fn any() -> String { "0.0.0.0".into() }
 fn three() -> usize { 3 }
 fn name() -> String { "BumbleBeam".into() }
 fn maturity() -> u64 { 240 }
-fn default_fee() -> u64 { 1_000 }
+fn default_fee() -> u64 { 100_000 } // 0.001 BEAM, the regular minimum (payments show 0.001)
 fn explorer_urls() -> Vec<String> { vec!["https://explorer.0xmx.net/api".into()] }
 /// Beam mainnet's Oracle2 contract
 pub const ORACLE2: &str = "4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b";

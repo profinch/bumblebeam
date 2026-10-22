@@ -14,13 +14,14 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct Api {
     pub shared: Arc<Shared>,
     pub net: Arc<NetCache>,
+    /// the stratum half: in this process (`run all`) or the stratum process's control interface (`run app`)
+    pub stratum: Arc<crate::ctl::Stratum>,
 }
 
 struct ApiError(anyhow::Error);
@@ -38,11 +39,7 @@ impl<E: Into<anyhow::Error>> From<E> for ApiError {
 type R = Result<Json<Value>, ApiError>;
 
 pub fn router(api: Api) -> Router {
-    let web = api.shared.cfg.http.web_dir.clone();
-    let index = format!("{web}/index.html");
-    let admin_page = format!("{web}/admin.html");
     Router::new()
-        .route_service("/admin", ServeFile::new(admin_page))
         .route("/api/stats", get(stats))
         .route("/api/blocks", get(blocks))
         .route("/api/blocks/heights", get(block_heights))
@@ -60,7 +57,9 @@ pub fn router(api: Api) -> Router {
         .layer(CorsLayer::permissive())
         // the operator's API is added after the CORS layer: no other site may call it from a browser
         .merge(admin_router(api.clone()))
-        .fallback_service(ServeDir::new(web).fallback(ServeFile::new(index)))
+        // the pages are pool-web's (nginx sends only /api/ here): anything else is a JSON 404, so a typo in a
+        // route no longer answers 200 with index.html
+        .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({ "error": "no such endpoint" }))) })
         .with_state(api)
 }
 
@@ -89,30 +88,31 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
     let last_block = s.db.last_block_ts(None, None).await?;
     let round = s.db.round_shares("pplns", s.db.last_block_ts(Some("pplns"), None).await?.unwrap_or(0), None).await?;
     let (blocks24h, effort24h) = s.db.blocks_24h(t).await?;
-    let job = s.current_job();
+    let job = s.node_view();
     let height = job.as_ref().map(|j| j.height.saturating_sub(1));
     let difficulty = job.as_ref().map(|j| pow::difficulty_to_double(j.net_packed));
     let net = api.net.data.read().await.clone();
     let cfg = &s.cfg.pool;
+    let workers_now = api.stratum.workers().await;
     Ok(Json(json!({
         "hashrate": hashrate, "minersTotal": miners, "workersTotal": workers,
         "stats": { "lastBlockFound": last_block, "roundShares": round },
         "nodes": [{ "name": "beam-node", "height": height.map(|h| h.to_string()), "difficulty": difficulty.map(|d| format!("{d:.1}")),
-                    "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|_| t.to_string()),
+                    "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|j| j.at.to_string()),
                     "connected": job.is_some() }],
         "name": cfg.name,
         "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "minPayout": cfg.min_payout_groth, "payoutScheme": "PPLNS", "finderBonus": cfg.finder_bonus_percent,
                     "pplnsWindow": cfg.pplns_window, "blockReward": height.map(|h| miner_reward_groth(h + 1)), "maturity": cfg.maturity,
                     "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host, "nodeAddr": cfg.public_node,
                     "minerPaysTxFee": cfg.miner_pays_tx_fee, "txFee": { "regular": s.cfg.wallet_api.tx_fee_groth, "shielded": s.cfg.wallet_api.shielded_fee_groth },
-                    "blockFeesTo": "pool", "coinbase": s.coinbase.is_some(),
+                    "blockFeesTo": "pool", "coinbase": s.cfg.coinbase.enabled,
                     "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
                                "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
         "charts": { "hashrate": s.db.pool_chart(t, range(&q), mode(&q).unwrap_or("pool")).await?,
                     "peak": s.db.pool_chart_peak(t, range(&q), mode(&q).unwrap_or("pool")).await? },
         "modes": s.db.mode_stats(t).await?,
         "blocks24h": blocks24h, "effort24h": effort24h, "blocksPending": s.db.blocks_pending().await?,
-        "connectedWorkers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed),
+        "connectedWorkers": workers_now,
     })))
 }
 
@@ -302,7 +302,7 @@ async fn miningboard(State(api): State<Api>) -> R {
     let iso = |ts: i64| chrono::DateTime::from_timestamp(ts, 0).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
     let (miners, workers) = s.db.pool_counts(t).await?;
     let (blocks24h, _) = s.db.blocks_24h(t).await?;
-    let job = s.current_job();
+    let job = s.node_view();
     let height = job.as_ref().map(|j| j.height.saturating_sub(1));
     let net = api.net.data.read().await.clone();
     let (cfg, st) = (&s.cfg.pool, &s.cfg.stratum);
@@ -325,7 +325,10 @@ async fn miningboard(State(api): State<Api>) -> R {
 }
 
 async fn coinbase_info(State(api): State<Api>) -> R {
-    Ok(Json(crate::coinbase::info(&api.shared).await?))
+    if !api.shared.cfg.coinbase.enabled {
+        return Ok(Json(json!({ "enabled": false })));
+    }
+    Ok(Json(api.stratum.coinbase_info().await?))
 }
 
 async fn coinbase_upload(State(api): State<Api>, body: axum::body::Bytes) -> Response {
@@ -336,22 +339,27 @@ async fn coinbase_upload(State(api): State<Api>, body: axum::body::Bytes) -> Res
         Ok(v) => v,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "body is not JSON" }))).into_response(),
     };
-    match crate::coinbase::upload(&api.shared, &v).await {
-        Ok(res) => Json(res).into_response(),
-        Err((code, msg)) => {
-            if code >= 500 {
-                error!("coinbase upload: {msg}");
-            }
-            (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(json!({ "error": msg }))).into_response()
-        }
+    if !api.shared.cfg.coinbase.enabled {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "this pool does not pay in the coinbase" }))).into_response();
     }
+    // the finalizer link is the stratum half's (in this process with `run all`, else over the control interface)
+    let (code, res) = api.stratum.coinbase_upload(&v).await;
+    if code >= 500 {
+        error!("coinbase upload: {}", res["error"]);
+    }
+    (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(res)).into_response()
 }
 
-async fn health(State(api): State<Api>) -> R {
+async fn health(State(api): State<Api>) -> Response {
+    // ok = this process answers, it has a node template under 2 min old, and (app-only) the stratum process answers
     let s = &api.shared;
-    let job = s.current_job();
-    Ok(Json(json!({ "ok": true, "node": job.is_some(), "jobAgeSecs": job.as_ref().map(|j| j.received.elapsed().as_secs()), "uptime": s.started.elapsed().as_secs(),
-                    "workers": s.connected_workers.load(std::sync::atomic::Ordering::Relaxed) })))
+    let job = s.node_view();
+    let age = job.as_ref().map(|j| now() - j.at);
+    let workers = api.stratum.workers().await;
+    let ok = age.is_some_and(|a| a < 120) && workers.is_some();
+    let body = json!({ "ok": ok, "role": s.role.as_str(), "node": job.is_some(), "jobAgeSecs": age, "uptime": s.started.elapsed().as_secs(),
+                       "workers": workers, "stratum": if workers.is_some() { "up" } else { "down" } });
+    (if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(body)).into_response()
 }
 
 // ---- the operator's dashboard (pool/web/admin.html) ----
@@ -456,12 +464,15 @@ async fn admin_wallet(State(api): State<Api>) -> R {
 }
 
 async fn admin_connections(State(api): State<Api>) -> R {
-    let c = &api.shared.conns;
-    Ok(Json(json!({ "now": now(), "live": c.live(None), "recent": c.recent() })))
+    let v = api.stratum.snapshot().await?;
+    Ok(Json(json!({ "now": now(), "live": v["live"], "recent": v["recent"] })))
 }
 
 async fn admin_kick(State(api): State<Api>, h: HeaderMap, Path(id): Path<u64>) -> Response {
-    let ok = api.shared.conns.kick(id);
+    let ok = match api.stratum.kick(id).await {
+        Ok(ok) => ok,
+        Err(e) => return ApiError(e).into_response(),
+    };
     info!(ip = %client_ip(&h), id, ok, "admin: kick");
     outcome(if ok { Ok(format!("connection {id} ended")) } else { Err(anyhow::anyhow!("no connection {id}")) })
 }
@@ -469,8 +480,9 @@ async fn admin_kick(State(api): State<Api>, h: HeaderMap, Path(id): Path<u64>) -
 async fn admin_miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
     let search: String = q.get("q").map(|s| s.trim().to_string()).unwrap_or_default();
     let mut list = crate::admin::miners(&api.shared.db, &search, limit(&q, 100, 1000)).await?;
+    let counts = api.stratum.counts().await; // one call for the page, not one per row
     for m in list.iter_mut() {
-        m["connections"] = json!(api.shared.conns.count_miner(m["id"].as_i64().unwrap_or(0)));
+        m["connections"] = json!(counts.get(&m["id"].as_i64().unwrap_or(0)).copied().unwrap_or(0));
     }
     Ok(Json(json!({ "miners": list })))
 }
@@ -478,7 +490,7 @@ async fn admin_miners(State(api): State<Api>, Query(q): Query<HashMap<String, St
 async fn admin_miner(State(api): State<Api>, Path(id): Path<i64>) -> Response {
     match crate::admin::miner(&api.shared.db, id).await {
         Ok(Some(mut m)) => {
-            m["connections"] = json!(api.shared.conns.live(Some(id)));
+            m["connections"] = json!(api.stratum.live(Some(id)).await.unwrap_or_default());
             Json(m).into_response()
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "no such miner" }))).into_response(),
@@ -497,14 +509,13 @@ async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, 
         },
         Err(e) => return ApiError(e).into_response(),
     }
-    // end the miner's connections first: their next shares would recreate the old account
-    let kicked = s.conns.kick_miner(id);
-    for _ in 0..50 {
-        if s.conns.count_miner(id) == 0 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
+    // end the miner's connections first: their next shares would recreate the old account; when the stratum
+    // half cannot be reached, or a connection is still open after 5 s, the merge does not run
+    let kicked = match api.stratum.kick_miner_wait(id).await {
+        Ok((kicked, 0)) => kicked,
+        Ok((_, left)) => return outcome(Err(anyhow::anyhow!("{left} connection(s) of this miner are still open; merge not done, try again"))),
+        Err(e) => return outcome(Err(anyhow::anyhow!("the stratum process does not answer ({e}); merge not done"))),
+    };
     let r = crate::admin::merge(&s.db, id, &b.to).await;
     info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
     outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
