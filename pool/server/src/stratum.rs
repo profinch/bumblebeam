@@ -337,6 +337,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             vd.diff = vd.diff.max(vd.floor);
                         }
                         info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, %agent, diff = vd.diff, "login");
+                        let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, crate::state::now()).await;
                         shared.conns.update(sess.id, |c| {
                             c.miner_id = miner_id;
                             c.miner = address.clone();
@@ -447,6 +448,9 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
                 if !address.is_empty() && stats.last_share > 0 {
                     let _ = shared.db.touch_miner(miner_id, stats.last_share).await;
+                }
+                if !address.is_empty() {
+                    let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, crate::state::now()).await;
                 }
                 stats = WorkerStats { accepted: stats.accepted, ..Default::default() };
                 // a worker that has not found a share in a long time has too high a difficulty
