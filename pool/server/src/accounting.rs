@@ -18,6 +18,69 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 
+/// Credits a block the node accepted, retrying on errors (a lost credit is a reward the pool keeps by
+/// mistake). The block_submissions row is marked credited once done; whatever is left is picked up by
+/// credit_loop. A shutdown waits for these (Shared::crediting).
+pub async fn credit_found(shared: Arc<Shared>, row: Option<i64>, sub: Submit, blockhash: String) {
+    use std::sync::atomic::Ordering;
+    shared.crediting.fetch_add(1, Ordering::SeqCst);
+    let height = sub.job.height;
+    // the PPLNS window must see the shares queued up to the winning one
+    if !shared.flush_shares(5).await {
+        warn!(height, "the share writer did not flush in 5 s; crediting with what is in the database");
+    }
+    let mut sub = Some(sub);
+    for attempt in 1..=4u32 {
+        let s = sub.take().expect("a submission per attempt");
+        let again = Submit { job: s.job.clone(), nonce: s.nonce, output: s.output, miner_id: s.miner_id, address: s.address.clone(), worker: s.worker.clone(), mode: s.mode };
+        match block_found(&shared, s, blockhash.clone()).await {
+            Ok(()) => {
+                if let Some(row) = row {
+                    if let Err(e) = shared.db.submission_credited(row, now()).await {
+                        tracing::error!(row, "block_submissions credited: {e:#} (credit_loop finds the block already recorded)");
+                    }
+                }
+                break;
+            }
+            Err(e) => {
+                tracing::error!(height, attempt, "crediting the block failed: {e:#}");
+                sub = Some(again);
+                if attempt < 4 { tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await; }
+            }
+        }
+    }
+    shared.crediting.fetch_sub(1, Ordering::SeqCst);
+}
+
+/// Settles solutions left half-way: accepted but not credited (a DB error, a restart) are credited again
+/// (block_found refuses a height already recorded, so this never doubles), and the ones the node never
+/// answered within 5 minutes (the link dropped) are marked `unanswered` for the operator.
+pub async fn credit_loop(shared: Arc<Shared>) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        if *shared.stopping.borrow() {
+            return;
+        }
+        match shared.db.submissions_to_credit(now() - 60).await {
+            Ok(list) => {
+                for (row, sub, hash) in list {
+                    warn!(row, height = sub.job.height, "an accepted block was not credited yet: crediting it now");
+                    credit_found(shared.clone(), Some(row), sub, hash).await;
+                }
+            }
+            Err(e) => warn!("block_submissions: {e:#}"),
+        }
+        match shared.db.submissions_unanswered(now() - 300).await {
+            Ok(list) => {
+                for (row, height, address) in list {
+                    tracing::error!(row, height, miner = %crate::state::Short(&address), "the node never answered this block solution (link lost): check the chain at this height");
+                }
+            }
+            Err(e) => warn!("block_submissions: {e:#}"),
+        }
+    }
+}
+
 pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -> Result<()> {
     let ts = now();
     let height = sub.job.height as i64;
@@ -273,6 +336,9 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
 
         let mut c = shared.db.client().await?;
         let tx = c.transaction().await?;
+        // credits -> balances and a merge of miners exclude each other (a merge moving credits while a block's
+        // credits go to balances could lose one): one transaction-scoped advisory lock for both
+        tx.execute("SELECT pg_advisory_xact_lock(7211001)", &[]).await?;
         let n = tx.execute("UPDATE blocks SET status=$2, verified_by=$3 WHERE height=$1 AND status='pending'", &[&height, &status, &by]).await?;
         if n != 1 {
             tx.rollback().await?;

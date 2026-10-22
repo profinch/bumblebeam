@@ -132,6 +132,13 @@ CREATE TABLE IF NOT EXISTS share_events (ts BIGINT NOT NULL, miner_id BIGINT NOT
 CREATE INDEX IF NOT EXISTS se_miner_ts ON share_events(miner_id, ts);
 ALTER TABLE share_events ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'pplns';
 CREATE TABLE IF NOT EXISTS miner_sessions (miner_id BIGINT NOT NULL, ip TEXT NOT NULL, worker TEXT NOT NULL, first BIGINT NOT NULL, last BIGINT NOT NULL, PRIMARY KEY (miner_id, ip, worker));
+CREATE TABLE IF NOT EXISTS block_submissions (
+  id BIGSERIAL PRIMARY KEY, ts BIGINT NOT NULL, height BIGINT NOT NULL, upstream_id TEXT NOT NULL, input TEXT NOT NULL,
+  net_packed BIGINT NOT NULL, nonce TEXT NOT NULL, output TEXT NOT NULL, miner_id BIGINT NOT NULL, address TEXT NOT NULL,
+  worker TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'sent', blockhash TEXT, answered_at BIGINT,
+  credited_at BIGINT, note TEXT);
+CREATE INDEX IF NOT EXISTS bsub_open ON block_submissions(status, ts) WHERE credited_at IS NULL;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS failure_reason TEXT;
 CREATE TABLE IF NOT EXISTS hashrate_samples (ts BIGINT NOT NULL, scope TEXT NOT NULL, hashrate DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS hs_scope_ts ON hashrate_samples(scope, ts);
 "#;
@@ -256,9 +263,14 @@ pub struct PaymentRow {
 
 impl Db {
     pub async fn connect(url: &str) -> Result<Db> {
-        let pg: tokio_postgres::Config = url.parse().context("database url")?;
+        let mut pg: tokio_postgres::Config = url.parse().context("database url")?;
+        // a stuck query must not hold a pool connection forever (the PPLNS window over 3 days is the longest)
+        pg.options("-c statement_timeout=30000");
         let mgr = Manager::from_config(pg, NoTls, ManagerConfig { recycling_method: RecyclingMethod::Fast });
-        let pool = Pool::builder(mgr).max_size(16).build()?;
+        // waiting for a free connection, opening one and recycling one are bounded: callers see an error
+        // instead of hanging (shares go through the writer task, which retries)
+        let t = Some(std::time::Duration::from_secs(10));
+        let pool = Pool::builder(mgr).max_size(16).wait_timeout(t).create_timeout(t).recycle_timeout(t).runtime(deadpool_postgres::Runtime::Tokio1).build()?;
         let db = Db { pool, lock_conn: Mutex::new(None) };
         let c = db.client().await?;
         c.batch_execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)").await?;
@@ -370,9 +382,24 @@ impl Db {
         Ok(())
     }
 
-    pub async fn record_share(&self, ts: i64, miner_id: i64, worker: &str, mode: &str, difficulty: f64, height: i64) -> Result<()> {
+    /// Many shares in one statement (the share writer's batch).
+    pub async fn record_shares(&self, rows: &[crate::state::ShareRow]) -> Result<()> {
+        if rows.is_empty() {
+            return Ok(());
+        }
         let c = self.client().await?;
-        c.execute("INSERT INTO shares (ts, miner_id, worker, mode, difficulty, height) VALUES ($1,$2,$3,$4,$5,$6)", &[&ts, &miner_id, &worker, &mode, &difficulty, &height]).await?;
+        let ts: Vec<i64> = rows.iter().map(|r| r.ts).collect();
+        let miner: Vec<i64> = rows.iter().map(|r| r.miner_id).collect();
+        let worker: Vec<&str> = rows.iter().map(|r| r.worker.as_str()).collect();
+        let mode: Vec<&str> = rows.iter().map(|r| r.mode).collect();
+        let diff: Vec<f64> = rows.iter().map(|r| r.difficulty).collect();
+        let height: Vec<i64> = rows.iter().map(|r| r.height).collect();
+        c.execute(
+            "INSERT INTO shares (ts, miner_id, worker, mode, difficulty, height)
+             SELECT * FROM UNNEST($1::BIGINT[], $2::BIGINT[], $3::TEXT[], $4::TEXT[], $5::FLOAT8[], $6::BIGINT[])",
+            &[&ts, &miner, &worker, &mode, &diff, &height],
+        )
+        .await?;
         Ok(())
     }
 
@@ -749,10 +776,18 @@ impl Db {
         let rows = c
             .query(
                 "SELECT id, address, balance, CASE WHEN address_type='invalid' AND COALESCE(type_checked,0) < $2 THEN NULL ELSE address_type END
-                 FROM miners WHERE balance >= $1 AND address NOT LIKE 'cb:%' AND payouts_held_at IS NULL
+                 FROM miners m WHERE balance >= $1 AND address NOT LIKE 'cb:%' AND payouts_held_at IS NULL
                    AND NOT (COALESCE(address_type,'') = 'invalid' AND COALESCE(type_checked,0) >= $2)
-                   AND ($3::BIGINT IS NULL OR id = $3) ORDER BY balance DESC",
-                &[&min_payout, &(now - 86400), &only],
+                   AND ($3::BIGINT IS NULL OR id = $3)
+                   -- a wallet that is never online (a regular address): n failed payouts in a row since the last
+                   -- completed one wait 2 h * 2^(n-1), at most a day, before the next try (one had 26 failed, 0 completed)
+                   AND ($3::BIGINT IS NOT NULL OR NOT EXISTS (
+                     SELECT 1 FROM (SELECT COUNT(*) AS n, MAX(p.ts) AS last FROM payments p
+                                     WHERE p.miner_id = m.id AND p.status = 'failed'
+                                       AND p.ts > COALESCE((SELECT MAX(q.ts) FROM payments q WHERE q.miner_id = m.id AND q.status = 'completed'), 0)) f
+                      WHERE f.n > 0 AND f.last + LEAST(86400, 7200 * POWER(2, f.n - 1))::BIGINT > $4))
+                 ORDER BY balance DESC",
+                &[&min_payout, &(now - 86400), &only, &now],
             )
             .await?;
         Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2), r.get(3))).collect())
@@ -763,7 +798,8 @@ impl Db {
     pub async fn create_payment(&self, miner_id: i64, debit: i64, amount: i64, fee: i64, tx_id: &str, ts: i64) -> Result<bool> {
         let mut c = self.client().await?;
         let tx = c.transaction().await?;
-        let n = tx.execute("UPDATE miners SET balance = balance - $2, paid = paid + $3 WHERE id=$1 AND balance >= $2", &[&miner_id, &debit, &amount]).await?;
+        // a hold placed while a run is going stops this miner too (the due list was read at the run's start)
+        let n = tx.execute("UPDATE miners SET balance = balance - $2, paid = paid + $3 WHERE id=$1 AND balance >= $2 AND payouts_held_at IS NULL", &[&miner_id, &debit, &amount]).await?;
         if n == 0 {
             tx.rollback().await?;
             return Ok(false);
@@ -804,6 +840,86 @@ impl Db {
     }
 
     /// Mark failed and give the debit back, only if the payment is still in `from` (no double refunds).
+    /// Why the wallet failed a payment (its failure_reason), for the operator and the miner's page.
+    pub async fn set_failure_reason(&self, tx_id: &str, reason: &str) -> Result<()> {
+        let c = self.client().await?;
+        c.execute("UPDATE payments SET failure_reason=$2 WHERE tx_id=$1", &[&tx_id, &reason]).await?;
+        Ok(())
+    }
+
+    /// Consecutive failed payouts of a miner since its last completed one, and when the last failed.
+    pub async fn payout_failures(&self, miner_id: i64) -> Result<(i64, Option<i64>, Option<String>)> {
+        let c = self.client().await?;
+        let r = c
+            .query_one(
+                "SELECT COUNT(*), MAX(ts), (ARRAY_AGG(failure_reason ORDER BY ts DESC))[1] FROM payments p
+                 WHERE miner_id=$1 AND status='failed'
+                   AND ts > COALESCE((SELECT MAX(ts) FROM payments q WHERE q.miner_id=$1 AND q.status='completed'), 0)",
+                &[&miner_id],
+            )
+            .await?;
+        Ok((r.get(0), r.get(1), r.get(2)))
+    }
+
+    // ---- solutions sent to the node: on disk before the node sees them, so no found block is lost ----
+
+    pub async fn submission_sent(&self, s: &crate::state::Submit, ts: i64) -> Result<i64> {
+        let c = self.client().await?;
+        let r = c
+            .query_one(
+                "INSERT INTO block_submissions (ts, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id",
+                &[&ts, &(s.job.height as i64), &s.job.upstream_id, &hex::encode(s.job.input), &(s.job.net_packed as i64), &hex::encode(s.nonce),
+                  &hex::encode(s.output), &s.miner_id, &s.address, &s.worker, &s.mode.as_str()],
+            )
+            .await?;
+        Ok(r.get(0))
+    }
+
+    pub async fn submission_answered(&self, id: i64, status: &str, blockhash: Option<&str>, note: Option<&str>, ts: i64) -> Result<()> {
+        let c = self.client().await?;
+        c.execute("UPDATE block_submissions SET status=$2, blockhash=COALESCE($3, blockhash), note=COALESCE($4, note), answered_at=$5 WHERE id=$1",
+                  &[&id, &status, &blockhash, &note, &ts]).await?;
+        Ok(())
+    }
+
+    pub async fn submission_credited(&self, id: i64, ts: i64) -> Result<()> {
+        let c = self.client().await?;
+        c.execute("UPDATE block_submissions SET credited_at=$2 WHERE id=$1", &[&id, &ts]).await?;
+        Ok(())
+    }
+
+    /// Accepted solutions whose crediting did not finish (a DB error, a restart): (id, the submission, its hash).
+    pub async fn submissions_to_credit(&self, answered_before: i64) -> Result<Vec<(i64, crate::state::Submit, String)>> {
+        let c = self.client().await?;
+        let rows = c
+            .query(
+                "SELECT id, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode, blockhash FROM block_submissions
+                 WHERE status='accepted' AND credited_at IS NULL AND answered_at < $1 ORDER BY id",
+                &[&answered_before],
+            )
+            .await?;
+        let mut out = Vec::new();
+        for r in rows {
+            let dec = |s: String| hex::decode(s).unwrap_or_default();
+            let (input, nonce, output) = (dec(r.get(3)), dec(r.get(5)), dec(r.get(6)));
+            let (Ok(input), Ok(nonce), Ok(output)) = (<[u8; 32]>::try_from(input), <[u8; 8]>::try_from(nonce), <[u8; 104]>::try_from(output)) else { continue };
+            let job = std::sync::Arc::new(crate::state::Job { upstream_id: r.get(2), input, net_packed: r.get::<_, i64>(4) as u32, height: r.get::<_, i64>(1) as u64, received: std::time::Instant::now() });
+            let mode = if r.get::<_, String>(10) == "solo" { crate::state::Mode::Solo } else { crate::state::Mode::Pplns };
+            out.push((r.get(0), crate::state::Submit { job, nonce, output, miner_id: r.get(7), address: r.get(8), worker: r.get(9), mode }, r.get::<_, Option<String>>(11).unwrap_or_default()));
+        }
+        Ok(out)
+    }
+
+    /// Solutions the node never answered (the link dropped with them in flight): marked, for the operator.
+    pub async fn submissions_unanswered(&self, sent_before: i64) -> Result<Vec<(i64, i64, String)>> {
+        let c = self.client().await?;
+        let rows = c
+            .query("UPDATE block_submissions SET status='unanswered' WHERE status='sent' AND ts < $1 RETURNING id, height, address", &[&sent_before])
+            .await?;
+        Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect())
+    }
+
     pub async fn refund_payment(&self, tx_id: &str, from: &str) -> Result<bool> {
         self.refund_payment_any(tx_id, &[from]).await
     }
@@ -1103,7 +1219,12 @@ async fn cb_pay_block<C: deadpool_postgres::GenericClient>(tx: &C, height: i64, 
 /// their debits back. Returns how many.
 async fn cb_refund_pending<C: deadpool_postgres::GenericClient>(tx: &C, cond: &str, arg: i64) -> Result<u64> {
     tx.execute(
-        &format!("UPDATE miners m SET balance = m.balance + p.debit, paid = m.paid - p.amount FROM payments p WHERE p.miner_id = m.id AND p.status='pending' AND {cond}"),
+        // summed per miner first: UPDATE .. FROM applies only one joined row per target row, so two pending
+        // payments of one account used to refund one debit and fail both (audit 2026-10-23)
+        &format!("UPDATE miners m SET balance = m.balance + p.debit, paid = m.paid - p.amount
+                  FROM (SELECT p.miner_id, SUM(p.debit)::BIGINT AS debit, SUM(p.amount)::BIGINT AS amount FROM payments p
+                        WHERE p.status='pending' AND {cond} GROUP BY p.miner_id) p
+                  WHERE p.miner_id = m.id"),
         &[&arg],
     )
     .await?;

@@ -197,6 +197,15 @@ async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Qu
     for k in ["blocksFound", "blocks24h", "lastBlockAt", "blocks"] {
         v[k] = found[k].clone();
     }
+    // payouts the wallet keeps failing (a regular address whose wallet is offline): how many in a row, why, and
+    // when the next try is (payouts back off 2 h * 2^(n-1), at most a day: crate::db::miners_due)
+    if let Some(id) = s.db.miner_lookup(&address).await? {
+        let (n, last, reason) = s.db.payout_failures(id).await?;
+        if n > 0 {
+            let next = last.map(|t| t + (7200i64 * 2i64.saturating_pow((n - 1).clamp(0, 30) as u32)).min(86400));
+            v["payoutFailures"] = json!({ "count": n, "lastAt": last, "reason": reason, "nextTryAt": next });
+        }
+    }
     // ?worker=<name>&since=<unix seconds>: that worker's blocks since then (the Mac app's session count)
     if let (Some(w), Some(since)) = (q.get("worker"), q.get("since").and_then(|v| v.parse::<i64>().ok())) {
         if w.len() <= 64 {

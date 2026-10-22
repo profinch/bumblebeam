@@ -223,6 +223,7 @@ const BB = (() => {
     txs: (Array.isArray(p.txs) ? p.txs : []).slice(0, 500).map((t) => ({ kernel: str(t && t.kernel, 64), amount: num(t && t.amount) || 0 })),
   });
   const normMiner = (m) => ({
+    payoutFailures: m.payoutFailures && m.payoutFailures.count ? m.payoutFailures : null,
     address: str(m.address, 600), hashrate: num(m.hashrate) || 0, hashrate24h: num(m.hashrate24h), balance: num(m.balance) || 0,
     modes: normModes(m.modes),
     immature: num(m.immature) || 0, paid: num(m.paid) || 0, sending: num(m.sending) || 0, lastShare: num(m.lastShare),
