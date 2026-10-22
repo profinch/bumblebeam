@@ -2,7 +2,8 @@
 
 Status (2026-10-23): step 0 (graceful SIGTERM) `315550c`; the P0 fixes of docs/pool-audit.md `8d5e7eb`; **steps 1-3
 done in code** (`run all|stratum|app`, `ctl.rs`, per-role locks, `node_job` / `net_height` in `meta`, tested by
-`tools/e2e.sh` and `tools/e2e_split.sh`); step 4 (two containers) next.
+`tools/e2e.sh` and `tools/e2e_split.sh`); **step 4 deployed 2026-10-23 00:50** (`b1ae63f`: `bumblebeam-pool-stratum` + `bumblebeam-pool-app`); a
+restart of pool-app took 0.47 s with the same 5 miner connections before and after, 0 disconnects.
 
 What the app needs from the stratum process turned out to be more than the live view (audit P1): the node tip /
 difficulty / job age (`meta` row `node_job`, written by the stratum process on a new height or every 10 s, read by

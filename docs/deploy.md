@@ -217,7 +217,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
   compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool, explorer-node, explorer-web, nginx, certbot
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
-  containers/pool/                    builds bumblebeam-pool from this repository at BUMBLEBEAM_REF
+  containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-stratum and pool-app)
   containers/pool-web/                builds the pool UI (pool/web) at BUMBLEBEAM_REF, nginx
   containers/explorer-api/            builds the API and MCP server (api/server.js) at BUMBLEBEAM_REF, Node
   containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
@@ -237,7 +237,8 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 | `beam-node` | `bumblebeam` | `10000` p2p; stratum `8101` stays inside |
 | `wallet-api` | `bumblebeam` + internal `bumblebeam-wallet`, fixed `172.30.1.2` | nothing; answers only the pool's `172.30.1.10` |
 | `postgres` | `bumblebeam` | nothing |
-| `pool` | `bumblebeam` + `bumblebeam-wallet` | `3333-3334`, `3443-3444`; web `127.0.0.1:8080` |
+| `pool-stratum` | `bumblebeam` | `3333-3334`, `3443-3444`; the control interface `8081` stays inside |
+| `pool-app` | `bumblebeam` (alias `pool`) + `bumblebeam-wallet`, fixed `172.30.1.10` | API `127.0.0.1:8080` |
 | `pool-web` | `bumblebeam` | `127.0.0.1:8091`; the pool's pages, so UI releases never restart the pool |
 | `explorer-node` | `bumblebeam` | nothing; syncs from `beam-node`, API `8888` stays inside |
 | `explorer-api` | `bumblebeam` | nothing; `/v1` and `/mcp` reach it through explorer-web, the pool's `/mcp` through pool-web |
@@ -347,7 +348,7 @@ curl -s localhost:8080/api/health
 
 Until the node is at the tip the pool logs `node still syncing: no work for miners yet`; that is
 expected. Run `admin probe-txid` before the first payout (section 7) with
-`sudo docker exec bumblebeam-pool bumblebeam-pool /etc/bumblebeam/pool.toml admin probe-txid`.
+`sudo docker exec bumblebeam-pool-app bumblebeam-pool /etc/bumblebeam/pool.toml admin probe-txid`.
 
 ### D7. Web and certificates
 
@@ -384,15 +385,22 @@ the running node, use `up -d --no-deps <service>`.
 
 ### D8. Operations
 
-- Status: `sudo docker ps`; logs: `sudo docker logs -f beam-node|wallet-api|bumblebeam-pool`. The
+- Status: `sudo docker ps`; logs: `sudo docker logs -f beam-node|wallet-api|bumblebeam-pool-stratum|bumblebeam-pool-app`. The
   pool logs to the host journal, so its history survives rebuilds:
-  `sudo journalctl CONTAINER_NAME=bumblebeam-pool --since "2 hours ago"`. Each miner connection
+  `sudo journalctl CONTAINER_NAME=bumblebeam-pool-stratum --since "2 hours ago"` (miners, the node, found blocks; `-app` for the API and payouts). Each miner connection
   leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
   shares, and why it ended); addresses are shortened in logs.
-- Pool update: build with the new `BUMBLEBEAM_REF`, then `up -d --no-deps pool`. Schema migrations
-  run on start. Restarting the pool drops every miner connection (miners reconnect), so a change
-  to `pool/web` only needs `pool-web` rebuilt, and a change to the shared `styles.css` `pool-web`
-  and `explorer-web`.
+- Pool update (docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
+  blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from one image tagged with `POOL_REF`. Set
+  `POOL_REF=<commit>` in `.env`, `build pool-stratum`, then
+  - a change only to the app half (`api`, `admin`, `payouts`, `accounting::confirm_loop`, `network`, `db` queries
+    used there): `up -d --no-deps pool-app` - no miner notices (2026-10-23: 0.47 s, 0 disconnects);
+  - a change to the stratum half (`stratum`, `upstream`, `pow`, `conns`, `ctl`, the share writer, found blocks):
+    `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, our miners are back within ~1 s,
+    NiceHash after ~40 s;
+  - both: both, the app first. Schema changes run on start of either half (they are idempotent).
+  A rollback is the previous `POOL_REF` and the same `up -d` (the old image tag is still there). `pool-web` takes
+  `POOL_WEB_REF` (falling back to `BUMBLEBEAM_REF`), so UI releases touch neither half.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
   (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and
