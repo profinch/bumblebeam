@@ -179,8 +179,14 @@ async fn main() -> Result<()> {
             tokio::spawn(async move {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                    if let Err(e) = s.db.sample_hashrates(state::now()).await {
+                    let t = state::now();
+                    if let Err(e) = s.db.sample_hashrates(t).await {
                         error!("hashrate samples: {e:#}");
+                    }
+                    if t % 3600 < 60 {
+                        if let Err(e) = s.db.prune(t).await {
+                            error!("prune: {e:#}");
+                        }
                     }
                 }
             });

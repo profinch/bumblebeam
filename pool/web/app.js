@@ -218,7 +218,6 @@
       <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}`;
   }
 
-  function setBanner() { $('#demo-banner').hidden = BB.mode !== 'demo'; }
   async function setFooter() {
     const el = $('#foot-status'), txt = $('#foot-status-text');
     if (!el) return;
@@ -227,8 +226,8 @@
     // pages that never ask the pool (API docs, not found) learn whether it is up here
     if (!BB.mode) await BB.pool('stats').catch(() => null);
     const live = BB.mode === 'live';
-    el.className = `pill-status ${live ? '' : BB.mode === 'demo' ? 'demo' : 'off'}`;
-    txt.textContent = `${live ? 'pool live' : BB.mode === 'demo' ? 'demo' : 'offline'}${net && net.ok && net.height ? ` · ${int(net.height)}` : ''}`;
+    el.className = `pill-status ${live ? '' : 'off'}`;
+    txt.textContent = `${live ? 'pool live' : 'offline'}${net && net.ok && net.height ? ` · ${int(net.height)}` : ''}`;
     // BEAM's price in the header on every page, from the same network data; the chip is there from
     // the start (… while loading, — without a price), so the header does not move when it arrives
     const price = net && net.ok ? net.priceUsd : null, v = $('#beam-price-v');
@@ -285,7 +284,7 @@
       <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="num"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
       ${rows.map((p, i) => `<tr class="${p.ours ? 'ours' : ''}">
         <td class="dim">${i + 1}</td>
-        <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}${p.ours && BB.mode === 'demo' ? ' · demo' : ''}</span></td>
+        <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}</span></td>
         <td><div class="hashcell"><span>${hr(p.hashrate)}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
             <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
         <td class="num">${pct(p.hashrate / total, 1)}</td>
@@ -460,10 +459,27 @@
         <td class="num">${beamAmt(c.amount, 8)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  // Block history (up to 500): fetched whole every 10 minutes (statuses change as blocks mature); the 30 s refresh in
+  // between asks for the latest 25 and merges them in, instead of 500 blocks per tab every 30 s.
+  const histories = new Map();
+  async function blockHistory(q) {
+    const h = histories.get(q);
+    if (!h || Date.now() - h.at > 600000) {
+      const { blocks } = await BB.pool(q);
+      histories.set(q, { at: Date.now(), blocks });
+      return blocks;
+    }
+    const { blocks: recent } = await BB.pool(q.replace('limit=500', 'limit=25'));
+    const byHeight = new Map(h.blocks.map((b) => [b.height, b]));
+    for (const b of recent) byHeight.set(b.height, b);
+    h.blocks = [...byHeight.values()].sort((a, b) => b.height - a.height).slice(0, 500);
+    return h.blocks;
+  }
+
   views.blocks = async (arg) => {
     if (arg) return roundView(arg);
     // the latest 500 blocks, so the filters and sorting see them all
-    const [{ blocks }, stats] = await Promise.all([BB.pool('blocks?limit=500'), BB.pool('stats')]);
+    const [blocks, stats] = await Promise.all([blockHistory('blocks?limit=500'), BB.pool('stats')]);
     blSet(allBlocks, 'pool', blocks, stats.maturity);
     const day = blocks.filter((b) => b.ts > Date.now() / 1000 - 86400);
     const effort24h = stats.effort24h ?? (day.length ? day.reduce((s, b) => s + (b.effort || 0), 0) / day.length : null);
@@ -591,7 +607,7 @@
     const addr = m.address || address;
     // every block of this miner (up to 500), so sorting and the filters see them all
     if (m.blocksFound > m.blocks.length) {
-      try { m.blocks = (await BB.pool(`blocks?limit=500&miner=${encodeURIComponent(addr)}`)).blocks; } catch (e) { /* the latest ten stay */ }
+      try { m.blocks = await blockHistory(`blocks?limit=500&miner=${encodeURIComponent(addr)}`); } catch (e) { /* the latest ten stay */ }
     }
     blSet(mine, addr, m.blocks, stats.maturity);
     if (m.lastShare != null) rememberAddress(addr);
@@ -1040,7 +1056,7 @@
     document.querySelectorAll('#main-nav a, .cta-top').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
   }
 
-  let seq = 0;
+  let seq = 0, lastHtml = '';
   async function render(scrollTop = true) {
     const { route, arg } = parse();
     const my = ++seq;
@@ -1049,10 +1065,11 @@
     try {
       const html = await views[route](arg);
       if (my !== seq) return;
-      view.innerHTML = html;
+      // the 30 s refresh often brings the same page: leave the DOM (selection, an open tooltip) alone then
+      if (scrollTop || html !== lastHtml) view.innerHTML = html;
+      lastHtml = html;
       // a miner page can make its address "my stats" while loading, so mark the tab again
       markNav(route, arg);
-      setBanner();
       setFooter();
       if (route === 'connect') bindConnect();
       if (route === 'blocks') bindBlocksPanel(allBlocks);

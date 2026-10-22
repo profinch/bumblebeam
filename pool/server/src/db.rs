@@ -142,6 +142,11 @@ CREATE INDEX IF NOT EXISTS bsub_open ON block_submissions(status, ts) WHERE cred
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS failure_reason TEXT;
 CREATE TABLE IF NOT EXISTS hashrate_samples (ts BIGINT NOT NULL, scope TEXT NOT NULL, hashrate DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS hs_scope_ts ON hashrate_samples(scope, ts);
+-- the hourly prune deletes by ts alone: BRIN (rows arrive in ts order) serves it at almost no cost
+CREATE INDEX IF NOT EXISTS hs_ts_brin ON hashrate_samples USING brin(ts);
+CREATE INDEX IF NOT EXISTS se_ts_brin ON share_events USING brin(ts);
+CREATE INDEX IF NOT EXISTS blocks_miner ON blocks(miner_id);
+CREATE INDEX IF NOT EXISTS blocks_status ON blocks(status);
 "#;
 
 /// Coinbase payouts: the miners' pairs (status stock | mined | expired) and the chain as the finalizer
@@ -758,15 +763,34 @@ impl Db {
     }
 
     /// One sample per minute for the pool and for every miner active in the last ten minutes.
+    /// One pass over the last 10 minutes of shares for every scope (pool, mode, miner, miner+mode), once a
+    /// minute; the history is pruned by `prune`, hourly.
     pub async fn sample_hashrates(&self, now: i64) -> Result<()> {
         let c = self.client().await?;
-        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'pool', COALESCE(SUM(difficulty),0)/600.0 FROM shares WHERE ts > $2", &[&now, &(now - 600)]).await?;
-        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, mode, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY mode", &[&now, &(now - 600)]).await?;
-        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id", &[&now, &(now - 600)]).await?;
-        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, 'm:' || miner_id || ':' || mode, SUM(difficulty)/600.0 FROM shares WHERE ts > $2 GROUP BY miner_id, mode", &[&now, &(now - 600)]).await?;
+        c.execute(
+            "INSERT INTO hashrate_samples (ts, scope, hashrate)
+             SELECT $1, CASE WHEN GROUPING(miner_id) = 1 AND GROUPING(mode) = 1 THEN 'pool'
+                             WHEN GROUPING(miner_id) = 1 THEN mode
+                             WHEN GROUPING(mode) = 1 THEN 'm:' || miner_id
+                             ELSE 'm:' || miner_id || ':' || mode END,
+                    COALESCE(SUM(difficulty), 0) / 600.0
+             FROM shares WHERE ts > $2
+             GROUP BY GROUPING SETS ((), (mode), (miner_id), (miner_id, mode))",
+            &[&now, &(now - 600)],
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Retention, hourly: chart samples for the longest chart range, shares and share events a week (PPLNS needs
+    /// at most 3 days), where miners connected from 90 days, benchmark reports 180 days.
+    pub async fn prune(&self, now: i64) -> Result<()> {
+        let c = self.client().await?;
         c.execute("DELETE FROM hashrate_samples WHERE ts < $1", &[&(now - ChartRange::KEEP_SECS)]).await?;
         c.execute("DELETE FROM shares WHERE ts < $1", &[&(now - 7 * 86400)]).await?;
         c.execute("DELETE FROM share_events WHERE ts < $1", &[&(now - 7 * 86400)]).await?;
+        c.execute("DELETE FROM miner_sessions WHERE last < $1", &[&(now - 90 * 86400)]).await?;
+        c.execute("DELETE FROM benchmarks WHERE ts < $1", &[&(now - 180 * 86400)]).await?;
         Ok(())
     }
 
