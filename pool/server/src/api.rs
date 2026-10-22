@@ -54,6 +54,7 @@ pub fn router(api: Api) -> Router {
         .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
         .route("/api/miningboard", get(miningboard))
         .route("/api/benchmarks", get(benchmarks).post(benchmark_report))
+        .layer(middleware::from_fn(micro_cache))
         .layer(CorsLayer::permissive())
         // the operator's API is added after the CORS layer: no other site may call it from a browser
         .merge(admin_router(api.clone()))
@@ -61,6 +62,47 @@ pub fn router(api: Api) -> Router {
         // route no longer answers 200 with index.html
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({ "error": "no such endpoint" }))) })
         .with_state(api)
+}
+
+/// The public read-only routes every visitor's page polls (each /api/stats is ~15 queries): their 200 answers are
+/// kept in memory 10-30 s per URL and sent with a matching Cache-Control, so a crowd costs one set of queries
+/// per period, not one per tab. Per-miner pages, admin and health are not cached.
+static MICRO: std::sync::LazyLock<std::sync::Mutex<HashMap<String, (std::time::Instant, axum::body::Bytes)>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+async fn micro_cache(req: Request, next: Next) -> Response {
+    let ttl = match (req.method() == axum::http::Method::GET, req.uri().path()) {
+        (true, "/api/stats" | "/api/miningboard" | "/api/blocks") => 10,
+        (true, "/api/blocks/heights" | "/api/miners" | "/api/payments" | "/api/benchmarks") => 30,
+        _ => 0,
+    };
+    if ttl == 0 {
+        return next.run(req).await;
+    }
+    let key = req.uri().to_string();
+    let hit = MICRO.lock().unwrap().get(&key).filter(|(at, _)| at.elapsed().as_secs() < ttl).map(|(_, b)| b.clone());
+    let body = match hit {
+        Some(b) => b,
+        None => {
+            let res = next.run(req).await;
+            if res.status() != StatusCode::OK {
+                return res;
+            }
+            let Ok(b) = axum::body::to_bytes(res.into_body(), 16 << 20).await else {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "response too large" }))).into_response();
+            };
+            let mut m = MICRO.lock().unwrap();
+            if m.len() > 2000 {
+                m.retain(|_, (at, _)| at.elapsed().as_secs() < 60);
+            }
+            m.insert(key, (std::time::Instant::now(), b.clone()));
+            b
+        }
+    };
+    let mut res = Response::new(axum::body::Body::from(body));
+    res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_str(&format!("public, max-age={ttl}")).unwrap());
+    res
 }
 
 fn range(q: &HashMap<String, String>) -> crate::db::ChartRange {

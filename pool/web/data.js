@@ -69,7 +69,7 @@ const BB = (() => {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-      const r = await fetch(url, { signal: ctl.signal, cache: 'no-store' });
+      const r = await fetch(url, { signal: ctl.signal });
       if (!r.ok) throw new Error(`${r.status} ${url}`);
       return await r.json();
     } finally {
@@ -94,7 +94,7 @@ const BB = (() => {
     const out = { ok: false, pools: [], hashrate: null, height: null, difficulty: null, avgBlock: null, blocks24h: null, priceUsd: null, othersHashrate: null, source: null };
 
     // The pool server caches the explorer for all visitors; use it when it answers.
-    if (POOL_API && mode !== 'demo' && Date.now() - proxyFailedAt > 60000) {
+    if (POOL_API && Date.now() - proxyFailedAt > 60000) {
       try {
         const p = await getJSON(`${POOL_API}/api/network`, 3000);
         out.ok = true;
@@ -145,7 +145,7 @@ const BB = (() => {
   // each pool's own API checked against them). Without it: heights and times from our explorer
   // with only our blocks named; the Beam Terminal last.
   async function networkBlocks(limit = 30) {
-    const pooled = POOL_API && mode !== 'demo';
+    const pooled = !!POOL_API;
     if (pooled) {
       try {
         const r = await getJSON(`${POOL_API}/api/network/blocks?limit=${limit}`, 5000);
@@ -249,184 +249,26 @@ const BB = (() => {
     return r;
   }
 
-  // ---------- pool API, or the demo stand-in ----------
+  // ---------- pool API ----------
+  // No demo stand-in any more (audit 2026-10-23): a slow first answer used to switch the site to generated
+  // numbers. A failure now throws and the view shows it; `stats` (every view asks for it) is shared for 10 s.
 
-  let mode = null; // 'live' | 'demo'
-  let liveTriedAt = 0;
+  let mode = null; // 'live' once the pool answered, 'offline' while it does not
+  const memo = new Map();
   async function pool(path) {
-    // In demo mode, try the real server again once a minute so it is picked up when it comes up.
-    if (POOL_API && (mode !== 'demo' || Date.now() - liveTriedAt > 60000)) {
-      liveTriedAt = Date.now();
-      try {
-        const r = await getJSON(`${POOL_API}/api/${path}`, 4000);
-        mode = 'live';
-        return normalize(path, r);
-      } catch (e) {
-        if (mode === 'live') throw e;
-      }
+    const key = path.startsWith('stats') ? path : null;
+    if (key && memo.has(key) && Date.now() - memo.get(key).at < 10000) return memo.get(key).v;
+    try {
+      const r = await getJSON(`${POOL_API}/api/${path}`, 8000);
+      mode = 'live';
+      const v = normalize(path, r);
+      if (key) memo.set(key, { at: Date.now(), v });
+      return v;
+    } catch (e) {
+      mode = 'offline';
+      throw e;
     }
-    mode = 'demo';
-    return normalize(path, Demo.get(path, await network().catch(() => null)));
   }
-
-  // ---------- demo generator (deterministic per 10 minutes, anchored to the live chain) ----------
-
-  const Demo = (() => {
-    function rng(seed) {
-      let a = seed >>> 0;
-      return () => {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
-    }
-    function strSeed(s) {
-      let h = 2166136261;
-      for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-      return h >>> 0;
-    }
-    const hex = (r, n) => Array.from({ length: n }, () => '0123456789abcdef'[(r() * 16) | 0]).join('');
-
-    // Pool hashrate over a chart range, at the API's resolution for that range.
-    function demoSeries(now, range, base) {
-      const [span, step] = range === '30d' ? [30 * 86400, 14400] : range === '7d' ? [7 * 86400, 3600] : [86400, 600];
-      const out = [];
-      for (let t = Math.floor((now - span) / step) * step + step; t <= now; t += step) {
-        const w = Math.sin(t / 7000) * 0.06 + Math.sin(t / 2300) * 0.03 + Math.sin(t / 400000) * 0.12;
-        out.push([t, base * (1 + w + (rng(t)() - 0.5) * 0.08)]);
-      }
-      return out;
-    }
-
-    let world = null, worldKey = '';
-    function build(net) {
-      const now = Math.floor(Date.now() / 1000);
-      const key = `${Math.floor(now / 600)}`;
-      if (world && worldKey === key) return world;
-      const r = rng(20261006);
-      const netHash = (net && net.hashrate) || 45000;
-      const height = (net && net.height) || 4068700;
-      const reward = blockReward(height);
-      const base = 1650; // Sol/s, ~3.5% of the network
-
-      const series = demoSeries(now, '24h', base);
-      const hashrate = series[series.length - 1][1];
-
-      const miners = [];
-      let left = hashrate;
-      for (let i = 0; i < 37; i++) {
-        const share = i === 36 ? left : Math.min(left * 0.5, hashrate * (0.25 / (i + 1)) * (0.6 + r()));
-        left -= share;
-        const nW = 1 + ((r() * 4) | 0);
-        miners.push({ address: hex(r, 66), hashrate: share, hashrate24h: share * (0.92 + r() * 0.12), workers: nW, lastShare: now - ((r() * 50) | 0) });
-      }
-      miners.sort((a, b) => b.hashrate - a.hashrate);
-
-      // Blocks: Poisson process at the pool's share of 1440 blocks/day.
-      const perSec = (base / netHash) / 60;
-      const blocks = [];
-      let t = now - ((r() * 300) | 0);
-      while (t > now - 86400 * 3) {
-        const h = height - Math.round((now - t) / 60);
-        const conf = height - h;
-        const orphan = conf > 2 && r() < 0.012;
-        blocks.push({
-          height: h, hash: hex(r, 64), ts: t, reward, fees: Math.round(r() * 3e6),
-          effort: -Math.log(1 - r() * 0.999), confirmations: conf,
-          status: orphan ? 'orphaned' : conf >= MATURITY ? 'confirmed' : 'pending',
-          finder: `rig${1 + ((r() * 9) | 0)}`, mode: r() < 0.08 ? 'solo' : 'pplns',
-        });
-        t -= Math.max(20, Math.round(-Math.log(1 - r()) / perSec));
-      }
-
-      const payments = [];
-      for (let pt = Math.floor(now / PAYOUT_INTERVAL) * PAYOUT_INTERVAL; pt > now - 86400 * 3; pt -= PAYOUT_INTERVAL) {
-        const n = 12 + ((r() * 20) | 0), txs = [];
-        for (let i = 0; i < n; i++) txs.push({ kernel: hex(r, 64), amount: Math.round((0.02 + r() * 0.1) * PAYOUT_INTERVAL * perSec * reward) });
-        payments.push({ ts: pt, amount: txs.reduce((s, t) => s + t.amount, 0), miners: n, kernel: txs[n - 1].kernel, txs });
-      }
-
-      const day = blocks.filter((b) => b.ts > now - 86400);
-      world = {
-        now, base, hashrate, series, miners, blocks, payments, height, netHash,
-        stats: {
-          hashrate, minersTotal: miners.length, workersTotal: miners.reduce((s, m) => s + m.workers, 0),
-          stats: { lastBlockFound: blocks[0] ? blocks[0].ts : null, roundShares: 0 },
-          nodes: [{ name: 'beam-node-1', height: String(height), difficulty: String((net && net.difficulty) || 2.72e6), networkhashps: String(netHash), lastBeat: String(now) }],
-          config: { fee: FEE, soloFee: FEE, finderBonus: 1, minPayout: MIN_PAYOUT, payoutScheme: 'PPLNS', pplnsWindow: 2.0, blockReward: reward, maturity: MATURITY, payoutInterval: PAYOUT_INTERVAL },
-          charts: { hashrate: series },
-          blocks24h: day.length,
-          effort24h: day.length ? day.reduce((s, b) => s + b.effort, 0) / day.length : null,
-        },
-      };
-      worldKey = key;
-      return world;
-    }
-
-    function miner(w, address, range) {
-      const known = w.miners.find((m) => m.address === address);
-      // like the server: an address that never mined here gets an empty record
-      if (!known) return { address, hashrate: 0, hashrate24h: 0, balance: 0, immature: 0, paid: 0, lastShare: null, workers: [], charts: { hashrate: [] }, payments: [] };
-      const r = rng(strSeed(address));
-      const hr = known ? known.hashrate : (r() < 0.25 ? 0 : 20 + r() * 300);
-      const nW = known ? known.workers : 1 + ((r() * 3) | 0);
-      const workers = Array.from({ length: nW }, (_, i) => {
-        const h = hr / nW * (0.7 + r() * 0.6);
-        return { name: `rig${i + 1}`, hashrate: h, hashrate24h: h * (0.9 + r() * 0.15), lastShare: w.now - ((r() * 40) | 0), online: hr > 0, stale: r() * 0.02, rejected: r() * 0.003 };
-      });
-      const series = demoSeries(w.now, range, w.base).map(([t, v]) => [t, hr ? hr * (v / w.hashrate) * (0.9 + r() * 0.2) : 0]);
-      const payments = w.payments.slice(0, 12).map((p) => ({ ts: p.ts, amount: Math.round(p.amount * (hr / w.hashrate)), kernel: p.kernel }));
-      const reward = blockReward(w.height);
-      return {
-        address, hashrate: hr, hashrate24h: hr * 0.97, balance: Math.round(r() * MIN_PAYOUT), immature: Math.round(hr / w.hashrate * 6 * reward),
-        paid: Math.round(hr / w.hashrate * 900 * reward), lastShare: hr ? w.now - 5 : null, workers, charts: { hashrate: series }, payments,
-      };
-    }
-
-    // A found block's split, in the shape of /api/blocks/<height>: the demo miners share the
-    // window in proportion to their hashrate, give or take luck.
-    function round(w, height) {
-      const b = w.blocks.find((x) => x.height === height);
-      if (!b) throw new Error(`404 demo: no block at ${height}`);
-      const r = rng(height);
-      const netDifficulty = Number(w.stats.nodes[0].difficulty);
-      const base = { height, hash: b.hash, ts: b.ts, mode: b.mode, status: b.status, reward: b.reward, fees: b.fees, effort: b.effort, netDifficulty, recorded: true, feePercent: FEE };
-      if (b.mode === 'solo') {
-        return { ...base, finderBonusPercent: 0, window: null, total: null, pot: null, finderBonus: null, shared: null,
-          credits: [{ kind: 'solo', difficulty: null, amount: Math.floor(b.reward * (1 - FEE / 100)) }] };
-      }
-      const window = 2 * netDifficulty;
-      const weights = w.miners.map((m) => m.hashrate * (0.6 + r() * 0.8));
-      const sum = weights.reduce((s, x) => s + x, 0);
-      const diffs = weights.map((x) => Math.round((x / sum) * window * (1 + r() * 0.002)));
-      const total = diffs.reduce((s, x) => s + x, 0);
-      const pot = b.reward * (1 - FEE / 100), finderBonus = Math.floor(pot / 100), shared = pot - finderBonus;
-      const credits = diffs.map((d) => ({ kind: 'share', difficulty: d, amount: Math.floor(shared * d / total) }))
-        .filter((c) => c.amount > 0).sort((x, y) => y.difficulty - x.difficulty);
-      credits.push({ kind: 'bonus', difficulty: null, amount: finderBonus });
-      return { ...base, finderBonusPercent: 1, window, total, pot, finderBonus, shared, credits };
-    }
-
-    function get(path, net) {
-      const w = build(net);
-      const [p, q] = path.split('?');
-      const qs = new URLSearchParams(q || '');
-      const limit = Math.min(500, Number(qs.get('limit')) || 50);
-      const before = Number(qs.get('before')) || Infinity;
-      const range = qs.get('range') || '24h';
-      if (p === 'stats') return { ...w.stats, charts: { hashrate: demoSeries(w.now, range, w.base) } };
-      if (p === 'blocks') return { blocks: w.blocks.filter((b) => b.height < before).slice(0, limit) };
-      if (p === 'payments') return { payments: w.payments.slice(0, limit) };
-      if (p === 'miners') return { miners: w.miners.slice(0, limit).map(({ address, ...m }) => m) };
-      if (p.startsWith('miners/')) return miner(w, decodeURIComponent(p.slice(7)), range);
-      if (p.startsWith('blocks/')) return round(w, Number(p.slice(7)));
-      throw new Error(`demo: unknown path ${path}`);
-    }
-
-    return { get };
-  })();
 
   return {
     GROTH, MATURITY, FEE,
