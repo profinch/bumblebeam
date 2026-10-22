@@ -498,15 +498,57 @@
     return `<td>${shown.length ? shown.map((w) => `<div class="stack-line">${esc(w)}</div>`).join('') : '<span class="dim">—</span>'}</td>
       <td class="num">${all.length > 1 ? `<button type="button" class="btn ghost small" data-workers="${Number(m.id)}">${open ? 'less' : 'more'}</button>` : ''}</td>`;
   };
+  // The wallet behind an address: a regular address IS the wallet's SBBS id (channel + 32-byte key, in hex); a
+  // regular-new or offline address is a base58 token that carries that id (after an 0xa8 length byte: an 8-byte
+  // channel, then the key). Public offline and max-privacy addresses carry none, by design.
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function walletKey(a) {
+    if (/^[0-9a-f]{64,70}$/i.test(a)) return `${a.slice(0, -64).replace(/^0+/, '').toLowerCase()}:${a.slice(-64).toLowerCase()}`;
+    if (!/^[1-9A-HJ-NP-Za-km-z]{90,600}$/.test(a)) return null;
+    let n = 0n;
+    for (const ch of a) n = n * 58n + BigInt(B58.indexOf(ch));
+    let hex = n.toString(16); if (hex.length % 2) hex = '0' + hex;
+    const b = hex.match(/../g).map((x) => parseInt(x, 16));
+    for (let i = 0; i + 41 <= b.length && i < 64; i++) {
+      if (b[i] === 0xa8 && b.slice(i + 1, i + 7).every((x) => x === 0) && (b[i + 7] || b[i + 8])) {
+        const chan = b.slice(i + 1, i + 9).map((x) => x.toString(16).padStart(2, '0')).join('').replace(/^0+/, '');
+        return `${chan}:${b.slice(i + 9, i + 41).map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+      }
+    }
+    return null;
+  }
+  // Miners that are most likely one person: the same wallet (exact), and/or the same IP + worker with one
+  // address taking over within an hour of the other (a hint: people share NATs and worker names)
+  function linksOf(list) {
+    const out = new Map(list.map((m) => [m.id, { wallet: [], seen: [] }]));
+    const keys = new Map(list.map((m) => [m.id, walletKey(m.address)]));
+    for (const a of list) {
+      for (const b of list) {
+        if (a.id === b.id) continue;
+        if (keys.get(a.id) && keys.get(a.id) === keys.get(b.id)) out.get(a.id).wallet.push(b.id);
+        const near = (a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && x.worker === y.worker
+          && Math.max(x.first, y.first) - Math.min(x.last, y.last) <= 3600));
+        if (near) out.get(a.id).seen.push(b.id);
+      }
+    }
+    return out;
+  }
+  const linkBadges = (l) => [
+    l && l.wallet.length ? `<span class="badge ok" title="the same wallet: its address carries the same wallet id">🔗 same wallet ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.seen.length ? `<span class="badge pending" title="the same IP and worker, one address taking over within an hour: probably one person (a hint, not a proof)">≈ same rig ${l.seen.map((i) => '#' + i).join(' ')}</span>` : '',
+  ].join(' ');
+
   async function miners() {
     const r = await api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`);
     const day = Date.now() / 1000 - 86400;
+    const links = linksOf(r.miners);
     const flags = (m) => [
       m.held ? badge('payouts held', 'bad') : '',
       m.firstSeen > day ? badge('new', 'pending') : '',
       m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending') : '',
       (m.type || '').startsWith('regular') ? badge('regular addr', 'bad') : '',
       m.connections ? badge(`${m.connections} live`, 'ok') : '',
+      linkBadges(links.get(m.id)),
     ].join(' ');
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Miners</h1></div>
