@@ -517,31 +517,38 @@
     }
     return null;
   }
-  // Miners that are most likely one person: the same wallet (exact), and/or the same IP + worker with one
-  // address taking over within an hour of the other (a hint: people share NATs and worker names)
-  function linksOf(list) {
+  // Miners that are most likely one person: the same wallet (exact, from the addresses), and/or connected from
+  // the same IP right now (a hint, from the live connections the pool already holds in memory; nothing about
+  // where miners connect from is stored - privacy)
+  function linksOf(list, live) {
     const out = new Map(list.map((m) => [m.id, { wallet: [], seen: [] }]));
     const keys = new Map(list.map((m) => [m.id, walletKey(m.address)]));
+    const ips = new Map();
+    for (const c of live || []) {
+      if (!c.minerId) continue;
+      const ip = String(c.peer || '').replace(/:\d+$/, '');
+      if (!ips.has(c.minerId)) ips.set(c.minerId, new Set());
+      ips.get(c.minerId).add(ip);
+    }
     for (const a of list) {
       for (const b of list) {
         if (a.id === b.id) continue;
         if (keys.get(a.id) && keys.get(a.id) === keys.get(b.id)) out.get(a.id).wallet.push(b.id);
-        const near = (a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && x.worker === y.worker
-          && Math.max(x.first, y.first) - Math.min(x.last, y.last) <= 3600));
-        if (near) out.get(a.id).seen.push(b.id);
+        const ia = ips.get(a.id), ib = ips.get(b.id);
+        if (ia && ib && [...ia].some((x) => ib.has(x))) out.get(a.id).seen.push(b.id);
       }
     }
     return out;
   }
   const linkBadges = (l) => [
     l && l.wallet.length ? `<span class="badge ok" title="the same wallet: its address carries the same wallet id">🔗 same wallet ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.seen.length ? `<span class="badge pending" title="the same IP and worker, one address taking over within an hour: probably one person (a hint, not a proof)">≈ same rig ${l.seen.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.seen.length ? `<span class="badge pending" title="connected from the same IP right now: maybe one person (a hint, not a proof - people share NATs)">≈ same IP now ${l.seen.map((i) => '#' + i).join(' ')}</span>` : '',
   ].join(' ');
 
   async function miners() {
-    const r = await api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`);
+    const [r, conns] = await Promise.all([api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`), api('connections').catch(() => ({ live: [] }))]);
     const day = Date.now() / 1000 - 86400;
-    const links = linksOf(r.miners);
+    const links = linksOf(r.miners, conns.live);
     const flags = (m) => [
       m.held ? badge('payouts held', 'bad') : '',
       m.firstSeen > day ? badge('new', 'pending') : '',
