@@ -99,6 +99,7 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
     let mut pending: HashMap<String, VecDeque<(Option<i64>, Instant, Submit)>> = HashMap::new();
     let mut logged_in = false;
     let mut last_sync_warn = Instant::now() - Duration::from_secs(3600);
+    let mut last_meta: (u64, Instant) = (0, Instant::now() - Duration::from_secs(3600));
     let idle = Duration::from_secs(600);
 
     loop {
@@ -135,6 +136,13 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                                     continue;
                                 }
                                 info!(id = %job.upstream_id, height = job.height, difficulty = crate::pow::difficulty_to_double(job.net_packed), "new job");
+                                // for the app process (its tip, maturity, /api/stats): on a new height, else every 10 s
+                                if job.height != last_meta.0 || last_meta.1.elapsed() > Duration::from_secs(10) {
+                                    last_meta = (job.height, Instant::now());
+                                    let v = json!({ "height": job.height, "net_packed": job.net_packed, "at": crate::state::now() }).to_string();
+                                    let s2 = shared.clone();
+                                    tokio::spawn(async move { if let Err(e) = s2.db.meta_set("node_job", &v).await { warn!("meta node_job: {e:#}"); } });
+                                }
                                 shared.job_tx.send_replace(Some(Arc::new(job)));
                             }
                             Err(e) => warn!("bad job: {e}"),

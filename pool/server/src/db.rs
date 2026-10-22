@@ -98,7 +98,8 @@ async fn chart_window(c: &tokio_postgres::Client, scope: &str, now: i64, span: i
 pub struct Db {
     pool: Pool,
     /// Connection that holds the single-instance advisory lock for the life of the process.
-    lock_conn: Mutex<Option<deadpool_postgres::Client>>,
+    /// one connection per advisory lock held (a lock lives in its connection)
+    lock_conn: Mutex<Vec<(i64, deadpool_postgres::Client)>>,
 }
 
 const SCHEMA: &str = r#"
@@ -247,7 +248,10 @@ pub struct StockPair {
     pub size: i64,
     pub hex: String,
 }
-const INSTANCE_LOCK: i64 = 0x62_75_6d_62_6c_65; // "bumble"
+/// The stratum half's lock is the old single-process lock, so an old binary and a new stratum process can never
+/// run together; the app half has its own. `run all` takes both.
+pub const STRATUM_LOCK: i64 = 0x62_75_6d_62_6c_65; // "bumble"
+pub const APP_LOCK: i64 = 0x62_75_6d_62_6c_66;
 
 pub type DuePayout = (i64, String, i64, Option<String>);
 
@@ -271,7 +275,7 @@ impl Db {
         // instead of hanging (shares go through the writer task, which retries)
         let t = Some(std::time::Duration::from_secs(10));
         let pool = Pool::builder(mgr).max_size(16).wait_timeout(t).create_timeout(t).recycle_timeout(t).runtime(deadpool_postgres::Runtime::Tokio1).build()?;
-        let db = Db { pool, lock_conn: Mutex::new(None) };
+        let db = Db { pool, lock_conn: Mutex::new(Vec::new()) };
         let c = db.client().await?;
         c.batch_execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)").await?;
         let ver: Option<i32> = c.query_opt("SELECT value FROM meta WHERE key='schema'", &[]).await?.and_then(|r| r.get::<_, String>(0).parse().ok());
@@ -299,28 +303,29 @@ impl Db {
     }
 
     /// Only one pool process may run against a database: payouts and confirmations must not race.
-    pub async fn acquire_instance_lock(&self) -> Result<bool> {
+    pub async fn acquire_instance_lock(&self, key: i64) -> Result<bool> {
         let c = self.client().await?;
-        let ok: bool = c.query_one("SELECT pg_try_advisory_lock($1)", &[&INSTANCE_LOCK]).await?.get(0);
+        let ok: bool = c.query_one("SELECT pg_try_advisory_lock($1)", &[&key]).await?.get(0);
         if ok {
-            *self.lock_conn.lock().unwrap() = Some(c);
+            self.lock_conn.lock().unwrap().push((key, c));
         }
         Ok(ok)
     }
 
-    /// The lock lives in one connection; if that connection died (PostgreSQL restart, network),
-    /// the lock is gone and another process could start. Re-acquire or report false.
+    /// A lock lives in one connection; if that connection died (PostgreSQL restart, network), the lock is gone
+    /// and another process could start. Re-acquire each one, or report false.
     pub async fn check_instance_lock(&self) -> bool {
-        let conn = self.lock_conn.lock().unwrap().take();
-        if let Some(c) = conn {
+        let held: Vec<(i64, deadpool_postgres::Client)> = std::mem::take(&mut *self.lock_conn.lock().unwrap());
+        let mut all = true;
+        for (key, c) in held {
             if c.query_one("SELECT 1", &[]).await.is_ok() {
-                *self.lock_conn.lock().unwrap() = Some(c);
-                return true;
+                self.lock_conn.lock().unwrap().push((key, c));
+                continue;
             }
-            // dead: destroy it rather than hand it back to the pool
-            let _ = deadpool_postgres::Object::take(c);
+            let _ = deadpool_postgres::Object::take(c); // dead: destroy it rather than hand it back to the pool
+            all &= self.acquire_instance_lock(key).await.unwrap_or(false);
         }
-        self.acquire_instance_lock().await.unwrap_or(false)
+        all
     }
 
     pub async fn meta_get(&self, key: &str) -> Result<Option<String>> {

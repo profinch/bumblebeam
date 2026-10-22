@@ -163,7 +163,10 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
                 "pools": list,
             });
             if let Some(h) = v["height"].as_u64() {
-                shared.net_height.store(h, Ordering::Relaxed);
+                if shared.net_height.swap(h, Ordering::Relaxed) != h {
+                    // the stratum process reads it for its syncing-node guard (crate::main::net_height_loop)
+                    let _ = shared.db.meta_set("net_height", &h.to_string()).await;
+                }
             }
             *cache.data.write().await = v;
         }

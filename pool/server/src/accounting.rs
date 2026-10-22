@@ -118,7 +118,7 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
         return Ok(());
     }
     tx.execute("DELETE FROM credits WHERE block_height=$1", &[&height]).await?;
-    if shared.coinbase.is_some() {
+    if shared.cfg.coinbase.enabled {
         let adopted = crate::db::Db::cb_adopt_block(&tx, height, &blockhash, ts).await?;
         if !adopted.is_empty() {
             info!(height, accounts = adopted.len(), groth = adopted.iter().map(|p| p.1).sum::<i64>(), "pairs the finalizer read before the block was recorded are now paid");
@@ -258,7 +258,7 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
 
     // With coinbase payouts the pool's wallet only gets the remainder of a block, so the UTXO check
     // does not apply; our node's chain, as the finalizer reports it, is the judge instead.
-    let coinbase_mode = shared.coinbase.is_some();
+    let coinbase_mode = shared.cfg.coinbase.enabled; // from the config: an app-only process has no finalizer link
     let chain_tip = if coinbase_mode { shared.db.chain_tip().await?.unwrap_or(0) } else { 0 };
 
     // The wallet's UTXO list is conclusive only once the wallet has itself reached the maturity

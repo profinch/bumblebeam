@@ -53,10 +53,16 @@ target_secs = 10.0
 
 [http]
 bind = "0.0.0.0:8080"
-web_dir = "/opt/bumblebeam/web"
 
 [admin]
 token = ""                                # the operator's dashboard at /admin; 24+ random chars (openssl rand -hex 24), empty turns it off
+
+[control]
+# only when the pool runs as two processes (`run stratum` + `run app`, docs/pool-split.md): the stratum process's
+# interface for the app process (live connections, kicks, the coinbase finalizer); internal only, the admin token
+# authenticates it, so `run app` needs [admin] token
+bind = "0.0.0.0:8081"
+url = "http://pool-stratum:8081"
 
 [database]
 url_file = "/etc/bumblebeam/database.url"   # a file holding postgres://user:pass@host/db, or set url = "..." here

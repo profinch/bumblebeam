@@ -59,6 +59,31 @@ pub enum ShareMsg {
     Flush(tokio::sync::oneshot::Sender<()>),
 }
 
+/// Which half of the pool this process runs (docs/pool-split.md): both, the stratum half, or the app half.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    All,
+    Stratum,
+    App,
+}
+impl Role {
+    pub fn stratum(self) -> bool { self != Role::App }
+    pub fn app(self) -> bool { self != Role::Stratum }
+    pub fn as_str(self) -> &'static str {
+        match self { Role::All => "all", Role::Stratum => "stratum", Role::App => "app" }
+    }
+}
+
+/// The node's current template as the app half needs it (height, difficulty, how old): from the job in
+/// this process, or from the `node_job` meta row the stratum process writes (crate::upstream).
+#[derive(Debug, Clone, Copy)]
+pub struct NodeView {
+    pub height: u64,
+    pub net_packed: u32,
+    /// unix seconds when the stratum process got it
+    pub at: i64,
+}
+
 pub struct Shared {
     pub cfg: Arc<Config>,
     pub db: Db,
@@ -90,6 +115,9 @@ pub struct Shared {
     /// Accepted shares go to the database through one writer task in batches, so a slow database never
     /// stalls a miner's connection (crate::stratum::share_writer).
     pub share_tx: mpsc::Sender<ShareMsg>,
+    pub role: Role,
+    /// the node view read from the database by an app-only process (crate::main::node_view_loop)
+    pub node_cache: std::sync::RwLock<Option<NodeView>>,
     /// Found blocks being credited right now (accounting::credit_found); a shutdown waits for them.
     pub crediting: AtomicU64,
 }
@@ -110,9 +138,19 @@ impl Shared {
     pub fn next_conn(&self) -> u64 {
         self.conn_seq.fetch_add(1, Ordering::Relaxed) + 1
     }
+    /// The node's template: this process's job, else (app-only) the stratum process's last one, if under 2 min old.
+    pub fn node_view(&self) -> Option<NodeView> {
+        if let Some(j) = self.current_job() {
+            return Some(NodeView { height: j.height, net_packed: j.net_packed, at: now() - j.received.elapsed().as_secs() as i64 });
+        }
+        if self.role == Role::App {
+            return self.node_cache.read().unwrap().filter(|v| now() - v.at < 120);
+        }
+        None
+    }
     /// Chain tip as the node sees it: jobs are for the next block.
     pub fn tip_height(&self) -> Option<u64> {
-        self.current_job().map(|j| j.height.saturating_sub(1))
+        self.node_view().map(|v| v.height.saturating_sub(1))
     }
 }
 

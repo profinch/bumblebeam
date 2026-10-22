@@ -1,6 +1,14 @@
 # Splitting the pool server: miners are only touched by stratum releases
 
-Status: plan (2026-10-23). Step 0 (a graceful stop on SIGTERM) is done: `315550c`.
+Status (2026-10-23): step 0 (graceful SIGTERM) `315550c`; the P0 fixes of docs/pool-audit.md `8d5e7eb`; **steps 1-3
+done in code** (`run all|stratum|app`, `ctl.rs`, per-role locks, `node_job` / `net_height` in `meta`, tested by
+`tools/e2e.sh` and `tools/e2e_split.sh`); step 4 (two containers) next.
+
+What the app needs from the stratum process turned out to be more than the live view (audit P1): the node tip /
+difficulty / job age (`meta` row `node_job`, written by the stratum process on a new height or every 10 s, read by
+the app every 2 s), and the coinbase finalizer link - so the coinbase routes stay with the stratum process and the
+app forwards `/api/coinbase*` to `/ctl/coinbase*`. The stratum process reads `net_height` (written by the app's
+explorer cache) for its syncing-node guard.
 
 ## Why
 
