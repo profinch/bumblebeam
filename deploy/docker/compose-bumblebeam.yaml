@@ -54,7 +54,7 @@ services:
     build:
       context: ./containers/pool-web
       args:
-        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+        BUMBLEBEAM_REF: ${POOL_WEB_REF:-${BUMBLEBEAM_REF:-main}}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8091:8080"             # for the host nginx
@@ -143,41 +143,75 @@ services:
     networks:
       - bumblebeam
 
-  pool:
-    image: bumblebeam-pool
-    container_name: bumblebeam-pool
-    # the pool stops gracefully on SIGTERM (connections, queued shares, a block being credited, a payout in hand)
-    stop_grace_period: 30s
-    hostname: pool
+  # The pool in two processes from one image (docs/pool-split.md): pool-stratum holds the miners' connections
+  # and changes rarely; pool-app (API, admin, payouts, maturity) takes most releases without dropping a miner.
+  # Both read the same pool.toml; the app reaches the stratum process's control interface on pool-stratum:8081.
+  # The host's journal keeps their logs across rebuilds: journalctl CONTAINER_NAME=bumblebeam-pool-stratum (or -app).
+  # POOL_REF (a commit) picks the source and tags the image, so a rollback is POOL_REF=<previous> + up -d.
+  pool-stratum:
+    image: bumblebeam-pool:${POOL_REF:?set POOL_REF in .env}
+    container_name: bumblebeam-pool-stratum
+    hostname: pool-stratum
     build:
       context: ./containers/pool
       args:
-        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
+        BUMBLEBEAM_REF: ${POOL_REF}
+    command: ["run", "stratum"]
     restart: unless-stopped
+    # the graceful stop: connections, the share queue, a block being credited
+    stop_grace_period: 30s
     ports:
       - "3333-3334:3333-3334"             # stratum PPLNS / solo
       - "3443-3444:3443-3444"             # stratum TLS PPLNS / solo
-      - "127.0.0.1:8080:8080"             # web UI + API, for a reverse proxy
     volumes:
       - /data/bumblebeam/pool:/etc/bumblebeam:ro
     ulimits:
       nofile: 65536
-    # The host's journal keeps the pool's log across container rebuilds (docker's json-file log
-    # goes away with the container): journalctl CONTAINER_NAME=bumblebeam-pool --since ...
-    # `docker logs bumblebeam-pool` still works.
     logging:
       driver: journald
       options:
-        tag: bumblebeam-pool
+        tag: bumblebeam-pool-stratum
     depends_on:
       postgres:
         condition: service_healthy
       beam-node:
         condition: service_started
     networks:
+      - bumblebeam
+
+  pool-app:
+    image: bumblebeam-pool:${POOL_REF:?set POOL_REF in .env}
+    container_name: bumblebeam-pool-app
+    hostname: pool-app
+    command: ["run", "app"]
+    restart: unless-stopped
+    # the graceful stop: a payout in hand finishes
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8080:8080"             # the API, for the host nginx
+    volumes:
+      - /data/bumblebeam/pool:/etc/bumblebeam:ro
+    logging:
+      driver: journald
+      options:
+        tag: bumblebeam-pool-app
+    healthcheck:
+      # /api/health is 200 when the node view is fresh and the stratum process answers
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /api/health HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pool-stratum:
+        condition: service_started
+    networks:
       bumblebeam:
+        aliases: [pool]                   # explorer-api's POOL_URL http://pool:8080 keeps working
       wallet:
-        ipv4_address: 172.30.1.10
+        ipv4_address: 172.30.1.10         # the only address wallet-api answers (payouts are the app's)
 
   # Web: pool.bumblebeam.org (and bumblebeam.org, www) through Cloudflare. Host
   # network, so the host firewall (Cloudflare ranges only on 80/443) applies; it
@@ -199,7 +233,7 @@ services:
       - /data/bumblebeam/logs/nginx:/var/log/nginx
       - /etc/localtime:/etc/localtime:ro
     depends_on:
-      - pool
+      - pool-app
 
   # Let's Encrypt for bumblebeam.org + *.bumblebeam.org over Cloudflare DNS-01,
   # same scripts as on h1: checked at start and daily at 03:00 UTC.
