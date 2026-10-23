@@ -60,7 +60,7 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
     loop {
         let (mut sock, mut peer) = tokio::select! {
             r = listener.accept() => r?,
-            _ = stop.changed() => { info!(port, "stratum port closed (shutting down)"); return Ok(()); }
+            _ = async { let _ = stop.wait_for(|v| *v).await; } => { info!(port, "stratum port closed (shutting down)"); return Ok(()); }
         };
         let _ = sock.set_nodelay(true);
         let shared = shared.clone();
@@ -79,9 +79,12 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
                 return;
             }
             shared.connected_workers.fetch_add(1, Ordering::Relaxed);
+            // releases the counters whatever happens to this task, a panic included
+            let mut guard = ConnGuard { shared: shared.clone(), ip: peer.ip(), id: None };
             let id = shared.next_conn();
             let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some());
-            let mut s = Session { id, peer, tls: tls.is_some(), started: Instant::now(), first: String::new(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0, last_share: 0 };
+            guard.id = Some(id);
+            let mut s = Session { id, peer, tls: tls.is_some(), started: Instant::now(), first: String::new(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0, last_share: 0, miner_id: 0, stats: WorkerStats::default() };
             let r = match tls {
                 Some(acceptor) => match tokio::time::timeout(Duration::from_secs(15), acceptor.accept(sock)).await {
                     Ok(Ok(stream)) => connection(shared.clone(), stream, mode, &mut s, kick).await,
@@ -97,7 +100,11 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
                 Ok(()) => "closed by the miner".to_string(),
                 Err(e) => format!("{e:#}"),
             };
+            if !s.miner.is_empty() {
+                flush_stats(&shared, &mut s, mode).await; // every disconnect, not only the minute's tick
+            }
             shared.conns.close(s.id, &s.first, &reason);
+            guard.id = None;
             if s.miner.is_empty() {
                 // scanners and failed handshakes: only with RUST_LOG=debug
                 debug!(%peer, tls = s.tls, %reason, "connection ended before login");
@@ -105,8 +112,7 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
                 info!(%peer, miner = %crate::state::Short(&s.miner), worker = %s.worker, mode = mode.as_str(), tls = s.tls,
                       minutes = s.started.elapsed().as_secs() / 60, accepted = s.accepted, stale = s.stale, rejected = s.rejected, %reason, "disconnect");
             }
-            shared.connected_workers.fetch_sub(1, Ordering::Relaxed);
-            ip_release(peer.ip());
+            drop(guard);
         });
     }
 }
@@ -132,12 +138,99 @@ async fn proxy_header<R: AsyncRead + Unpin>(rd: &mut R) -> Result<Option<std::ne
 }
 
 /// Loads the PEM certificate and key for the miner-facing TLS ports.
-pub fn tls_acceptor(cert_path: &str, key_path: &str) -> Result<TlsAcceptor> {
+fn load_certified_key(cert_path: &str, key_path: &str) -> Result<Arc<rustls::sign::CertifiedKey>> {
     let certs = rustls_pemfile::certs(&mut std::io::BufReader::new(std::fs::File::open(cert_path)?)).collect::<Result<Vec<_>, _>>()?;
     let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(std::fs::File::open(key_path)?))?
         .ok_or_else(|| anyhow::anyhow!("no private key in {key_path}"))?;
-    let config = rustls::ServerConfig::builder().with_no_client_auth().with_single_cert(certs, key)?;
+    let signing = rustls::crypto::ring::sign::any_supported_type(&key).map_err(|e| anyhow::anyhow!("{key_path}: {e}"))?;
+    Ok(Arc::new(rustls::sign::CertifiedKey::new(certs, signing)))
+}
+
+/// The stratum TLS certificate, re-read when its files change (a Let's Encrypt renewal copied into place by the
+/// host's daily pool-tls-sync), so a renewal never needs a stratum restart that drops every miner.
+#[derive(Debug)]
+struct ReloadingCert {
+    cert_path: String,
+    key_path: String,
+    current: std::sync::RwLock<(Arc<rustls::sign::CertifiedKey>, Option<std::time::SystemTime>)>,
+}
+
+impl rustls::server::ResolvesServerCert for ReloadingCert {
+    fn resolve(&self, _hello: rustls::server::ClientHello<'_>) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(self.current.read().unwrap().0.clone())
+    }
+}
+
+impl ReloadingCert {
+    fn modified(&self) -> Option<std::time::SystemTime> {
+        let a = std::fs::metadata(&self.cert_path).and_then(|m| m.modified()).ok();
+        let b = std::fs::metadata(&self.key_path).and_then(|m| m.modified()).ok();
+        a.max(b)
+    }
+    fn reload_if_changed(&self) {
+        let m = self.modified();
+        if m.is_none() || m == self.current.read().unwrap().1 {
+            return;
+        }
+        match load_certified_key(&self.cert_path, &self.key_path) {
+            Ok(k) => {
+                *self.current.write().unwrap() = (k, m);
+                info!(cert = %self.cert_path, "stratum TLS certificate reloaded");
+            }
+            // a half-copied pair: keep serving the old one, try again next time
+            Err(e) => warn!(cert = %self.cert_path, "stratum TLS certificate changed but does not load (keeping the old one): {e:#}"),
+        }
+    }
+}
+
+pub fn tls_acceptor(cert_path: &str, key_path: &str) -> Result<TlsAcceptor> {
+    let resolver = Arc::new(ReloadingCert { cert_path: cert_path.into(), key_path: key_path.into(), current: std::sync::RwLock::new((load_certified_key(cert_path, key_path)?, None)) });
+    let m = resolver.modified();
+    resolver.current.write().unwrap().1 = m;
+    let r2 = resolver.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(600)).await;
+            r2.reload_if_changed();
+        }
+    });
+    let config = rustls::ServerConfig::builder().with_no_client_auth().with_cert_resolver(resolver);
     Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+/// Undoes what accepting a connection took (the worker count, the per-IP slot, the operator's list entry), also
+/// when the task panics.
+struct ConnGuard {
+    shared: Arc<Shared>,
+    ip: IpAddr,
+    /// set while the connection is in the operator's list and not yet closed there
+    id: Option<u64>,
+}
+impl Drop for ConnGuard {
+    fn drop(&mut self) {
+        if let Some(id) = self.id.take() {
+            self.shared.conns.close(id, "", "the connection task ended abnormally");
+        }
+        self.shared.connected_workers.fetch_sub(1, Ordering::Relaxed);
+        ip_release(self.ip);
+    }
+}
+
+/// Writes what a connection owes the database since its last flush: stale/rejected counts, the last share, where it
+/// connects from. On the minute's tick, at the pool's stop and when the connection ends.
+async fn flush_stats(shared: &Shared, sess: &mut Session, mode: Mode) {
+    if sess.miner.is_empty() || sess.miner_id == 0 {
+        return;
+    }
+    let now = crate::state::now();
+    let st = std::mem::take(&mut sess.stats);
+    if st.stale > 0 || st.rejected > 0 {
+        let _ = shared.db.record_share_events(now, sess.miner_id, &sess.worker, mode.as_str(), st.stale, st.rejected).await;
+    }
+    if st.last_share > 0 {
+        let _ = shared.db.touch_miner(sess.miner_id, st.last_share).await;
+    }
+    let _ = shared.db.miner_seen(sess.miner_id, &sess.peer.ip().to_string(), &sess.worker, now).await;
 }
 
 struct MinerJob {
@@ -171,6 +264,9 @@ struct Session {
     stale: u64,
     rejected: u64,
     last_share: i64,
+    miner_id: i64,
+    /// what the next flush writes (stale/rejected since the last flush, the last share)
+    stats: WorkerStats,
 }
 
 /// Copies a session's counters and difficulty to the operator's list of live connections.
@@ -231,22 +327,29 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     let vd_cfg = &shared.cfg.vardiff;
     let mut vd = Vardiff { diff: vd_cfg.start, floor: vd_cfg.min, shares: 0, since: Instant::now() };
     let idle = Duration::from_secs(900);
-    let mut stats = WorkerStats::default();
     let mut flush = tokio::time::interval(Duration::from_secs(60));
     flush.tick().await;
 
     async fn send<W: AsyncWrite + Unpin>(wr: &mut W, v: Value) -> Result<()> {
-        wr.write_all(format!("{v}\n").as_bytes()).await?;
+        // a miner that stops reading must not hold this connection (and its slot) forever
+        tokio::time::timeout(Duration::from_secs(10), wr.write_all(format!("{v}\n").as_bytes())).await.map_err(|_| anyhow::anyhow!("write timeout"))??;
         Ok(())
     }
     fn result(id: &Value, code: i64, desc: &str) -> Value {
         json!({ "jsonrpc": "2.0", "id": id, "method": "result", "code": code, "description": desc })
     }
 
+    let mut deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     loop {
         tokio::select! {
-            line = tokio::time::timeout(idle, lines.next()) => {
-                let Some(line) = line.map_err(|_| anyhow::anyhow!("silent for {} min", idle.as_secs() / 60))? else { return Ok(()) };
+            // a deadline, not a timeout per select round: every job (several a minute) restarts the round, so a
+            // per-round timeout never fired. 30 s to log in, then `idle` of silence (audit 2026-10-23)
+            _ = tokio::time::sleep_until(deadline) => {
+                if address.is_empty() { anyhow::bail!("no login in 30 s") } else { anyhow::bail!("silent for {} min", idle.as_secs() / 60) }
+            }
+            line = lines.next() => {
+                deadline = tokio::time::Instant::now() + if address.is_empty() { Duration::from_secs(30) } else { idle };
+                let Some(line) = line else { return Ok(()) };
                 let line = match line {
                     Ok(l) => l,
                     // binary where text lines are due: most often a TLS handshake on a plain port
@@ -335,6 +438,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         res["forkheight2"] = json!(FORK_HEIGHT2);
                         send(&mut wr, res).await?;
                         sess.miner = address.clone();
+                        sess.miner_id = miner_id;
                         sess.worker = worker.clone();
                         let agent: String = msg["agent"].as_str().unwrap_or("").chars().take(64).collect();
                         if agent.to_ascii_lowercase().contains("nicehash") {
@@ -364,7 +468,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         if let Some(cur) = shared.current_job() {
                             if jobs[pos].job.height < cur.height {
                                 send(&mut wr, result(&id, 3, "stale: block already found")).await?;
-                                stats.stale += 1;
+                                sess.stats.stale += 1;
                                 sess.stale += 1;
                                 sync(&shared, sess, vd.diff);
                                 continue;
@@ -390,7 +494,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         // the same template can be out under several ids (vardiff): one set of seen shares for all of them
                         if jobs.iter().any(|j| j.job.input == input && j.seen.contains(&(n, hash))) {
                             send(&mut wr, result(&id, 2, "rejected: duplicate share")).await?;
-                            stats.rejected += 1;
+                            sess.stats.rejected += 1;
                             sess.rejected += 1;
                             sync(&shared, sess, vd.diff);
                             continue;
@@ -406,15 +510,15 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                         if r != pow::BB_OK {
                             send(&mut wr, result(&id, 2, &format!("rejected: {}", pow::result_str(r)))).await?;
                             warn!(miner = %crate::state::Short(&address), worker = %worker, reason = pow::result_str(r), "share rejected");
-                            stats.rejected += 1;
+                            sess.stats.rejected += 1;
                             sess.rejected += 1;
                             sync(&shared, sess, vd.diff);
                             continue;
                         }
-                        stats.accepted += 1;
+                        sess.stats.accepted += 1;
                         sess.accepted += 1;
-                        stats.last_share = crate::state::now();
-                        sess.last_share = stats.last_share;
+                        sess.stats.last_share = crate::state::now();
+                        sess.last_share = sess.stats.last_share;
                         let share_diff = pow::difficulty_to_double(packed);
                         let job = mj.job.clone();
                         send(&mut wr, result(&id, 1, "accepted")).await?;
@@ -450,16 +554,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
             }
             _ = flush.tick() => {
-                if !address.is_empty() && (stats.stale > 0 || stats.rejected > 0) {
-                    let _ = shared.db.record_share_events(crate::state::now(), miner_id, &worker, mode.as_str(), stats.stale, stats.rejected).await;
-                }
-                if !address.is_empty() && stats.last_share > 0 {
-                    let _ = shared.db.touch_miner(miner_id, stats.last_share).await;
-                }
-                if !address.is_empty() {
-                    let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, crate::state::now()).await;
-                }
-                stats = WorkerStats { accepted: stats.accepted, ..Default::default() };
+                flush_stats(&shared, sess, mode).await;
                 // a worker that has not found a share in a long time has too high a difficulty
                 if !address.is_empty() && vd.shares == 0 && vd.since.elapsed().as_secs_f64() > 6.0 * vd_cfg.target_secs && vd.diff > vd.floor {
                     vd.diff = (vd.diff / 4.0).max(vd.floor);
@@ -470,20 +565,8 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
             }
             _ = kick.notified() => anyhow::bail!("ended by the operator"),
-            _ = stop.changed() => {
-                // the pool is stopping (main.rs): flush what the minute's flush would have written, then close
-                if !address.is_empty() {
-                    let now = crate::state::now();
-                    if stats.stale > 0 || stats.rejected > 0 {
-                        let _ = shared.db.record_share_events(now, miner_id, &worker, mode.as_str(), stats.stale, stats.rejected).await;
-                    }
-                    if stats.last_share > 0 {
-                        let _ = shared.db.touch_miner(miner_id, stats.last_share).await;
-                    }
-                    let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, now).await;
-                }
-                anyhow::bail!("pool restarting");
-            }
+            // wait_for: also a connection accepted while the stop was already on ends at once
+            _ = async { let _ = stop.wait_for(|v| *v).await; } => anyhow::bail!("pool restarting"),
             changed = job_rx.changed() => {
                 if changed.is_err() { return Ok(()); }
                 let job = job_rx.borrow_and_update().clone();
@@ -514,9 +597,11 @@ async fn push_job<S: AsyncWrite + Unpin>(wr: &mut WriteHalf<S>, jobs: &mut VecDe
     let id = seq.to_string();
     let packed = pow::pack_difficulty(diff);
     let msg = json!({ "jsonrpc": "2.0", "id": id, "method": "job", "input": hex::encode(job.input), "difficulty": packed, "height": job.height });
-    wr.write_all(format!("{msg}\n").as_bytes()).await?;
+    tokio::time::timeout(Duration::from_secs(10), wr.write_all(format!("{msg}\n").as_bytes())).await.map_err(|_| anyhow::anyhow!("write timeout"))??;
     jobs.push_front(MinerJob { id, job: job.clone(), packed, seen: HashSet::new() });
-    while jobs.len() > 4 { jobs.pop_back(); }
+    // templates come with every mempool change: keep every job of the current height (a valid share for an older
+    // template at this height is still a share), at most 16; jobs of older heights are stale anyway
+    while jobs.len() > 16 || jobs.back().is_some_and(|j| j.job.height < job.height) { jobs.pop_back(); }
     Ok(())
 }
 
