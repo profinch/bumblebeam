@@ -36,14 +36,26 @@
     return `${Math.floor(s / 86400)}d ago`;
   }
   const time = (ts) => (ts ? new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—');
-  const badge = (text, kind) => `<span class="badge ${kind}">${esc(text)}</span>`;
+  const badge = (text, kind, title = '') => `<span class="badge ${kind}"${title ? ` title="${esc(title)}"` : ''}>${esc(text)}</span>`;
   const explorerBlock = (h) => `<a href="https://explorer.bumblebeam.org/block/${Number(h)}" target="_blank" rel="noopener">${int(h)}</a>`;
   // a payout's transaction: its kernel in our explorer once the pool knows it, the bare tx id before
   const explorerTx = (p) => (p.kernel
     ? `<a href="https://explorer.bumblebeam.org/kernel/${encodeURIComponent(p.kernel)}" target="_blank" rel="noopener" title="${esc(p.txId)}">${esc(short(p.txId || p.kernel))}</a>`
     : esc(short(p.txId)));
   const tile = (k, v, s = '', cls = '') => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
-  const statusBadge = (s) => badge(s, s === 'confirmed' || s === 'completed' ? 'ok' : s === 'orphaned' || s === 'failed' ? 'bad' : 'pending');
+  // what each status of a block credit or a payment means, for the badges' tooltips
+  const STATUS_TIPS = {
+    confirmed: 'the block is mature and in the chain: its credits are in the balances',
+    pending: 'the block is maturing (240 blocks) / the payment is sent and waits for the chain',
+    unverified: 'the automatic checks could not settle the block: it waits for an operator',
+    orphaned: 'another block won this height: its credits are not paid',
+    created: 'the payment is written down and about to go to the wallet',
+    sending: 'the wallet is sending the payment',
+    review: 'the wallet did not confirm the payment: it waits for an operator (Attention)',
+    completed: 'the payment is in the chain',
+    failed: 'the payment failed: the amount went back to the balance',
+  };
+  const statusBadge = (s) => badge(s, s === 'confirmed' || s === 'completed' ? 'ok' : s === 'orphaned' || s === 'failed' ? 'bad' : 'pending', STATUS_TIPS[s] || '');
 
   // ---------- token and API ----------
   function token() {
@@ -206,12 +218,13 @@
 
   // ---------- the pool site's block cells: mode, effort, status ----------
   const MATURITY = 240;
-  const modeBadge = (m) => (m === 'solo' ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>');
+  const modeBadge = (m) => (m === 'solo' ? '<span class="badge solo" title="solo: the finder takes the whole reward">solo</span>'
+    : '<span class="badge ok" title="PPLNS: the reward is split by the shares of the last window">pplns</span>');
   const effortColor = (e) => (e == null ? 'inherit' : e > 1.5 ? 'var(--color-red)' : e < 0.7 ? 'var(--accent)' : 'inherit');
-  const blockStatus = (b) => (b.status === 'confirmed' ? '<span class="badge ok">confirmed</span>'
-    : b.status === 'orphaned' ? '<span class="badge bad">orphaned</span>'
-    : b.status === 'unverified' ? '<span class="badge bad">unverified</span>'
-    : `<span class="badge pending">${int(Math.min(b.confirmations, MATURITY))}/${MATURITY}</span>`);
+  const blockStatus = (b) => (b.status === 'confirmed' ? `<span class="badge ok" title="${esc(STATUS_TIPS.confirmed)}">confirmed</span>`
+    : b.status === 'orphaned' ? `<span class="badge bad" title="${esc(STATUS_TIPS.orphaned)}">orphaned</span>`
+    : b.status === 'unverified' ? `<span class="badge bad" title="${esc(STATUS_TIPS.unverified)}">unverified</span>`
+    : `<span class="badge pending" title="maturing: ${int(Math.min(b.confirmations, MATURITY))} of the ${MATURITY} confirmations a coinbase needs">${int(Math.min(b.confirmations, MATURITY))}/${MATURITY}</span>`);
 
   // A listbox in place of a native <select> (the pool site's dropdown(), the same .dd styles):
   // arrows, Home/End, Enter or Space to pick, Esc or Tab to close.
@@ -595,61 +608,69 @@
     const [r, conns] = await Promise.all([api('miners?limit=1000'), api('connections').catch(() => ({ live: [] }))]);
     const day = Date.now() / 1000 - 86400;
     const links = linksOf(r.miners, conns.live);  // over every miner, so a link to one the search hides still shows
-    const by = M_SORTS[msort.key];
-    const list = r.miners.filter((m) => minerMatches(m, minerQuery))
-      .map((m, i) => [m, i]).sort(([a, i], [b, j]) => (by ? by(a, b) * msort.dir : 0) || i - j).map(([m]) => m);
-    const th = (key, text, cls = '') => {
-      const on = msort.key === key;
-      return `<th class="sortable${cls}" data-sort="${key}" data-dir="${on ? (msort.dir > 0 ? '▲' : '▼') : ''}" aria-sort="${on ? (msort.dir > 0 ? 'ascending' : 'descending') : 'none'}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
-    };
+    const th = (key, text, cls = '') => `<th class="sortable${cls}" data-sort="${key}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
     const flags = (m) => [
-      m.held ? badge('payouts held', 'bad') : '',
-      m.firstSeen > day ? badge('new', 'pending') : '',
-      m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending') : '',
+      m.held ? badge('payouts held', 'bad', `held by the operator ${ago(m.held.at)}${m.held.note ? ': ' + m.held.note : ''} - no payout run pays this miner until it is released`) : '',
+      m.firstSeen > day ? badge('new', 'pending', `first seen ${ago(m.firstSeen)}: in the last 24 hours`) : '',
+      m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending', 'logs in without a worker name (address.worker), so all its rigs show as one "default"') : '',
       typeBadge(m.type),
-      m.connections ? badge(`${m.connections} live`, 'ok') : '',
+      m.connections ? badge(`${m.connections} live`, 'ok', `${m.connections} stratum connection${m.connections > 1 ? 's' : ''} open right now`) : '',
       linkBadges(links.get(m.id)),
     ].join(' ');
     view.innerHTML = `
       <div class="page-head"><h1 class="page-title">Miners</h1></div>
       ${flashHtml()}
       <section class="panel">
-        <form class="adm-row" id="mq" style="margin-bottom:12px">
-          <input class="adm-field" id="mq-in" placeholder="part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker">
-          <button class="btn" type="submit">Search</button>
-        </form>
-        <div class="table-wrap"><table id="miners-table"><thead><tr>${th('id', 'Miner')}<th>Flags</th><th>Workers 24h</th><th></th>${th('hashrate', 'Hashrate 24h', ' num')}${th('first', 'First seen')}${th('last', 'Last share')}<th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead><tbody>
-        ${list.map((m) => `<tr class="clickable" data-miner="${Number(m.id)}">
+        <div class="adm-row" style="margin-bottom:12px">
+          <input class="adm-field" id="mq-in" placeholder="part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker" autocomplete="off" spellcheck="false">
+          <span class="dim" id="mq-count"></span>
+        </div>
+        <div class="table-wrap"><table id="miners-table"><thead><tr>${th('id', 'Miner')}<th>Flags</th><th>Workers 24h</th><th></th>${th('hashrate', 'Hashrate 24h', ' num')}${th('first', 'First seen')}${th('last', 'Last share')}<th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead>
+        <tbody id="miners-body"></tbody></table></div></section>`;
+    // the rows only: the search (as you type, like the explorer's) and the sorting redraw them without a new request
+    const draw = () => {
+      const by = M_SORTS[msort.key];
+      const list = r.miners.filter((m) => minerMatches(m, minerQuery))
+        .map((m, i) => [m, i]).sort(([x, i], [y, j]) => (by ? by(x, y) * msort.dir : 0) || i - j).map(([m]) => m);
+      $('#miners-body').innerHTML = list.map((m) => `<tr class="clickable" data-miner="${Number(m.id)}">
           <td><a href="#miner/${Number(m.id)}">${esc(short(m.address))}</a><span class="sub">#${Number(m.id)} · ${esc(m.type || '?')}</span></td>
           <td>${flags(m)}</td>${workersCells(m)}
           <td class="num">${hr(m.hashrate24h)}</td><td>${ago(m.firstSeen)}</td><td>${ago(m.lastShare)}</td>
           <td class="num">${beamAmt(m.balance)}</td><td class="num">${beamAmt(m.immature)}</td>
-          <td class="num">${beamAmt(m.paid)}${m.sending ? `<span class="sub">+${beam(m.sending)} sending</span>` : ''}</td></tr>`).join('') || `<tr><td colspan="10" class="dim">${minerQuery ? 'No miner matches.' : 'No miners.'}</td></tr>`}
-        </tbody></table></div></section>`;
-    $('#mq').addEventListener('submit', (e) => { e.preventDefault(); minerQuery = $('#mq-in').value.trim(); render(); });
+          <td class="num">${beamAmt(m.paid)}${m.sending ? `<span class="sub">+${beam(m.sending)} sending</span>` : ''}</td></tr>`).join('')
+        || `<tr><td colspan="10" class="dim">${minerQuery ? 'No miner matches.' : 'No miners.'}</td></tr>`;
+      $('#mq-count').textContent = minerQuery ? `${list.length} of ${r.miners.length}` : `${r.miners.length} miners`;
+      view.querySelectorAll('#miners-table th[data-sort]').forEach((t) => {
+        const on = t.dataset.sort === msort.key;
+        t.dataset.dir = on ? (msort.dir > 0 ? '▲' : '▼') : '';
+        t.setAttribute('aria-sort', on ? (msort.dir > 0 ? 'ascending' : 'descending') : 'none');
+      });
+      view.querySelectorAll('[data-workers]').forEach((b) => b.addEventListener('click', () => {
+        const id = Number(b.dataset.workers);
+        if (openWorkers.has(id)) openWorkers.delete(id); else openWorkers.add(id);
+        draw();
+      }));
+      view.querySelectorAll('tr[data-miner]').forEach((tr) => tr.addEventListener('click', (e) => {
+        if (e.target.closest('a, button')) return;
+        location.hash = `miner/${tr.dataset.miner}`;
+      }));
+    };
     const sortBy = (key) => {
       if (msort.key !== key) { msort.key = key; msort.dir = 1; } else if (msort.dir > 0) msort.dir = -1; else { msort.key = ''; msort.dir = 1; }
-      render();
+      draw();
     };
     view.querySelectorAll('#miners-table th[data-sort]').forEach((t) => {
       t.addEventListener('click', () => sortBy(t.dataset.sort));
       t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(t.dataset.sort); } });
     });
+    $('#mq-in').addEventListener('input', (e) => { minerQuery = e.target.value.trim(); draw(); });
     // Esc clears the search (and shows everyone again), then leaves the field
     $('#mq-in').addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
-      if (e.target.value || minerQuery) { e.target.value = ''; minerQuery = ''; render(); } else e.target.blur();
+      if (e.target.value || minerQuery) { e.target.value = ''; minerQuery = ''; draw(); } else e.target.blur();
     });
-    view.querySelectorAll('[data-workers]').forEach((b) => b.addEventListener('click', () => {
-      const id = Number(b.dataset.workers);
-      if (openWorkers.has(id)) openWorkers.delete(id); else openWorkers.add(id);
-      render();
-    }));
-    view.querySelectorAll('tr[data-miner]').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (e.target.closest('a, button')) return;
-      location.hash = `miner/${tr.dataset.miner}`;
-    }));
+    draw();
   }
 
   async function miner(id) {
@@ -692,7 +713,7 @@
         ${tile('Blocks found', int(m.blocksFound), m.blocksFound ? `${int(p.blocks24h)} in 24h · last ${ago(p.lastBlockAt)}` : 'by its shares')}
         ${tile('Last share', ago(m.lastShare))}
       </div>
-      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payouts</h2>${m.held ? `<span class="panel-meta"><span class="badge bad">held</span> ${esc(ago(m.held.at))}</span>` : ''}</div>
+      <section class="panel"><div class="panel-head"><h2 class="panel-title">Payouts</h2>${m.held ? `<span class="panel-meta"><span class="badge bad" title="no payout run pays this miner until you release it">held</span> ${esc(ago(m.held.at))}</span>` : ''}</div>
         ${m.held
           ? `<p class="hint">No payout run pays this miner, scheduled or yours, until you release it; it still mines and its balance grows. A payout already sent goes on.${m.held.note ? ` Note: <b>${esc(m.held.note)}</b>` : ''}</p>
             <div class="adm-row"><button class="btn" id="release">Release payouts</button></div>`
