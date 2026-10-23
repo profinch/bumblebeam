@@ -346,7 +346,7 @@
           <input type="text" name="username" value="operator" autocomplete="username" hidden>
           <input class="adm-login-tok" id="tok" type="password" autocomplete="current-password" placeholder="admin token" aria-label="Admin token" required>
           <button class="btn small" type="submit">Sign in</button>
-          ${err ? `<p class="hint adm-login-msg" role="alert">${esc(err)}</p>` : ''}
+          <p class="hint adm-login-msg" role="alert">${err ? esc(err) : ''}</p>
         </form>
       </section>`;
     $('#signin').addEventListener('submit', (e) => {
