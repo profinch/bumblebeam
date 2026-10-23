@@ -1,4 +1,4 @@
-// BumbleBeam pool: the operator dashboard (/admin). It calls /api/admin/* with the token from
+// BumbleBeam pool: the operator dashboard (/dash). It calls /api/admin/* with the token from
 // pool.toml [admin], kept in this browser's localStorage. Every string from the API goes through
 // esc() before it is put into HTML.
 'use strict';
@@ -7,7 +7,12 @@
   const $ = (s, el = document) => el.querySelector(s);
   const view = $('#view');
   const GROTH = 1e8;
-  const KEY = 'bb-admin-token';
+  const KEY = 'bb-dash-token';
+  try {  // the token saved under /admin's key moves to /dash's: no new sign-in after the rename
+    const old = localStorage.getItem('bb-admin-token');
+    if (old && !localStorage.getItem(KEY)) localStorage.setItem(KEY, old);
+    localStorage.removeItem('bb-admin-token');
+  } catch { /* private window */ }
 
   // ---------- formatting ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -344,7 +349,7 @@
         <h2 class="panel-title">Sign in</h2>
         <form id="signin" autocomplete="on">
           <input type="text" name="username" value="operator" autocomplete="username" hidden>
-          <input class="adm-login-tok" id="tok" type="password" autocomplete="current-password" placeholder="admin token" aria-label="Admin token" required>
+          <input class="adm-login-tok" id="tok" type="password" autocomplete="current-password" placeholder="dashboard token" aria-label="Dashboard token" required>
           <button class="btn small" type="submit">Sign in</button>
           <p class="hint adm-login-msg" role="alert">${err ? esc(err) : ''}</p>
         </form>

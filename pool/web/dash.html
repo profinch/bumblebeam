@@ -21,11 +21,11 @@
   .adm-field { width: 100%; max-width: 520px; background: var(--field-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font: 12px var(--font-mono); }
   .adm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   /* the sign-in panel: the same as the NiceHash dashboard's (/nicehash) */
-  .adm-login { max-width: 460px; margin: 32px auto; }
+  .adm-login { max-width: 460px; margin: 24px auto 32px; }  /* main has 8 px on top here, none on /nicehash: the panel at the same height
   .adm-login .panel-title { margin: 0 0 14px; }
   .adm-login form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .adm-login .hint { flex-basis: 100%; }
-  .adm-login-msg { min-height: 18px; line-height: 18px; margin: 0; }  /* one line kept for a message: the panel does not grow */
+  .adm-login-msg { min-height: 18px; line-height: 18px; margin: 0; color: var(--color-yellow); }  /* one line kept for a message: the panel does not grow */
   .adm-login-tok { flex: 1 1 220px; min-width: 0; height: 28px; padding: 0 8px; color: var(--text); font: 12px var(--font-mono);
     background: rgba(255, 255, 255, .07); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
   .tile .v.bad, .panel-meta .bad { color: var(--color-red); }
@@ -57,7 +57,7 @@
     .adm-row > .btn { flex: none; }
     td.wrap { min-width: 160px; }
   }
-  /* confirmations (ask() in admin.js): the tooltips' look, the light end of the page's gradient
+  /* confirmations (ask() in dash.js): the tooltips' look, the light end of the page's gradient
      with the accent edge, instead of the browser's own dialog */
   .adm-ask-bg { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px;
     background: rgba(2, 18, 34, 0.55); opacity: 0; transition: opacity 0.14s ease; }
@@ -131,6 +131,6 @@
   <a class="mail" href="mailto:support@bumblebeam.org">support@bumblebeam.org</a>
 </footer>
 
-<script src="/admin.js?v=dev"></script>
+<script src="/dash.js?v=dev"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // node pool/web/test/walletkey.test.mjs - the admin page's wallet-id extraction (linked miners "same wallet")
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-const src = readFileSync(new URL('../admin.js', import.meta.url), 'utf8');
+const src = readFileSync(new URL('../dash.js', import.meta.url), 'utf8');
 const block = src.match(/const B58 = [\s\S]*?\n  }\n/)[0];
 const { walletKey, B58 } = new Function(`${block}; return { walletKey, B58 };`)();
 const b58 = (bytes) => { let n = 0n; for (const b of bytes) n = n * 256n + BigInt(b); let s = ''; while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; } return s; };

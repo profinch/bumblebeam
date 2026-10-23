@@ -439,7 +439,7 @@ async fn health(State(api): State<Api>) -> Response {
     (if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(body)).into_response()
 }
 
-// ---- the operator's dashboard (pool/web/admin.html) ----
+// ---- the operator's dashboard (pool/web/dash.html, at /dash) ----
 
 fn admin_router(api: Api) -> Router<Api> {
     Router::new()
