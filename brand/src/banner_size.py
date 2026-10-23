@@ -1,7 +1,9 @@
 """The static banner at another size: the same honeycomb, wave (frame 25), logo and text as frames.py's banner,
 with the logo+text block centred and every element scaled by k (1.0 = the 1500x500 header's sizes).
-python3 banner_size.py <W> <H> <k> <out.html>   ->   then render.sh / headless Chrome at <W>,<H>
-  1024x576  k=1.0 (16:9)      1920x640  k=1.28 (3:1)     2560x1440  k=1.5 (YouTube: block inside the 1546x423 safe area)"""
+python3 banner_size.py <W> <H> <k> <out.html> [u]   ->   then render.sh / headless Chrome at <W>,<H>
+u = where the yellow wave sits, 0..1 along the slanted diagonal (frame 25 of the loop = 0.227; a very wide banner wants it nearer the centred block)
+  1024x576  k=1.0 (16:9)      1920x640  k=1.28 (3:1)     2560x1440  k=1.5 (YouTube: block inside the 1546x423 safe area)
+  4000x192  k=0.7 u=0.33 (Reddit banner, any monitor width)     2160x256  k=0.9 (Reddit mobile banner, 2x of 1080x128)"""
 import math, sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -52,5 +54,6 @@ def banner(t, T, W, H, k=1.0):
 
 if __name__ == "__main__":
     W, H, k, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
-    open(out, "w").write(banner(25 * F.BT / F.BF, F.BT, W, H, k))
+    u = float(sys.argv[5]) if len(sys.argv) > 5 else 25 / F.BF
+    open(out, "w").write(banner(u * F.BT, F.BT, W, H, k))
     print(out)
