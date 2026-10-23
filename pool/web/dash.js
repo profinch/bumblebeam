@@ -609,12 +609,13 @@
     const day = Date.now() / 1000 - 86400;
     const links = linksOf(r.miners, conns.live);  // over every miner, so a link to one the search hides still shows
     const th = (key, text, cls = '') => `<th class="sortable${cls}" data-sort="${key}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
+    // live first, then the address type, then the rest
     const flags = (m) => [
+      m.connections ? badge(`${m.connections} live`, 'ok', `${m.connections} stratum connection${m.connections > 1 ? 's' : ''} open right now`) : '',
+      typeBadge(m.type),
       m.held ? badge('payouts held', 'bad', `held by the operator ${ago(m.held.at)}${m.held.note ? ': ' + m.held.note : ''} - no payout run pays this miner until it is released`) : '',
       m.firstSeen > day ? badge('new', 'pending', `first seen ${ago(m.firstSeen)}: in the last 24 hours`) : '',
       m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending', 'logs in without a worker name (address.worker), so all its rigs show as one "default"') : '',
-      typeBadge(m.type),
-      m.connections ? badge(`${m.connections} live`, 'ok', `${m.connections} stratum connection${m.connections > 1 ? 's' : ''} open right now`) : '',
       linkBadges(links.get(m.id)),
     ].join(' ');
     view.innerHTML = `
@@ -622,7 +623,11 @@
       ${flashHtml()}
       <section class="panel">
         <div class="adm-row" style="margin-bottom:12px">
-          <input class="adm-field" id="mq-in" placeholder="part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker" autocomplete="off" spellcheck="false">
+          <div class="search mq-search" role="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input id="mq-in" placeholder="Part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker" autocomplete="off" spellcheck="false">
+            <kbd title="Press / to search">/</kbd>
+          </div>
           <span class="dim" id="mq-count"></span>
         </div>
         <div class="table-wrap"><table id="miners-table"><thead><tr>${th('id', 'Miner')}<th>Flags</th><th>Workers 24h</th><th></th>${th('hashrate', 'Hashrate 24h', ' num')}${th('first', 'First seen')}${th('last', 'Last share')}<th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead>
@@ -672,6 +677,12 @@
     });
     draw();
   }
+
+  // as in the explorer's header: / puts the cursor in the miners search (when not typing elsewhere); Esc is the field's own
+  window.addEventListener('keydown', (e) => {
+    const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('#mq-in')) { e.preventDefault(); $('#mq-in').focus(); }
+  });
 
   async function miner(id) {
     const m = await api(`miners/${id}`);
