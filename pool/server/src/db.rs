@@ -869,6 +869,12 @@ impl Db {
     }
 
     /// Mark failed and give the debit back, only if the payment is still in `from` (no double refunds).
+    /// The latest scheduled payout run (its payments share the run's timestamp), for the schedule after a restart.
+    pub async fn last_payout_ts(&self) -> Result<Option<i64>> {
+        let c = self.client().await?;
+        Ok(c.query_one("SELECT MAX(ts) FROM payments WHERE cb_height IS NULL", &[]).await?.get(0))
+    }
+
     /// Why the wallet failed a payment (its failure_reason), for the operator and the miner's page.
     pub async fn set_failure_reason(&self, tx_id: &str, reason: &str) -> Result<()> {
         let c = self.client().await?;
