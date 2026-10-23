@@ -11,3 +11,11 @@
     ffmpeg -framerate 25 -i banner/f%03d.png -vf "fps=20,split[a][b];[a]palettegen=max_colors=192:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" -loop 0 banner-1500x500.gif
 
 The static banner is frame 25 (banner/f025.png). Both loop in 4.4 s: 10 wing beats of 0.44 s and 3 trail blinks of 1.47 s, as pool/web/favicon.svg moves (0.44 s, 1.5 s).
+
+Other banner sizes (the static frame 25, the logo+text block centred, elements scaled by k):
+
+    python3 brand/src/banner_size.py 1024 576 1.0 /tmp/bb/b.html && brand/src/render.sh b /tmp/bb/b.html 1024,576 /tmp/bb
+    python3 brand/src/banner_size.py 1920 640 1.28 ...   # 3:1
+    python3 brand/src/banner_size.py 2560 1440 1.5 ...   # YouTube: the block stays inside the 1546x423 safe area
+
+On Linux/WSL `chrome --headless=new --screenshot` hangs; Playwright's `chrome-headless-shell` with the same flags works.
