@@ -51,6 +51,7 @@
 
   class AuthError extends Error {}
   async function api(path, body) {
+    if (!memToken) throw new AuthError('signed out');  // after Sign out: no request with an empty token
     const opt = { headers: { Authorization: `Bearer ${memToken}` }, cache: 'no-store' };
     if (body) {
       opt.method = 'POST';
@@ -819,13 +820,16 @@
       } else if (tab === 'miners') await miners();
       else if (tab === 'miner') await miner(Number(arg));
       else await attention();
+      // signed out while the view was loading: its answers do not draw over the sign-in panel
+      if (!memToken) return signIn();
       // the menu only once the token has been accepted
       $('#tabs').hidden = false;
     } catch (e) {
       if (e instanceof AuthError) {
+        const had = !!memToken;  // a load still running at Sign out ends here too: no 'Wrong token.' then
         memToken = '';
         setToken('');
-        return signIn('Wrong token.');
+        return signIn(had ? 'Wrong token.' : '');
       }
       view.innerHTML = `<div class="page-head"><h1 class="page-title">Operator</h1></div><div class="adm-msg err">${esc(e.message)}</div>`;
     }
