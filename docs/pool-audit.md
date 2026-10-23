@@ -103,11 +103,28 @@ Priorities: **P0** can lose money or a block, fix first; **P1** needed for the s
     `app.js` and `admin.js`, `API.md` fetched from GitHub `main` instead of the deployed copy.
 25. Never pruned: `miner_sessions` (keep 90 days), `benchmarks`, expired coinbase pair `hex`.
 
-## Status
+## Status (2026-10-23 01:10)
 
-- 2026-10-23 00:40, `5e98561`: **P0 1-7 deployed** (6 only the refund half: coinbase is off; the two-step debit in
-  `cb_pay_block` stays open). The first graceful restart: the old process closed its 5 connections and exited in
-  51 ms, the new one listened 0.7 s later, our miners were back in 0.4-1.2 s.
+Done and in production:
+- **P0** 1-5, 7 and the refund half of 6 (`8d5e7eb`, 00:40).
+- **P1** 8-11, 13 with the split (`d61dbce`, `b1ae63f`, 00:50): `bumblebeam-pool-stratum` + `bumblebeam-pool-app`; a
+  pool-app restart: 0.47 s, 0 disconnects. 12 (moving shared helpers into their own files) not done - not needed
+  for the split to work, the release rule in docs/deploy.md lists the files per half.
+- **P2** 14 (micro-cache + Cache-Control, nginx no longer overrides it), 15 (one GROUPING SETS pass, hourly prune,
+  BRIN), 16 partly (blocks indexes; `pg_stat_statements` needs a postgres restart - not done), 17 (front polling),
+  18 (POOL_REF / POOL_WEB_REF, image tags, Cargo.lock + --locked, stop_grace_period, a healthcheck on pool-app),
+  19 (connection guard, flush on every disconnect, login and idle deadlines - the old idle timeout never fired,
+  write timeouts, jobs of the current height), 20 (TLS reload + /etc/cron.daily/bumblebeam-pool-tls) - `861272d`,
+  `496ecd0`, `c2d00c5`.
+- **P3** 21 (no web serving in the pool), 22 (demo mode removed), 23 (CSP on the public pages; the token stays in
+  localStorage behind it), 25 (miner_sessions, benchmarks pruned), the fallback fee.
+
+Open:
+- P0 6, the second half: `cb_pay_block`'s two-step debit (coinbase payouts are off).
+- P3 24: write-only columns (`shares.height`), `WorkerStats.accepted`, the dead `generation` in coinbase.rs,
+  `META_TXID_ACCEPTED`, the schema ladder, duplicated helpers between app.js and admin.js, API.md from GitHub.
+- Not in the audit, noticed on the way: a logged-in miner silent for 15 min is now disconnected (the limit never
+  fired before) - expected to be rare (vardiff lowers the difficulty after 6 targets without a share).
 
 ## Work order
 
