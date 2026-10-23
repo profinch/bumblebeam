@@ -2,7 +2,7 @@
 python3 gen.py <outdir>  ->  <outdir>/avatar/f###.html, <outdir>/banner/f###.html (one SVG per frame)"""
 import math, os, sys
 
-OUT = sys.argv[1]
+OUT = sys.argv[1] if __name__ == "__main__" else None
 GRAD = '<linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient>'
 CLIP = '<clipPath id="c"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath>'
 
@@ -92,6 +92,7 @@ def write(kind, n, make):
 
 AT, AF = 4.4, 110          # avatar: 4.4 s loop = 10 wing beats of 0.44 s + 3 blinks of 1.47 s (favicon: 1.5), 25 fps
 BT, BF = 4.4, 110          # banner: the same 4.4 s loop, 25 fps
-write("avatar", AF, lambda i: avatar(i * AT / AF, AT, 800))
-write("banner", BF, lambda i: banner(i * BT / BF, BT))
-print("frames written")
+if __name__ == "__main__":
+    write("avatar", AF, lambda i: avatar(i * AT / AF, AT, 800))
+    write("banner", BF, lambda i: banner(i * BT / BF, BT))
+    print("frames written")
