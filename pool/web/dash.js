@@ -551,10 +551,30 @@
     return out;
   }
   const linkBadges = (l) => [
-    l && l.wallet.length ? `<span class="badge ok" title="the same wallet: its address carries the same wallet id">🔗 same wallet ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.rig.length ? `<span class="badge pending" title="the same IP and worker, one address taking over within an hour of the other: probably one person (a hint, not a proof)">≈ same rig ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.now.length ? `<span class="badge pending" title="connected from the same IP right now: maybe one person (a hint - people share NATs)">≈ same IP now ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
+    // the text is in the tooltips: 🔗 the same wallet, ≈ the same rig, 🌐 the same IP right now
+    l && l.wallet.length ? `<span class="badge ok" title="the same wallet as ${l.wallet.map((i) => '#' + i).join(', ')}: its address carries the same wallet id">🔗 ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.rig.length ? `<span class="badge pending" title="the same rig as ${l.rig.map((i) => '#' + i).join(', ')}: the same IP and worker, one address taking over within an hour of the other - probably one person (a hint, not a proof)">≈ ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.now.length ? `<span class="badge pending" title="the same IP as ${l.now.map((i) => '#' + i).join(', ')} right now: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
   ].join(' ');
+
+  // the address type as the wallet named it (a trailing ? = guessed from the address's shape, the wallet has not
+  // checked it yet); regular ones are red: a payout to them is a regular transaction the miner's wallet must be
+  // online for (the guide asks for the offline kind), the offline kinds are pushed (payouts.rs PUSH_TYPES)
+  const ADDR_TYPES = {
+    regular: ['regular', 'bad', 'a regular address: a payout to it needs the miner\'s wallet online'],
+    regular_new: ['regular new', 'bad', 'a regular (new format) address: a payout to it needs the miner\'s wallet online'],
+    offline: ['offline', 'addr', 'an offline address: payouts are pushed, the wallet may be offline'],
+    max_privacy: ['max privacy', 'addr', 'a max-privacy address: payouts are pushed, the wallet may be offline'],
+    public_offline: ['public offline', 'addr', 'a public offline address: payouts are pushed, the wallet may be offline'],
+    coinbase: ['coinbase', 'ok', 'a coinbase account: paid in the blocks it mines'],
+    invalid: ['invalid', 'bad', 'the wallet does not take this address: no payouts'],
+  };
+  function typeBadge(t) {
+    if (!t) return '';
+    const guessed = t.endsWith('?'), k = t.replace(/\?$/, '');
+    const [label, cls, title] = ADDR_TYPES[k] || [k.replace(/_/g, ' '), 'addr', 'address type: ' + k];
+    return `<span class="badge ${cls}" title="${esc(title + (guessed ? ' (guessed from the address, not checked by the wallet yet)' : ''))}">👛 ${esc(label)}${guessed ? '?' : ''}</span>`;
+  }
 
   async function miners() {
     const [r, conns] = await Promise.all([api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`), api('connections').catch(() => ({ live: [] }))]);
@@ -564,7 +584,7 @@
       m.held ? badge('payouts held', 'bad') : '',
       m.firstSeen > day ? badge('new', 'pending') : '',
       m.workers24h.length === 1 && m.workers24h[0] === 'default' ? badge('no .worker', 'pending') : '',
-      (m.type || '').startsWith('regular') ? badge('regular addr', 'bad') : '',
+      typeBadge(m.type),
       m.connections ? badge(`${m.connections} live`, 'ok') : '',
       linkBadges(links.get(m.id)),
     ].join(' ');
