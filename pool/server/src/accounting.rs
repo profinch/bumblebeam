@@ -16,7 +16,7 @@ use anyhow::Result;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// Credits a block the node accepted, retrying on errors (a lost credit is a reward the pool keeps by
 /// mistake). The block_submissions row is marked credited once done; whatever is left is picked up by
@@ -229,7 +229,56 @@ pub async fn confirm_loop(shared: Arc<Shared>) {
         if let Err(e) = confirm_once(&shared, wallet.as_ref()).await {
             warn!("confirm: {e:#}");
         }
+        if let Some(w) = wallet.as_ref().filter(|_| !shared.cfg.coinbase.enabled) {
+            if let Err(e) = settle_unanswered(&shared, w).await {
+                warn!("unanswered block solutions: {e:#}");
+            }
+        }
     }
+}
+
+/// Block solutions the node never answered (the link dropped, or the stratum process stopped, with the answer in
+/// flight) are settled from the chain: a coinbase of that height in the pool's wallet means the node took the block,
+/// and it is credited as if the answer had come (the hash from the explorer-node); none once the wallet is 20 blocks
+/// past it means it was not ours. The wallet may hold the coinbase of a block the pool already recorded: block_found
+/// refuses a height twice, so this never doubles.
+async fn settle_unanswered(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
+    let list = shared.db.submissions_open_unanswered().await?;
+    if list.is_empty() {
+        return Ok(());
+    }
+    let wh = wallet.status().await?["current_height"].as_i64().unwrap_or(0);
+    let utxos = wallet.utxos().await?;
+    for (row, sub, _, found_ts) in list {
+        let height = sub.job.height as i64;
+        if wh < height {
+            continue;
+        }
+        if coinbase_in(&utxos, height as u64, 1).is_some() {
+            let Some(hash) = chain_hash(shared, height).await else {
+                warn!(row, height, "unanswered solution: the wallet has its coinbase, the explorer has no hash yet; retrying");
+                continue;
+            };
+            warn!(row, height, %hash, "unanswered solution: the wallet has the block's coinbase, crediting it");
+            credit_found(shared.clone(), Some(row), sub, hash, found_ts, false).await;
+        } else if wh >= height + 20 {
+            shared.db.submission_answered(row, "lost", None, Some("no coinbase of this height in the wallet"), now()).await?;
+            info!(row, height, "unanswered solution: no coinbase in the wallet 20 blocks later, not ours");
+        }
+    }
+    Ok(())
+}
+
+/// The hash of the chain's block at `height` from the first explorer-node that knows it.
+async fn chain_hash(shared: &Arc<Shared>, height: i64) -> Option<String> {
+    for url in &shared.cfg.pool.block_check_urls {
+        let Ok(resp) = shared.http.get(format!("{url}{height}")).send().await else { continue };
+        let Ok(v) = resp.json::<Value>().await else { continue };
+        if let Some(h) = v["hash"].as_str().map(|s| s.trim().to_lowercase()).filter(|h| h.len() == 64) {
+            return Some(h);
+        }
+    }
+    None
 }
 
 /// The chain's view of `height` according to the first explorer-node that answers: Some(true) our
@@ -304,7 +353,7 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
             };
             let wh = st["current_height"].as_i64().unwrap_or(0);
             if wh < lowest + maturity {
-                warn!(wallet_height = wh, lowest, "wallet behind the chain, confirmations wait");
+                info!(wallet_height = wh, lowest, "wallet behind the chain, confirmations wait");
                 return Ok(());
             }
             match w.utxos().await {
@@ -385,6 +434,14 @@ async fn confirm_once(shared: &Arc<Shared>, wallet: Option<&Wallet>) -> Result<(
                 &[&height],
             )
             .await?;
+            // credits whose miner row is gone reached no balance: the coins stay in the wallet, the operator must know
+            let lost = tx
+                .query_one("SELECT COUNT(*), COALESCE(SUM(amount),0)::BIGINT FROM credits c WHERE block_height=$1 AND NOT EXISTS (SELECT 1 FROM miners m WHERE m.id = c.miner_id)", &[&height])
+                .await?;
+            let (n, groth): (i64, i64) = (lost.get(0), lost.get(1));
+            if n > 0 {
+                error!(height, credits = n, groth, "block credits to miners that no longer exist: paid to no one, settle by hand");
+            }
         }
         if coinbase_mode {
             let settled = crate::db::cb_settle_block(&tx, height, status).await?;

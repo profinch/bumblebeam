@@ -107,7 +107,7 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
             line = tokio::time::timeout(idle, lines.next()) => {
                 let line = line.map_err(|_| anyhow::Error::new(Idle))?.ok_or_else(|| anyhow!("eof"))?.context("line from node")?;
                 if line.trim().is_empty() { continue; }
-                let msg: Value = match serde_json::from_str(&line) { Ok(v) => v, Err(e) => { warn!("bad json from node: {e}: {}", &line[..line.len().min(200)]); continue; } };
+                let msg: Value = match serde_json::from_str(&line) { Ok(v) => v, Err(e) => { warn!("bad json from node: {e}: {}", line.chars().take(200).collect::<String>()); continue; } };
                 let method = msg["method"].as_str().unwrap_or("");
                 let id = msg["id"].as_str().unwrap_or("").to_string();
                 match method {

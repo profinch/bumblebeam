@@ -5,6 +5,23 @@ login by the P2 deadline (NiceHash, seen live at 01:09), now fixed; the share wr
 `node_job` beat, credit on stop, payout backoff, micro-cache and control cache fixes; DB tests per schema,
 `tools/e2e_split.sh` (16 checks) and the web walletKey test. Docs and MCP updated in `009fa36` (and this commit).
 
+Third pass (2026-10-23 morning, two reviews, stratum side and money/API/DB side), fixed in the commit after
+`35d0141`:
+- a merge could lose PPLNS credits for good: a rig that logged in while the merge ran kept the deleted id; now a
+  second kick after the commit and a sweep of late shares and credits, and the confirm step logs credits to missing
+  miners as an error;
+- a block the node accepted but whose answer was lost (stop, link drop) was never credited: `unanswered` solutions
+  are settled from the wallet's coinbase;
+- a database outage over the 30 s lock check dropped every miner: only another process holding the lock stops one;
+- the per-minute stats flush and the post-login session write no longer stall a connection's loop;
+- garbage solutions no longer grow the duplicate set, 200 rejects in a row end a connection;
+- the startup DDL gives up a busy table after 2 s and retries, instead of queueing every query behind it;
+- the micro-cache keys on parsed parameter values, is bounded by bytes, and always admits the plain routes;
+- a merge moves per-mode charts and IP sessions too.
+Not changed: 200-with-`error` answers for a bad address (the web and the explorer read them), pre-login time
+counted from accept (L1), share/net difficulty order on low-difficulty chains (L3), nonce prefix change on a
+node reconnect (L4: the node gives none).
+
 Four read-only reviews (stratum side; money side; API and DB; web and deploy), then the findings marked HIGH
 were re-checked against the code and against production (`pool.toml`, `meta`, `pg_stat_user_tables`).
 Production facts used: coinbase payouts are off (no `[coinbase]`), the node gives an empty nonce prefix and

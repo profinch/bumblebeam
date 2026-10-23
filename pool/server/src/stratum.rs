@@ -234,18 +234,38 @@ impl Drop for ConnGuard {
 /// Writes what a connection owes the database since its last flush: stale/rejected counts, the last share, where it
 /// connects from. On the minute's tick, at the pool's stop and when the connection ends.
 async fn flush_stats(shared: &Shared, sess: &mut Session, mode: Mode) {
+    if let Some(f) = take_stats(sess, mode) {
+        write_stats(shared, f).await;
+    }
+}
+
+/// The minute's flush off the connection's loop: a slow database (a merge holding the miner's row, an outage) must
+/// not stop the connection from reading shares and forwarding jobs.
+fn flush_stats_bg(shared: &Arc<Shared>, sess: &mut Session, mode: Mode) {
+    if let Some(f) = take_stats(sess, mode) {
+        let shared = shared.clone();
+        tokio::spawn(async move { write_stats(&shared, f).await });
+    }
+}
+
+struct StatsFlush { miner_id: i64, worker: String, ip: String, mode: Mode, st: WorkerStats }
+
+fn take_stats(sess: &mut Session, mode: Mode) -> Option<StatsFlush> {
     if sess.miner.is_empty() || sess.miner_id == 0 {
-        return;
+        return None;
     }
+    Some(StatsFlush { miner_id: sess.miner_id, worker: sess.worker.clone(), ip: sess.peer.ip().to_string(), mode, st: std::mem::take(&mut sess.stats) })
+}
+
+async fn write_stats(shared: &Shared, f: StatsFlush) {
     let now = crate::state::now();
-    let st = std::mem::take(&mut sess.stats);
-    if st.stale > 0 || st.rejected > 0 {
-        let _ = shared.db.record_share_events(now, sess.miner_id, &sess.worker, mode.as_str(), st.stale, st.rejected).await;
+    if f.st.stale > 0 || f.st.rejected > 0 {
+        let _ = shared.db.record_share_events(now, f.miner_id, &f.worker, f.mode.as_str(), f.st.stale, f.st.rejected).await;
     }
-    if st.last_share > 0 {
-        let _ = shared.db.touch_miner(sess.miner_id, st.last_share).await;
+    if f.st.last_share > 0 {
+        let _ = shared.db.touch_miner(f.miner_id, f.st.last_share).await;
     }
-    let _ = shared.db.miner_seen(sess.miner_id, &sess.peer.ip().to_string(), &sess.worker, now).await;
+    let _ = shared.db.miner_seen(f.miner_id, &f.ip, &f.worker, now).await;
 }
 
 struct MinerJob {
@@ -338,6 +358,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     let mut worker = String::new();
     let mut miner_id: i64 = 0;
     let mut jobs: VecDeque<MinerJob> = VecDeque::new();
+    let mut bad_in_row = 0u32;
     let mut seq = 0u64;
     let vd_cfg = &shared.cfg.vardiff;
     let mut vd = Vardiff { diff: vd_cfg.start, floor: vd_cfg.min, shares: 0, since: Instant::now() };
@@ -468,7 +489,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             vd.diff = vd.diff.max(vd.floor);
                         }
                         info!(peer = %sess.peer, miner = %crate::state::Short(&address), worker = %worker, mode = mode.as_str(), tls = sess.tls, %kind, %agent, diff = vd.diff, "login");
-                        let _ = shared.db.miner_seen(miner_id, &sess.peer.ip().to_string(), &worker, crate::state::now()).await;
+                        {
+                            let (s, ip, w) = (shared.clone(), sess.peer.ip().to_string(), worker.clone());
+                            tokio::spawn(async move { let _ = s.db.miner_seen(miner_id, &ip, &w, crate::state::now()).await; });
+                        }
                         shared.conns.update(sess.id, |c| {
                             c.miner_id = miner_id;
                             c.miner = address.clone();
@@ -522,14 +546,22 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             continue;
                         }
                         let mj = &mut jobs[pos];
-                        mj.seen.insert((n, hash));
                         let mut packed = mj.packed;
                         let mut r = pow::check_share(&mj.job.input, &n, &out, packed);
+                        // only a solution that verifies is remembered: garbage with fresh nonces would grow the set for the
+                        // whole block time
+                        if r == pow::BB_OK || r == pow::BB_ERR_DIFFICULTY {
+                            mj.seen.insert((n, hash));
+                        }
                         if r == pow::BB_ERR_DIFFICULTY && lenient != packed && pow::difficulty_reached(&hash, lenient) {
                             packed = lenient;
                             r = pow::BB_OK;
                         }
                         if r != pow::BB_OK {
+                            bad_in_row += 1;
+                            if bad_in_row >= 200 {
+                                anyhow::bail!("200 rejected shares in a row");
+                            }
                             send(&mut wr, result(&id, 2, &format!("rejected: {}", pow::result_str(r)))).await?;
                             warn!(miner = %crate::state::Short(&address), worker = %worker, reason = pow::result_str(r), "share rejected");
                             sess.stats.rejected += 1;
@@ -537,6 +569,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             sync(&shared, sess, vd.diff);
                             continue;
                         }
+                        bad_in_row = 0;
                         sess.stats.accepted += 1;
                         sess.accepted += 1;
                         sess.stats.last_share = crate::state::now();
@@ -583,7 +616,7 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 }
             }
             _ = flush.tick() => {
-                flush_stats(&shared, sess, mode).await;
+                flush_stats_bg(&shared, sess, mode);
                 // a worker that has not found a share in a long time has too high a difficulty
                 if !address.is_empty() && vd.shares == 0 && vd.since.elapsed().as_secs_f64() > 6.0 * vd_cfg.target_secs && vd.diff > vd.floor {
                     vd.diff = (vd.diff / 4.0).max(vd.floor);

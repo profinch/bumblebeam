@@ -100,6 +100,8 @@ pub struct Db {
     /// Connection that holds the single-instance advisory lock for the life of the process.
     /// one connection per advisory lock held (a lock lives in its connection)
     lock_conn: Mutex<Vec<(i64, deadpool_postgres::Client)>>,
+    /// role locks whose connection died (a database outage) and are not retaken yet
+    lock_lost: Mutex<Vec<i64>>,
 }
 
 const SCHEMA: &str = r#"
@@ -271,6 +273,28 @@ pub struct PaymentRow {
     pub created_at: i64,
 }
 
+/// The idempotent DDL, run at every start. `ALTER TABLE ... IF NOT EXISTS` still takes its table's exclusive lock, so
+/// behind a long transaction (a merge, a block credit, the prune) it would queue every query on that table: each try
+/// gives up after 2 s instead, and the start retries.
+async fn ensure_schema(c: &deadpool_postgres::Client) -> Result<()> {
+    let ddl = format!("SET lock_timeout = '2s'; {SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD} RESET lock_timeout;");
+    for attempt in 1..=15 {
+        match c.batch_execute(&ddl).await {
+            Ok(()) => return Ok(()),
+            Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::LOCK_NOT_AVAILABLE) && attempt < 15 => {
+                let _ = c.batch_execute("RESET lock_timeout").await;
+                tracing::warn!(attempt, "schema: a table is busy, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            Err(e) => {
+                let _ = c.batch_execute("RESET lock_timeout").await;
+                return Err(anyhow::Error::from(e).context("schema"));
+            }
+        }
+    }
+    unreachable!()
+}
+
 impl Db {
     pub async fn connect(url: &str) -> Result<Db> {
         let mut pg: tokio_postgres::Config = url.parse().context("database url")?;
@@ -283,18 +307,28 @@ impl Db {
         // instead of hanging (shares go through the writer task, which retries)
         let t = Some(std::time::Duration::from_secs(10));
         let pool = Pool::builder(mgr).max_size(16).wait_timeout(t).create_timeout(t).recycle_timeout(t).runtime(deadpool_postgres::Runtime::Tokio1).build()?;
-        let db = Db { pool, lock_conn: Mutex::new(Vec::new()) };
+        let db = Db { pool, lock_conn: Mutex::new(Vec::new()), lock_lost: Mutex::new(Vec::new()) };
         let c = db.client().await?;
+        // one process at a time runs the DDL (stratum and app start together)
+        // and without a NOTICE per existing table in the log
+        c.batch_execute("SELECT pg_advisory_lock(7211009); SET client_min_messages = warning").await?;
+        let r = Self::prepare(&c).await;
+        let _ = c.batch_execute("RESET client_min_messages; SELECT pg_advisory_unlock(7211009)").await;
+        r?;
+        Ok(db)
+    }
+
+    async fn prepare(c: &deadpool_postgres::Client) -> Result<()> {
         c.batch_execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)").await?;
         let ver: Option<i32> = c.query_opt("SELECT value FROM meta WHERE key='schema'", &[]).await?.and_then(|r| r.get::<_, String>(0).parse().ok());
         match ver {
             None => {
                 let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares' AND table_schema = current_schema()", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?;
+                ensure_schema(&c).await?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
             }
-            Some(v) if v == SCHEMA_VERSION => c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?,
+            Some(v) if v == SCHEMA_VERSION => ensure_schema(&c).await?,
             Some(mut v) if v < SCHEMA_VERSION => {
                 while v < SCHEMA_VERSION {
                     let Some(sql) = migration(v) else { anyhow::bail!("no migration from schema version {v}") };
@@ -303,11 +337,11 @@ impl Db {
                     c.execute("UPDATE meta SET value=$1 WHERE key='schema'", &[&v.to_string()]).await?;
                     tracing::info!(version = v, "database schema migrated");
                 }
-                c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?;
+                ensure_schema(&c).await?;
             }
             Some(v) => anyhow::bail!("database schema version {v} is newer than this binary ({SCHEMA_VERSION})"),
         }
-        Ok(db)
+        Ok(())
     }
 
     /// Only one pool process may run against a database: payouts and confirmations must not race.
@@ -331,7 +365,20 @@ impl Db {
                 continue;
             }
             let _ = deadpool_postgres::Object::take(c); // dead: destroy it rather than hand it back to the pool
-            all &= self.acquire_instance_lock(key).await.unwrap_or(false);
+            self.lock_lost.lock().unwrap().push(key);
+        }
+        // retake what was lost; the database being unreachable is no reason to stop (the miners would drop and a
+        // restart could not even connect): only another process holding the lock is
+        let lost: Vec<i64> = std::mem::take(&mut *self.lock_lost.lock().unwrap());
+        for key in lost {
+            match self.acquire_instance_lock(key).await {
+                Ok(true) => tracing::info!(key, "database instance lock retaken"),
+                Ok(false) => all = false,
+                Err(e) => {
+                    tracing::warn!(key, "database instance lock not retaken yet: {e:#}");
+                    self.lock_lost.lock().unwrap().push(key);
+                }
+            }
         }
         all
     }
@@ -931,12 +978,18 @@ impl Db {
 
     /// Accepted solutions whose crediting did not finish (a DB error, a restart): (id, the submission, its hash).
     pub async fn submissions_to_credit(&self, answered_before: i64) -> Result<Vec<(i64, crate::state::Submit, String, i64)>> {
+        self.submissions_where("status='accepted' AND credited_at IS NULL AND answered_at < $1", answered_before).await
+    }
+
+    async fn submissions_where(&self, cond: &str, arg: i64) -> Result<Vec<(i64, crate::state::Submit, String, i64)>> {
         let c = self.client().await?;
         let rows = c
             .query(
-                "SELECT id, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode, blockhash, ts FROM block_submissions
-                 WHERE status='accepted' AND credited_at IS NULL AND answered_at < $1 ORDER BY id",
-                &[&answered_before],
+                &format!(
+                    "SELECT id, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode, blockhash, ts FROM block_submissions
+                     WHERE {cond} AND $1::BIGINT IS NOT NULL ORDER BY id"
+                ),
+                &[&arg],
             )
             .await?;
         let mut out = Vec::new();
@@ -952,6 +1005,11 @@ impl Db {
             out.push((r.get(0), crate::state::Submit { job, nonce, output, miner_id: r.get(7), address: r.get(8), worker: r.get(9), mode }, r.get::<_, Option<String>>(11).unwrap_or_default(), r.get(12)));
         }
         Ok(out)
+    }
+
+    /// `unanswered` solutions not settled yet, as Submits (accounting::settle_unanswered decides them from the wallet).
+    pub async fn submissions_open_unanswered(&self) -> Result<Vec<(i64, crate::state::Submit, String, i64)>> {
+        self.submissions_where("status='unanswered' AND credited_at IS NULL", 0).await
     }
 
     /// Solutions the node never answered (the link dropped with them in flight): marked, for the operator.
