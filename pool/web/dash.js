@@ -497,6 +497,21 @@
   }
 
   let minerQuery = '';
+  // the miners table: sorted by a column (first click ascending, again descending, a third time the server's order -
+  // the latest share or first sight first) and searched here, by a part of the address or of a worker's name
+  const msort = { key: '', dir: 1 };
+  const M_SORTS = {
+    id: (a, b) => a.id - b.id,
+    hashrate: (a, b) => a.hashrate24h - b.hashrate24h,
+    first: (a, b) => a.firstSeen - b.firstSeen,
+    last: (a, b) => (a.lastShare || 0) - (b.lastShare || 0),
+  };
+  const minerMatches = (m, q) => {
+    if (!q) return true;
+    q = q.toLowerCase();
+    return m.address.toLowerCase().includes(q) || m.workers24h.some((w) => w.toLowerCase().includes(q))
+      || (m.sessions || []).some((x) => String(x.worker || '').toLowerCase().includes(q));
+  };
   // a miner's workers as on the pool's payments page: the first one, "more" opens the rest in place;
   // which rows are open survives the live refresh
   const openWorkers = new Set();
@@ -577,9 +592,16 @@
   }
 
   async function miners() {
-    const [r, conns] = await Promise.all([api(`miners?limit=200&q=${encodeURIComponent(minerQuery)}`), api('connections').catch(() => ({ live: [] }))]);
+    const [r, conns] = await Promise.all([api('miners?limit=1000'), api('connections').catch(() => ({ live: [] }))]);
     const day = Date.now() / 1000 - 86400;
-    const links = linksOf(r.miners, conns.live);
+    const links = linksOf(r.miners, conns.live);  // over every miner, so a link to one the search hides still shows
+    const by = M_SORTS[msort.key];
+    const list = r.miners.filter((m) => minerMatches(m, minerQuery))
+      .map((m, i) => [m, i]).sort(([a, i], [b, j]) => (by ? by(a, b) * msort.dir : 0) || i - j).map(([m]) => m);
+    const th = (key, text, cls = '') => {
+      const on = msort.key === key;
+      return `<th class="sortable${cls}" data-sort="${key}" data-dir="${on ? (msort.dir > 0 ? '▲' : '▼') : ''}" aria-sort="${on ? (msort.dir > 0 ? 'ascending' : 'descending') : 'none'}" tabindex="0" aria-label="Sort by ${text.toLowerCase()}">${text}</th>`;
+    };
     const flags = (m) => [
       m.held ? badge('payouts held', 'bad') : '',
       m.firstSeen > day ? badge('new', 'pending') : '',
@@ -593,18 +615,26 @@
       ${flashHtml()}
       <section class="panel">
         <form class="adm-row" id="mq" style="margin-bottom:12px">
-          <input class="adm-field" id="mq-in" placeholder="part of an address" value="${esc(minerQuery)}" aria-label="Search by address">
+          <input class="adm-field" id="mq-in" placeholder="part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker">
           <button class="btn" type="submit">Search</button>
         </form>
-        <div class="table-wrap"><table id="miners-table"><thead><tr><th>Miner</th><th>Flags</th><th>Workers 24h</th><th></th><th class="num">Hashrate 24h</th><th>First seen</th><th>Last share</th><th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead><tbody>
-        ${r.miners.map((m) => `<tr class="clickable" data-miner="${Number(m.id)}">
+        <div class="table-wrap"><table id="miners-table"><thead><tr>${th('id', 'Miner')}<th>Flags</th><th>Workers 24h</th><th></th>${th('hashrate', 'Hashrate 24h', ' num')}${th('first', 'First seen')}${th('last', 'Last share')}<th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead><tbody>
+        ${list.map((m) => `<tr class="clickable" data-miner="${Number(m.id)}">
           <td><a href="#miner/${Number(m.id)}">${esc(short(m.address))}</a><span class="sub">#${Number(m.id)} · ${esc(m.type || '?')}</span></td>
           <td>${flags(m)}</td>${workersCells(m)}
           <td class="num">${hr(m.hashrate24h)}</td><td>${ago(m.firstSeen)}</td><td>${ago(m.lastShare)}</td>
           <td class="num">${beamAmt(m.balance)}</td><td class="num">${beamAmt(m.immature)}</td>
-          <td class="num">${beamAmt(m.paid)}${m.sending ? `<span class="sub">+${beam(m.sending)} sending</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="dim">No miners.</td></tr>'}
+          <td class="num">${beamAmt(m.paid)}${m.sending ? `<span class="sub">+${beam(m.sending)} sending</span>` : ''}</td></tr>`).join('') || `<tr><td colspan="10" class="dim">${minerQuery ? 'No miner matches.' : 'No miners.'}</td></tr>`}
         </tbody></table></div></section>`;
     $('#mq').addEventListener('submit', (e) => { e.preventDefault(); minerQuery = $('#mq-in').value.trim(); render(); });
+    const sortBy = (key) => {
+      if (msort.key !== key) { msort.key = key; msort.dir = 1; } else if (msort.dir > 0) msort.dir = -1; else { msort.key = ''; msort.dir = 1; }
+      render();
+    };
+    view.querySelectorAll('#miners-table th[data-sort]').forEach((t) => {
+      t.addEventListener('click', () => sortBy(t.dataset.sort));
+      t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(t.dataset.sort); } });
+    });
     // Esc clears the search (and shows everyone again), then leaves the field
     $('#mq-in').addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
