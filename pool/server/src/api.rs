@@ -81,9 +81,12 @@ async fn micro_cache(req: Request, next: Next) -> Response {
     }
     // the path and only the parameters these routes read: anything else neither bypasses the cache nor grows it
     let key = {
-        let mut q: Vec<(String, String)> = req.uri().query().map(|q| url_pairs(q)).unwrap_or_default();
-        q.retain(|(k, _)| matches!(k.as_str(), "range" | "mode" | "limit" | "before" | "miner"));
+        let mut q: Vec<(String, String)> = req.uri().query().map(|q| url_pairs(q)).unwrap_or_default().into_iter().filter_map(|(k, v)| cache_param(&k, &v).map(|v| (k, v))).collect();
         q.sort();
+        // a parameter given twice: which one the route reads is not ours to guess, so such a request is not cached
+        if q.windows(2).any(|w| w[0].0 == w[1].0) {
+            return next.run(req).await;
+        }
         format!("{}?{}", req.uri().path(), q.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("&"))
     };
     let hit = MICRO.lock().unwrap().get(&key).filter(|(at, _)| at.elapsed().as_secs() < ttl).map(|(_, b)| b.clone());
@@ -97,11 +100,14 @@ async fn micro_cache(req: Request, next: Next) -> Response {
             let Ok(b) = axum::body::to_bytes(res.into_body(), 16 << 20).await else {
                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "response too large" }))).into_response();
             };
+            // bounded by entries and bytes; the plain routes everyone polls (no parameters) always get in, so a flood of
+            // distinct parameters cannot push /api/stats out of the cache
             let mut m = MICRO.lock().unwrap();
-            if m.len() >= 2000 {
+            let full = |m: &HashMap<String, (std::time::Instant, axum::body::Bytes)>| m.len() >= 2000 || m.values().map(|(_, b)| b.len()).sum::<usize>() >= 64 << 20;
+            if full(&m) {
                 m.retain(|_, (at, _)| at.elapsed().as_secs() < 30);
             }
-            if m.len() < 2000 {
+            if key.ends_with('?') || !full(&m) {
                 m.insert(key, (std::time::Instant::now(), b.clone()));
             }
             b
@@ -111,6 +117,19 @@ async fn micro_cache(req: Request, next: Next) -> Response {
     res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
     res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_str(&format!("public, max-age={ttl}")).unwrap());
     res
+}
+
+/// A cached route's parameter as the route reads it: unknown values become what the route would use anyway, so junk
+/// in a parameter neither bypasses the cache nor grows it. None leaves the parameter out of the key.
+fn cache_param(k: &str, v: &str) -> Option<String> {
+    match k {
+        "range" => Some(match v { "7d" | "30d" => v, _ => "24h" }.to_string()),
+        "mode" => matches!(v, "pplns" | "solo").then(|| v.to_string()),
+        "limit" => v.parse::<u32>().ok().map(|n| n.min(1000).to_string()),
+        "before" => v.parse::<i64>().ok().map(|n| n.to_string()),
+        "miner" => Some(v.chars().take(600).collect()),
+        _ => None,
+    }
 }
 
 fn url_pairs(q: &str) -> Vec<(String, String)> {
@@ -574,7 +593,17 @@ async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, 
         Ok((_, left)) => return outcome(Err(anyhow::anyhow!("{left} connection(s) of this miner are still open; merge not done, try again"))),
         Err(e) => return outcome(Err(anyhow::anyhow!("the stratum process does not answer ({e}); merge not done"))),
     };
-    let r = crate::admin::merge(&s.db, id, &b.to).await;
+    let mut r = crate::admin::merge(&s.db, id, &b.to).await;
+    if r.is_ok() {
+        // a rig that logged in again while the merge ran got the old id: end it once more, then move what it wrote
+        let again = api.stratum.kick_miner_wait(id).await;
+        match crate::admin::merge_sweep(&s.db, id, &to).await {
+            Ok(_) if matches!(again, Ok((_, 0))) => {}
+            Ok(_) => error!(from = id, ?again, "merge: the second kick did not end every connection; shares under the old id may follow"),
+            Err(e) => error!(from = id, "merge: sweep of late shares failed: {e:#}"),
+        }
+        if let Ok((k, _)) = again { if k > 0 { r = r.map(|m| format!("{m}; {k} connection(s) that logged in during the merge ended too")); } }
+    }
     info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
     outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
 }
@@ -662,5 +691,10 @@ mod tests {
     fn query_pairs() {
         assert_eq!(super::url_pairs("range=24h&x=1&&mode="), vec![("range".into(), "24h".into()), ("x".into(), "1".into()), ("mode".into(), "".into())]);
         assert!(super::url_pairs("").is_empty());
+        assert_eq!(super::cache_param("range", "<script>"), Some("24h".into()));
+        assert_eq!(super::cache_param("mode", "x"), None);
+        assert_eq!(super::cache_param("limit", "99999"), Some("1000".into()));
+        assert_eq!(super::cache_param("limit", "abc"), None);
+        assert_eq!(super::cache_param("utm_source", "x"), None);
     }
 }

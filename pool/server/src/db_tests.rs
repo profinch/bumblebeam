@@ -227,3 +227,69 @@ async fn block_submissions_lifecycle() {
     assert_eq!(unanswered.iter().map(|u| u.0).collect::<Vec<_>>(), vec![c]);
     t.done().await;
 }
+
+#[tokio::test]
+async fn merge_moves_everything_and_the_sweep_catches_a_late_login() {
+    let t = test_db!("merge");
+    let from = miner(&t, "ff01", 500).await;
+    let to = miner(&t, "ff02", 100).await;
+    t.q(&format!(
+        "INSERT INTO shares (ts, miner_id, worker, mode, difficulty, height) VALUES ({NOW}, {from}, 'w', 'pplns', 1, 9);
+         INSERT INTO hashrate_samples (ts, scope, hashrate) VALUES ({NOW}, 'm:{from}', 1), ({NOW}, 'm:{from}:pplns', 1), ({NOW}, 'm:{from}:solo', 1);
+         INSERT INTO miner_sessions VALUES ({from}, '1.2.3.4', 'w', {NOW} - 50, {NOW}), ({to}, '1.2.3.4', 'w', {NOW} - 10, {NOW} - 5);"
+    ))
+    .await;
+    let msg = crate::admin::merge(&t.db, from, "ff02").await.unwrap();
+    assert!(msg.contains("deleted"), "{msg}");
+    assert_eq!(t.i64(&format!("SELECT balance FROM miners WHERE id={to}")).await, 600);
+    assert_eq!(t.i64(&format!("SELECT COUNT(*) FROM shares WHERE miner_id={to}")).await, 1);
+    assert_eq!(t.i64(&format!("SELECT COUNT(*) FROM hashrate_samples WHERE scope LIKE 'm:{to}%'")).await, 3, "per-mode charts move too");
+    assert_eq!(t.i64(&format!("SELECT first FROM miner_sessions WHERE miner_id={to}")).await, NOW - 50, "sessions merge");
+    assert_eq!(t.i64(&format!("SELECT COUNT(*) FROM miner_sessions WHERE miner_id={from}")).await, 0);
+    // a rig that logged in while the merge ran kept the old id: its shares and a block credit come after the commit
+    t.q(&format!(
+        "INSERT INTO shares (ts, miner_id, worker, mode, difficulty, height) VALUES ({NOW} + 5, {from}, 'w', 'pplns', 1, 10);
+         INSERT INTO blocks (height, hash, ts, miner_id, worker, mode, reward, net_difficulty, effort, status) VALUES (10, 'h10', {NOW} + 6, {to}, 'w', 'pplns', 100, 1, 1, 'pending');
+         INSERT INTO credits (block_height, miner_id, amount) VALUES (10, {from}, 70), (10, {to}, 30);"
+    ))
+    .await;
+    assert_eq!(crate::admin::merge_sweep(&t.db, from, "ff02").await.unwrap(), 2);
+    assert_eq!(t.i64(&format!("SELECT COUNT(*) FROM shares WHERE miner_id={from}")).await, 0);
+    assert_eq!(t.i64(&format!("SELECT COALESCE(SUM(amount),0)::BIGINT FROM credits WHERE miner_id={to}")).await, 100, "the late credit reaches a miner that exists");
+    t.done().await;
+}
+
+#[tokio::test]
+async fn unanswered_solutions_wait_for_the_wallet() {
+    let t = test_db!("unans");
+    let c = t.db.submission_sent(&submit(200), NOW - 1000).await.unwrap();
+    assert!(t.db.submissions_open_unanswered().await.unwrap().is_empty(), "a sent row is not settled before the stratum side gives up");
+    t.db.submissions_unanswered(NOW).await.unwrap();
+    let open = t.db.submissions_open_unanswered().await.unwrap();
+    assert_eq!(open.iter().map(|o| (o.0, o.1.job.height, o.3)).collect::<Vec<_>>(), vec![(c, 200, NOW - 1000)]);
+    t.db.submission_answered(c, "lost", None, Some("no coinbase"), NOW).await.unwrap();
+    assert!(t.db.submissions_open_unanswered().await.unwrap().is_empty(), "a lost one is settled");
+    t.done().await;
+}
+
+#[tokio::test]
+async fn a_restart_waits_out_a_busy_table_instead_of_queueing_everyone() {
+    let t = test_db!("ddl");
+    let url = std::env::var("BB_TEST_DB").ok().or_else(|| std::fs::read_to_string("database.test.url").ok()).unwrap();
+    let url = url.trim().to_string();
+    let (holder, conn) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+    tokio::spawn(conn);
+    // a long transaction reading share_events, whose ALTER the start runs (as a merge or a block credit would)
+    holder.batch_execute(&format!("SET search_path={}; BEGIN; SELECT * FROM share_events", t.schema)).await.unwrap();
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let u2 = format!("{url}{sep}options=-c%20search_path%3D{}", t.schema);
+    let start = tokio::spawn(async move { Db::connect(&u2).await.map(|_| ()) });
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // meanwhile other queries on the table are not stuck behind the DDL
+    let t0 = std::time::Instant::now();
+    assert_eq!(t.i64("SELECT COUNT(*) FROM share_events").await, 0);
+    assert!(t0.elapsed() < std::time::Duration::from_millis(2500), "a reader waited {:?}", t0.elapsed());
+    holder.batch_execute("COMMIT").await.unwrap();
+    start.await.unwrap().expect("the start retries and succeeds once the table is free");
+    t.done().await;
+}

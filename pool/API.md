@@ -108,9 +108,11 @@ adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
 `?miner=<address>` keeps only the blocks that miner's shares found (an empty list for an address
 the pool never saw). A block solution is written to the database (`block_submissions`) before the
 node sees it. One the node accepted but that was not credited (a database error, a restart) is
-credited within a minute or two. One the node never answered within 5 minutes (the link dropped)
-is marked `unanswered` and only logged as an error for the operator: it is in no API answer, so
-check the chain at that height.
+credited within a minute or two. One the node never answered within 5 minutes (the link dropped, or
+the stratum process stopped with the answer in flight) is marked `unanswered` and settled from the
+chain: a coinbase of that height in the pool's wallet means the node took it, and it is credited
+like any other block (the hash from the explorer-node); no coinbase once the wallet is 20 blocks
+past it marks it `lost`.
 
 ## `GET /api/blocks/heights`
 

@@ -252,7 +252,16 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
     tx.execute("UPDATE share_events SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?;
     let credits = tx.execute("UPDATE credits SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?;
     let blocks = tx.execute("UPDATE blocks SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?;
-    tx.execute("UPDATE hashrate_samples SET scope=$2 WHERE scope=$1", &[&format!("m:{from_id}"), &format!("m:{to_id}")]).await?;
+    for sfx in ["", ":pplns", ":solo"] {
+        tx.execute("UPDATE hashrate_samples SET scope=$2 WHERE scope=$1", &[&format!("m:{from_id}{sfx}"), &format!("m:{to_id}{sfx}")]).await?;
+    }
+    tx.execute(
+        "INSERT INTO miner_sessions (miner_id, ip, worker, first, last) SELECT $2, ip, worker, first, last FROM miner_sessions WHERE miner_id=$1
+         ON CONFLICT (miner_id, ip, worker) DO UPDATE SET first = LEAST(miner_sessions.first, EXCLUDED.first), last = GREATEST(miner_sessions.last, EXCLUDED.last)",
+        &[&from_id, &to_id],
+    )
+    .await?;
+    tx.execute("DELETE FROM miner_sessions WHERE miner_id=$1", &[&from_id]).await?;
     tx.execute(
         "UPDATE miners SET balance = balance + $2, last_share = GREATEST(last_share, (SELECT last_share FROM miners WHERE id=$3)) WHERE id=$1",
         &[&to_id, &balance, &from_id],
@@ -270,15 +279,32 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
         tx.execute("UPDATE miners SET balance = 0 WHERE id=$1", &[&from_id]).await?;
     }
     tx.commit().await?;
-    // a share or a block credit written by a transaction that overlapped ours
-    let late = c.execute("UPDATE shares SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?
-        + c.execute("UPDATE credits SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?;
-    tracing::info!(from = %crate::state::Short(&src_addr), to = %crate::state::Short(&to), shares, credits, blocks, balance, late, "merged by operator");
+    tracing::info!(from = %crate::state::Short(&src_addr), to = %crate::state::Short(&to), shares, credits, blocks, balance, "merged by operator");
     Ok(format!(
         "moved {shares} shares, {credits} block credits, {blocks} found blocks and a balance of {balance} groth to {}; {}",
         crate::state::Short(&to),
         if paid == 0 { "the old account is deleted" } else { "the old account keeps its payout history" }
     ) + if held_at.is_some() { "; its payouts were held, and so are the new address's" } else { "" })
+}
+
+/// After a merge and a second kick of the old miner's connections: shares and block credits written under the old id
+/// by a connection that logged in while the merge ran (its login read the old id before the merge committed). Without
+/// this they would stay with an id that may no longer exist, and a block's credit to it would pay no one.
+pub async fn merge_sweep(db: &Db, from_id: i64, to: &str) -> Result<u64> {
+    let mut c = db.client().await?;
+    let Some(dst) = c.query_opt("SELECT id FROM miners WHERE address=$1", &[&to]).await? else { bail!("merge target is gone") };
+    let to_id: i64 = dst.get(0);
+    let tx = c.transaction().await?;
+    tx.execute("SELECT pg_advisory_xact_lock(7211001)", &[]).await?;
+    tx.execute("SET LOCAL statement_timeout = 0", &[]).await?;
+    let late = tx.execute("UPDATE shares SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?
+        + tx.execute("UPDATE share_events SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?
+        + tx.execute("UPDATE credits SET miner_id=$2 WHERE miner_id=$1", &[&from_id, &to_id]).await?;
+    tx.commit().await?;
+    if late > 0 {
+        tracing::info!(from = from_id, to = to_id, late, "merge: late shares and credits moved");
+    }
+    Ok(late)
 }
 
 /// Miners for the operator, the most recently active first; `q` filters by a piece of the address.
