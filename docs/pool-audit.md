@@ -1,5 +1,10 @@
 # Pool audit (2026-10-23) and the work order with the split
 
+Re-audit after the split (`100f324`, deployed 2026-10-23 01:45 BST): a logged-in miner was cut 30 s after its
+login by the P2 deadline (NiceHash, seen live at 01:09), now fixed; the share writer, accept errors, TLS reload,
+`node_job` beat, credit on stop, payout backoff, micro-cache and control cache fixes; DB tests per schema,
+`tools/e2e_split.sh` (16 checks) and the web walletKey test. Docs and MCP updated in `009fa36` (and this commit).
+
 Four read-only reviews (stratum side; money side; API and DB; web and deploy), then the findings marked HIGH
 were re-checked against the code and against production (`pool.toml`, `meta`, `pg_stat_user_tables`).
 Production facts used: coinbase payouts are off (no `[coinbase]`), the node gives an empty nonce prefix and
