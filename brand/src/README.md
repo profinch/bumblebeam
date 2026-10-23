@@ -17,5 +17,7 @@ Other banner sizes (the static frame 25, the logo+text block centred, elements s
     python3 brand/src/banner_size.py 1024 576 1.0 /tmp/bb/b.html && brand/src/render.sh b /tmp/bb/b.html 1024,576 /tmp/bb
     python3 brand/src/banner_size.py 1920 640 1.28 ...   # 3:1
     python3 brand/src/banner_size.py 2560 1440 1.5 ...   # YouTube: the block stays inside the 1546x423 safe area
+    python3 brand/src/banner_size.py 4000 192 0.7 ... 0.33   # Reddit banner; the 5th arg moves the wave next to the block
+    python3 brand/src/banner_size.py 2160 256 0.9 ...   # Reddit mobile banner
 
 On Linux/WSL `chrome --headless=new --screenshot` hangs; Playwright's `chrome-headless-shell` with the same flags works.
