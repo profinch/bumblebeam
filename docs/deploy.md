@@ -99,15 +99,25 @@ sudo cp /opt/bumblebeam/pool/server/pool.example.toml /etc/bumblebeam/pool.toml 
 
 In `pool.toml`: `node.api_key` is the line from `stratum.api.keys`; `wallet_api.url`
 `http://127.0.0.1:10001/api/wallet`; `pool.public_host` the name miners connect to;
-`http.web_dir` `/opt/bumblebeam/pool/web`; `database.url_file` `/etc/bumblebeam/database.url`;
-`block_check_urls` your own explorer-node first if you run one. Keep `maturity` at 240 or more and
-`min_payout_groth` well above the shielded network fee (0.01 BEAM). Install
-[`bumblebeam-pool.service`](../pool/deploy/bumblebeam-pool.service) and start it.
+`database.url_file` `/etc/bumblebeam/database.url`; `block_check_urls` your own explorer-node first
+if you run one; `[admin] token` from `openssl rand -hex 24` if you want the operator's dashboard.
+Keep `maturity` at 240 or more and `min_payout_groth` well above the shielded network fee
+(0.01 BEAM). Install [`bumblebeam-pool.service`](../pool/deploy/bumblebeam-pool.service) and start
+it.
 
-Check: `curl -s localhost:8080/api/health` shows `"node": true` once the node is synced and a
-template arrived; the web UI is on port 8080; `journalctl -u bumblebeam-pool -f` shows logins and
-jobs. The database schema is created and migrated on start; only one pool process may run against
-a database.
+The unit runs the pool as one process (no subcommand, which is `run all`): stratum, API, admin and
+payouts together. A pool release then restarts the stratum ports too and every miner reconnects.
+To release the API without touching the miners, run it as two processes, `run stratum` and
+`run app` ([`docs/pool-split.md`](pool-split.md)), as the [Docker](#docker) stack does: two units
+with the same config, `[admin] token` set (both refuse to start without it) and `[control]`
+pointing the app at the stratum process.
+
+Check: `curl -s localhost:8080/api/health` shows `"ok": true` once the node is synced and a
+template arrived (until then it answers 503 with `"node": false`); `journalctl -u bumblebeam-pool -f`
+shows logins and jobs. Port 8080 is the API only: the pool serves no pages, so the web UI
+([`pool/web`](../pool/web)) comes from nginx (section 8). The database schema is created and
+migrated on start. Each half holds a PostgreSQL advisory lock of its own, so a second pool process
+of the same kind refuses to start against the database.
 
 ## 7. Before the first payout
 
@@ -121,8 +131,9 @@ It pays 0.001 BEAM three times to a fresh address of the wallet itself and prove
 refuses a second `tx_send` with the same transaction id. Only with that proof does the pool resend
 interrupted payments automatically; without it they wait for an operator in `review`.
 
-Then run the test suite against a throwaway database (`pool/server/tools/e2e.sh`, see its header)
-and a real miner against the TLS port: MXBM, lolMiner and GMiner all default to TLS for Beam.
+Then run the tests against a throwaway database (`cargo test`, `pool/server/tools/e2e.sh` and
+`tools/e2e_split.sh`, see [`pool/server/README.md`](../pool/server/README.md)) and a real miner
+against the TLS port: MXBM, lolMiner and GMiner all default to TLS for Beam.
 
 ## 7b. Coinbase payouts (optional)
 
@@ -150,15 +161,20 @@ localhost:8080/api/coinbase` shows the finalizer's state; a miner sets up with `
 ## 8. Network and firewall
 
 Open to the world: 10000/tcp (node p2p, so the node is a full peer), 3333, 3334, 3443, 3444
-(stratum), 443 (web, behind a reverse proxy with a certificate; the pool itself serves plain HTTP
-on 8080). Keep closed: 8080, 8101 (node stratum, pool only), 10001 (wallet-api), 5432.
+(stratum), 443 (web, behind a reverse proxy with a certificate; the pool itself serves its API as
+plain HTTP on 8080). Keep closed: 8080, 8081 (the control interface, when the pool runs as two
+processes), 8101 (node stratum, pool only), 10001 (wallet-api), 5432.
 
 ```sh
 sudo ufw allow 22/tcp; sudo ufw allow 10000/tcp; sudo ufw allow 3333:3334/tcp; sudo ufw allow 3443:3444/tcp; sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-nginx: `proxy_pass http://127.0.0.1:8080;` for `/` with a Let's Encrypt certificate.
+nginx, with a Let's Encrypt certificate: `location /api/ { proxy_pass http://127.0.0.1:8080; }` for
+the API (pass `X-Real-IP`: the pool logs it and rate-limits benchmark reports by it), and the pages
+from `/opt/bumblebeam/pool/web` with `try_files $uri /index.html;` (clean paths) and `/admin` from
+`admin.html`, as [`containers/pool-web/default.conf`](../deploy/docker/containers/pool-web/default.conf)
+does, Content-Security-Policy included.
 
 ### Regional relays
 
@@ -199,8 +215,10 @@ bumblebeam.org runs one: **ru.bumblebeam.org** (185.133.42.180, Novosibirsk).
 - Back up `wallet.db` and `wallet.pass` (the money) and `pg_dump bumblebeam` (balances and
   history). The node database is disposable.
 - Update: `git pull`, `cargo build --release`, `install`, `systemctl restart bumblebeam-pool`.
-  Schema migrations run on start.
-- Shares are kept seven days, hashrate samples 31 (for the month chart); the database stays small.
+  Schema migrations run on start. A web UI change needs no pool restart: the pages are files nginx
+  serves.
+- Retention (pruned hourly by the pool): shares and share events seven days, hashrate samples 31
+  (for the month chart), miner sessions 90, benchmark reports 180; the database stays small.
 - Payouts lock a whole UTXO each; split coins with `tx_split` in wallet-api when many miners
   reach the threshold at once.
 
@@ -214,15 +232,17 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
 
 ```
 /data/docker/                         = deploy/docker
-  compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool, explorer-node, explorer-web, nginx, certbot
+  compose-bumblebeam.yaml             beam-node, wallet-api, postgres, pool-stratum, pool-app, pool-web, explorer-node,
+                                      explorer-api, explorer-web, nginx, certbot
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
   containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-stratum and pool-app)
-  containers/pool-web/                builds the pool UI (pool/web) at BUMBLEBEAM_REF, nginx
+  containers/pool-web/                builds the pool UI (pool/web) at POOL_WEB_REF (else BUMBLEBEAM_REF), nginx
   containers/explorer-api/            builds the API and MCP server (api/server.js) at BUMBLEBEAM_REF, Node
   containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
   containers/nginx/, containers/certbot/
   beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
+  pool-tls-sync.sh                    copies the wildcard certificate for stratum TLS (D7)
 /data/bumblebeam/
   node/        node.db, beam-node.cfg, secrets/ (stratum TLS + API key)
   wallet/      wallet.db, wallet.pass                                  <- the money, back it up
@@ -299,8 +319,11 @@ printf %s "$PW" | sudo install -m 600 -o 999 -g 999 /dev/stdin $B/secrets/postgr
 printf 'postgres://bumblebeam:%s@postgres:5432/bumblebeam\n' "$PW" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/database.url
 KEY=$(head -c 48 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 32)
 printf %s "$KEY" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/node/secrets/stratum.api.keys
-sed "s|^api_key = .*|api_key = \"$KEY\"|" /data/docker/pool.toml.example | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/pool.toml
-unset PW KEY
+ADMIN=$(openssl rand -hex 24)        # [admin] token: required, it authenticates pool-app to pool-stratum (and /admin)
+sed -e "s|^api_key = .*|api_key = \"$KEY\"|" -e "s|^token = .*|token = \"$ADMIN\"|" /data/docker/pool.toml.example \
+  | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/pool.toml
+echo "operator token: $ADMIN"        # for the dashboard at /admin; it is also in pool.toml
+unset PW KEY ADMIN
 cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml build beam-node
 sudo docker run --rm -u 10001:10001 -v $B/node/secrets:/s bumblebeam-beam \
   openssl req -x509 -newkey rsa:2048 -nodes -keyout /s/stratum.key -out /s/stratum.crt -subj /CN=beam-node -days 3650
@@ -310,7 +333,9 @@ sudo docker run --rm -u 10001:10001 -v $B/pool/tls:/s bumblebeam-beam \
 ```
 
 In `pool.toml` set `public_host` to the stratum name. The template already points at
-`beam-node:8101`, at wallet-api on `172.30.1.2` and at `/opt/bumblebeam/web`.
+`beam-node:8101`, at wallet-api on `172.30.1.2` and, under `[control]`, the app at
+`http://pool-stratum:8081`. `[admin] token` must be 24+ characters: `pool-stratum` and `pool-app`
+refuse to start with the template's `CHANGE_ME`.
 
 ### D4. The node
 
@@ -341,10 +366,15 @@ sudo docker compose -f compose-bumblebeam.yaml up -d --force-recreate beam-node 
 ### D6. The pool
 
 ```sh
-sudo docker compose -f compose-bumblebeam.yaml build --build-arg BUMBLEBEAM_REF=<commit> pool
-sudo docker compose -f compose-bumblebeam.yaml up -d postgres pool
+echo "POOL_REF=<commit>" | sudo tee -a /data/docker/.env     # picks the source and tags the image
+sudo docker compose -f compose-bumblebeam.yaml build pool-stratum pool-web   # pool-stratum builds the image pool-app uses too
+sudo docker compose -f compose-bumblebeam.yaml up -d postgres pool-stratum pool-app pool-web
 curl -s localhost:8080/api/health
 ```
+
+The health answer is 503 (`"ok": false`) until the node has given the pool a template, or while
+`pool-stratum` does not answer `pool-app` (`"stratum": "down"`); the compose healthcheck of
+`pool-app` waits for a 200.
 
 Until the node is at the tip the pool logs `node still syncing: no work for miners yet`; that is
 expected. Run `admin probe-txid` before the first payout (section 7) with
@@ -366,15 +396,21 @@ Telegram notices go out when `/data/docker/.env` has `TELEGRAM_BOT_TOKEN` and `T
 4. `sudo docker compose -f compose-bumblebeam.yaml up -d certbot nginx`.
 
 Stratum TLS uses the same certificate (`*.example.org` covers the stratum name). The pool runs as
-uid 10001 and reads its certificate at start, so
-[`deploy/host/pool-tls-sync.sh`](../deploy/host/pool-tls-sync.sh) copies the live certificate and
-key into `/data/bumblebeam/pool/tls/` when they changed and restarts the pool; install it as
-`/usr/local/sbin/pool-tls-sync.sh` with `pool-tls-sync.service` and `pool-tls-sync.timer` (daily
-04:30 UTC, after the renewal) and `systemctl enable --now pool-tls-sync.timer`. The pool restarts
-only on a real renewal; miners reconnect.
+uid 10001 and certbot keeps the key root-only, so
+[`deploy/docker/pool-tls-sync.sh`](../deploy/docker/pool-tls-sync.sh) copies the live certificate
+and key into `/data/bumblebeam/pool/tls/` when they changed (the key first, each through a
+temporary name). Install it as a daily cron job:
+`sudo install -m 755 /data/docker/pool-tls-sync.sh /etc/cron.daily/bumblebeam-pool-tls`.
+`pool-stratum` checks the files every 10 minutes (`BB_TLS_RELOAD_SECS` in its environment changes
+that) and serves a changed pair without a restart, so no miner is dropped. A pair that does not
+load, or a key that does not match its certificate, is refused with a warning and the old one
+stays. The older `deploy/host/pool-tls-sync.{sh,service,timer}` restarted a `bumblebeam-pool`
+container that no longer exists and are gone; on a host that still has the timer, disable it:
+`sudo systemctl disable --now pool-tls-sync.timer`.
 
 [`bumblebeam.conf`](../deploy/docker/containers/nginx/conf/bumblebeam.conf) serves the pool on
-`pool.bumblebeam.org` (`/api/*` from the pool, the pages from `pool-web`), the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
+`pool.bumblebeam.org` (`/api/*` from `pool-app` on `127.0.0.1:8080`, the pages and `/mcp` from
+`pool-web` on `127.0.0.1:8091`), the explorer on `explorer.bumblebeam.org`, and redirects `bumblebeam.org`
 and `www` to the pool.
 
 The explorer: copy `explorer-node.cfg.example` to `/data/bumblebeam/explorer/explorer-node.cfg`
@@ -392,11 +428,12 @@ the running node, use `up -d --no-deps <service>`.
   shares, and why it ended); addresses are shortened in logs.
 - Pool update (docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
   blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from one image tagged with `POOL_REF`. Set
-  `POOL_REF=<commit>` in `.env`, `build pool-stratum`, then
+  `POOL_REF=<commit>` in `.env`, `build pool-stratum` (it builds the image both containers run), then
   - a change only to the app half (`api`, `admin`, `payouts`, `accounting::confirm_loop`, `network`, `db` queries
     used there): `up -d --no-deps pool-app` - no miner notices (2026-10-23: 0.47 s, 0 disconnects);
-  - a change to the stratum half (`stratum`, `upstream`, `pow`, `conns`, `ctl`, the share writer, found blocks):
-    `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, our miners are back within ~1 s,
+  - a change to the stratum half (`stratum`, `upstream`, `pow`, `conns`, the share writer, found blocks and
+    `accounting::credit_loop`, `coinbase`: the finalizer link, uploads and expiry live there): also
+    `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
     NiceHash after ~40 s;
   - both: both, the app first. Schema changes run on start of either half (they are idempotent).
   A rollback is the previous `POOL_REF` and the same `up -d` (the old image tag is still there). `pool-web` takes
@@ -407,3 +444,4 @@ the running node, use `up -d --no-deps <service>`.
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and
   `sudo docker exec bumblebeam-postgres pg_dump -U bumblebeam bumblebeam`. The node database is
   disposable, but an archival resync takes long.
+  - `ctl.rs` is in both halves (the server in pool-stratum, the client in pool-app): a change to it restarts both;

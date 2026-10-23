@@ -13,13 +13,13 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 
 | need | call |
 |---|---|
-| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h, blocks still confirming (`blocksPending`), effort, fee, min payout, payout interval, ports | `/api/stats` (`?range=24h|7d|30d` for the chart) |
-| is it up, does it have work | `/api/health` |
+| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h, blocks still confirming (`blocksPending`), effort, fee, min payout, payout interval, ports, `connectedWorkers` (null when the stratum half does not answer) | `/api/stats` (`?range=24h|7d|30d` for the chart) |
+| is it up, does it have work | `/api/health` (`ok`, `role`, `node`, `jobAgeSecs`, `uptime`, `workers`, `stratum`; HTTP 503 when not ok) |
 | blocks the pool found, status and confirmations | `/api/blocks?limit=50&before=<height>` |
 | every height the pool found, compact: is this block ours? how many confirmed? | `/api/blocks/heights` (`[height, mode, status]`, orphans left out) |
 | how a block was split, to recompute a credit | `/api/blocks/{height}?address=` (fee, bonus, `window`, `total`, credits with `difficulty` and `amount`; share credit = floor(`shared` × `difficulty` / `total`)) |
 | top miners by hashrate (no addresses) | `/api/miners?limit=50` |
-| one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments, `blocksFound`) |
+| one miner by payout address | `/api/miners/{address}` (hashrate, `balance` unpaid, `immature`, `paid`, workers, payments with `fee` and `status`, `blocksFound`, `payoutFailures` when payouts keep failing; `?worker=<name>&since=<unix s>` adds `blocksSince`, that worker's blocks since then) |
 | payout runs | `/api/payments?limit=50` |
 | Beam network, BEAM price, every Beam pool | `/api/network` (`height`, `difficulty`, `avgBlock`, `hashrate`, `blocks24h` from the chain; `priceUsd`; `pools`) |
 | the latest network blocks and which pool found each | `/api/network/blocks?limit=50&before=<height>&pool=<id>` (`pool`, `poolName`; `null` = no listed pool) |
@@ -30,6 +30,17 @@ curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balan
 ```
 
 ## Reading the answers
+
+- `/api/health` answers HTTP **503** (same JSON body, `ok: false`) when the pool has no template,
+  the template is 10 minutes old or more, or the stratum half is down (`stratum: "down"`,
+  `workers: null`). Read the body; do not treat the 503 as "no answer".
+- `payoutFailures` `{count, lastAt, reason, nextTryAt}` appears only while payouts to the
+  address fail (a regular address whose wallet is offline): `count` failures since the last
+  completed payout, the wallet's `reason`, and `nextTryAt`, the next try (the pause doubles from
+  2 h up to a day). An offline address avoids it.
+- Caching: `/api/stats`, `/api/blocks` and `/api/miningboard` may be up to 10 s old, `/api/miners`,
+  `/api/payments` and `/api/blocks/heights` up to 30 s (`Cache-Control: public, max-age=…`). A
+  miner's own page and health are never cached. Polling faster gains nothing.
 
 - **Pool amounts are in groth** (1 BEAM = 100,000,000 groth): divide `balance`, `paid`,
   `minPayout`, `reward` by 1e8. Hashrates are Sol/s. Times are unix seconds.

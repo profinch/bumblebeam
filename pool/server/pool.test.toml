@@ -23,7 +23,6 @@ verify_blocks_with_wallet = false
 
 [http]
 bind = "127.0.0.1:18080"
-web_dir = "../web"
 
 [database]
 url_file = "database.test.url"   # created by the test scripts next to this file

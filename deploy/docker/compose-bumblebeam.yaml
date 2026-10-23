@@ -215,7 +215,8 @@ services:
 
   # Web: pool.bumblebeam.org (and bumblebeam.org, www) through Cloudflare. Host
   # network, so the host firewall (Cloudflare ranges only on 80/443) applies; it
-  # proxies to the pool on 127.0.0.1:8080. Same image as on h1: cron runs
+  # sends the pool's /api/ to pool-app on 127.0.0.1:8080 and its pages to pool-web
+  # on 127.0.0.1:8091. Same image as on h1: cron runs
   # nginx-reload.sh daily at 04:00, which reloads when certbot left a trigger.
   nginx:
     image: bumblebeam-nginx

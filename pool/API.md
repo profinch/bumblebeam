@@ -1,10 +1,20 @@
 # bumblebeam pool: HTTP API
 
-The contract between the pool server and its web UI (`pool/web`). All responses are JSON and all
-endpoints are `GET`. Nothing public links an address to a hashrate or a balance (see `/api/miners`). Amounts are in **groth** (1 BEAM = 10⁸ groth) as integers, hashrates in
+The contract between the pool server and its web UI (`pool/web`). All responses are JSON. The public
+routes are `GET` except `POST /api/benchmarks` and `POST /api/coinbase/pairs`; the operator's actions
+are `POST` too. The pages come from `pool-web` (nginx); on pool.bumblebeam.org the host's nginx sends
+`/api/*` to the pool's app process and everything else to `pool-web`. An unknown `/api` route is a
+404 with `{ "error": "no such endpoint" }`, never a page. Nothing public links an address to a hashrate or a balance (see `/api/miners`). Amounts are in **groth** (1 BEAM = 10⁸ groth) as integers, hashrates in
 **Sol/s**, times in **unix seconds**, and `effort` is a ratio (1.0 = average luck). CORS is open
 (`*`). The UI treats every field as untrusted: numbers are coerced, strings are length-capped and
 escaped before they reach the page, so a field with HTML in it is shown as text, never rendered.
+
+Caching: the polled public routes keep their `200` answers in memory per URL (the path and the
+parameters the route reads) and send `Cache-Control: public, max-age=<ttl>`: 10 s for `/api/stats`,
+`/api/blocks` and `/api/miningboard`, 30 s for `/api/blocks/heights`, `/api/miners`, `/api/payments`
+and `GET /api/benchmarks`. Only `GET` is cached. `/api/health`, `/api/miners/<address>`,
+`/api/blocks/<height>`, `/api/network*`, `/api/coinbase*` and the operator's API are not
+(`/api/network` has its own 30 s cache of the upstream data, see below).
 
 ## `GET /api/stats?range=24h&mode=`
 
@@ -18,8 +28,9 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 {
   "hashrate": 5230.4, "minersTotal": 41, "workersTotal": 97,
   "stats": { "lastBlockFound": 1791321278, "roundShares": 10342912 },
-  "nodes": [{ "name": "beam-node-1", "height": "4068710", "difficulty": "2719891.5",
-              "networkhashps": "45570", "lastBeat": "1791321596" }],
+  "nodes": [{ "name": "beam-node", "height": "4068710", "difficulty": "2719891.5",
+              "networkhashps": "45570", "lastBeat": "1791321596", "connected": true }],
+  "name": "BumbleBeam",
   "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0, "minPayout": 10000000, "payoutScheme": "PPLNS",
               "pplnsWindow": 2.0, "blockReward": 2500000000, "maturity": 240, "payoutInterval": 7200 },
   "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]], "peak": [1791300420, 6890.4] },
@@ -29,7 +40,7 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
     "solo":  { "hashrate": 50.2, "miners": 2, "workers": 3, "blocks24h": 1, "lastBlockFound": 1791290000,
                "series": [[1791234000, 48.1]] }
   },
-  "blocks24h": 31, "effort24h": 0.94, "blocksPending": 12
+  "blocks24h": 31, "effort24h": 0.94, "blocksPending": 12, "connectedWorkers": 95
 }
 ```
 
@@ -38,8 +49,11 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 
 - `name` is the pool's display name. `config.stratumHost` and `config.ports` (`pplns`, `solo`,
   `pplnsTls`, `soloTls`) tell the UI where miners connect, `config.nodeAddr` (`host:port`, empty if
-  not offered) where wallets can reach the pool's node; `connectedWorkers` counts open stratum connections; `nodes[0].connected` says
-  whether the pool currently has a block template from its node.
+  not offered) where wallets can reach the pool's node; `nodes[0].connected` says whether the pool
+  currently has a block template from its node, `nodes[0].lastBeat` when that template arrived.
+- `connectedWorkers` counts the logged-in stratum connections now. It is `null` when the stratum
+  process does not answer (see [two processes](#two-processes)); there is no fallback to an older
+  value. `workersTotal` counts the workers with shares in the last 10 minutes, from the database.
 - `fee` and `soloFee` are percentages. The pool's fee is **0.5%** on both PPLNS and solo rewards.
 - `finderBonus` is the percentage of a PPLNS block, after the fee, credited to the miner whose share
   found it, on top of that miner's PPLNS part; the rest of the pot is shared as usual. It is written
@@ -90,6 +104,13 @@ the wallet's coinbase can confirm a block; the explorer alone never does.
 `matured` (confirmed), `immature` (pending and unverified) and an always-empty `candidates`
 repeat the same page of blocks in the open-ethereum-pool shape, so the Beam Explorer's `open-eth`
 adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
+
+`?miner=<address>` keeps only the blocks that miner's shares found (an empty list for an address
+the pool never saw). A block solution is written to the database (`block_submissions`) before the
+node sees it. One the node accepted but that was not credited (a database error, a restart) is
+credited within a minute or two. One the node never answered within 5 minutes (the link dropped)
+is marked `unanswered` and only logged as an error for the operator: it is in no API answer, so
+check the chain at that height.
 
 ## `GET /api/blocks/heights`
 
@@ -157,9 +178,19 @@ guessed.
   "workers": [{ "name": "rig1", "hashrate": 52.1, "hashrate24h": 50.7, "lastShare": 1791321590,
                 "online": true, "stale": 0.012, "rejected": 0.001, "modes": ["pplns"] }],
   "charts": { "hashrate": [[1791300000, 49.8]], "peak": [1791300060, 61.2] },
-  "payments": [{ "ts": 1791300000, "amount": 1000000000, "kernel": "…" }],
-  "addressType": "offline", "coinbase": null }
+  "payments": [{ "ts": 1791300000, "amount": 1000000000, "fee": 1000100, "kernel": "…", "status": "completed" }],
+  "addressType": "offline", "coinbase": null,
+  "payoutFailures": { "count": 3, "lastAt": 1791290000, "reason": "…", "nextTryAt": 1791304400 } }
 ```
+
+`payments` are the latest 50, newest first, failed ones left out: `amount` is what the miner
+receives, `fee` the network fee taken from it, `kernel` null until the transaction is confirmed,
+`status` one of the [payment states](#payment-states) other than `failed`.
+
+`payoutFailures` is present only while payouts to this address keep failing (a regular address
+whose wallet is offline): `count` failed pool payouts since the last completed one, `lastAt` when
+the last one failed, `reason` the wallet's failure reason of the latest one (may be null), and
+`nextTryAt` when the payout run tries again (see [payout addresses](#payout-addresses)).
 
 `paid` is what reached the miner's wallet; `sending` is sent and not confirmed yet (a payout the
 wallet gives up on goes back to `balance`).
@@ -215,8 +246,22 @@ are refunded to the balance and not listed.
 
 ## `GET /api/health`
 
-`{ "ok": true, "node": true, "jobAgeSecs": 12, "uptime": 86400, "workers": 41 }`. `node` is false
-while the pool has no block template, for example while the node syncs.
+```json
+{ "ok": true, "role": "app", "node": true, "jobAgeSecs": 12, "uptime": 86400, "workers": 41, "stratum": "up" }
+```
+
+- `role`: `all` (one process) or `app` (the API half of [two processes](#two-processes)).
+- `node`: the pool has a block template from its node (false while the node syncs). In `run app`
+  it comes from the stratum process's heartbeat in the database; a beat over a minute old counts
+  as no template.
+- `jobAgeSecs`: seconds since that template arrived, null without one. A slow block keeps a
+  template for minutes.
+- `uptime`: seconds since this process started.
+- `workers`: logged-in stratum connections; null when the stratum process does not answer.
+- `stratum`: `up` or `down`, whether the stratum half answers.
+
+`ok` is false, and the answer is HTTP **503** with the same body, when there is no template, the
+template is 600 s old or more, or the stratum half does not answer. Otherwise 200. Not cached.
 
 ## `GET /api/network`
 
@@ -292,8 +337,11 @@ needs the receiving wallet online while the payout is built, so payouts to it fa
 miner's wallet is closed. The pool therefore asks for an **offline address** (also called a
 permanent or public offline address), which any Beam wallet can generate under "Receive". A
 regular address is accepted at login with a warning in the login response. Balances belong to the
-address that mined them: a payout to a regular address is attempted each run, a failed one is
-refunded to that balance and tried again next run, and the miner's page shows the address type.
+address that mined them: a failed payout is refunded to that balance and tried again later, and
+the miner's page shows the address type and `payoutFailures`. The scheduled runs back off: after
+n failed payouts since the last completed one, the next try waits 2 h × 2^(n-1) from the last
+failure, at most a day (2 h, 4 h, 8 h, 16 h, then daily). An operator's payout to that one miner
+does not wait.
 To move to an offline address, mine with it; the old balance is paid once its wallet is online.
 
 ## Coinbase payouts
@@ -335,8 +383,9 @@ Answer:
 ```
 
 Errors come as `{ "error": "…" }` with 400 (shape, signature, ladder, expiry), 409 (stock full),
-429 (uploads are verified one at a time, a second apart: try again), 503 (finalizer offline, or no
-block template yet). The miner page of a `cb:` account carries a `coinbase` object:
+429 (uploads are verified one at a time, a second apart: try again), 503 (finalizer offline, no
+block template yet, or the stratum process, which holds the finalizer link, does not answer), 404
+when the pool does not pay in the coinbase, 413 over 2 MB. The miner page of a `cb:` account carries a `coinbase` object:
 
 ```json
 "coinbase": { "stock": [{ "value": 1048576, "count": 3 }], "stockPairs": 36, "stockValue": 12881756160,
@@ -347,7 +396,7 @@ block template yet). The miner page of a `cb:` account carries a `coinbase` obje
 and its payments have `kernel` of the form `coinbase@<height> <block hash>`: one payment per block
 and account. Its debit leaves the balance the moment the pool's node has the block, so the next
 blocks do not pay the same amount again; the payment is `pending` until the block confirms, then
-`completed`; if the block is orphaned it is `failed`, the debit is refunded and the pairs are back in
+`completed`; if the block is orphaned it is `failed` (and leaves the miner's `payments`), the debit is refunded and the pairs are back in
 stock. A balance can therefore be negative for a while (a block that had paid was orphaned): the next
 blocks work the advance off first, and a miner who leaves right after an orphan keeps at most that
 one block's share. A block the pool's node has already replaced (its header differs) no longer
@@ -385,34 +434,70 @@ refunded only when the wallet refuses and does not know the id.
 
 The login is `<wallet address>.<worker name>`, and every Beam miner speaks the protocol unchanged:
 Beam's own stratum dialect from `pow/stratum.h` in the core. lolMiner and GMiner default to TLS for
-Beam, so the TLS ports are the ones most miners land on; the certificate is self-signed and miners
-do not verify it. Share difficulty is per worker (vardiff), aimed at about one share every ten
+Beam, so the TLS ports are the ones most miners land on. Miners do not verify the certificate, so a
+self-signed one works; pool.bumblebeam.org serves its Let's Encrypt wildcard. The pool re-reads the
+certificate files when they change (checked every 10 minutes) and serves the new pair without a
+restart; a pair that does not load, or a key that does not match its certificate, is refused and
+the old one stays. Share difficulty is per worker (vardiff), aimed at about one share every ten
 seconds, starting at 64. A rig that will not work below its own minimum (rented ones on
 MiningRigRentals) asks for it after the worker name, `<wallet address>.<worker name>+8192`: the
 difficulty starts there and vardiff does not go below it; the worker keeps its name without the
 suffix. The pool assigns each connection a nonce prefix so no two rigs search the
-same nonces. The server is `pool/server` (Rust).
+same nonces. A connection that has not logged in after 30 s is closed, and a logged-in one after
+15 minutes without a line from the miner. The server is `pool/server` (Rust).
 
 ## Operator's API
 
-`/api/admin/*` backs the operator's dashboard at `/admin`. It exists only when `[admin] token` is
-set in pool.toml (24+ characters), takes `Authorization: Bearer <token>`, answers with
-`Cache-Control: no-store` and has no CORS headers. A wrong token is logged with the client's
-address; every action is logged.
+`/api/admin/*` backs the operator's dashboard at `/admin` (a page of `pool-web`). Without
+`[admin] token` in pool.toml (24+ characters) every route is a 404. It takes
+`Authorization: Bearer <token>` (a wrong one is 401 and logged with the client's address), answers
+with `Cache-Control: no-store` and has no CORS headers. Every action is logged. An action answers
+200 `{ "ok": true, "message": "…" }` or 409 `{ "ok": false, "error": "…" }` with why it was refused.
+Live connections come from the stratum process: in `run app` through the
+[control interface](#two-processes).
 
 | | |
 |---|---|
 | `GET attention` | unverified blocks, blocks orphaned in the last 7 days (no action needed), payments in review or stuck, miners whose payouts are held, txId deduplication proof |
 | `GET wallet` | the wallet's available, maturing, sending and receiving (or why it did not answer), what the miners are owed (unpaid balances, immature credits, payouts on the way) and what the pool earned in 24 h, 7 days and in all (confirmed blocks less the miners' credits, less network fees the pool paid) |
 | `GET connections` | live stratum connections (peer, port, TLS, address, worker, agent, difficulty, shares) and the last 300 that ended before a login, with what they sent first and why they ended |
-| `POST connections/<id>/kick` | ends a connection |
-| `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address |
-| `GET miners/<id>` | one miner: workers over 7 days, block credits, payments, live connections, `held` (`{at, note}` or null) |
+| `POST connections/<id>/kick` | ends a connection (409 if there is none) |
+| `GET miners?q=&limit=` | miners, most recently active first, filtered by a piece of the address (`limit` default 100, at most 1000): balances, 24 h shares, hashrate and workers, `held`, `connections` (live connections now; 0 when the stratum process does not answer) and `sessions` (the last 8 IP + worker pairs it connected from, `{ip, worker, first, last}`, kept 90 days) |
+| `GET miners/<id>` | one miner: workers over 7 days, block credits, payments (with `txId` and `status`, failed ones too), `connections` (its live connections; empty when the stratum process does not answer), `held` (`{at, note}` or null) |
+| `GET address?a=<address>` | before a move: the address's shape, whether it is a miner here (`minerId`, `balance`) and what the wallet says of it (`wallet`: `{valid, type}`, null for a coinbase account, an address of no known shape, or without a wallet) |
 | `POST miners/<id>/hold` `{"hold": true, "note": "…"}` or `{"hold": false}` | holds one miner's payouts or releases them: held, no run pays it, scheduled or the operator's, while it still mines and is credited; a payout already sent goes on; a move (`merge`) takes the hold along; not for coinbase accounts (paid in blocks) |
-| `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another miner of this pool, never to a new address (ends the miner's connections first) |
+| `POST miners/<id>/merge` `{"to": "<address>"}` | moves shares, credits, found blocks and unpaid balance to another miner of this pool, never to a new address. It ends the miner's connections first and waits up to 5 s for them to close; it is refused (409, nothing moved) when a connection is still open or the stratum process does not answer |
 | `POST blocks/<height>` `{"action": "confirm"\|"orphan", "force": false}` | as `admin block` |
 | `POST payments/<txid>` `{"action": "sent"\|"refund", "force": false}` | as `admin payment` |
-| `POST payouts` `{}` or `{"miner": <id>}` | a payout run now, done by the payout loop and answered with a line per miner: everyone at the threshold, or one miner's whole balance even below it |
+| `POST payouts` `{}` or `{"miner": <id>}` | a payout run now, done by the payout loop and answered with a line per miner: everyone at the threshold, or one miner's whole balance even below it (refused for a held miner) |
+| `POST payouts/freeze` `{"freeze": true}` or `{"freeze": false}` | stops the scheduled payout countdown where it is, or resumes it; kept across restarts |
+
+## Two processes
+
+The pool binary runs as `bumblebeam-pool <pool.toml> run all|stratum|app` (no subcommand is
+`run all`). pool.bumblebeam.org runs two containers from one image: `bumblebeam-pool-stratum`
+(`run stratum`: the stratum ports, the node link, share checks, found blocks and their credits, the
+coinbase finalizer link) and `bumblebeam-pool-app` (`run app`: this HTTP API, the operator's API,
+payouts, block maturity, the explorer cache). Why and how: [`docs/pool-split.md`](../docs/pool-split.md).
+`run stratum` and `run app` refuse to start without `[admin] token`.
+
+The app reaches the stratum process over its control interface, `[control] bind` in the stratum
+process (`0.0.0.0:8081` in the Docker stack, on the internal network only) and `[control] url` in
+the app. Every call carries `Authorization: Bearer <admin token>`; a missing or wrong token is 401.
+
+| route | what it answers |
+|---|---|
+| `GET /ctl/live` | `{live, recent, workers}`: the live connections, the recent ones that ended before a login, the logged-in count |
+| `POST /ctl/kick/<id>` | `{ok}`: ends one connection |
+| `POST /ctl/kick-miner/<miner id>` | `{kicked, left}`: ends a miner's connections and waits up to 5 s for them to close |
+| `GET /ctl/coinbase` | the body of `GET /api/coinbase` |
+| `POST /ctl/coinbase/pairs` | the answer of `POST /api/coinbase/pairs` |
+
+The app keeps a `/ctl/live` answer 1 s and a failure 2 s. When the stratum process does not
+answer: `/api/health` is 503 with `"stratum": "down"`, `connectedWorkers` and `workers` are null,
+the operator's connection lists are empty or an error, a merge is refused, and `/api/coinbase*`
+fails (`POST /api/coinbase/pairs` with 503). The node's height and difficulty reach the app through
+the `meta` row `node_job`, which the stratum process writes on every new height and every 10 s.
 
 ## MCP for agents
 
@@ -420,15 +505,16 @@ address; every action is logged.
 
 | tool | what it answers |
 |---|---|
-| `pool_stats` | pool hashrate, miners, workers, blocks in 24h, effort, fee, PPLNS and solo split, chart and its peak; `mode` for one mode's chart |
+| `pool_stats` | pool hashrate, miners, workers, `connectedWorkers` (null when the stratum half does not answer), blocks in 24h, blocks still confirming, effort, fee, PPLNS and solo split, chart and its peak; `mode` for one mode's chart |
 | `pool_blocks` | blocks the pool found, with status and finder |
+| `pool_block_heights` | every block the pool found that the chain kept, as `[height, mode, status]` |
 | `pool_block_round` | how one block was split: fee, finder bonus, PPLNS window, every credit; `address` marks a miner's rows |
-| `pool_miner` | one miner by payout address: hashrate and its peak, balances, workers and their modes, payments, blocks |
+| `pool_miner` | one miner by payout address: hashrate and its peak, balances, workers and their modes, payments, blocks, `payoutFailures` |
 | `pool_miners` | top miners by hashrate with their modes; `mode` for PPLNS or solo only |
 | `pool_payments` | payout runs |
 | `pool_network` | Beam network (from the chain), BEAM/USD, every Beam pool |
 | `pool_network_blocks` | the latest network blocks with the pool that found each, `pool` to filter |
-| `pool_health` | whether the pool is up and has work |
+| `pool_health` | the `/api/health` body (also when it is a 503): ok, role, node, jobAgeSecs, uptime, workers, stratum |
 
 ```sh
 claude mcp add --transport http bumblebeam-pool https://pool.bumblebeam.org/mcp

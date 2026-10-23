@@ -19,8 +19,8 @@ pplns_port = 3333
 solo_port = 3334
 pplns_tls_port = 3443                     # lolMiner and GMiner default to TLS for Beam; 0 disables
 solo_tls_port = 3444
-tls_cert = "/etc/bumblebeam/tls/pool.crt"
-tls_key = "/etc/bumblebeam/tls/pool.key"
+tls_cert = "/etc/bumblebeam/tls/pool.crt"   # the wildcard, copied daily by pool-tls-sync.sh; re-read when the files
+tls_key = "/etc/bumblebeam/tls/pool.key"    # change (checked every 10 min, no restart); a key that does not match is refused
 nonce_prefix_bytes = 3
 proxy_protocol_from = []                  # relays that send a PROXY v1 header with the miner's address, e.g. ["185.133.42.180"]
 
@@ -55,12 +55,13 @@ target_secs = 10.0
 bind = "0.0.0.0:8080"
 
 [admin]
-token = ""                                # the operator's dashboard at /admin; 24+ random chars (openssl rand -hex 24), empty turns it off
+token = "CHANGE_ME"                       # required: pool-stratum and pool-app refuse to start without it. 24+ random chars
+                                          # (openssl rand -hex 24): the operator's dashboard at /admin and the control interface
 
 [control]
 # only when the pool runs as two processes (`run stratum` + `run app`, docs/pool-split.md): the stratum process's
 # interface for the app process (live connections, kicks, the coinbase finalizer); internal only, the admin token
-# authenticates it, so `run app` needs [admin] token
+# authenticates it (a Bearer), so `run stratum` and `run app` both need [admin] token
 bind = "0.0.0.0:8081"
 url = "http://pool-stratum:8081"
 

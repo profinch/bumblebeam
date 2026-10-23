@@ -2,7 +2,9 @@
 
 The pool server: a stratum proxy between Beam miners and our own `beam-node`, with every share
 checked by the oracle (`oracle/src/pow.cpp`, compiled in), PPLNS and solo accounting in PostgreSQL,
-payouts over `wallet-api`, and the HTTP API from [`../API.md`](../API.md) serving [`../web`](../web).
+payouts over `wallet-api`, and the HTTP API from [`../API.md`](../API.md). It serves no pages: the
+web UI ([`../web`](../web)) is served by nginx (`pool-web` in the Docker stack), and the server answers
+anything outside its routes with a JSON 404.
 
 ```
 miners ──stratum 3333/3334──▶ bumblebeam-pool ──stratum TLS 8101──▶ beam-node ──▶ Beam network
@@ -33,7 +35,11 @@ How it works, in the order a share travels:
 6. Every `payout_interval_secs`, balances above `min_payout_groth` are paid, one transaction per
    miner with a pool-chosen `txId`, the network fee deducted from the payout (shielded payouts to
    offline addresses cost about 0.01 BEAM). A crash at any point is resolved by `tx_status(txId)`.
-   Only one pool process may run against a database (PostgreSQL advisory lock).
+   The schedule is kept in `meta` (`payouts_next_at`), so a restart does not move it; a run missed
+   while the process was down goes a minute after the start. A payout that fails (a regular
+   address whose wallet is offline) is refunded to the balance, and the next try backs off: after
+   n failures since the last completed payout it waits 2 h × 2^(n-1), at most a day. The miner's
+   page shows this as `payoutFailures`.
 
 ## Run
 
@@ -42,7 +48,40 @@ A full server setup, from packages to firewall, is in [`docs/deploy.md`](../../d
 ```sh
 cargo build --release
 cp pool.example.toml pool.toml   # edit
-./target/release/bumblebeam-pool pool.toml
+./target/release/bumblebeam-pool pool.toml               # = run all: both halves in one process
+./target/release/bumblebeam-pool pool.toml run stratum   # the miner-facing half
+./target/release/bumblebeam-pool pool.toml run app       # the HTTP API, admin, payouts
+```
+
+Run modes ([`docs/pool-split.md`](../../docs/pool-split.md)):
+
+- `run stratum`: the stratum ports, the node link, share checks and the share writer, found blocks
+  credited at find time (and `credit_loop`, which settles solutions left half-way), the coinbase
+  finalizer link and the coinbase pair expiry, and the control interface on `[control] bind`.
+  Every 10 s and on each new height it writes the node's template to `meta` (`node_job`).
+- `run app`: the HTTP API on `[http] bind`, the operator's API, payouts, block maturity
+  (`confirm_loop`), the explorer and network cache (it writes `net_height` to `meta`), the
+  hashrate samples every minute and the hourly prune. It calls the stratum process on
+  `[control] url` for live connections, kicks and the coinbase routes.
+- `run all`: both in one process, with no control interface; the default, and what `tools/e2e.sh` runs.
+
+Each half takes a PostgreSQL advisory lock of its own (`run all` takes both), so two stratum
+processes or two app processes never run against one database, while one of each can. The stratum
+lock is the one older single-process versions took. A lock lost with its connection is retaken; if
+it cannot be, the process stops. `run stratum` and `run app` need `[admin] token` (24+ characters,
+`openssl rand -hex 24`): it is the Bearer token of the control interface. Keep `[control] bind` off
+the public network. SIGTERM stops either half gracefully: connections flush their counters and
+close, queued shares and a block being credited reach the database, a payout in progress finishes.
+
+Tests:
+
+```sh
+cargo test                        # unit tests, and the DB tests in src/db_tests.rs: each in a schema of its
+                                  # own in the test database (database.test.url, or BB_TEST_DB); skipped without one
+tools/e2e.sh                      # end to end with `run all`: fake node and miner (tools/e2e.py), admin commands
+tools/e2e_split.sh                # the same with `run stratum` + `run app` and 16 checks: control auth, caching,
+                                  # login deadline, TLS swap, stratum gone
+node ../web/test/walletkey.test.mjs   # the admin page's wallet-id extraction (no dependencies)
 ```
 
 Node side: `beam-node --stratum_port=8101 --stratum_secrets_path=<dir with stratum.crt,
@@ -78,7 +117,8 @@ The same actions are in the operator's dashboard at `/admin`, on when `[admin] t
 characters, `openssl rand -hex 24`) is set: the decisions above, live stratum connections with
 their agent, port, difficulty and shares (and a button to end one), the connections that ended
 before a login with what they sent first and why they ended (a rental service's checker, TLS on a
-plain port), and the miners with the move above. "Pay all due now" runs the payout without waiting for the next
+plain port), and the miners with the move above (from the dashboard it first ends the miner's
+connections, and is refused while one stays open or the stratum process does not answer). "Pay all due now" runs the payout without waiting for the next
 interval; "Pay now" on a miner's page sends its whole balance even below the threshold. The API is in [`../API.md`](../API.md).
 
 `block_check_urls` lists explorer-node APIs (`/block?height=`) tried in order. None of them can
@@ -90,14 +130,13 @@ as `https://explorer.0xmx.net/api/block?height=`, as the fallback.
 
 Operations: payouts lock a whole UTXO each (coinbases are 25 BEAM), so a wallet with few large
 coins runs out of `available` during a run and the rest is postponed to the next one. Splitting
-coins now and then (`tx_split` in wallet-api) keeps payouts flowing. Shares are kept for seven
-days, hashrate samples for 31 (the month chart).
+coins now and then (`tx_split` in wallet-api) keeps payouts flowing.
+
+Retention: the app half prunes once per clock hour. Shares and share events are kept seven days
+(PPLNS needs at most three), hashrate samples 31 (the month chart), where miners connected from
+(`miner_sessions`) 90 days, benchmark reports 180.
 
 ## Not yet
 
 Hot standby switch under 100 ms (today a dead node is replaced within seconds), publishing PPLNS
 rounds for audit, automatic coin splitting, and rate limits beyond the per-address connection cap.
-The payout schedule counts from the pool's start (`payout_interval_secs` after it, then every
-interval), so each restart postpones the next run by up to a full interval. Meant for later: a
-wall-clock schedule (every interval on the hour) or one counted from the last payout run. Until
-then "Pay all due now" in `/admin` covers a restart.
