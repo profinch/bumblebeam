@@ -337,14 +337,15 @@
     nextPay = null; // the countdown sits outside the menu: hidden with it
     frozenLeft = null;
     tick();
+    // the same sign-in panel as the NiceHash dashboard's (/nicehash); the token is [admin] token in pool.toml
     view.innerHTML = `
-      <div class="page-head"><h1 class="page-title">Operator sign-in</h1></div>
-      <section class="panel">
-        <p class="hint">The token is <code>[admin] token</code> in the pool's pool.toml. It stays in this browser only.</p>
-        ${err ? `<div class="adm-msg err">${esc(err)}</div>` : ''}
-        <form class="adm-row" id="signin">
-          <input class="adm-field" id="tok" type="password" autocomplete="current-password" placeholder="admin token" aria-label="Admin token">
-          <button class="btn" type="submit">Sign in</button>
+      <section class="panel adm-login">
+        <h2 class="panel-title">Sign in</h2>
+        <form id="signin" autocomplete="on">
+          <input type="text" name="username" value="operator" autocomplete="username" hidden>
+          <input class="adm-login-tok" id="tok" type="password" autocomplete="current-password" placeholder="admin token" aria-label="Admin token" required>
+          <button class="btn small" type="submit">Sign in</button>
+          ${err ? `<p class="hint adm-login-msg" role="alert">${esc(err)}</p>` : ''}
         </form>
       </section>`;
     $('#signin').addEventListener('submit', (e) => {

@@ -20,6 +20,13 @@
   .adm-tabs .n { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px; border-radius: 8px; font-size: 10px; text-align: center; background: rgba(242, 95, 91, .2); color: var(--color-red); }
   .adm-field { width: 100%; max-width: 520px; background: var(--field-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font: 12px var(--font-mono); }
   .adm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  /* the sign-in panel: the same as the NiceHash dashboard's (/nicehash) */
+  .adm-login { max-width: 460px; margin: 32px auto; }
+  .adm-login .panel-title { margin: 0 0 14px; }
+  .adm-login form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .adm-login .hint { flex-basis: 100%; margin: 0 0 4px; }
+  .adm-login-tok { flex: 1 1 220px; min-width: 0; height: 28px; padding: 0 8px; color: var(--text); font: 12px var(--font-mono);
+    background: rgba(255, 255, 255, .07); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
   .tile .v.bad, .panel-meta .bad { color: var(--color-red); }
   #miners-table td { vertical-align: top; }
   #miners-table .stack-line { white-space: nowrap; }
