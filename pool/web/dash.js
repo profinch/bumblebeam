@@ -563,16 +563,16 @@
   const ADDR_TYPES = {
     regular: ['regular', 'bad', 'a regular address: a payout to it needs the miner\'s wallet online'],
     regular_new: ['regular new', 'bad', 'a regular (new format) address: a payout to it needs the miner\'s wallet online'],
-    offline: ['offline', 'addr', 'an offline address: payouts are pushed, the wallet may be offline'],
-    max_privacy: ['max privacy', 'addr', 'a max-privacy address: payouts are pushed, the wallet may be offline'],
-    public_offline: ['public offline', 'addr', 'a public offline address: payouts are pushed, the wallet may be offline'],
+    offline: ['offline', 'atype', 'an offline address: payouts are pushed, the wallet may be offline'],
+    max_privacy: ['max privacy', 'atype', 'a max-privacy address: payouts are pushed, the wallet may be offline'],
+    public_offline: ['public offline', 'atype', 'a public offline address: payouts are pushed, the wallet may be offline'],
     coinbase: ['coinbase', 'ok', 'a coinbase account: paid in the blocks it mines'],
     invalid: ['invalid', 'bad', 'the wallet does not take this address: no payouts'],
   };
   function typeBadge(t) {
     if (!t) return '';
     const guessed = t.endsWith('?'), k = t.replace(/\?$/, '');
-    const [label, cls, title] = ADDR_TYPES[k] || [k.replace(/_/g, ' '), 'addr', 'address type: ' + k];
+    const [label, cls, title] = ADDR_TYPES[k] || [k.replace(/_/g, ' '), 'atype', 'address type: ' + k];
     return `<span class="badge ${cls}" title="${esc(title + (guessed ? ' (guessed from the address, not checked by the wallet yet)' : ''))}">👛 ${esc(label)}${guessed ? '?' : ''}</span>`;
   }
 
