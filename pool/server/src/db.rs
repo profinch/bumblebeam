@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS block_submissions (
   credited_at BIGINT, note TEXT);
 CREATE INDEX IF NOT EXISTS bsub_open ON block_submissions(status, ts) WHERE credited_at IS NULL;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS failure_reason TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS failed_at BIGINT;
 CREATE TABLE IF NOT EXISTS hashrate_samples (ts BIGINT NOT NULL, scope TEXT NOT NULL, hashrate DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS hs_scope_ts ON hashrate_samples(scope, ts);
 -- the hourly prune deletes by ts alone: BRIN (rows arrive in ts order) serves it at almost no cost
@@ -274,7 +275,9 @@ impl Db {
     pub async fn connect(url: &str) -> Result<Db> {
         let mut pg: tokio_postgres::Config = url.parse().context("database url")?;
         // a stuck query must not hold a pool connection forever (the PPLNS window over 3 days is the longest)
-        pg.options("-c statement_timeout=30000");
+        // appended to what the URL already sets (options= in the database URL)
+        let opts = format!("{} -c statement_timeout=30000", pg.get_options().unwrap_or("")).trim().to_string();
+        pg.options(&opts);
         let mgr = Manager::from_config(pg, NoTls, ManagerConfig { recycling_method: RecyclingMethod::Fast });
         // waiting for a free connection, opening one and recycling one are bounded: callers see an error
         // instead of hanging (shares go through the writer task, which retries)
@@ -286,7 +289,7 @@ impl Db {
         let ver: Option<i32> = c.query_opt("SELECT value FROM meta WHERE key='schema'", &[]).await?.and_then(|r| r.get::<_, String>(0).parse().ok());
         match ver {
             None => {
-                let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares'", &[]).await?.is_some();
+                let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares' AND table_schema = current_schema()", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
                 c.batch_execute(&format!("{SCHEMA}{SCHEMA_COINBASE}{SCHEMA_ROUNDS}{SCHEMA_BENCH}{SCHEMA_HOLD}")).await.context("schema")?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
@@ -811,10 +814,12 @@ impl Db {
                    -- a wallet that is never online (a regular address): n failed payouts in a row since the last
                    -- completed one wait 2 h * 2^(n-1), at most a day, before the next try (one had 26 failed, 0 completed)
                    AND ($3::BIGINT IS NOT NULL OR NOT EXISTS (
-                     SELECT 1 FROM (SELECT COUNT(*) AS n, MAX(p.ts) AS last FROM payments p
-                                     WHERE p.miner_id = m.id AND p.status = 'failed'
+                     -- counted from when a payout failed (a wallet that never answers fails hours after the send), pool
+                     -- payouts only (not coinbase ones), the exponent capped (POWER(2, 1024) overflows)
+                     SELECT 1 FROM (SELECT COUNT(*) AS n, MAX(COALESCE(p.failed_at, p.ts)) AS last FROM payments p
+                                     WHERE p.miner_id = m.id AND p.status = 'failed' AND p.cb_height IS NULL
                                        AND p.ts > COALESCE((SELECT MAX(q.ts) FROM payments q WHERE q.miner_id = m.id AND q.status = 'completed'), 0)) f
-                      WHERE f.n > 0 AND f.last + LEAST(86400, 7200 * POWER(2, f.n - 1))::BIGINT > $4))
+                      WHERE f.n > 0 AND f.last + LEAST(86400, 7200 * POWER(2, LEAST(f.n - 1, 30)))::BIGINT > $4))
                  ORDER BY balance DESC",
                 &[&min_payout, &(now - 86400), &only, &now],
             )
@@ -887,8 +892,8 @@ impl Db {
         let c = self.client().await?;
         let r = c
             .query_one(
-                "SELECT COUNT(*), MAX(ts), (ARRAY_AGG(failure_reason ORDER BY ts DESC))[1] FROM payments p
-                 WHERE miner_id=$1 AND status='failed'
+                "SELECT COUNT(*), MAX(COALESCE(failed_at, ts)), (ARRAY_AGG(failure_reason ORDER BY ts DESC))[1] FROM payments p
+                 WHERE miner_id=$1 AND status='failed' AND cb_height IS NULL
                    AND ts > COALESCE((SELECT MAX(ts) FROM payments q WHERE q.miner_id=$1 AND q.status='completed'), 0)",
                 &[&miner_id],
             )
@@ -925,11 +930,11 @@ impl Db {
     }
 
     /// Accepted solutions whose crediting did not finish (a DB error, a restart): (id, the submission, its hash).
-    pub async fn submissions_to_credit(&self, answered_before: i64) -> Result<Vec<(i64, crate::state::Submit, String)>> {
+    pub async fn submissions_to_credit(&self, answered_before: i64) -> Result<Vec<(i64, crate::state::Submit, String, i64)>> {
         let c = self.client().await?;
         let rows = c
             .query(
-                "SELECT id, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode, blockhash FROM block_submissions
+                "SELECT id, height, upstream_id, input, net_packed, nonce, output, miner_id, address, worker, mode, blockhash, ts FROM block_submissions
                  WHERE status='accepted' AND credited_at IS NULL AND answered_at < $1 ORDER BY id",
                 &[&answered_before],
             )
@@ -938,10 +943,13 @@ impl Db {
         for r in rows {
             let dec = |s: String| hex::decode(s).unwrap_or_default();
             let (input, nonce, output) = (dec(r.get(3)), dec(r.get(5)), dec(r.get(6)));
-            let (Ok(input), Ok(nonce), Ok(output)) = (<[u8; 32]>::try_from(input), <[u8; 8]>::try_from(nonce), <[u8; 104]>::try_from(output)) else { continue };
+            let (Ok(input), Ok(nonce), Ok(output)) = (<[u8; 32]>::try_from(input), <[u8; 8]>::try_from(nonce), <[u8; 104]>::try_from(output)) else {
+                tracing::error!(row = r.get::<_, i64>(0), "block_submissions: a row that does not decode, left alone");
+                continue;
+            };
             let job = std::sync::Arc::new(crate::state::Job { upstream_id: r.get(2), input, net_packed: r.get::<_, i64>(4) as u32, height: r.get::<_, i64>(1) as u64, received: std::time::Instant::now() });
             let mode = if r.get::<_, String>(10) == "solo" { crate::state::Mode::Solo } else { crate::state::Mode::Pplns };
-            out.push((r.get(0), crate::state::Submit { job, nonce, output, miner_id: r.get(7), address: r.get(8), worker: r.get(9), mode }, r.get::<_, Option<String>>(11).unwrap_or_default()));
+            out.push((r.get(0), crate::state::Submit { job, nonce, output, miner_id: r.get(7), address: r.get(8), worker: r.get(9), mode }, r.get::<_, Option<String>>(11).unwrap_or_default(), r.get(12)));
         }
         Ok(out)
     }
@@ -950,7 +958,7 @@ impl Db {
     pub async fn submissions_unanswered(&self, sent_before: i64) -> Result<Vec<(i64, i64, String)>> {
         let c = self.client().await?;
         let rows = c
-            .query("UPDATE block_submissions SET status='unanswered' WHERE status='sent' AND ts < $1 RETURNING id, height, address", &[&sent_before])
+            .query("UPDATE block_submissions SET status='unanswered' WHERE status='sent' AND credited_at IS NULL AND ts < $1 RETURNING id, height, address", &[&sent_before])
             .await?;
         Ok(rows.iter().map(|r| (r.get(0), r.get(1), r.get(2))).collect())
     }
@@ -963,7 +971,7 @@ impl Db {
         let mut c = self.client().await?;
         let tx = c.transaction().await?;
         let from: Vec<String> = from.iter().map(|s| s.to_string()).collect();
-        let row = tx.query_opt("UPDATE payments SET status='failed' WHERE tx_id=$1 AND status = ANY($2) RETURNING miner_id, debit, amount", &[&tx_id, &from]).await?;
+        let row = tx.query_opt("UPDATE payments SET status='failed', failed_at=EXTRACT(EPOCH FROM now())::BIGINT WHERE tx_id=$1 AND status = ANY($2) RETURNING miner_id, debit, amount", &[&tx_id, &from]).await?;
         let Some(row) = row else {
             tx.rollback().await?;
             return Ok(false);

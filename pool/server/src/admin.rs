@@ -224,6 +224,8 @@ pub async fn merge(db: &Db, from_id: i64, to: &str) -> Result<String> {
     let tx = c.transaction().await?;
     // credits -> balances and a merge of miners exclude each other (see accounting::confirm): one advisory lock
     tx.execute("SELECT pg_advisory_xact_lock(7211001)", &[]).await?;
+    // moving a big miner's week of shares can take longer than the pool's statement_timeout
+    tx.execute("SET LOCAL statement_timeout = 0", &[]).await?;
     let Some(src) = tx.query_opt("SELECT address, balance, payouts_held_at, payouts_held_note FROM miners WHERE id=$1 FOR UPDATE", &[&from_id]).await? else { bail!("no miner {from_id}") };
     let (src_addr, balance, held_at, held_note): (String, i64, Option<i64>, Option<String>) = (src.get(0), src.get(1), src.get(2), src.get(3));
     if src_addr.starts_with("cb:") {
