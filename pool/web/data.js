@@ -1,8 +1,7 @@
 // bumblebeam pool web UI: data layer.
 //
 // Two sources:
-//  - the pool's own API (pool/API.md) at the page's origin. While the pool server does not exist
-//    yet, a seeded generator stands in and the UI says so. From localhost, ?api=<url> points the
+//  - the pool's own API (pool/API.md) at the page's origin. From localhost, ?api=<url> points the
 //    UI at another server; on a public host the parameter is ignored, so a crafted link cannot
 //    feed the page foreign data.
 //  - live Beam network data: the pool server's /api/network and /api/network/blocks (our node, and

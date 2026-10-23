@@ -114,15 +114,18 @@ enabled = true
 link_bind = "127.0.0.1:$LINK_PORT"
 [http]
 bind = "127.0.0.1:$HTTP_PORT"
-web_dir = "$REPO/pool/web"
 [database]
 url_file = "$DBURL_FILE"
 EOF
   psql "$(cat "$DBURL_FILE")" -q -c "DROP TABLE IF EXISTS shares, blocks, credits, miners, payments, share_events, hashrate_samples, meta, coinbase_pairs, chain_headers CASCADE;" 2>&1 | grep -v NOTICE
   (cd "$LAB/pool" && RUST_LOG=info exec nohup "$POOL" "$LAB/pool/pool.toml" > "$LAB/logs/pool.out" 2>&1) &
   echo $! > "$LAB/pool.pid"
-  for i in $(seq 1 30); do curl -sf "$API/api/health" >/dev/null 2>&1 && break; sleep 1; done
-  curl -sf "$API/api/health" || { echo "pool did not come up"; tail -20 "$LAB/logs/pool.out"; exit 1; }
+  # /api/health answers 503 until the pool has a template (curl -f would take that for "down"): first wait for
+  # any HTTP answer, then for "ok":true; without a template yet go on, the top-up below retries
+  for i in $(seq 1 30); do [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/health")" != 000 ] && break; sleep 1; done
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/health")" != 000 ] || { echo "pool did not come up"; tail -20 "$LAB/logs/pool.out"; exit 1; }
+  for i in $(seq 1 60); do curl -s "$API/api/health" | grep -q '"ok":true' && break; sleep 1; done
+  curl -s "$API/api/health"
   echo
 
   echo "== miner's stock (bb-coinbase)"

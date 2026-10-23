@@ -1,4 +1,4 @@
-//! HTTP API (pool/API.md) and the static web UI.
+//! HTTP API (pool/API.md). The web UI is served by pool-web (nginx), not here.
 
 use crate::emission::miner_reward_groth;
 use crate::network::NetCache;
