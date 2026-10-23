@@ -519,11 +519,21 @@
     first: (a, b) => a.firstSeen - b.firstSeen,
     last: (a, b) => (a.lastShare || 0) - (b.lastShare || 0),
   };
+  // what the search looks in: the address (default), the miner's id (from its start, # optional) or a worker's name
+  // (the last 24 h and the recent sessions)
+  let minerBy = 'address';
+  const MINER_BY = {
+    address: ['Address', 'Part of an address'],
+    id: ['ID', 'Miner ID, e.g. 47'],
+    worker: ['Worker', 'Part of a worker name'],
+  };
   const minerMatches = (m, q) => {
     if (!q) return true;
     q = q.toLowerCase();
-    return m.address.toLowerCase().includes(q) || m.workers24h.some((w) => w.toLowerCase().includes(q))
+    if (minerBy === 'id') return String(m.id).startsWith(q.replace(/^#/, ''));
+    if (minerBy === 'worker') return m.workers24h.some((w) => w.toLowerCase().includes(q))
       || (m.sessions || []).some((x) => String(x.worker || '').toLowerCase().includes(q));
+    return m.address.toLowerCase().includes(q);
   };
   // a miner's workers as on the pool's payments page: the first one, "more" opens the rest in place;
   // which rows are open survives the live refresh
@@ -625,9 +635,11 @@
         <div class="adm-row" style="margin-bottom:12px">
           <div class="search mq-search" role="search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-            <input id="mq-in" placeholder="Part of an address or a worker" value="${esc(minerQuery)}" aria-label="Search by address or worker" autocomplete="off" spellcheck="false">
+            <input id="mq-in" placeholder="${MINER_BY[minerBy][1]}" value="${esc(minerQuery)}" aria-label="Search miners by ${MINER_BY[minerBy][0].toLowerCase()}" autocomplete="off" spellcheck="false">
             <kbd title="Press / to search">/</kbd>
           </div>
+          <div class="seg" id="mq-by" role="group" aria-label="Search by">${Object.entries(MINER_BY).map(([k, [label]]) =>
+            `<button type="button" data-by="${k}" class="${k === minerBy ? 'on' : ''}" aria-pressed="${k === minerBy}">${label}</button>`).join('')}</div>
           <span class="dim" id="mq-count"></span>
         </div>
         <div class="table-wrap"><table id="miners-table"><thead><tr>${th('id', 'Miner')}<th>Flags</th><th>Workers 24h</th><th></th>${th('hashrate', 'Hashrate 24h', ' num')}${th('first', 'First seen')}${th('last', 'Last share')}<th class="num">Unpaid</th><th class="num">Immature</th><th class="num">Paid</th></tr></thead>
@@ -669,6 +681,18 @@
       t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(t.dataset.sort); } });
     });
     $('#mq-in').addEventListener('input', (e) => { minerQuery = e.target.value.trim(); draw(); });
+    $('#mq-by').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-by]');
+      if (!b || b.dataset.by === minerBy) return;
+      minerBy = b.dataset.by;
+      $('#mq-by').querySelectorAll('[data-by]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+      const inp = $('#mq-in');
+      inp.placeholder = MINER_BY[minerBy][1];
+      inp.setAttribute('aria-label', `Search miners by ${MINER_BY[minerBy][0].toLowerCase()}`);
+      inp.inputMode = minerBy === 'id' ? 'numeric' : 'text';
+      draw();
+      inp.focus();
+    });
     // Esc clears the search (and shows everyone again), then leaves the field
     $('#mq-in').addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
@@ -790,7 +814,7 @@
         const r = await api(`miners/${m.id}/merge`, { to });
         // done: the list shows the address it went to; only a refusal gets a message
         flash = r.ok ? null : { ok: false, text: r.error || 'refused' };
-        if (r.ok) { minerQuery = to.slice(0, 16); location.hash = 'miners'; return; }
+        if (r.ok) { minerQuery = to.slice(0, 16); minerBy = 'address'; location.hash = 'miners'; return; }
       } catch (err) {
         flash = { ok: false, text: err.message };
       }
