@@ -157,3 +157,107 @@ Open:
    Cargo.lock, grace period, healthchecks).
 4. **P2 14-17, 19-20** in `pool-app` / `pool-web` releases - none of them drops a miner once the split is live.
 5. **P3** as the files are touched.
+
+## Fourth pass (2026-10-23, read-only, nothing fixed yet)
+
+Three independent reviews of `756134d` (stratum; money/API/DB; web/MCP/deploy) plus a read-only look at the live
+host. The ledger reconciles to zero (confirmed credits - completed payouts - in-flight debits - balances = 0), no
+credits or shares point at a missing miner, no block is in review. Everything the first three passes list as fixed
+was re-checked and holds.
+
+### HIGH
+
+1. **No backup exists.** No `pg_dump`, no copy of `wallet.db` / `wallet.pass`, no cron or timer; one `/data` disk
+   on one host. `docs/deploy.md` only says to do it. Postgres holds who is owed what, the wallet dir the funds.
+   Fix: nightly `pg_dump | gzip` + an encrypted copy of the wallet dir shipped off-host (restic/rclone), retention,
+   a restore drill, and a note on where the seed phrase lives.
+
+### MEDIUM
+
+2. **Wallet down at the scheduled minute = a whole interval skipped** (`payouts.rs:115-120`): `next_payout` and
+   `payouts_next_at` move forward *before* `pay_once`; a failed `wallet.status()` only warns. Fix: retry in 10 min
+   on error, show "last run failed" in attention.
+3. **A pool-side `tx_send` refusal counts as the miner's failure and carries no reason** (`payouts.rs:272-276`):
+   refunded as `failed` with `failed_at` (fee too low, ACL, stale `available`) → 2 h … 24 h backoff;
+   `set_failure_reason` is only called in `poll_pending`, so `payoutFailures.reason` is null. Fix: write the reason
+   here too; count only wallet-confirmed failures (status 2/4) toward the backoff.
+4. **"Pay all due now" is cut by nginx at 30 s** (`api.rs:649` waits 150 s, `bumblebeam.conf:71`
+   `proxy_read_timeout 30s`): with ~6+ miners due the operator gets a 504, the run goes on blind and its per-miner
+   report (the only record) is lost. Fix: a longer timeout for `/api/admin/` or an async run with a status poll.
+5. **A database outage refuses every login for its duration** (`stratum.rs:466-469`): the login awaits
+   `db.miner_id()` and bails on error. Open connections survive (the share writer buffers), anyone reconnecting in
+   the window - NiceHash included - is turned away. Fix: an in-memory `address -> miner_id` cache, refuse only
+   unknown addresses while the DB is down.
+6. **MCP batch bypasses rate limiting** (`api/server.js:613-614`): an unbounded JSON-RPC array in one ≤1 MB POST
+   fans out thousands of upstream calls concurrently; nginx counts one request. Fix: cap the batch (10-20) and the
+   concurrency.
+7. **MCP maps every upstream non-2xx to 502 and builds URLs with `NaN`** (`server.js:26,30,514,516,270-272`):
+   a pool 404/400 reaches the agent as "upstream answered 404"; `Number(a.height)` is not validated. Fix: validate
+   integers, pass 4xx bodies through as `bodyOn` does for health.
+8. **Miner addresses land in access logs twice**: the host nginx logs full `/miners/<addr>` and
+   `/api/miners/<addr>` URIs for 60 days; pool-web logs the same to stdout; most services have no `logging:` cap in
+   compose (the host's `daemon.json` caps json-file at 100 MB x 5). Fix: `access_log off` in pool-web, redact
+   `/miners/…` in the host nginx.
+9. **Nobody watches health**: the pool-app healthcheck has no consumer (Docker does not restart or alert), the other
+   services have none, no external check of `/api/health`. A stuck node (503) or a hung wallet-api (payouts silently
+   fail) is found by hand. Fix: an external uptime check expecting 200 + certificate-expiry monitor.
+10. **The host's Docker build cache holds 90.8 GB** of the 185 GB used on `/data`. `docker builder prune`.
+
+### LOW
+
+Money/books: a second accepted block at a height already `pending` is dropped silently (`accounting.rs:134-149`;
+needs the node to rewind below H, so unrealistic - still worth an `error!` and a submissions note); the syncing guard
+trusts the public explorer's height (`network.rs:165-169` → `upstream.rs:128-136`) and health stays ok while jobs are
+withheld; `block_submissions` states and credits to deleted miners never reach the operator's attention list;
+example configs ship `tx_fee_groth = 1000` against a default of 100 000 (a copied example makes every regular payout
+fail → the backoff of #3); a changed `payout_interval_secs` applies only after the stored `payouts_next_at` passes;
+a half-dead lock connection (client gone, backend holding the advisory lock) exits the process and the next one
+cannot take the lock until keepalive (2 h) - `tcp_keepalives_idle=60` in the DB url fixes it; admin actions answer
+409 for "no such miner/payment" (404).
+
+Stratum: every valid-JSON pre-login message is logged (`stratum.rs:428`), not only the first; no grace window for
+shares of the previous height (200 ms of latency = a stale share; fairness, not money); shares on superseded
+templates of the current height are accepted for the whole block time (the node only takes the current template:
+griefing with no gain); in `run app` `credit_found` waits 5 s on a share writer that does not exist (misleading
+warning from `settle_unanswered`); a second `login` on a logged-in connection re-points it and its stats; node
+rotation sticks to the standby (none configured); any 100-600-char alphanumeric login creates a `miners` row -
+one IP can create thousands a minute.
+
+Web/deploy/host: `app.js:1046` routes like `/constructor` or `/__proto__` hit `Object.prototype` ("[object Object]"
+instead of Not found, no XSS); `app.js:491` `stats.blocksPending` is always undefined (`normStats` drops it);
+`/api/blocks/<height>` and `payoutFailures.reason` are not length-capped (escaped, so no XSS); no
+`client_max_body_size 2m` on `/api/` (coinbase pair uploads over 1 MB die with an HTML 413); the wallet password is
+visible in `/proc/<pid>/cmdline` (`--pass="$(cat …)"`); pool-web / explorer-* default to `main` when
+`BUMBLEBEAM_REF` is unset (set on the host); postgres 5432, wallet-api 10001 (whitelisted) and control 8081 are
+reachable from every container on the `bumblebeam` network, web containers included; the Cloudflare IP lists in
+nginx and nftables are static (2026-10-07); `/data/docker/.env` is 644 and holds the Telegram bot token; `web_dir`
+is still in the live `pool.toml` (ignored); unattended-upgrades is not installed; pool-web serves
+`/test/walletkey.test.mjs` and `/.gitignore`. Docs: `pool/server/README.md:141` "Not yet: publishing PPLNS rounds"
+is stale (they are published); `API.md:34` example `minPayout` 0.1 BEAM vs the 1 BEAM default; `API.md:390`
+promises 413 above 2 MB while nginx cuts at 1 MB.
+
+### Checked and fine
+
+Payout state machine (atomic debit, refunds only from the stated status, resend with the same tx_id, completed /
+pending never rolled back even with `--force`); groth arithmetic all integer, PPLNS floors in the pool's favour;
+payout / confirm / merge / credit serialized on lock 7211001, double credit excluded by height uniqueness; the
+deadlines (30 s / 15 min), share dedup, nonce prefixes, the block path from solution to credit, SIGTERM at every
+moment, the share writer, hostile input without panics; XSS (every sink escaped or numeric, CSP matches what the
+pages load, admin token only in a header with constant-time compare and `no-store`); secrets on the host (0600,
+right owners), wallet-api unpublished, firewall 80/443 from Cloudflare only, control 8081 not exposed; certificates
+certbot → cron.daily → reload, valid to 2027-01-05; API privacy (balance only by exact address); retention and
+indexes (204 k shares, 59 MB).
+
+### Test gaps
+
+Stratum has unit tests only for job retention, the worker suffix, PROXY v1, pack and sha; everything else is e2e.
+Missing: `connection()` under a duplex harness (nonce prefix, lenient difficulty across job ids, duplicate across
+job ids, the 200-reject cut, vardiff math, a second login, the per-IP cap), `upstream` (FIFO pending, unknown id,
+the sync guard), `block_found` twice, `settle_unanswered` from UTXOs; on the money side `block_found` end to end
+with the PPLNS window and bonus, `confirm_once` (aggregate to balances, verdicts, no double credit after a forced
+confirm), the payment lifecycle (`complete_payment`, refunds with `paid`), `merge` refusals, `cb_pay_block`.
+
+### Suggested order
+
+1 backups → 2-3 payouts silently skipped or backed off for a pool-side cause → 5 logins during a DB outage →
+10 the build cache → 9 health monitoring and 4 the admin payout timeout.
