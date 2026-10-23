@@ -17,6 +17,8 @@ mod config;
 mod conns;
 mod ctl;
 mod db;
+#[cfg(test)]
+mod db_tests;
 mod emission;
 mod network;
 mod payouts;
@@ -63,8 +65,8 @@ async fn main() -> Result<()> {
     if role.app() {
         anyhow::ensure!(db.acquire_instance_lock(db::APP_LOCK).await?, "another app half already runs against this database");
     }
-    if role == state::Role::App {
-        anyhow::ensure!(cfg.admin.token.len() >= 24, "run app needs [admin] token: it authenticates the stratum process's control interface");
+    if role != state::Role::All {
+        anyhow::ensure!(cfg.admin.token.len() >= 24, "run stratum / run app need [admin] token (24+ chars): it authenticates the control interface between them");
     }
     let (job_tx, _) = watch::channel(None);
     let (submit_tx, submit_rx) = mpsc::channel(256);
@@ -163,6 +165,8 @@ async fn main() -> Result<()> {
     if role == state::Role::Stratum {
         // its syncing-node guard needs the network height, which the app half's explorer cache writes
         tokio::spawn(net_height_loop(shared.clone()));
+        // the app half's view of the node: a heartbeat every 10 s with the current template (crate::state::NodeView)
+        tokio::spawn(node_job_beat(shared.clone()));
     }
 
     // ---- the app half
@@ -200,11 +204,28 @@ async fn main() -> Result<()> {
         info!(bind = %cfg.http.bind, "http listening");
         axum::serve(listener, app).await?;
     } else {
-        // stratum only: the control interface for the app process is this process's lifetime
-        ctl::serve(shared.clone()).await?;
+        // stratum only: the control interface for the app process; if it fails the miners are kept (the app loses
+        // its live view and says so), this process lives on until a signal
+        if let Err(e) = ctl::serve(shared.clone()).await {
+            error!("control interface: {e:#}; pool-app has no live view of the stratum process until it is restarted");
+        }
         std::future::pending::<()>().await;
     }
     Ok(())
+}
+
+/// Stratum-only: every 10 s the current template (height, difficulty, when it came) and the time now, for the app.
+async fn node_job_beat(shared: Arc<Shared>) {
+    loop {
+        if let Some(j) = shared.current_job() {
+            let t = state::now();
+            let v = serde_json::json!({ "height": j.height, "net_packed": j.net_packed, "at": t, "job_at": t - j.received.elapsed().as_secs() as i64 }).to_string();
+            if let Err(e) = shared.db.meta_set("node_job", &v).await {
+                tracing::warn!("meta node_job: {e:#}");
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    }
 }
 
 /// App-only: the node's template as the stratum process last wrote it (meta `node_job`), every 2 s.
@@ -213,7 +234,8 @@ async fn node_view_loop(shared: Arc<Shared>) {
         if let Ok(Some(v)) = shared.db.meta_get("node_job").await {
             if let Ok(j) = serde_json::from_str::<serde_json::Value>(&v) {
                 if let (Some(height), Some(net_packed), Some(at)) = (j["height"].as_u64(), j["net_packed"].as_u64(), j["at"].as_i64()) {
-                    *shared.node_cache.write().unwrap() = Some(state::NodeView { height, net_packed: net_packed as u32, at });
+                    let job_at = j["job_at"].as_i64().unwrap_or(at);
+                    *shared.node_cache.write().unwrap() = Some(state::NodeView { height, net_packed: net_packed as u32, at, job_at });
                 }
             }
         }
@@ -250,7 +272,8 @@ async fn shutdown(shared: Arc<Shared>, why: &str, code: i32) {
     use std::sync::atomic::Ordering;
     let workers = shared.connected_workers.load(Ordering::Relaxed);
     info!(reason = why, role = shared.role.as_str(), workers, "shutting down");
-    let _ = shared.stopping.send(true);
+    // send_replace: send() stores nothing when nobody subscribes, as in `run app` (the payout loop then never saw the stop)
+    shared.stopping.send_replace(true);
     let t0 = Instant::now();
     let mut left = 0;
     if shared.role.stratum() {

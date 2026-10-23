@@ -96,10 +96,10 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
 
     // Solutions in flight, by the job id we sent them under (the node answers with that id), each with its
     // block_submissions row (written before the node saw it) and when it was sent.
-    let mut pending: HashMap<String, VecDeque<(Option<i64>, Instant, Submit)>> = HashMap::new();
+    let mut pending: HashMap<String, VecDeque<(Option<i64>, Instant, Submit, i64)>> = HashMap::new();
     let mut logged_in = false;
     let mut last_sync_warn = Instant::now() - Duration::from_secs(3600);
-    let mut last_meta: (u64, Instant) = (0, Instant::now() - Duration::from_secs(3600));
+    let mut last_height = 0u64;
     let idle = Duration::from_secs(600);
 
     loop {
@@ -136,12 +136,12 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                                     continue;
                                 }
                                 info!(id = %job.upstream_id, height = job.height, difficulty = crate::pow::difficulty_to_double(job.net_packed), "new job");
-                                // for the app process (its tip, maturity, /api/stats): on a new height, else every 10 s
-                                if job.height != last_meta.0 || last_meta.1.elapsed() > Duration::from_secs(10) {
-                                    last_meta = (job.height, Instant::now());
-                                    let v = json!({ "height": job.height, "net_packed": job.net_packed, "at": crate::state::now() }).to_string();
+                                // a new height reaches the app at once (the 10 s beat covers the rest: main::node_job_beat)
+                                if job.height != last_height {
+                                    last_height = job.height;
+                                    let v = json!({ "height": job.height, "net_packed": job.net_packed, "at": crate::state::now(), "job_at": crate::state::now() }).to_string();
                                     let s2 = shared.clone();
-                                    tokio::spawn(async move { if let Err(e) = s2.db.meta_set("node_job", &v).await { warn!("meta node_job: {e:#}"); } });
+                                    tokio::spawn(async move { let _ = s2.db.meta_set("node_job", &v).await; });
                                 }
                                 shared.job_tx.send_replace(Some(Arc::new(job)));
                             }
@@ -158,19 +158,18 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                         let sub = pending.get_mut(&id).and_then(|q| q.pop_front());
                         if pending.get(&id).is_some_and(|q| q.is_empty()) { pending.remove(&id); }
                         match (sub, code) {
-                            (Some((row, _, sub)), 1) => {
+                            (Some((row, _, sub, found_ts)), 1) => {
                                 info!(height = sub.job.height, %blockhash, miner = %crate::state::Short(&sub.address), worker = %sub.worker, "BLOCK FOUND, accepted by node");
-                                if let Some(row) = row {
-                                    if let Err(e) = shared.db.submission_answered(row, "accepted", Some(&blockhash.to_lowercase()), None, crate::state::now()).await {
-                                        error!(row, "block_submissions: {e:#}");
-                                    }
-                                }
-                                tokio::spawn(crate::accounting::credit_found(shared.clone(), row, sub, blockhash));
+                                // no database call on this loop: the node's next job (right after our block) must be read
+                                // at once; the task marks the row accepted and credits (a shutdown waits for it)
+                                shared.crediting.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                tokio::spawn(crate::accounting::credit_found(shared.clone(), row, sub, blockhash, found_ts, true));
                             }
-                            (Some((row, _, sub)), _) => {
+                            (Some((row, _, sub, _)), _) => {
                                 warn!(height = sub.job.height, code, %desc, miner = %crate::state::Short(&sub.address), "block solution rejected by node");
                                 if let Some(row) = row {
-                                    let _ = shared.db.submission_answered(row, "rejected", None, Some(&format!("{code} {desc}")), crate::state::now()).await;
+                                    let s2 = shared.clone();
+                                    tokio::spawn(async move { let _ = s2.db.submission_answered(row, "rejected", None, Some(&format!("{code} {desc}")), crate::state::now()).await; });
                                 }
                             }
                             (None, _) => warn!(%id, code, %desc, "result for unknown submission"),
@@ -185,18 +184,21 @@ async fn drive<S: AsyncRead + AsyncWrite + Unpin>(shared: &Arc<Shared>, stream: 
                 let sol = json!({ "jsonrpc": "2.0", "id": id, "method": "solution", "nonce": hex::encode(sub.nonce), "output": hex::encode(sub.output) });
                 // on disk first: if the link drops before the node answers, or the crediting fails, the solution
                 // is still known (accounting::credit_loop settles it); a DB error must not hold the block back
-                let row = match shared.db.submission_sent(&sub, crate::state::now()).await {
-                    Ok(r) => Some(r),
-                    Err(e) => { error!(height = sub.job.height, "block_submissions: {e:#} (sending anyway)"); None }
+                // bounded: a slow database must not hold a found block back from the network (orphan risk)
+                let found_ts = crate::state::now();
+                let row = match tokio::time::timeout(Duration::from_millis(500), shared.db.submission_sent(&sub, found_ts)).await {
+                    Ok(Ok(r)) => Some(r),
+                    Ok(Err(e)) => { error!(height = sub.job.height, "block_submissions: {e:#} (sending anyway)"); None }
+                    Err(_) => { error!(height = sub.job.height, "block_submissions: no answer in 0.5 s (sending anyway)"); None }
                 };
                 if let Err(e) = wr.write_all(format!("{sol}\n").as_bytes()).await {
                     error!(height = sub.job.height, row = ?row, "block solution NOT sent, the node link failed: {e}");
                     return Err(e.into());
                 }
                 info!(height = sub.job.height, miner = %crate::state::Short(&sub.address), row = ?row, "block solution sent to node");
-                pending.entry(id).or_default().push_back((row, Instant::now(), sub));
+                pending.entry(id).or_default().push_back((row, Instant::now(), sub, found_ts));
                 // a node that never answers: forget what it has not answered for 10 minutes (the rows stay)
-                pending.retain(|_, q| { q.retain(|(_, at, _)| at.elapsed() < Duration::from_secs(600)); !q.is_empty() });
+                pending.retain(|_, q| { q.retain(|(_, at, _, _)| at.elapsed() < Duration::from_secs(600)); !q.is_empty() });
             }
         }
     }

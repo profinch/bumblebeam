@@ -17,12 +17,13 @@ const VERSION = '1.0.0';
 const GROTH = 100000000n;
 
 // ---------- upstream ----------
-async function fetchJson(url, timeoutMs = 30000) {
+// `bodyOn`: statuses whose JSON body is the answer (the pool's /api/health is a 503 with its reasons when not ok)
+async function fetchJson(url, timeoutMs = 30000, bodyOn = []) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const r = await fetch(url, { signal: ctl.signal });
-    if (!r.ok) throw new HttpError(502, `upstream answered ${r.status}`);
+    if (!r.ok && !bodyOn.includes(r.status)) throw new HttpError(502, `upstream answered ${r.status}`);
     return await r.json();
   } catch (e) {
     if (e instanceof HttpError) throw e;
@@ -509,17 +510,17 @@ const TOOLS = [
   ['explorer_names', 'BANS (Beam Anonymous Name Service) names: owner key, status, registration and expiry heights and dates, sale price.', { q: str('optional name filter'), status: str('optional active, on_hold or expired'), for_sale: { type: 'boolean', description: 'only names listed for sale' } }, (a) => v1Names(new URLSearchParams({ q: a.q || '', status: a.status || '', ...(a.for_sale ? { for_sale: '1' } : {}) }))],
   ['explorer_contracts', 'Deployed Beam contracts: kind (when Beam\'s parser knows it), shader hash, deployment height, locked funds, owned assets.', { q: str('optional filter by kind, ID or shader'), kind: str('optional kind prefix, e.g. DEX') }, (a) => v1Contracts(new URLSearchParams({ q: a.q || '', kind: a.kind || '' }))],
   ['explorer_contract', 'One contract by ID: decoded state, locked funds, owned assets, versions and recent calls.', { id: str('contract ID, 64 hex characters'), calls: intp('how many recent calls, 1-500 (default 20)') }, (a) => v1Contract(String(a.id || ''), new URLSearchParams(a.calls ? { calls: String(a.calls) } : {})), ['id']],
-  ['pool_stats', 'BumbleBeam pool statistics: hashrate (Sol/s), miners, workers, blocks in 24h, blocks still confirming (`blocksPending`), effort, fee, payout settings, PPLNS and solo split in `modes`, the hashrate chart and its `peak` over the range.', { range: str('optional chart range: 24h, 7d or 30d'), mode: str('optional chart of one mode: pplns (the pool) or solo; both by default') }, async (a) => withPeak(await pool(`stats${query({ range: a.range, mode: a.mode })}`), a.range)],
+  ['pool_stats', 'BumbleBeam pool statistics (cached up to 10 s): hashrate (Sol/s), miners, workers, connectedWorkers (null when the stratum half does not answer), blocks in 24h, blocks still confirming (`blocksPending`), effort, fee, payout settings, PPLNS and solo split in `modes`, the hashrate chart and its `peak` over the range.', { range: str('optional chart range: 24h, 7d or 30d'), mode: str('optional chart of one mode: pplns (the pool) or solo; both by default') }, async (a) => withPeak(await pool(`stats${query({ range: a.range, mode: a.mode })}`), a.range)],
   ['pool_blocks', 'Blocks found by the BumbleBeam pool, newest first, with status, confirmations, effort and finder.', { limit: intp('how many, 1-500 (default 50)'), before: intp('only blocks below this height') }, (a) => pool(`blocks?limit=${clampLimit(a.limit, 50, 500)}${a.before ? `&before=${Number(a.before)}` : ''}`)],
   ['pool_block_heights', 'Every block the BumbleBeam pool found that the chain kept, newest first, as [height, mode, status] only: one small list to tell whether a height is ours or to count blocks by status.', {}, () => pool('blocks/heights')],
   ['pool_block_round', 'How the BumbleBeam pool split one block it found: fee, finder bonus, the PPLNS window and the difficulty taken, and every credit (difficulty and amount, no addresses). Each share credit = floor(shared x difficulty / total). Give an address to mark that miner\'s rows.', { height: intp('block height'), address: str('optional: a miner\'s payout address, to mark their rows') }, (a) => pool(`blocks/${Number(a.height)}${query({ address: a.address ? String(a.address).replace(/\s+/g, '') : undefined })}`), ['height']],
-  ['pool_miner', 'One miner on the BumbleBeam pool by payout address: hashrate and its peak over the range, unpaid and immature balance, paid total, workers with their modes (pplns, solo), payments, blocks found.', { address: str('the miner\'s Beam payout address'), range: str('optional chart range: 24h, 7d or 30d'), mode: str('optional: pplns or solo shares only (hashrate, workers, chart)') }, async (a) => withPeak(await pool(`miners/${encodeURIComponent(String(a.address || '').replace(/\s+/g, ''))}${query({ range: a.range, mode: a.mode })}`), a.range), ['address']],
+  ['pool_miner', 'One miner on the BumbleBeam pool by payout address: hashrate and its peak over the range, unpaid and immature balance, paid total, workers with their modes (pplns, solo), payments, blocks found, and payoutFailures {count, lastAt, reason, nextTryAt} when payouts to the address keep failing (a regular address whose wallet is offline; the pool retries with a growing pause, at most a day).', { address: str('the miner\'s Beam payout address'), range: str('optional chart range: 24h, 7d or 30d'), mode: str('optional: pplns or solo shares only (hashrate, workers, chart)') }, async (a) => withPeak(await pool(`miners/${encodeURIComponent(String(a.address || '').replace(/\s+/g, ''))}${query({ range: a.range, mode: a.mode })}`), a.range), ['address']],
   ['pool_miners', 'Top miners on the BumbleBeam pool by hashrate, with the modes they mine in (no addresses: Beam is private).', { limit: intp('how many, 1-500 (default 50)'), mode: str('optional: pplns or solo only') }, (a) => pool(`miners${query({ limit: clampLimit(a.limit, 50, 500), mode: a.mode })}`)],
   ['pool_payments', 'Payout runs of the BumbleBeam pool with amounts and kernels.', { limit: intp('how many, 1-500 (default 50)') }, (a) => pool(`payments?limit=${clampLimit(a.limit, 50, 500)}`)],
   ['pool_network', 'Beam network from the chain (height, difficulty, block time, hashrate in Sol/s, blocks in 24h), BEAM/USD (`priceUsd`, the on-chain Oracle2 median), and every Beam mining pool with hashrate, miners, workers, blocks in 24h, fee and scheme. Network hashrate less the pools\' is miners no pool lists (solo nodes, private pools).', {}, () => pool('network')],
   ['pool_network_blocks', 'The latest Beam blocks (up to 500) with the pool that found each: every listed pool\'s own API checked against BumbleBeam\'s node (hash by height, orphans dropped), BumbleBeam\'s own blocks from its database. `mined_by` null: no listed pool claims it (solo miners, private pools).', { limit: intp('how many, 1-500 (default 50)'), before: intp('only blocks below this height'), pool: str('optional pool id, e.g. 2miners, herominers, bumblebeam') }, (a) => v1NetworkBlocks(new URLSearchParams(Object.entries(a).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])))],
   ['explorer_mining_pools', 'Beam network and every Beam mining pool: height, difficulty, block time, network hashrate (Sol/s), blocks in 24h, BEAM/USD (on-chain oracle), and per pool hashrate, miners, workers, blocks in 24h, fee, scheme, last block.', {}, () => v1Network()],
-  ['pool_health', 'Whether the BumbleBeam pool is up and has work from its node.', {}, () => pool('health')],
+  ['pool_health', 'Whether the BumbleBeam pool is up: ok, role (all or app: the API half of the pool), node (it has a template from its node), jobAgeSecs (how old that template is), uptime, workers (logged-in miner connections; null when the stratum half does not answer), stratum (up or down). ok is false - and the HTTP answer a 503 - when the template is over 10 minutes old or the stratum half is down.', {}, () => fetchJson(`${POOL}/api/health`, 30000, [503])],
 ].map(([name, description, properties, run, required]) => ({ name, description, inputSchema: { type: 'object', properties, ...(required ? { required } : {}), additionalProperties: false }, run, annotations: { readOnlyHint: true, openWorldHint: true } }));
 
 // two MCP servers on one process: the explorer's (/mcp) knows the chain, the pool's (/mcp/pool,
@@ -533,7 +534,7 @@ const MCP_SERVERS = {
   pool: {
     tools: TOOLS.filter((t) => t.name.startsWith('pool_')),
     info: { name: 'bumblebeam-pool', title: 'BumbleBeam Pool: Beam mining', version: VERSION },
-    instructions: 'Read-only tools for the BumbleBeam mining pool for Beam (BEAM, BeamHash III, PPLNS): pool and network stats, blocks the pool found, a miner by payout address (hashrate, balances, workers, payments), payouts, health. Hashrate is in Sol/s, amounts in BEAM. For the blockchain itself use https://explorer.bumblebeam.org/mcp.',
+    instructions: 'Read-only tools for the BumbleBeam mining pool for Beam (BEAM, BeamHash III, PPLNS): pool and network stats, blocks the pool found, a miner by payout address (hashrate, balances, workers, payments), payouts, health. Hashrate is in Sol/s; pool amounts (balances, payments, rewards) are in groth, 1 BEAM = 100000000 groth. For the blockchain itself use https://explorer.bumblebeam.org/mcp.',
   },
 };
 

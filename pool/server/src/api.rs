@@ -79,7 +79,13 @@ async fn micro_cache(req: Request, next: Next) -> Response {
     if ttl == 0 {
         return next.run(req).await;
     }
-    let key = req.uri().to_string();
+    // the path and only the parameters these routes read: anything else neither bypasses the cache nor grows it
+    let key = {
+        let mut q: Vec<(String, String)> = req.uri().query().map(|q| url_pairs(q)).unwrap_or_default();
+        q.retain(|(k, _)| matches!(k.as_str(), "range" | "mode" | "limit" | "before" | "miner"));
+        q.sort();
+        format!("{}?{}", req.uri().path(), q.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("&"))
+    };
     let hit = MICRO.lock().unwrap().get(&key).filter(|(at, _)| at.elapsed().as_secs() < ttl).map(|(_, b)| b.clone());
     let body = match hit {
         Some(b) => b,
@@ -92,10 +98,12 @@ async fn micro_cache(req: Request, next: Next) -> Response {
                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "response too large" }))).into_response();
             };
             let mut m = MICRO.lock().unwrap();
-            if m.len() > 2000 {
-                m.retain(|_, (at, _)| at.elapsed().as_secs() < 60);
+            if m.len() >= 2000 {
+                m.retain(|_, (at, _)| at.elapsed().as_secs() < 30);
             }
-            m.insert(key, (std::time::Instant::now(), b.clone()));
+            if m.len() < 2000 {
+                m.insert(key, (std::time::Instant::now(), b.clone()));
+            }
             b
         }
     };
@@ -103,6 +111,10 @@ async fn micro_cache(req: Request, next: Next) -> Response {
     res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
     res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_str(&format!("public, max-age={ttl}")).unwrap());
     res
+}
+
+fn url_pairs(q: &str) -> Vec<(String, String)> {
+    q.split('&').filter(|p| !p.is_empty()).map(|p| { let (k, v) = p.split_once('=').unwrap_or((p, "")); (k.to_string(), v.to_string()) }).collect()
 }
 
 fn range(q: &HashMap<String, String>) -> crate::db::ChartRange {
@@ -140,7 +152,7 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
         "hashrate": hashrate, "minersTotal": miners, "workersTotal": workers,
         "stats": { "lastBlockFound": last_block, "roundShares": round },
         "nodes": [{ "name": "beam-node", "height": height.map(|h| h.to_string()), "difficulty": difficulty.map(|d| format!("{d:.1}")),
-                    "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|j| j.at.to_string()),
+                    "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|j| j.job_at.to_string()),
                     "connected": job.is_some() }],
         "name": cfg.name,
         "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "minPayout": cfg.min_payout_groth, "payoutScheme": "PPLNS", "finderBonus": cfg.finder_bonus_percent,
@@ -244,7 +256,7 @@ async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Qu
     if let Some(id) = s.db.miner_lookup(&address).await? {
         let (n, last, reason) = s.db.payout_failures(id).await?;
         if n > 0 {
-            let next = last.map(|t| t + (7200i64 * 2i64.saturating_pow((n - 1).clamp(0, 30) as u32)).min(86400));
+            let next = last.map(|t| t + (7200i64.saturating_mul(2i64.saturating_pow((n - 1).clamp(0, 30) as u32))).min(86400));
             v["payoutFailures"] = json!({ "count": n, "lastAt": last, "reason": reason, "nextTryAt": next });
         }
     }
@@ -370,7 +382,10 @@ async fn coinbase_info(State(api): State<Api>) -> R {
     if !api.shared.cfg.coinbase.enabled {
         return Ok(Json(json!({ "enabled": false })));
     }
-    Ok(Json(api.stratum.coinbase_info().await?))
+    match api.stratum.coinbase_info().await {
+        Ok(v) => Ok(Json(v)),
+        Err(e) => Err(ApiError(e.context("the stratum process (coinbase) does not answer"))),
+    }
 }
 
 async fn coinbase_upload(State(api): State<Api>, body: axum::body::Bytes) -> Response {
@@ -396,9 +411,10 @@ async fn health(State(api): State<Api>) -> Response {
     // ok = this process answers, it has a node template under 2 min old, and (app-only) the stratum process answers
     let s = &api.shared;
     let job = s.node_view();
-    let age = job.as_ref().map(|j| now() - j.at);
+    // a template can be minutes old on a slow block; ten minutes without a new one is a stuck node
+    let age = job.as_ref().map(|j| now() - j.job_at);
     let workers = api.stratum.workers().await;
-    let ok = age.is_some_and(|a| a < 120) && workers.is_some();
+    let ok = age.is_some_and(|a| a < 600) && workers.is_some();
     let body = json!({ "ok": ok, "role": s.role.as_str(), "node": job.is_some(), "jobAgeSecs": age, "uptime": s.started.elapsed().as_secs(),
                        "workers": workers, "stratum": if workers.is_some() { "up" } else { "down" } });
     (if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(body)).into_response()
@@ -638,4 +654,13 @@ async fn admin_address(State(api): State<Api>, Query(q): Query<HashMap<String, S
     };
     Ok(Json(json!({ "address": a, "shape": shape, "minerId": known.as_ref().map(|r| r.get::<_, i64>(0)),
                     "balance": known.as_ref().map(|r| r.get::<_, i64>(1)), "wallet": wallet })))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn query_pairs() {
+        assert_eq!(super::url_pairs("range=24h&x=1&&mode="), vec![("range".into(), "24h".into()), ("x".into(), "1".into()), ("mode".into(), "".into())]);
+        assert!(super::url_pairs("").is_empty());
+    }
 }

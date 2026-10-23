@@ -19,12 +19,12 @@ use tracing::info;
 /// The stratum half as the app half sees it.
 pub enum Stratum {
     Local(Arc<Shared>),
-    Remote { base: String, token: String, http: reqwest::Client, cache: tokio::sync::Mutex<Option<(Instant, Value)>> },
+    Remote { base: String, token: String, http: reqwest::Client, cache: std::sync::Mutex<Option<(Instant, Result<Value, String>)>> },
 }
 
 impl Stratum {
     pub fn remote(base: &str, token: &str, http: reqwest::Client) -> Stratum {
-        Stratum::Remote { base: base.trim_end_matches('/').to_string(), token: token.to_string(), http, cache: tokio::sync::Mutex::new(None) }
+        Stratum::Remote { base: base.trim_end_matches('/').to_string(), token: token.to_string(), http, cache: std::sync::Mutex::new(None) }
     }
 
     /// `{live: [...], recent: [...], workers: n}`: the connections, cached a second when remote.
@@ -32,15 +32,21 @@ impl Stratum {
         match self {
             Stratum::Local(s) => Ok(snapshot(s)),
             Stratum::Remote { base, token, http, cache } => {
-                let mut c = cache.lock().await;
-                if let Some((at, v)) = c.as_ref() {
-                    if at.elapsed() < Duration::from_secs(1) {
-                        return Ok(v.clone());
+                // an answer is reused 1 s, a failure 2 s; the lock is never held across the request, so a hung
+                // stratum process costs each caller one 3 s timeout at most, not a queue of them
+                if let Some((at, v)) = cache.lock().unwrap().as_ref() {
+                    let ttl = if v.is_ok() { 1 } else { 2 };
+                    if at.elapsed() < Duration::from_secs(ttl) {
+                        return v.clone().map_err(|e| anyhow!(e));
                     }
                 }
-                let v: Value = http.get(format!("{base}/ctl/live")).bearer_auth(token).timeout(Duration::from_secs(3)).send().await?.error_for_status()?.json().await?;
-                *c = Some((Instant::now(), v.clone()));
-                Ok(v)
+                let r: Result<Value> = async {
+                    Ok(http.get(format!("{base}/ctl/live")).bearer_auth(token).timeout(Duration::from_secs(3)).send().await?.error_for_status()?.json().await?)
+                }
+                .await;
+                let r = r.map_err(|e| format!("the stratum process does not answer: {e}"));
+                *cache.lock().unwrap() = Some((Instant::now(), r.clone()));
+                r.map_err(|e| anyhow!(e))
             }
         }
     }

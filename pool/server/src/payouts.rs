@@ -466,7 +466,8 @@ async fn poll_pending(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
             }
             2 | 4 => {
                 if shared.db.refund_payment(&tx_id, "pending").await? {
-                    let reason = st["failure_reason"].as_str().map(str::to_string).unwrap_or_else(|| if status == 2 { "cancelled".into() } else { st["failure_reason"].to_string() });
+                    let reason = st["failure_reason"].as_str().filter(|r| !r.is_empty()).map(str::to_string)
+                        .unwrap_or_else(|| if status == 2 { "cancelled".into() } else { "failed".into() });
                     let _ = shared.db.set_failure_reason(&tx_id, &reason).await;
                     warn!(address = %crate::state::Short(&address), value, %tx_id, status, %reason, "payout failed, refunded");
                 }

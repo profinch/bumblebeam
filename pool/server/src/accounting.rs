@@ -21,10 +21,35 @@ use tracing::{info, warn};
 /// Credits a block the node accepted, retrying on errors (a lost credit is a reward the pool keeps by
 /// mistake). The block_submissions row is marked credited once done; whatever is left is picked up by
 /// credit_loop. A shutdown waits for these (Shared::crediting).
-pub async fn credit_found(shared: Arc<Shared>, row: Option<i64>, sub: Submit, blockhash: String) {
+pub async fn credit_found(shared: Arc<Shared>, row: Option<i64>, sub: Submit, blockhash: String, found_ts: i64, counted: bool) {
     use std::sync::atomic::Ordering;
-    shared.crediting.fetch_add(1, Ordering::SeqCst);
+    // `counted`: the caller already added this one to Shared::crediting (upstream does before spawning, so a stop
+    // that starts before this task runs still waits for it)
+    if !counted {
+        shared.crediting.fetch_add(1, Ordering::SeqCst);
+    }
     let height = sub.job.height;
+    let hash = blockhash.to_lowercase();
+    // the row is marked accepted here, off the node link; without a row (its insert failed) one is written now, so
+    // a crediting that fails every attempt is still on disk for credit_loop
+    let row = match row {
+        Some(r) => {
+            if let Err(e) = shared.db.submission_answered(r, "accepted", Some(&hash), None, now()).await {
+                tracing::error!(r, "block_submissions accepted: {e:#}");
+            }
+            Some(r)
+        }
+        None => match shared.db.submission_sent(&sub, found_ts).await {
+            Ok(r) => {
+                let _ = shared.db.submission_answered(r, "accepted", Some(&hash), None, now()).await;
+                Some(r)
+            }
+            Err(e) => {
+                tracing::error!(height, "block_submissions: {e:#}; the block's crediting is not on disk");
+                None
+            }
+        },
+    };
     // the PPLNS window must see the shares queued up to the winning one
     if !shared.flush_shares(5).await {
         warn!(height, "the share writer did not flush in 5 s; crediting with what is in the database");
@@ -33,7 +58,7 @@ pub async fn credit_found(shared: Arc<Shared>, row: Option<i64>, sub: Submit, bl
     for attempt in 1..=4u32 {
         let s = sub.take().expect("a submission per attempt");
         let again = Submit { job: s.job.clone(), nonce: s.nonce, output: s.output, miner_id: s.miner_id, address: s.address.clone(), worker: s.worker.clone(), mode: s.mode };
-        match block_found(&shared, s, blockhash.clone()).await {
+        match block_found(&shared, s, blockhash.clone(), found_ts).await {
             Ok(()) => {
                 if let Some(row) = row {
                     if let Err(e) = shared.db.submission_credited(row, now()).await {
@@ -63,9 +88,9 @@ pub async fn credit_loop(shared: Arc<Shared>) {
         }
         match shared.db.submissions_to_credit(now() - 60).await {
             Ok(list) => {
-                for (row, sub, hash) in list {
+                for (row, sub, hash, found_ts) in list {
                     warn!(row, height = sub.job.height, "an accepted block was not credited yet: crediting it now");
-                    credit_found(shared.clone(), Some(row), sub, hash).await;
+                    credit_found(shared.clone(), Some(row), sub, hash, found_ts, false).await;
                 }
             }
             Err(e) => warn!("block_submissions: {e:#}"),
@@ -81,8 +106,9 @@ pub async fn credit_loop(shared: Arc<Shared>) {
     }
 }
 
-pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -> Result<()> {
-    let ts = now();
+/// `ts`: when the block was found (not when it is credited: a retry or credit_loop may run much later, and the PPLNS
+/// window, the block's time and the next round's start must not move with it).
+pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String, ts: i64) -> Result<()> {
     let height = sub.job.height as i64;
     let net_diff = pow::difficulty_to_double(sub.job.net_packed);
     let reward = miner_reward_groth(sub.job.height) as i64;
@@ -99,6 +125,10 @@ pub async fn block_found(shared: &Arc<Shared>, sub: Submit, blockhash: String) -
 
     let mut c = shared.db.client().await?;
     let tx = c.transaction().await?;
+    // the credits are written for miner ids: a merge must not move a miner's rows meanwhile (the lock of confirm/merge)
+    tx.execute("SELECT pg_advisory_xact_lock(7211001)", &[]).await?;
+    // the PPLNS window over 3 days can exceed the pool's statement_timeout on a slow day: no limit for this one
+    tx.execute("SET LOCAL statement_timeout = 0", &[]).await?;
     // A height already recorded: a reorg can replace an orphaned block with a new one of ours, then
     // the old credits go and the new ones are written; anything else at that height is a duplicate.
     let inserted = tx

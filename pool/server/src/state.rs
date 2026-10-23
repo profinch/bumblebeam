@@ -80,8 +80,10 @@ impl Role {
 pub struct NodeView {
     pub height: u64,
     pub net_packed: u32,
-    /// unix seconds when the stratum process got it
+    /// unix seconds of the stratum process's last heartbeat (every 10 s) - is it alive
     pub at: i64,
+    /// unix seconds when this template arrived - how old the work is (a slow block keeps it for minutes)
+    pub job_at: i64,
 }
 
 pub struct Shared {
@@ -126,10 +128,12 @@ impl Shared {
     /// Waits (at most `secs`) until every share queued so far is in the database.
     pub async fn flush_shares(&self, secs: u64) -> bool {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        if self.share_tx.send(ShareMsg::Flush(tx)).await.is_err() {
+        let wait = std::time::Duration::from_secs(secs);
+        // the send is bounded too: a full queue must not hang a shutdown or a block's crediting
+        if !matches!(tokio::time::timeout(wait, self.share_tx.send(ShareMsg::Flush(tx))).await, Ok(Ok(()))) {
             return false;
         }
-        matches!(tokio::time::timeout(std::time::Duration::from_secs(secs), rx).await, Ok(Ok(())))
+        matches!(tokio::time::timeout(wait, rx).await, Ok(Ok(())))
     }
 
     pub fn current_job(&self) -> Option<Arc<Job>> {
@@ -141,10 +145,11 @@ impl Shared {
     /// The node's template: this process's job, else (app-only) the stratum process's last one, if under 2 min old.
     pub fn node_view(&self) -> Option<NodeView> {
         if let Some(j) = self.current_job() {
-            return Some(NodeView { height: j.height, net_packed: j.net_packed, at: now() - j.received.elapsed().as_secs() as i64 });
+            return Some(NodeView { height: j.height, net_packed: j.net_packed, at: now(), job_at: now() - j.received.elapsed().as_secs() as i64 });
         }
         if self.role == Role::App {
-            return self.node_cache.read().unwrap().filter(|v| now() - v.at < 120);
+            // the stratum process beats every 10 s: a minute without a beat means it (or its node link) is gone
+            return self.node_cache.read().unwrap().filter(|v| now() - v.at < 60);
         }
         None
     }
