@@ -172,8 +172,8 @@ sudo ufw enable
 
 nginx, with a Let's Encrypt certificate: `location /api/ { proxy_pass http://127.0.0.1:8080; }` for
 the API (pass `X-Real-IP`: the pool logs it and rate-limits benchmark reports by it), and the pages
-from `/opt/bumblebeam/pool/web` with `try_files $uri /index.html;` (clean paths) and `/admin` from
-`admin.html`, as [`containers/pool-web/default.conf`](../deploy/docker/containers/pool-web/default.conf)
+from `/opt/bumblebeam/pool/web` with `try_files $uri /index.html;` (clean paths) and `/dash` from
+`dash.html`, as [`containers/pool-web/default.conf`](../deploy/docker/containers/pool-web/default.conf)
 does, Content-Security-Policy included.
 
 ### Regional relays
@@ -319,10 +319,10 @@ printf %s "$PW" | sudo install -m 600 -o 999 -g 999 /dev/stdin $B/secrets/postgr
 printf 'postgres://bumblebeam:%s@postgres:5432/bumblebeam\n' "$PW" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/database.url
 KEY=$(head -c 48 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 32)
 printf %s "$KEY" | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/node/secrets/stratum.api.keys
-ADMIN=$(openssl rand -hex 24)        # [admin] token: required, it authenticates pool-app to pool-stratum (and /admin)
+ADMIN=$(openssl rand -hex 24)        # [admin] token: required, it authenticates pool-app to pool-stratum (and /dash)
 sed -e "s|^api_key = .*|api_key = \"$KEY\"|" -e "s|^token = .*|token = \"$ADMIN\"|" /data/docker/pool.toml.example \
   | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/pool.toml
-echo "operator token: $ADMIN"        # for the dashboard at /admin; it is also in pool.toml
+echo "operator token: $ADMIN"        # for the dashboard at /dash; it is also in pool.toml
 unset PW KEY ADMIN
 cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml build beam-node
 sudo docker run --rm -u 10001:10001 -v $B/node/secrets:/s bumblebeam-beam \

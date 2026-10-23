@@ -56,7 +56,7 @@ bind = "0.0.0.0:8080"
 
 [admin]
 token = "CHANGE_ME"                       # required: pool-stratum and pool-app refuse to start without it. 24+ random chars
-                                          # (openssl rand -hex 24): the operator's dashboard at /admin and the control interface
+                                          # (openssl rand -hex 24): the operator's dashboard at /dash and the control interface
 
 [control]
 # only when the pool runs as two processes (`run stratum` + `run app`, docs/pool-split.md): the stratum process's
