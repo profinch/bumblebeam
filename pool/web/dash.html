@@ -28,6 +28,7 @@
   .adm-login-msg { min-height: 18px; line-height: 18px; margin: 0; color: var(--color-yellow); }  /* one line kept for a message: the panel does not grow */
   .adm-login-tok { flex: 1 1 220px; min-width: 0; height: 28px; padding: 0 8px; color: var(--text); font: 12px var(--font-mono);
     background: rgba(255, 255, 255, .07); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
+  .adm-login-tok:focus { outline: none; border-color: rgba(0, 246, 210, 0.5); }  /* as /nicehash's field */
   .tile .v.bad, .panel-meta .bad { color: var(--color-red); }
   #miners-table td { vertical-align: top; }
   #miners-table .stack-line { white-space: nowrap; }
@@ -73,7 +74,6 @@
   .adm-ask.danger h3 { color: var(--color-red); }
   .adm-ask .adm-row { justify-content: flex-end; margin-top: 16px; }
   @media (prefers-reduced-motion: reduce) { .adm-ask-bg, .adm-ask { transition: none; } }
-  .foot a.mail { font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
   .adm-seen { font-size: 11px; }
   .adm-ask b { color: var(--text); }
   .panel.addr .btn { flex: none; }
@@ -128,7 +128,7 @@
 
 <footer class="foot">
   <a href="/">Pool</a>
-  <a class="mail" href="mailto:support@bumblebeam.org">support@bumblebeam.org</a>
+  <a href="/nicehash">NiceHash</a>
 </footer>
 
 <script src="/dash.js?v=dev"></script>
