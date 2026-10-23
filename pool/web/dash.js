@@ -566,9 +566,9 @@
     return out;
   }
   const linkBadges = (l) => [
-    // the text is in the tooltips: 🔗 the same wallet, ≈ the same rig, 🌐 the same IP right now
+    // the text is in the tooltips: 🔗 the same wallet, ⛏ the same rig, 🌐 the same IP right now
     l && l.wallet.length ? `<span class="badge ok" title="the same wallet as ${l.wallet.map((i) => '#' + i).join(', ')}: its address carries the same wallet id">🔗 ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.rig.length ? `<span class="badge pending" title="the same rig as ${l.rig.map((i) => '#' + i).join(', ')}: the same IP and worker, one address taking over within an hour of the other - probably one person (a hint, not a proof)">≈ ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.rig.length ? `<span class="badge pending" title="the same rig as ${l.rig.map((i) => '#' + i).join(', ')}: the same IP and worker, one address taking over within an hour of the other - probably one person (a hint, not a proof)">⛏ ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
     l && l.now.length ? `<span class="badge pending" title="the same IP as ${l.now.map((i) => '#' + i).join(', ')} right now: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
   ].join(' ');
 
