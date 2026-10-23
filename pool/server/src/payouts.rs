@@ -37,6 +37,9 @@ pub struct PayNow {
 
 /// The frozen countdown's seconds left, kept so a restart does not quietly resume payouts; -1 runs.
 pub const META_FROZEN: &str = "payouts_frozen_left";
+/// When the next scheduled payout run is due (unix seconds): kept across restarts, so a release of pool-app no
+/// longer pushes the payouts 2 h further each time (2026-10-23: three restarts moved a 00:00 UTC run to 02:08).
+pub const META_NEXT: &str = "payouts_next_at";
 
 /// Freezes or resumes the scheduled payouts. Frozen, the countdown stops where it is and no
 /// scheduled run starts (the operator's "pay now" still works); resumed, it goes on from there.
@@ -63,6 +66,7 @@ pub async fn set_frozen(shared: &Shared, freeze: bool) -> Result<String> {
         }
         shared.next_payout.store(t + left, Relaxed);
         shared.db.meta_set(META_FROZEN, "-1").await?;
+        shared.db.meta_set(META_NEXT, &(t + left).to_string()).await?;
         shared.payouts_frozen_left.store(-1, Relaxed);
         info!(left, "scheduled payouts resumed by the operator");
         Ok(format!("scheduled payouts resumed: the next run in {}", mins(left)))
@@ -79,7 +83,19 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
     // wall-clock seconds: the operator's countdown shows the same moment, and can freeze it
     let interval = shared.cfg.pool.payout_interval_secs.max(60) as i64;
     let frozen = shared.db.meta_get(META_FROZEN).await.ok().flatten().and_then(|v| v.parse::<i64>().ok()).filter(|v| *v >= 0);
-    shared.next_payout.store(now() + frozen.unwrap_or(interval), Relaxed);
+    let next = match frozen {
+        Some(left) => now() + left,
+        None => {
+            // the schedule as it was before this start; else the last payout run in the books; else a full interval
+            let saved = shared.db.meta_get(META_NEXT).await.ok().flatten().and_then(|v| v.parse::<i64>().ok());
+            let last_run = shared.db.last_payout_ts().await.ok().flatten().map(|t| t + interval);
+            let at = saved.or(last_run).unwrap_or(now() + interval);
+            // overdue (the process was down at the time): a minute after the start, once the wallet link is up
+            at.max(now() + 60)
+        }
+    };
+    shared.next_payout.store(next, Relaxed);
+    info!(in_secs = next - now(), "next scheduled payout run");
     if let Some(left) = frozen {
         shared.payouts_frozen_left.store(left, Relaxed);
         warn!(left, "scheduled payouts are frozen by the operator (dashboard); they wait until resumed");
@@ -98,6 +114,7 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
             }
             if shared.payouts_frozen_left.load(Relaxed) < 0 && now() >= shared.next_payout.load(Relaxed) {
                 shared.next_payout.store(now() + interval, Relaxed);
+                let _ = shared.db.meta_set(META_NEXT, &(now() + interval).to_string()).await;
                 if let Err(e) = pay_once(&shared, &wallet, None).await {
                     warn!("payout run: {e:#}");
                 }

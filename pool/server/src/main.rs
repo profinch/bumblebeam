@@ -177,13 +177,16 @@ async fn main() -> Result<()> {
         {
             let s = shared.clone();
             tokio::spawn(async move {
+                let mut pruned_hour = 0;
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                     let t = state::now();
                     if let Err(e) = s.db.sample_hashrates(t).await {
                         error!("hashrate samples: {e:#}");
                     }
-                    if t % 3600 < 60 {
+                    // once per clock hour (a `t % 3600 < 60` test could miss an hour as the loop drifts)
+                    if t / 3600 != pruned_hour {
+                        pruned_hour = t / 3600;
                         if let Err(e) = s.db.prune(t).await {
                             error!("prune: {e:#}");
                         }
