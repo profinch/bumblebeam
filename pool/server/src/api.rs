@@ -64,7 +64,7 @@ pub fn router(api: Api) -> Router {
         .with_state(api)
 }
 
-/// The public read-only routes every visitor's page polls (each /api/stats is ~15 queries): their 200 answers are
+/// The public read-only routes every visitor's page polls (each /api/stats is ~10 queries): their 200 answers are
 /// kept in memory 10-30 s per URL and sent with a matching Cache-Control, so a crowd costs one set of queries
 /// per period, not one per tab. Per-miner pages, admin and health are not cached.
 static MICRO: std::sync::LazyLock<std::sync::Mutex<HashMap<String, (std::time::Instant, axum::body::Bytes)>>> =
@@ -156,25 +156,37 @@ fn limit(q: &HashMap<String, String>, default: i64, max: i64) -> i64 {
 async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
     let s = &api.shared;
     let t = now();
-    let hashrate = s.db.pool_hashrate(t).await?;
-    let (miners, workers) = s.db.pool_counts(t).await?;
-    let last_block = s.db.last_block_ts(None, None).await?;
-    let round = s.db.round_shares("pplns", s.db.last_block_ts(Some("pplns"), None).await?.unwrap_or(0), None).await?;
-    let (blocks24h, effort24h) = s.db.blocks_24h(t).await?;
+    let (hashrate, miners, workers) = s.db.pool_now(t).await?;
+    let b = s.db.block_summary(t).await?;
+    let round = s.db.round_shares("pplns", b.last_pplns_ts.unwrap_or(0), None).await?;
     let job = s.node_view();
     let height = job.as_ref().map(|j| j.height.saturating_sub(1));
     let difficulty = job.as_ref().map(|j| pow::difficulty_to_double(j.net_packed));
     let net = api.net.data.read().await.clone();
     let cfg = &s.cfg.pool;
     let workers_now = api.stratum.workers().await;
+    // the last blocks the chain kept, as the miningpoolstats report other Beam pools publish (pool-info.php?miningpoolstats)
+    let recent: Vec<Value> = s.db.blocks(20, None, cfg.maturity as i64, s.tip_height().map(|h| h as i64), None).await?
+        .iter()
+        .filter(|b| b["orphan"] != true)
+        .map(|b| json!({ "blockNumber": b["height"], "timestampMilliSeconds": b["timestamp"].as_i64().map(|ts| ts * 1000),
+                         "status": if b["status"] == "confirmed" { "[Available]" } else { "[Maturing]" } }))
+        .collect();
     Ok(Json(json!({
         "hashrate": hashrate, "minersTotal": miners, "workersTotal": workers,
-        "stats": { "lastBlockFound": last_block, "roundShares": round },
+        "stats": { "lastBlockFound": b.last_ts, "roundShares": round },
+        // open-ethereum-pool's totals over all blocks (pool/API.md)
+        "now": t * 1000, "candidatesTotal": 0, "immatureTotal": b.pending, "maturedTotal": b.confirmed,
+        // the miningpoolstats report: `hashrate` above is its field too; its `name` (the coin's) is left out, ours is the pool's.
+        // These are the only min payout (in BEAM), scheme, 24 h block count and pending count: config has no copies.
+        "coin": "BEAM", "feePercent": cfg.fee_percent, "minPay": cfg.min_payout_groth as f64 / 1e8, "feeType": "PPLNS",
+        "timestampMilliSeconds": t * 1000, "miners": miners, "workers": workers, "blockHeight": height,
+        "blocksFound24H": b.blocks24h, "lastBlocksFound": recent,
         "nodes": [{ "name": "beam-node", "height": height.map(|h| h.to_string()), "difficulty": difficulty.map(|d| format!("{d:.1}")),
                     "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|j| j.job_at.to_string()),
                     "connected": job.is_some() }],
         "name": cfg.name,
-        "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "minPayout": cfg.min_payout_groth, "payoutScheme": "PPLNS", "finderBonus": cfg.finder_bonus_percent,
+        "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "finderBonus": cfg.finder_bonus_percent,
                     "pplnsWindow": cfg.pplns_window, "blockReward": height.map(|h| miner_reward_groth(h + 1)), "maturity": cfg.maturity,
                     "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host, "nodeAddr": cfg.public_node,
                     "minerPaysTxFee": cfg.miner_pays_tx_fee, "txFee": { "regular": s.cfg.wallet_api.tx_fee_groth, "shielded": s.cfg.wallet_api.shielded_fee_groth },
@@ -184,7 +196,7 @@ async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>)
         "charts": { "hashrate": s.db.pool_chart(t, range(&q), mode(&q).unwrap_or("pool")).await?,
                     "peak": s.db.pool_chart_peak(t, range(&q), mode(&q).unwrap_or("pool")).await? },
         "modes": s.db.mode_stats(t).await?,
-        "blocks24h": blocks24h, "effort24h": effort24h, "blocksPending": s.db.blocks_pending().await?,
+        "effort24h": b.effort24h,
         "connectedWorkers": workers_now,
     })))
 }
@@ -198,7 +210,8 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
         Some(a) => match clean_address(a) {
             Some(a) => match s.db.miner_lookup(&a).await? {
                 Some(id) => Some(id),
-                None => return Ok(Json(json!({ "blocks": [], "matured": [], "immature": [], "candidates": [] }))),
+                None => return Ok(Json(json!({ "blocks": [], "matured": [], "immature": [], "candidates": [],
+                                               "maturedTotal": 0, "immatureTotal": 0, "candidatesTotal": 0 }))),
             },
             None => return Ok(Json(json!({ "error": "not a Beam address" }))),
         },
@@ -212,7 +225,10 @@ async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>
     };
     let matured = by_status(&["confirmed"]);
     let immature = by_status(&["pending", "unverified"]);
-    Ok(Json(json!({ "blocks": list, "matured": matured, "immature": immature, "candidates": [] })))
+    // and their totals over all blocks (that miner's with `miner`), not this page
+    let (pending, confirmed) = s.db.block_totals(miner).await?;
+    Ok(Json(json!({ "blocks": list, "matured": matured, "immature": immature, "candidates": [],
+                    "maturedTotal": confirmed, "immatureTotal": pending, "candidatesTotal": 0 })))
 }
 
 /// Every block the pool found and the chain kept, newest first: `[height, mode, status]`, with
@@ -373,7 +389,7 @@ async fn miningboard(State(api): State<Api>) -> R {
     let s = &api.shared;
     let t = now();
     let iso = |ts: i64| chrono::DateTime::from_timestamp(ts, 0).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
-    let (miners, workers) = s.db.pool_counts(t).await?;
+    let (hashrate, miners, workers) = s.db.pool_now(t).await?;
     let (blocks24h, _) = s.db.blocks_24h(t).await?;
     let job = s.node_view();
     let height = job.as_ref().map(|j| j.height.saturating_sub(1));
@@ -387,7 +403,7 @@ async fn miningboard(State(api): State<Api>) -> R {
         .collect();
     Ok(Json(json!({
         "spec": "miningboard-pool-v1", "coin": "BEAM", "algorithm": "BeamHash III", "updated_at": iso(t),
-        "pool": { "hashrate": s.db.pool_hashrate(t).await?, "miners": miners, "workers": workers, "blocks_24h": blocks24h,
+        "pool": { "hashrate": hashrate, "miners": miners, "workers": workers, "blocks_24h": blocks24h,
                   "last_block_at": s.db.last_block_ts(None, None).await?.and_then(iso), "fee_percent": cfg.fee_percent,
                   "payout_scheme": "PPLNS", "min_payout": beam(cfg.min_payout_groth) },
         "network": height.map(|h| json!({ "hashrate": net["hashrate"].as_f64(), "height": h,

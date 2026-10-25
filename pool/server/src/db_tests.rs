@@ -293,3 +293,37 @@ async fn a_restart_waits_out_a_busy_table_instead_of_queueing_everyone() {
     start.await.unwrap().expect("the start retries and succeeds once the table is free");
     t.done().await;
 }
+
+#[tokio::test]
+async fn the_stats_summaries_count_as_the_queries_they_replaced() {
+    let t = test_db!("summ");
+    let (a, b) = (miner(&t, "aa01", 0).await, miner(&t, "aa02", 0).await);
+    t.q(&format!(
+        "INSERT INTO shares (ts, miner_id, worker, mode, difficulty, height) VALUES
+           ({n}, {a}, 'w1', 'pplns', 600, 1), ({n}, {a}, 'w2', 'pplns', 600, 1), ({n}, {b}, 'w1', 'solo', 1200, 1),
+           ({old}, {b}, 'w9', 'pplns', 6000, 1);
+         INSERT INTO blocks (height, hash, ts, miner_id, worker, mode, reward, effort, net_difficulty, status, round_total) VALUES
+           (10, 'h10', {n} - 100, {a}, 'w1', 'pplns', 1, 0.5, 2000, 'pending', 900),
+           (9, 'h9', {n} - 200, {a}, 'w1', 'pplns', 1, 1.5, 2000, 'unverified', NULL),
+           (8, 'h8', {n} - 300, {b}, 'w1', 'solo', 1, 2.0, 2000, 'confirmed', NULL),
+           (7, 'h7', {n} - 50, {b}, 'w1', 'solo', 1, 9.0, 2000, 'orphaned', NULL),
+           (6, 'h6', {n} - 90000, {a}, 'w1', 'pplns', 1, 1.0, 2000, 'confirmed', NULL)",
+        n = NOW, old = NOW - 700
+    ))
+    .await;
+    assert_eq!(t.db.pool_now(NOW).await.unwrap(), (4.0, 2, 3), "the last 10 min only");
+    let s = t.db.block_summary(NOW).await.unwrap();
+    assert_eq!((s.last_ts, s.last_pplns_ts), (Some(NOW - 50), Some(NOW - 100)), "the newest block counts an orphan, as last_block_ts did");
+    assert_eq!((s.pending, s.confirmed, s.blocks24h), (2, 2, 3));
+    assert_eq!(s.effort24h, Some(4.0 / 3.0));
+    assert_eq!(t.db.block_totals(None).await.unwrap(), (2, 2));
+    assert_eq!(t.db.block_totals(Some(b)).await.unwrap(), (0, 1));
+    let m = t.db.mode_stats(NOW).await.unwrap();
+    assert_eq!((m["pplns"]["hashrate"].as_f64(), m["pplns"]["miners"].as_i64(), m["pplns"]["workers"].as_i64()), (Some(2.0), Some(1), Some(2)));
+    assert_eq!((m["solo"]["hashrate"].as_f64(), m["solo"]["blocks24h"].as_i64(), m["solo"]["lastBlockFound"].as_i64()), (Some(2.0), Some(1), Some(NOW - 300)));
+    assert_eq!(m["pplns"]["lastBlockFound"].as_i64(), Some(NOW - 100));
+    let list = t.db.blocks(10, None, 240, Some(10), None).await.unwrap();
+    assert_eq!((list[0]["timestamp"].as_i64(), list[0]["difficulty"].as_f64(), list[0]["shares"].as_f64()), (Some(NOW - 100), Some(2000.0), Some(900.0)));
+    assert_eq!(list.iter().filter(|b| b["orphan"] == true).count(), 1);
+    t.done().await;
+}

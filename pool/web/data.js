@@ -176,11 +176,12 @@ const BB = (() => {
     const c = r.config || {}, s = r.stats || {}, node = (Array.isArray(r.nodes) && r.nodes[0]) || {};
     const height = num(node.height);
     const fee = num(c.fee) ?? FEE;
+    const minPay = num(r.minPay);
     return {
       hashrate: num(r.hashrate) || 0, minersTotal: num(r.minersTotal) || 0, workersTotal: num(r.workersTotal) || 0,
       lastBlockFound: num(s.lastBlockFound), roundShares: num(s.roundShares),
       height, difficulty: num(node.difficulty), networkHashrate: num(node.networkhashps),
-      fee, soloFee: num(c.soloFee) ?? fee, finderBonus: num(c.finderBonus) || 0, minPayout: num(c.minPayout) ?? MIN_PAYOUT, scheme: str(c.payoutScheme, 16) || 'PPLNS',
+      fee, soloFee: num(c.soloFee) ?? fee, finderBonus: num(c.finderBonus) || 0, minPayout: minPay != null ? Math.round(minPay * GROTH) : MIN_PAYOUT, scheme: str(r.feeType, 16) || 'PPLNS',
       pplnsWindow: num(c.pplnsWindow), maturity: num(c.maturity) ?? MATURITY, payoutInterval: num(c.payoutInterval) ?? PAYOUT_INTERVAL,
       blockReward: num(c.blockReward) ?? blockReward(height),
       stratumHost: str(c.stratumHost, 253),
@@ -193,7 +194,7 @@ const BB = (() => {
         pplnsTls: num(c.ports && c.ports.pplnsTls) ?? 3443, soloTls: num(c.ports && c.ports.soloTls) ?? 3444,
       },
       chart: series(r.charts && r.charts.hashrate), chartPeak: peakOf(r.charts && r.charts.peak),
-      blocks24h: num(r.blocks24h), effort24h: num(r.effort24h),
+      blocks24h: num(r.blocksFound24H), effort24h: num(r.effort24h), blocksPending: num(r.immatureTotal),
       // PPLNS and solo as two pools; null from servers that do not split them
       modes: r.modes && r.modes.pplns && r.modes.solo ? Object.fromEntries(['pplns', 'solo'].map((k) => {
         const m = r.modes[k];
@@ -204,7 +205,7 @@ const BB = (() => {
   }
   const normModes = (v) => (Array.isArray(v) ? v.filter((x) => x === 'pplns' || x === 'solo') : []);
   const normBlock = (b) => ({
-    height: num(b.height) || 0, hash: str(b.hash, 64), ts: num(b.ts), reward: num(b.reward) || 0, fees: num(b.fees) || 0,
+    height: num(b.height) || 0, hash: str(b.hash, 64), ts: num(b.timestamp), reward: num(b.reward) || 0, fees: num(b.fees) || 0,
     effort: num(b.effort), status: STATUS.includes(b.status) ? b.status : 'pending', confirmations: num(b.confirmations) || 0,
     finder: str(b.finder, 64), mode: b.mode === 'solo' ? 'solo' : 'pplns',
   });
