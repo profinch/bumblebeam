@@ -13,9 +13,9 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 
 | need | call |
 |---|---|
-| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h, blocks still confirming (`blocksPending`), effort, fee, min payout, payout interval, ports, `connectedWorkers` (null when the stratum half does not answer) | `/api/stats` (`?range=24h|7d|30d` for the chart) |
+| pool at a glance: hashrate (Sol/s), miners, workers, blocks 24h (`blocksFound24H`), blocks still confirming (`immatureTotal`), effort, fee, min payout (`minPay`, BEAM), payout interval, ports, `connectedWorkers` (null when the stratum half does not answer) | `/api/stats` (`?range=24h|7d|30d` for the chart) |
 | is it up, does it have work | `/api/health` (`ok`, `role`, `node`, `jobAgeSecs`, `uptime`, `workers`, `stratum`; HTTP 503 when not ok) |
-| blocks the pool found, status and confirmations | `/api/blocks?limit=50&before=<height>` |
+| blocks the pool found, status and confirmations | `/api/blocks?limit=50&before=<height>` (a block's time is `timestamp`) |
 | every height the pool found, compact: is this block ours? how many confirmed? | `/api/blocks/heights` (`[height, mode, status]`, orphans left out) |
 | how a block was split, to recompute a credit | `/api/blocks/{height}?address=` (fee, bonus, `window`, `total`, credits with `difficulty` and `amount`; share credit = floor(`shared` × `difficulty` / `total`)) |
 | top miners by hashrate (no addresses) | `/api/miners?limit=50` |
@@ -25,7 +25,7 @@ server at `https://pool.bumblebeam.org/mcp` has `pool_*` tools that do the same.
 | the latest network blocks and which pool found each | `/api/network/blocks?limit=50&before=<height>&pool=<id>` (`pool`, `poolName`; `null` = no listed pool) |
 
 ```sh
-curl -s https://pool.bumblebeam.org/api/stats | jq '{hashrate, minersTotal, workersTotal, blocks24h}'
+curl -s https://pool.bumblebeam.org/api/stats | jq '{hashrate, minersTotal, workersTotal, blocksFound24H}'
 curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balance, immature, paid, blocksFound}'
 ```
 
@@ -43,10 +43,10 @@ curl -s "https://pool.bumblebeam.org/api/miners/$ADDRESS" | jq '{hashrate, balan
   miner's own page and health are never cached. Polling faster gains nothing.
 
 - **Pool amounts are in groth** (1 BEAM = 100,000,000 groth): divide `balance`, `paid`,
-  `minPayout`, `reward` by 1e8. Hashrates are Sol/s. Times are unix seconds.
+  `reward` by 1e8 (`/api/stats` `minPay` alone is already in BEAM). Hashrates are Sol/s. Times are unix seconds.
 - `immature` is the miner's share of blocks still confirming: Beam coinbase matures after 240
   blocks (about 4 hours); then it moves to `balance` (unpaid) and is paid at the next run once
-  above `minPayout`. An orphaned block's share disappears.
+  above `minPay`. An orphaned block's share disappears.
 - A miner's address is private on Beam; the pool shows a miner only to whoever has the address.
 - Network `hashrate` is now: the pools' own current figures scaled up by the part of the day's
   blocks no listed pool found (`othersHashrate`, `othersBlocks24h`: solo nodes, private pools).

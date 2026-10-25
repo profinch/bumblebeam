@@ -303,7 +303,7 @@
     return list.sort((a, b) => last(a, b) || (by ? by(a, b) * fb.dir : 0) || b.height - a.height);
   }
   const fbRow = (b) => `<tr>
-    <td>${explorerBlock(b.height)}</td><td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
+    <td>${explorerBlock(b.height)}</td><td class="dim">${ago(b.timestamp)}</td><td>${modeBadge(b.mode)}</td>
     <td class="num" style="color:${effortColor(b.effort)}">${b.effort == null ? '—' : `${(b.effort * 100).toFixed(0)}%`}</td>
     <td class="dim">${esc(b.finder || '—')}</td>
     <td class="num">${beamAmt(b.reward + (b.fees || 0))}<span class="sub">${b.status === 'confirmed' ? (b.fees ? `incl. ${beam(b.fees)} tx fees` : 'no tx fees') : 'tx fees known at maturity'}</span></td>
@@ -716,7 +716,7 @@
     const [fj, pm, st] = await Promise.all([pub(`blocks?limit=500&miner=${encodeURIComponent(m.address)}`), pub(`miners/${encodeURIComponent(m.address)}?range=24h`), pub('stats')]);
     const found = (fj && fj.blocks) || [];
     const p = pm || {};
-    const minPayout = st && st.config ? st.config.minPayout : null;
+    const minPayout = st && st.minPay != null ? Math.round(st.minPay * 1e8) : null;
     if (fb.id !== m.id) Object.assign(fb, { id: m.id, mode: '', finder: '', sort: '', dir: 1, shown: FB_PAGE });
     fb.blocks = found;
     fb.credit = new Map(m.credits.map((c) => [c.height, c.amount]));

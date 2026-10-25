@@ -31,7 +31,7 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
   "nodes": [{ "name": "beam-node", "height": "4068710", "difficulty": "2719891.5",
               "networkhashps": "45570", "lastBeat": "1791321596", "connected": true }],
   "name": "BumbleBeam",
-  "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0, "minPayout": 10000000, "payoutScheme": "PPLNS",
+  "config": { "fee": 0.5, "soloFee": 0.5, "finderBonus": 1.0,
               "pplnsWindow": 2.0, "blockReward": 2500000000, "maturity": 240, "payoutInterval": 7200 },
   "charts": { "hashrate": [[1791300000, 5120.0], [1791300600, 5301.2]], "peak": [1791300420, 6890.4] },
   "modes": {
@@ -40,12 +40,27 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
     "solo":  { "hashrate": 50.2, "miners": 2, "workers": 3, "blocks24h": 1, "lastBlockFound": 1791290000,
                "series": [[1791234000, 48.1]] }
   },
-  "blocks24h": 31, "effort24h": 0.94, "blocksPending": 12, "connectedWorkers": 95
+  "effort24h": 0.94, "connectedWorkers": 95,
+  "now": 1791321600000, "candidatesTotal": 0, "immatureTotal": 12, "maturedTotal": 306,
+  "coin": "BEAM", "feePercent": 0.5, "minPay": 0.1, "feeType": "PPLNS", "timestampMilliSeconds": 1791321600000,
+  "miners": 41, "workers": 97, "blockHeight": 4068710, "blocksFound24H": 31,
+  "lastBlocksFound": [{ "blockNumber": 4068700, "timestampMilliSeconds": 1791320000000, "status": "[Maturing]" }]
 }
 ```
 
-- `blocksPending` counts every block still waiting for maturity or an operator's verdict
-  (`pending` and `unverified`), not just those on one page of `/api/blocks`.
+- `now`, `candidatesTotal`, `immatureTotal` and `maturedTotal` complete the open-ethereum-pool shape
+  (2Miners' `/api/stats`): `now` in milliseconds, the totals over all blocks, not one page of
+  `/api/blocks`. `immatureTotal` counts every block still waiting for maturity or an operator's
+  verdict (`pending` and `unverified`); `candidates` is always empty here, as in `/api/blocks`.
+- `coin` … `lastBlocksFound` are the pool in the report other Beam pools publish for
+  MiningPoolStats (SunPool's `pool-info.php?miningpoolstats`); `hashrate` is that report's field too,
+  its `name` (the coin's) is left out because ours is the pool's. They are the only place for the
+  minimum payout (`minPay`, in BEAM), the scheme (`feeType`) and the blocks found in 24 hours
+  (`blocksFound24H`, orphans left out). `lastBlocksFound` is the last 20 blocks the chain kept,
+  `[Available]` once confirmed and `[Maturing]` before.
+- Removed 2026-10-25, each a copy of a field above: `blocksPending` (= `immatureTotal`),
+  `blocks24h` (= `blocksFound24H`), `config.minPayout` (= `minPay` × 1e8), `config.payoutScheme`
+  (= `feeType`). `config.fee` stays.
 
 - `name` is the pool's display name. `config.stratumHost` and `config.ports` (`pplns`, `solo`,
   `pplnsTls`, `soloTls`) tell the UI where miners connect, `config.nodeAddr` (`host:port`, empty if
@@ -61,7 +76,7 @@ reads the pool with no code change: `hashrate`, `minersTotal`, `workersTotal`,
 - `minerPaysTxFee` and `txFee`: Beam's network fee comes out of each payout. A payout to an
   offline, max-privacy or public-offline address is a shielded transaction and costs about
   0.01 BEAM; to a regular address about 0.00001 BEAM. The wallet is asked for the exact fee
-  (`calc_change`) at payout time; `txFee` holds the fallbacks. This is why `minPayout` defaults to
+  (`calc_change`) at payout time; `txFee` holds the fallbacks. This is why `minPay` defaults to
   1 BEAM.
 - `blockFeesTo`: the transaction fees inside a found block go to the pool, not into PPLNS; they are
   recorded per block (`fees`) for transparency. The coinbase holds the reward plus the fees, so
@@ -95,15 +110,23 @@ neither paid nor dropped until an operator decides (`admin block <height> confir
 the wallet's coinbase can confirm a block; the explorer alone never does.
 
 ```json
-{ "blocks": [{ "height": 4068700, "hash": "…", "ts": 1791320000, "reward": 2500000000,
+{ "blocks": [{ "height": 4068700, "hash": "…", "timestamp": 1791320000, "reward": 2500000000,
                "fees": 1100000, "effort": 0.82, "status": "pending", "confirmations": 10,
-               "finder": "rig1", "mode": "pplns" }],
-  "matured": [], "immature": [{ "height": 4068700, "…": "…" }], "candidates": [] }
+               "finder": "rig1", "mode": "pplns",
+               "difficulty": 2719891.5, "shares": 2230272.0, "orphan": false }],
+  "matured": [], "immature": [{ "height": 4068700, "…": "…" }], "candidates": [],
+  "maturedTotal": 306, "immatureTotal": 12, "candidatesTotal": 0 }
 ```
 
 `matured` (confirmed), `immature` (pending and unverified) and an always-empty `candidates`
 repeat the same page of blocks in the open-ethereum-pool shape, so the Beam Explorer's `open-eth`
-adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`.
+adapter credits our blocks to the pool. Orphaned blocks appear only in `blocks`. The `*Total`
+fields count all blocks, not the page (with `?miner=` that miner's). A block's time
+is `timestamp` (unix seconds, open-ethereum-pool's name; it was `ts` until 2026-10-25), and it also
+carries that shape's `difficulty` (the network's at the block), `shares` (the round's total share
+difficulty, null for blocks recorded before it was kept) and `orphan`. `finder` stays the worker's
+name: addresses are never listed. The miner page's `blocks` (`/api/miners/<address>`) are the same
+rows.
 
 `?miner=<address>` keeps only the blocks that miner's shares found (an empty list for an address
 the pool never saw). A block solution is written to the database (`block_submissions`) before the

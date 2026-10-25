@@ -6,6 +6,7 @@
 use anyhow::{Context, Result};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tokio_postgres::NoTls;
 
@@ -220,6 +221,19 @@ fn migration(from: i32) -> Option<&'static str> {
         8 => Some(SCHEMA_HOLD),
         _ => None,
     }
+}
+
+/// The blocks table as /api/stats shows it (`Db::block_summary`).
+pub struct BlockSummary {
+    /// the newest block's time, orphans included
+    pub last_ts: Option<i64>,
+    pub last_pplns_ts: Option<i64>,
+    /// waiting for maturity or an operator's verdict
+    pub pending: i64,
+    pub confirmed: i64,
+    /// the last 24 h, orphans left out
+    pub blocks24h: i64,
+    pub effort24h: Option<f64>,
 }
 
 /// One speed report from the Mac app, already checked by the API.
@@ -477,22 +491,19 @@ impl Db {
         Ok(())
     }
 
-    pub async fn pool_hashrate(&self, now: i64) -> Result<f64> {
+    /// The pool over the last 10 minutes of shares, in one pass: (hashrate, miners, workers).
+    pub async fn pool_now(&self, now: i64) -> Result<(f64, i64, i64)> {
         let c = self.client().await?;
-        let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE ts > $1", &[&(now - 600)]).await?.get(0);
-        Ok(sum / 600.0)
+        let row = c
+            .query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8, COUNT(DISTINCT miner_id), COUNT(DISTINCT (miner_id, worker)) FROM shares WHERE ts > $1", &[&(now - 600)])
+            .await?;
+        Ok((row.get::<_, f64>(0) / 600.0, row.get(1), row.get(2)))
     }
 
     pub async fn mode_hashrate(&self, mode: &str, now: i64) -> Result<f64> {
         let c = self.client().await?;
         let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE mode=$1 AND ts > $2", &[&mode, &(now - 600)]).await?.get(0);
         Ok(sum / 600.0)
-    }
-
-    pub async fn pool_counts(&self, now: i64) -> Result<(i64, i64)> {
-        let c = self.client().await?;
-        let row = c.query_one("SELECT COUNT(DISTINCT miner_id), COUNT(DISTINCT (miner_id, worker)) FROM shares WHERE ts > $1", &[&(now - 600)]).await?;
-        Ok((row.get(0), row.get(1)))
     }
 
     pub async fn last_block_ts(&self, mode: Option<&str>, miner_worker: Option<(i64, &str)>) -> Result<Option<i64>> {
@@ -521,7 +532,7 @@ impl Db {
         let c = self.client().await?;
         let rows = c
             .query(
-                "SELECT height, hash, ts, worker, mode, reward, fees, effort, status, verified_by FROM blocks
+                "SELECT height, hash, ts, worker, mode, reward, fees, effort, status, verified_by, net_difficulty, round_total FROM blocks
                  WHERE ($1::BIGINT IS NULL OR height < $1) AND ($2::BIGINT IS NULL OR miner_id = $2) ORDER BY height DESC LIMIT $3",
                 &[&before, &miner, &limit],
             )
@@ -532,10 +543,13 @@ impl Db {
                 let height: i64 = r.get(0);
                 let conf = tip.map(|t| (t - height + 1).clamp(0, maturity)).unwrap_or(0);
                 json!({
-                    "height": height, "hash": r.get::<_, Option<String>>(1), "ts": r.get::<_, i64>(2),
+                    "height": height, "hash": r.get::<_, Option<String>>(1), "timestamp": r.get::<_, i64>(2),
                     "reward": r.get::<_, i64>(5), "fees": r.get::<_, i64>(6), "effort": r.get::<_, Option<f64>>(7),
                     "status": r.get::<_, String>(8), "verifiedBy": r.get::<_, Option<String>>(9), "confirmations": conf,
                     "finder": r.get::<_, String>(3), "mode": r.get::<_, String>(4),
+                    // open-ethereum-pool's too: the network difficulty and the round's shares
+                    "difficulty": r.get::<_, f64>(10), "shares": r.get::<_, Option<f64>>(11),
+                    "orphan": r.get::<_, String>(8) == "orphaned",
                 })
             })
             .collect())
@@ -599,10 +613,29 @@ impl Db {
         })))
     }
 
-    /// Blocks still waiting for maturity or an operator's verdict, over all blocks, not a page.
-    pub async fn blocks_pending(&self) -> Result<i64> {
+    /// Over all blocks, not a page (only `miner`'s with one): (waiting for maturity or an operator's verdict, confirmed).
+    pub async fn block_totals(&self, miner: Option<i64>) -> Result<(i64, i64)> {
         let c = self.client().await?;
-        Ok(c.query_one("SELECT COUNT(*) FROM blocks WHERE status IN ('pending','unverified')", &[]).await?.get(0))
+        let row = c
+            .query_one("SELECT COUNT(*) FILTER (WHERE status IN ('pending','unverified')), COUNT(*) FILTER (WHERE status = 'confirmed')
+                        FROM blocks WHERE ($1::BIGINT IS NULL OR miner_id = $1)", &[&miner])
+            .await?;
+        Ok((row.get(0), row.get(1)))
+    }
+
+    /// Everything /api/stats reads from the blocks table, in one pass.
+    pub async fn block_summary(&self, now: i64) -> Result<BlockSummary> {
+        let c = self.client().await?;
+        let r = c
+            .query_one(
+                "SELECT MAX(ts), MAX(ts) FILTER (WHERE mode = 'pplns'),
+                        COUNT(*) FILTER (WHERE status IN ('pending','unverified')), COUNT(*) FILTER (WHERE status = 'confirmed'),
+                        COUNT(*) FILTER (WHERE ts > $1 AND status <> 'orphaned'), AVG(effort) FILTER (WHERE ts > $1 AND status <> 'orphaned')
+                 FROM blocks",
+                &[&(now - 86400)],
+            )
+            .await?;
+        Ok(BlockSummary { last_ts: r.get(0), last_pplns_ts: r.get(1), pending: r.get(2), confirmed: r.get(3), blocks24h: r.get(4), effort24h: r.get(5) })
     }
 
     /// Blocks found by one miner: total and in 24 h (orphans not counted), the last one's time, and
@@ -794,18 +827,27 @@ impl Db {
     /// minutes, blocks in 24 h, the last block, and an hourly 24 h series for sparklines.
     pub async fn mode_stats(&self, now: i64) -> Result<Value> {
         let c = self.client().await?;
+        // both modes in one pass over shares and one over blocks; a mode without rows reads as zeros
+        let sh: HashMap<String, (f64, i64, i64)> = c
+            .query("SELECT mode, SUM(difficulty)::FLOAT8/600.0, COUNT(DISTINCT miner_id), COUNT(DISTINCT (miner_id, worker)) FROM shares WHERE ts > $1 GROUP BY mode",
+                   &[&(now - 600)])
+            .await?
+            .iter()
+            .map(|r| (r.get(0), (r.get(1), r.get(2), r.get(3))))
+            .collect();
+        let bl: HashMap<String, (i64, Option<i64>)> = c
+            .query("SELECT mode, COUNT(*) FILTER (WHERE ts > $1), MAX(ts) FROM blocks WHERE status <> 'orphaned' GROUP BY mode", &[&(now - 86400)])
+            .await?
+            .iter()
+            .map(|r| (r.get(0), (r.get(1), r.get(2))))
+            .collect();
         let mut out = serde_json::Map::new();
         for mode in ["pplns", "solo"] {
-            let sh = c
-                .query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8/600.0, COUNT(DISTINCT miner_id), COUNT(DISTINCT (miner_id, worker)) FROM shares WHERE mode=$1 AND ts > $2",
-                           &[&mode, &(now - 600)])
-                .await?;
-            let bl = c
-                .query_one("SELECT COUNT(*) FILTER (WHERE ts > $2), MAX(ts) FROM blocks WHERE mode=$1 AND status <> 'orphaned'", &[&mode, &(now - 86400)])
-                .await?;
+            let (hashrate, miners, workers) = sh.get(mode).copied().unwrap_or((0.0, 0, 0));
+            let (blocks24h, last) = bl.get(mode).copied().unwrap_or((0, None));
             out.insert(mode.into(), json!({
-                "hashrate": sh.get::<_, f64>(0), "miners": sh.get::<_, i64>(1), "workers": sh.get::<_, i64>(2),
-                "blocks24h": bl.get::<_, i64>(0), "lastBlockFound": bl.get::<_, Option<i64>>(1),
+                "hashrate": hashrate, "miners": miners, "workers": workers,
+                "blocks24h": blocks24h, "lastBlockFound": last,
                 "series": chart_window(&c, mode, now, 86400, 3600).await?,
             }));
         }

@@ -121,8 +121,8 @@ print("stats: miners", stats["minersTotal"], "node height", stats["nodes"][0]["h
 hs = json.load(urllib.request.urlopen(a.api + "/api/blocks/heights"))
 print("api block heights:", hs)
 assert hs["count"] == 1 and hs["blocks"][0][0] == hdr["height"] and hs["blocks"][0][1] in ("pplns", "solo") and hs["blocks"][0][2] == "pending"
-print("stats: blocks pending", stats["blocksPending"])
-assert stats["blocksPending"] == 1
+print("stats: blocks pending", stats["immatureTotal"])
+assert stats["immatureTotal"] == 1
 
 # the round is published and recomputes: each share row is floor(shared x difficulty / total)
 rd = json.load(urllib.request.urlopen(a.api + f"/api/blocks/{hdr['height']}?address={addr}"))

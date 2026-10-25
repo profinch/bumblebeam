@@ -207,10 +207,10 @@ async fn ours(shared: &Shared) -> Option<Value> {
     let t = chrono::Utc::now().timestamp();
     let db = &shared.db;
     let r = async {
-        let (miners, workers) = db.pool_counts(t).await?;
+        let (hashrate, miners, workers) = db.pool_now(t).await?;
         anyhow::Ok(json!({
             "id": "bumblebeam", "name": "BumbleBeam", "website": "https://pool.bumblebeam.org", "scheme": "PPLNS / SOLO",
-            "fee": shared.cfg.pool.fee_percent, "hashrate": db.pool_hashrate(t).await?, "miners": miners, "workers": workers,
+            "fee": shared.cfg.pool.fee_percent, "hashrate": hashrate, "miners": miners, "workers": workers,
             "blocks24h": db.blocks_24h(t).await?.0, "lastTs": db.last_block_ts(None, None).await?,
         }))
     }.await;
