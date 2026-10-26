@@ -1,8 +1,9 @@
 """The static banner at another size: the same honeycomb, wave (frame 25), logo and text as frames.py's banner,
 with the logo+text block centred and every element scaled by k (1.0 = the 1500x500 header's sizes).
-python3 banner_size.py <W> <H> <k> <out.html> [u] [notext]   ->   then render.sh / headless Chrome at <W>,<H>
+python3 banner_size.py <W> <H> <k> <out.html> [u] [notext] [flat]   ->   then render.sh / headless Chrome at <W>,<H>
 u = where the yellow wave sits, 0..1 along the slanted diagonal (frame 25 of the loop = 0.227; a very wide banner wants it nearer the centred block)
 notext = the honeycomb and wave only: no logo, no text, nothing dimmed (a background)
+flat = no twinkle: the cells outside the wave all the same (the twinkle reads as faint diagonal stripes on a large plain honeycomb)
   1024x576  k=1.0 (16:9)      1920x640  k=1.28 (3:1)     2560x1440  k=1.5 (YouTube: block inside the 1546x423 safe area)
   4000x192  k=0.7 u=0.33 (Reddit banner, any monitor width)     2160x256  k=0.9 (Reddit mobile banner, 2x of 1080x128)
   2560x1440 k=1.5 notext (honeycomb background)"""
@@ -15,7 +16,7 @@ SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
 MONO = "ui-monospace, 'SF Mono', Menlo, monospace"
 
 
-def banner(t, T, W, H, k=1.0, text=True):
+def banner(t, T, W, H, k=1.0, text=True, flat=False):
     R = 30.0 * k
     hw, vs = math.sqrt(3) * R, 1.5 * R
     s = 5.6 * k                              # the logo: 32 units -> ~180 px at k=1
@@ -31,7 +32,7 @@ def banner(t, T, W, H, k=1.0, text=True):
         while x < W + hw:
             u = (x + 1.1 * y) / (W + 1.1 * H)
             band = max(0.0, math.cos(2 * math.pi * (u - t / T))) ** 14
-            twinkle = 0.5 + 0.5 * math.sin(2 * math.pi * (t / T) + x * 0.013 + y * 0.021)
+            twinkle = 0.5 if flat else 0.5 + 0.5 * math.sin(2 * math.pi * (t / T) + x * 0.013 + y * 0.021)
             d = math.hypot((x - cx0) / (430 * k), (y - cy0) / (150 * k))
             dim = min(1.0, max(0.18, d - 0.35)) if text else 1.0
             a = (0.5 * band + 0.03 * twinkle) * dim
@@ -60,5 +61,5 @@ def banner(t, T, W, H, k=1.0, text=True):
 if __name__ == "__main__":
     W, H, k, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
     u = float(sys.argv[5]) if len(sys.argv) > 5 else 25 / F.BF
-    open(out, "w").write(banner(u * F.BT, F.BT, W, H, k, text="notext" not in sys.argv[6:]))
+    open(out, "w").write(banner(u * F.BT, F.BT, W, H, k, text="notext" not in sys.argv[6:], flat="flat" in sys.argv[6:]))
     print(out)
