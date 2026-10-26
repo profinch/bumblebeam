@@ -22,5 +22,6 @@ Other banner sizes (the static frame 25, the logo+text block centred, elements s
     python3 brand/src/banner_size.py 2560 1440 1.5 ... 0.227 notext   # the honeycomb alone, no logo or text
     python3 brand/src/banner_size.py 1920 192 0.7 ... 0.33 notext    # the honeycomb strip (Reddit banner, under 500 KB)
     python3 brand/src/banner_size.py 1080 128 0.5 ... 0.227 notext   # the mobile strip
+    python3 brand/src/banner_size.py 2000 600 1.2 ... [0.227 notext]   # Reddit profile banner, then ffmpeg -i x.png -q:v 2 x.jpg (the PNG is 840 KB, Reddit allows 500)
 
 On Linux/WSL `chrome --headless=new --screenshot` hangs; Playwright's `chrome-headless-shell` with the same flags works.
