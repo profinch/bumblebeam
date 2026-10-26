@@ -16,10 +16,10 @@ Other banner sizes (the static frame 25, the logo+text block centred, elements s
 
     python3 brand/src/banner_size.py 1024 576 1.0 /tmp/bb/b.html && brand/src/render.sh b /tmp/bb/b.html 1024,576 /tmp/bb
     python3 brand/src/banner_size.py 1920 640 1.28 ...   # 3:1
-    python3 brand/src/banner_size.py 2560 1440 1.5 ...   # YouTube: the block stays inside the 1546x423 safe area
+    python3 brand/src/banner_size.py 2560 1440 1.5 ... 0.227 flat   # YouTube: the block stays inside the 1546x423 safe area; flat = no twinkle stripes
     python3 brand/src/banner_size.py 4000 192 0.7 ... 0.33   # Reddit banner; the 5th arg moves the wave next to the block
     python3 brand/src/banner_size.py 2160 256 0.9 ...   # Reddit mobile banner
-    python3 brand/src/banner_size.py 2560 1440 1.5 ... 0.227 notext   # the honeycomb alone, no logo or text
+    python3 brand/src/banner_size.py 2560 1440 1.5 ... 0.227 notext flat   # the honeycomb alone, no logo or text
     python3 brand/src/banner_size.py 1920 192 0.7 ... 0.33 notext    # the honeycomb strip (Reddit banner, under 500 KB)
     python3 brand/src/banner_size.py 1080 128 0.5 ... 0.227 notext   # the mobile strip
     python3 brand/src/banner_size.py 2000 600 1.2 ... [0.227 notext flat]   # Reddit profile banner (flat: no twinkle stripes on the plain honeycomb), then ffmpeg -i x.png -q:v 2 x.jpg (the PNG is 840 KB, Reddit allows 500)
