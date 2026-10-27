@@ -266,7 +266,7 @@
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
-    return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
+    return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col class="w-f"><col class="w-r"><col class="w-s"></colgroup>
       <thead><tr><th>Height</th><th>Found</th><th class="mid">Mode</th><th class="mid">Effort</th><th>Finder</th><th class="mid">Reward</th><th class="num">Status</th></tr></thead>
       <tbody id="blocks-body">${blocksRows(blocks, maturity)}</tbody></table></div>${more}`;
   }
@@ -597,7 +597,7 @@
         <div class="panel-meta">${meta}<span id="${k}-count"></span>
           ${ddHtml(`${k}-mode`, 'Filter by mode', st.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml(`${k}-finder`, 'Filter by finder', st.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
-      <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
+      <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col class="w-f"><col class="w-r"><col class="w-s"></colgroup>
         <thead><tr>${th('height', 'Height')}<th>Found</th>${th('mode', 'Mode', ' mid')}${th('effort', 'Effort', ' mid')}${th('finder', 'Finder')}<th class="mid">Reward</th><th class="num">Status</th></tr></thead>
         <tbody id="${k}-body"></tbody></table></div>
       <div class="more" id="${k}-more" hidden><button class="btn ghost">Show more</button></div></section>`;
