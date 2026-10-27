@@ -260,14 +260,14 @@
   function blocksRows(blocks, maturity) {
     return blocks.map((b) => `<tr>
         <td><a href="${explorerBlock(b.height)}" target="_blank" rel="noopener">${int(b.height)}</a></td>
-        <td class="dim">${ago(b.ts)}</td><td>${modeBadge(b.mode)}</td>
-        <td class="num" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
-        <td class="dim">${esc(b.finder || '—')}</td><td class="num"><a href="/blocks/${Math.round(b.height)}" title="How this block was split">${beamAmt(b.reward + b.fees, 3)}</a></td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
+        <td class="dim">${ago(b.ts)}</td><td class="mid">${modeBadge(b.mode)}</td>
+        <td class="mid" style="color:${effortColor(b.effort)}">${pct(b.effort, 0)}</td>
+        <td class="dim">${esc(b.finder || '—')}</td><td class="mid"><a href="/blocks/${Math.round(b.height)}" title="How this block was split">${beamAmt(b.reward + b.fees, 3)}</a></td><td class="num">${statusBadge(b, maturity)}</td></tr>`).join('');
   }
   function blocksTable(blocks, maturity, more = '') {
     if (!blocks.length) return '<div class="empty">No blocks found yet</div>';
     return `<div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
-      <thead><tr><th>Height</th><th>Found</th><th>Mode</th><th class="num">Effort</th><th>Finder</th><th class="num">Reward</th><th class="num">Status</th></tr></thead>
+      <thead><tr><th>Height</th><th>Found</th><th class="mid">Mode</th><th class="mid">Effort</th><th>Finder</th><th class="mid">Reward</th><th class="num">Status</th></tr></thead>
       <tbody id="blocks-body">${blocksRows(blocks, maturity)}</tbody></table></div>${more}`;
   }
 
@@ -346,7 +346,7 @@
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
       <div class="panel-head"><h2 class="panel-title">Beam mining pools</h2><div class="panel-meta">${head}</div></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="num"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="mid"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
       ${rows.map((p, i) => `<tr class="${p.ours ? 'ours' : ''}">
         <td class="dim">${i + 1}</td>
         <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}</span></td>
@@ -354,7 +354,7 @@
             <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
         <td class="num">${pct(p.hashrate / total, 1)}</td>
         <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${p.blocks24hHours ? `<span class="tipped" title="Estimated: the pool's blocks over the last ${fix(p.blocks24hHours, 1)} h, from its own API, scaled to a day. Counted exactly once a whole day of its blocks is known.">≈${int(p.blocks24h)}</span>` : int(p.blocks24h)}</td>
-        <td class="num">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
+        <td class="mid">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
       ${others ? `<tr class="others">
         <td></td>
@@ -363,7 +363,7 @@
             <div class="bar"><i style="width:${Math.min(100, (others.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
         <td class="num">${pct(others.hashrate / total, 1)}</td>
         <td class="num dim">—</td><td class="num dim">—</td><td class="num">${others.blocks24h != null ? int(others.blocks24h) : '—'}</td>
-        <td class="num">${beamAmt(perDay(others), 0)}${price ? `<span class="sub">${usd(perDay(others))}</span>` : ''}</td>
+        <td class="mid">${beamAmt(perDay(others), 0)}${price ? `<span class="sub">${usd(perDay(others))}</span>` : ''}</td>
         <td class="num dim">—</td><td></td></tr>` : ''}
       </tbody></table></div></section>`;
   }
@@ -598,7 +598,7 @@
           ${ddHtml(`${k}-mode`, 'Filter by mode', st.mode, [['', 'All modes'], ...modes.map((v) => [v, v === 'solo' ? 'Solo' : 'PPLNS'])])}
           ${ddHtml(`${k}-finder`, 'Filter by finder', st.finder, [['', 'All finders'], ...finders.map((v) => [v, v])])}</div></div>
       <div class="table-wrap"><table class="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-m"><col class="w-e"><col><col class="w-r"><col class="w-s"></colgroup>
-        <thead><tr>${th('height', 'Height')}<th>Found</th>${th('mode', 'Mode')}${th('effort', 'Effort', ' num')}${th('finder', 'Finder')}<th class="num">Reward</th><th class="num">Status</th></tr></thead>
+        <thead><tr>${th('height', 'Height')}<th>Found</th>${th('mode', 'Mode', ' mid')}${th('effort', 'Effort', ' mid')}${th('finder', 'Finder')}<th class="mid">Reward</th><th class="num">Status</th></tr></thead>
         <tbody id="${k}-body"></tbody></table></div>
       <div class="more" id="${k}-more" hidden><button class="btn ghost">Show more</button></div></section>`;
   }
@@ -643,10 +643,10 @@
     return `<div class="page-head"><h1 class="page-title">Miners</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Miners by hashrate</h2><div class="panel-meta">${counts}${modeSwitch(mm, 'data-miners-mode', 'Miners mode', MINERS_MODES)}</div></div>
       <p class="hint">Beam is a private chain, so the pool does not list wallet addresses. Your own pool stats open only with your payout address: hashrate, what the pool still owes you, and past payouts. Wallet balances are never visible, not to the pool either.</p>
-      ${miners.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Hashrate</th><th>Mode</th><th class="num">24h avg</th><th class="num">Share</th><th class="num">Workers</th><th class="num">Last share</th></tr></thead><tbody>
+      ${miners.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Hashrate</th><th class="mid">Mode</th><th class="num">24h avg</th><th class="num">Share</th><th class="num">Workers</th><th class="num">Last share</th></tr></thead><tbody>
       ${miners.map((m, i) => `<tr><td class="dim">${i + 1}</td>
         <td>${hr(m.hashrate)}<div class="bar accent"><i style="width:${Math.min(100, (m.hashrate / top) * 100).toFixed(1)}%"></i></div></td>
-        <td>${modesBadges(m.modes)}</td>
+        <td class="mid">${modesBadges(m.modes)}</td>
         <td class="num">${hr(m.hashrate24h)}</td><td class="num">${pct(total ? m.hashrate / total : null, 2)}</td>
         <td class="num">${int(m.workers)}</td><td class="num dim">${ago(m.lastShare)}</td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty">${mm === 'solo' ? 'No solo miners right now' : mm === 'pplns' ? 'No PPLNS miners right now' : 'No miners yet'}</div>`}</section>`;
@@ -700,8 +700,8 @@
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Hashrate${modeNote}</h2><div class="panel-meta">${modeSwitch(mm, 'data-miner-mode', 'Miner mode', MINERS_MODES)}${rangeSwitch(range)}</div></div>${areaChart(m.chart, { title: 'Miner hashrate', range, peak: true, peakAt: m.chartPeak })}</section>
       <div class="grid2">
         <section class="panel"><div class="panel-head"><h2 class="panel-title">Workers${modeNote}</h2></div>
-          ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th>Mode</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
-          ${m.workers.map((w) => `<tr><td><span class="dot ${w.online ? '' : 'off'}"></span></td><td>${esc(w.name)}</td><td>${modesBadges(w.modes)}</td><td class="num">${hr(w.hashrate)}</td><td class="num">${hr(w.hashrate24h)}</td>
+          ${m.workers.length ? `<div class="table-wrap"><table><thead><tr><th></th><th>Worker</th><th class="mid">Mode</th><th class="num">Hashrate</th><th class="num">24h avg</th><th class="num">Stale</th><th class="num">Rejected</th><th class="num">Last share</th></tr></thead><tbody>
+          ${m.workers.map((w) => `<tr><td><span class="dot ${w.online ? '' : 'off'}"></span></td><td>${esc(w.name)}</td><td class="mid">${modesBadges(w.modes)}</td><td class="num">${hr(w.hashrate)}</td><td class="num">${hr(w.hashrate24h)}</td>
             <td class="num dim">${pct(w.stale, 1)}</td><td class="num" style="color:${w.rejected > 0.01 ? 'var(--color-red)' : 'var(--muted)'}">${pct(w.rejected, 1)}</td><td class="num dim">${ago(w.lastShare)}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No workers</div>'}
         </section>
