@@ -691,7 +691,7 @@
         ${tile('Decimals', esc(decimalsOf(a).text), esc(decimalsOf(a).note))}
         ${tile('Lock height', a && a.lock ? `<a href="${blockHref(a.lock)}">${int(a.lock)}</a>` : '—')}
       </div>
-      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}
+      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools</h2><div class="panel-meta"><a class="text-link" href="/dex">All pools</a></div></div>${poolTable(pools)}</section>` : ''}
       ${a ? assetAbout(a, m) : ''}
       ${sections}`;
   };
@@ -866,7 +866,7 @@
       </div>
       <section class="panel"><p class="hint" style="margin:0">BEAM is emitted with every block: 100 a block in the first year, 50 in years two to five, then half
         as much every four years, shared between the miner and, until year five, the treasury. Balances are private; what contracts hold is public.</p></section>
-      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools with BEAM</h2><div class="panel-meta"><a href="/dex">all pools →</a></div></div>${poolTable(pools)}</section>` : ''}`;
+      ${pools.length ? `<section class="panel"><div class="panel-head"><h2 class="panel-title">DEX pools with BEAM</h2><div class="panel-meta"><a class="text-link" href="/dex">All pools</a></div></div>${poolTable(pools)}</section>` : ''}`;
   }
 
   const ds = { q: '', tier: 'All', empty: false, sort: 'r1', dir: -1, pools: [] };

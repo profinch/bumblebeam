@@ -40,6 +40,13 @@
     if (sec % 3600 === 0) return `${sec / 3600} h`;
     return `${(sec / 3600).toFixed(1)} h`;
   }
+  // the same in words: "2 hours", "30 minutes"
+  function durWords(sec) {
+    if (sec == null || !isFinite(sec)) return '—';
+    const n = (v, u) => `${v} ${u}${v === 1 ? '' : 's'}`;
+    if (sec < 3600) return n(Math.round(sec / 60), 'minute');
+    return n(sec % 3600 === 0 ? sec / 3600 : +(sec / 3600).toFixed(1), 'hour');
+  }
   // every hash, key and ID is shortened the same way, on both sites: first 8 … last 8
   const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-8)}` : s || '—');
   const pct = (x, d = 1) => (x == null || !isFinite(x) ? '—' : `${(x * 100).toFixed(d)}%`);
@@ -116,9 +123,13 @@
       peakMark = `<line class="now" x1="${L}" x2="${W - R}" y1="${py.toFixed(1)}" y2="${py.toFixed(1)}" vector-effect="non-scaling-stroke"/>
       <text class="peak-text" x="${W - R - 4}" y="${ty.toFixed(1)}" text-anchor="end">${esc(pText)}</text>`;
     }
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
+    // what the pointer reads (chartHover): every point where it is drawn
+    for (const k of [...CHARTS.keys()]) if (!document.querySelector(`svg[data-chart="${k}"]`)) CHARTS.delete(k);
+    CHARTS.set(id, { pts: series.map((p) => [x(p[0]), y(p[1]), p[0], p[1]]), W, H, L, R, T, B, label, color });
+    return `<svg class="chart" data-chart="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}, ${span.text}: now ${esc(pillText)}">
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0.55"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
       ${grid}
+      <line class="grid" x1="${L}" x2="${L}" y1="${T}" y2="${H - B}"/>
       <line class="grid" x1="${W - R}" x2="${W - R}" y1="${T}" y2="${H - B}"/>
       <path d="M${line} L${x(t1).toFixed(1)},${y(0)} L${x(t0).toFixed(1)},${y(0)} Z" fill="url(#${id})"/>
       <path d="M${line}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
@@ -126,8 +137,54 @@
       ${peakMark}
       <rect x="${W - R + 4}" y="${(ly - 9).toFixed(1)}" width="${pw.toFixed(0)}" height="18" rx="3" fill="${color}"/>
       <text class="pill-text" x="${W - R + 4 + pw / 2}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${esc(pillText)}</text>
+      <g class="hover" visibility="hidden">
+        <line class="cross vx" y1="${T}" y2="${H - B}"/><line class="cross hy" x1="${L}" x2="${W - R}"/>
+        <circle class="dot" r="3.5" fill="${color}"/>
+        <rect class="hv-pill" height="18" rx="3"/><text class="hv-text hv-v" text-anchor="middle"></text>
+        <rect class="hv-pill" height="18" rx="3"/><text class="hv-text hv-t" text-anchor="middle"></text>
+      </g>
     </svg>`;
   }
+
+  // The crosshair, as on the DEX terminal's chart: the point nearest the pointer, its value on the
+  // axis and its time under the chart. One listener for every chart, as views redraw them.
+  const CHARTS = new Map();
+  function chartHover(e) {
+    const svg = e.target.closest && e.target.closest('svg.chart[data-chart]');
+    const c = svg && CHARTS.get(svg.dataset.chart);
+    // leaving a line or the area inside the chart is not leaving the chart
+    if (!c || (e.type === 'pointerleave' && e.target !== svg)) return;
+    const g = svg.querySelector('.hover');
+    const m = svg.getScreenCTM();
+    if (!m || !g) return;
+    const px = (e.clientX - m.e) / m.a;
+    if (e.type === 'pointerleave' || px < c.L || px > c.W - c.R) { g.setAttribute('visibility', 'hidden'); return; }
+    // the nearest point: they run left to right
+    let lo = 0, hi = c.pts.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (c.pts[mid][0] < px) lo = mid; else hi = mid; }
+    const [x, y, t, v] = px - c.pts[lo][0] < c.pts[hi][0] - px ? c.pts[lo] : c.pts[hi];
+    const d = new Date(t * 1000), hh = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const vt = c.label(v), tt = `${MONTHS[d.getMonth()]} ${d.getDate()} ${hh}`;
+    const vw = vt.length * 6.2 + 8, tw = tt.length * 6.2 + 10;
+    const set = (el, a) => { for (const k in a) el.setAttribute(k, typeof a[k] === 'number' ? a[k].toFixed(1) : a[k]); };
+    set(g.querySelector('.vx'), { x1: x, x2: x });
+    set(g.querySelector('.hy'), { y1: y, y2: y });
+    set(g.querySelector('.dot'), { cx: x, cy: y });
+    const [vp, tp] = g.querySelectorAll('.hv-pill');
+    const vy = Math.max(c.T + 9, Math.min(c.H - c.B - 9, y));
+    set(vp, { x: c.W - c.R + 4, y: vy - 9, width: vw });
+    set(g.querySelector('.hv-v'), { x: c.W - c.R + 4 + vw / 2, y: vy + 4 });
+    g.querySelector('.hv-v').textContent = vt;
+    // the time's pill stays inside the chart at both ends
+    const tx = Math.max(c.L + tw / 2, Math.min(c.W - c.R - tw / 2, x));
+    // on the time axis' own line: its labels sit on the baseline H - 8
+    set(tp, { x: tx - tw / 2, y: c.H - 20.5, width: tw });
+    set(g.querySelector('.hv-t'), { x: tx, y: c.H - 8 });
+    g.querySelector('.hv-t').textContent = tt;
+    g.setAttribute('visibility', 'visible');
+  }
+  for (const ev of ['pointermove', 'pointerdown']) document.addEventListener(ev, chartHover);
+  document.addEventListener('pointerleave', chartHover, true);
 
   // Blocks per pool over 24 h, as the explorer's mining donut.
   const PALETTE = ['#00f6d2', '#24c1ff', '#ffbd2e', '#ff51ff', '#a4e000', '#d885ff', '#ff7a21'];
@@ -191,6 +248,8 @@
 
   // ---------- shared pieces ----------
   // tile(): callers pass already formatted and escaped strings.
+  // a tile's note on several lines, the empty ones left out
+  const lines = (...xs) => xs.filter(Boolean).join('<br>');
   const tile = (k, v, s = '', cls = '') => `<div class="tile"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   const statusBadge = (b, maturity) => b.status === 'confirmed' ? '<span class="badge ok">confirmed</span>'
     : b.status === 'orphaned' ? '<span class="badge bad">orphaned</span>'
@@ -213,12 +272,13 @@
   }
 
   // what the network's hashrate is, wherever it is shown
-  const NET_HR_TIP = 'Now: what the pools report from their shares over the last minutes, scaled up by the part of the last 24 h of blocks no listed pool found (solo nodes, pools with no API). Blocks alone are too few for a current figure: an hour of them is ±13% on luck.';
+  const NET_HR_TIP = 'Now: what pools report from their shares over the past few minutes, scaled up to account for the share of blocks found in the last 24 hours by pools that aren’t listed (solo nodes and pools without an API). Blocks alone are too sparse for a current estimate: over an hour, luck varies by about ±13%.';
   function netMeta(net, extra = '') {
     if (!net || !net.ok) return '<span class="err">network data unavailable</span>';
-    return `<span class="tipped" title="${NET_HR_TIP}">Network: <b>${hr(net.hashrate)}</b></span><span>Block: <b>${int(net.height)}</b></span>
+    // the rest in a group of its own, which phones put on a line under the network's hashrate
+    return `<span class="tipped net-hr" title="${NET_HR_TIP}">Network: <b>${hr(net.hashrate)}</b></span><span class="net-more"><span>Block: <b>${int(net.height)}</b></span>
       <span>Diff: <b>${net.difficulty ? fix(net.difficulty / 1e6, 2) + 'M' : '—'}</b></span>
-      <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}`;
+      <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}</span>`;
   }
 
   async function setFooter() {
@@ -226,11 +286,13 @@
     if (!el) return;
     let net = null;
     try { net = await BB.network(); } catch (e) { net = null; }
-    // pages that never ask the pool (API docs, not found) learn whether it is up here
-    if (!BB.mode) await BB.pool('stats').catch(() => null);
-    const live = BB.mode === 'live';
-    el.className = `pill-status ${live ? '' : 'off'}`;
-    txt.textContent = `${live ? 'pool live' : 'offline'}${net && net.ok && net.height ? ` · ${int(net.height)}` : ''}`;
+    // live only when mining works: the stratum answers and the node feeds it (the pool's /api/health),
+    // not merely when the API answers
+    const h = await BB.health();
+    el.className = `pill-status ${h.state === 'live' ? '' : h.state === 'degraded' ? 'demo' : 'off'}`;
+    el.title = h.state === 'live' ? 'Mining works: the stratum server answers and the node sent a block template in the last 10 minutes. The number is the network\'s current block height.'
+      : h.state === 'degraded' ? `The pool's site answers, but mining does not: ${h.reason}.` : 'The pool does not answer.';
+    txt.textContent = `${h.state === 'live' ? 'pool live' : h.state === 'degraded' ? h.reason : 'offline'}${net && net.ok && net.height ? ` → ${int(net.height)}` : ''}`;
     // BEAM's price in the header on every page, from the same network data; the chip is there from
     // the start (… while loading, — without a price), so the header does not move when it arrives
     const price = net && net.ok ? net.priceUsd : null, v = $('#beam-price-v');
@@ -352,25 +414,27 @@
     const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}${cmode === 'all' ? '' : `&mode=${cmode}`}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
     const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
     const expectedPerDay = share != null ? share * 1440 : null;
+    // the newest block the pool found, as the list has it (its height and the worker that found it)
+    const last = blocks && blocks[0];
     return `
-      <div class="page-head"><h1 class="page-title">Pool</h1></div>
+      <div class="page-head"><h1 class="page-title">Beam Mining Pool</h1></div>
       <div class="tiles">
         ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '', 'accent')}
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
-        ${tile('Blocks 24h', int(stats.blocks24h), [expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)}` : '', stats.effort24h != null ? `effort ${pct(stats.effort24h, 0)}` : ''].filter(Boolean).join(' · '))}
-        ${tile('Last block', ago(stats.lastBlockFound))}
-        ${tile('Fee', pctFee(stats.fee), `${esc(stats.scheme)} · solo ${pctFee(stats.soloFee)}${stats.finderBonus ? ` · finder bonus ${pctFee(stats.finderBonus)}` : ''}`)}
-        ${tile('Min payout', beam(stats.minPayout, 2), `every ${dur(stats.payoutInterval)}, after ${int(stats.maturity)} confirmations`)}
+        ${tile('Blocks 24h', int(stats.blocks24h), lines(expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)} blocks` : '', stats.effort24h != null ? `${pct(stats.effort24h, 0)} average effort` : ''))}
+        ${tile('Last block', ago(stats.lastBlockFound), last ? lines(`block height ${int(last.height)}`, last.finder ? `worker ${esc(last.finder)}` : '') : '')}
+        ${tile('Fee', pctFee(stats.fee), lines(stats.soloFee == null || stats.soloFee === stats.fee ? `${esc(stats.scheme)} and SOLO ${pctFee(stats.fee)}` : `${esc(stats.scheme)} ${pctFee(stats.fee)} and SOLO ${pctFee(stats.soloFee)}`,
+          stats.finderBonus ? `finder bonus ${pctFee(stats.finderBonus)}` : ''))}
+        ${tile('Min payout', beam(stats.minPayout, 2), lines(`every ${durWords(stats.payoutInterval)}`, `after ${int(stats.maturity)} confirmations`))}
       </div>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">${MODE_TITLES[cmode]}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
+        <div class="panel-head hr-head"><h2 class="panel-title">${MODE_TITLES[cmode]}</h2><div class="panel-meta">${netMeta(net)}${modeSwitch(cmode)}${rangeSwitch(range)}</div></div>
         ${areaChart(stats.chart, { title: MODE_TITLES[cmode], range, peak: true, peakAt: stats.chartPeak })}
       </section>
       <section class="panel">
-        <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a href="/blocks">all blocks →</a></div></div>
+        <div class="panel-head"><h2 class="panel-title">Recent blocks</h2><div class="panel-meta"><a class="text-link" href="/blocks">All blocks</a></div></div>
         ${blocksTable(blocks, stats.maturity)}
-      </section>
-      ${poolsTable(stats, net, { meta: false })}`;
+      </section>`;
   };
 
   views.network = async () => {
@@ -1099,6 +1163,19 @@
     document.querySelectorAll('#main-nav a, .cta-top').forEach((a) => a.classList.toggle('active', a.dataset.route === navKey));
   }
 
+  // Tiles in columns of one width, the widest tile's content: a tile that goes to the next row
+  // keeps that width instead of stretching, and none breaks its words. Measured once a page is
+  // drawn, and again when the phone styles (smaller type) come or go.
+  function sizeTiles(root = document) {
+    for (const box of root.querySelectorAll('.tiles')) {
+      box.classList.add('measuring');
+      const w = Math.max(0, ...[...box.children].map((t) => Math.ceil(t.getBoundingClientRect().width)));
+      box.classList.remove('measuring');
+      if (w) box.style.setProperty('--tile-w', `${w}px`);
+    }
+  }
+  window.matchMedia('(max-width: 560px)').addEventListener('change', () => sizeTiles());
+
   let seq = 0, lastHtml = '';
   async function render(scrollTop = true) {
     const { route, arg } = parse();
@@ -1109,7 +1186,7 @@
       const html = await views[route](arg);
       if (my !== seq) return;
       // the 30 s refresh often brings the same page: leave the DOM (selection, an open tooltip) alone then
-      if (scrollTop || html !== lastHtml) view.innerHTML = html;
+      if (scrollTop || html !== lastHtml) { view.innerHTML = html; sizeTiles(); }
       lastHtml = html;
       setMeta(route, arg);
       view.removeAttribute('data-snap');

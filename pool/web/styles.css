@@ -66,6 +66,35 @@ input:focus { outline: none; }
   max-width: var(--page-width); margin: 0 auto; height: 64px;
   display: flex; align-items: center; gap: 24px;
 }
+/* One header for the pool and the explorer (it has no Start mining). Two rows, on the content's
+   width: the logo, the search between, Start mining at the right end; under them BEAM's price,
+   starting under the B of BumbleBeam, and the menu at the right end. */
+.top-row {
+  height: auto; padding: 14px 0 2px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand search cta" "price nav nav";
+  align-items: center; column-gap: clamp(16px, 4vw, 56px); row-gap: 4px;
+}
+.top-row:not(:has(.cta-top)) { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "brand search" "price nav"; }
+.top-row .brand { grid-area: brand; }
+.top-row .search { grid-area: search; }
+.top-row .cta-top { grid-area: cta; display: inline-flex; font: 700 13px var(--font-sans); text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; padding: 8px 14px; }
+/* the logo is 42px and 11px from the word */
+/* right under the word, not centred on the menu's taller row */
+.top-row .price-chip { grid-area: price; justify-self: start; align-self: start; margin: -6px 0 0 53px; }
+.top-row .main-nav { grid-area: nav; justify-self: end; margin-left: 0; flex-wrap: wrap; justify-content: flex-end; }
+.main-nav a.nav-cta { display: none; }
+/* phones: the logo and Start mining, then the price and the search, then the menu across */
+@media (max-width: 820px) {
+  .top-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand brand cta" "price search search" "nav nav nav"; column-gap: 10px; row-gap: 10px; padding-top: 12px; }
+  .top-row:not(:has(.cta-top)) { grid-template-areas: "brand brand brand" "price search search" "nav nav nav"; }
+  .top-row .cta-top { justify-self: end; padding: 6px 10px; font-size: 11px; }
+  .top-row .price-chip { margin: 0; align-self: center; }
+  /* no keyboard to press / on a phone: the room goes to the placeholder */
+  .search kbd { display: none; }
+  .search { gap: 6px; padding: 0 8px 0 10px; }
+  .top-row .price-chip { padding: 5px 8px; }
+  .top-row .main-nav { justify-self: stretch; justify-content: space-between; }
+}
 .brand { display: flex; align-items: center; gap: 11px; color: var(--text); font-weight: 700; font-size: 19px; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand em { font-style: normal; font-weight: 400; color: var(--muted); }
@@ -113,13 +142,13 @@ input:focus { outline: none; }
   color: var(--accent); background: rgba(0, 246, 210, 0.06);
 }
 .main-nav a.nav-cta:hover { background: var(--accent-dim); color: var(--accent); }
-.top-row .cta-top { display: none; }
 .price-chip {
   flex: none; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: default;
   font: 700 11px var(--font-mono); letter-spacing: 0.04em; color: var(--muted); white-space: nowrap;
+  cursor: help;
 }
-/* room for "$0.0088" from the start, so the price arriving does not move the header */
-.price-chip b { display: inline-block; min-width: 7.5ch; color: var(--accent); letter-spacing: 0.02em; }
+/* room for "loading…" and "$0.0088" from the start, so the price arriving does not move the header */
+.price-chip b { display: inline-block; width: 8.5ch; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
 .cta-top.active { background: rgba(0, 246, 210, 0.15); }
 .main-nav a.nav-cta.active { background: rgba(0, 246, 210, 0.15); border-bottom-color: rgba(0, 246, 210, 0.6); }
 
@@ -159,13 +188,17 @@ main { flex: 1 0 auto; width: 100%; max-width: var(--page-width); margin: 0 auto
 .btn.small { padding: 4px 8px; font-size: 11px; }
 
 /* stat tiles */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.tile { background: var(--surface); border: 1px solid var(--border-dim); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+/* columns of one width, the widest tile's content (--tile-w, measured by sizeTiles in app.js):
+   a row takes as many as fit, a tile on the next row keeps the width, no tile breaks its words */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--tile-w, 200px), 100%), 1fr)); gap: 12px; margin-bottom: 16px; }
+.tiles.measuring { display: block; }
+.tiles.measuring > .tile { display: inline-block; width: max-content; }
+.tile { min-width: 0; background: var(--surface); border: 1px solid var(--border-dim); border-radius: 8px; padding: 14px 16px; }
 .tile .k { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .tile .v { font: 700 22px var(--font-mono); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 /* a value too long for its tile wraps instead of being cut off with an ellipsis */
 .tile .v, .tile .v .amt { white-space: normal; text-overflow: clip; }
-.tile .s { font: 11px var(--font-mono); color: var(--muted); margin-top: 4px; }
+.tile .s { font: 11px var(--font-mono); color: var(--muted); margin-top: 4px; white-space: nowrap; }
 .tile .v.accent { color: var(--accent); }
 
 /* tables */
@@ -334,7 +367,7 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .nf { padding: 28px 16px 30px; }
 .nf-art { display: block; width: min(420px, 100%); height: auto; margin: 0 auto 18px; }
 .foot {
-  max-width: var(--page-width); margin: 0 auto; padding: 22px var(--page-padding-x) 30px;
+  max-width: var(--page-width); margin: 0 auto; padding: 2px var(--page-padding-x) 30px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; justify-content: center;
   font: 700 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
 }
@@ -344,7 +377,8 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 /* the stats sites that track the pool, above the footer links: their marks alone, grey until
    hovered, then in their own colours; the name is in the tooltip. Local copies (img/): the pages
    load nothing from other hosts. */
-.foot .tracked-by { flex-basis: 100%; display: flex; justify-content: center; gap: 24px; margin-bottom: 4px; }
+.foot .tracked-by { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 24px; margin-bottom: 4px; }
+.foot .tracked-label { flex-basis: 100%; text-align: center; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .foot .tracked-by a { display: block; line-height: 0; padding: 4px; border-radius: 8px; }
 .foot .tracked-by img { width: auto; height: 30px; filter: grayscale(1) brightness(1.5); opacity: .45; transition: filter .25s, opacity .25s, transform .25s; }
 .foot .tracked-by a:hover img, .foot .tracked-by a:focus-visible img { filter: none; opacity: 1; transform: scale(1.12); }
@@ -357,8 +391,14 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .pill-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .pill-status.demo { color: var(--color-yellow); border-color: rgba(244, 206, 74, 0.5); background: rgba(244, 206, 74, 0.1); }
 .pill-status.demo i { background: var(--color-yellow); box-shadow: 0 0 6px var(--color-yellow); }
-.pill-status.off { color: var(--muted); border-color: var(--border); background: transparent; }
-.pill-status.off i { background: var(--muted2); box-shadow: none; }
+.pill-status.off { color: var(--color-red); border-color: rgba(242, 95, 91, 0.5); background: rgba(242, 95, 91, 0.1); }
+.pill-status.off i { background: var(--color-red); box-shadow: 0 0 6px var(--color-red); }
+#foot-status { cursor: help; }
+/* the last line: the copyright, what the pool is, its licence and source */
+.foot .foot-copy { flex-basis: 100%; margin: 4px 0 0; text-align: center; font: 400 11px var(--font-mono); letter-spacing: 0.02em; text-transform: none; color: var(--muted2); }
+/* links in running text and quiet links in panel heads ("All blocks"): grey, dotted underline, white on hover */
+.text-link, .foot .foot-copy a { font: 400 11px var(--font-mono); letter-spacing: 0.02em; color: var(--muted); text-decoration: underline dotted rgba(255, 255, 255, 0.25); text-underline-offset: 3px; }
+.text-link:hover, .foot .foot-copy a:hover { color: var(--text); text-decoration: underline dotted rgba(255, 255, 255, 0.5); }
 
 /* donut + block times, as on the explorer's mining page */
 .donut-wrap { display: grid; grid-template-columns: 180px 1fr; gap: 20px 28px; align-items: center; }
@@ -388,26 +428,6 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
   .grid2 { grid-template-columns: 1fr; }
   .donut-wrap { grid-template-columns: 1fr; justify-items: center; }
 }
-/* One header for the pool and the explorer, so switching sites does not move it. On one row
-   (wide screens) the brand and the search have the same sizes on both: the brand is as wide as
-   "BumbleBeam Explorer", the search width depends on the window only, leaving room for the
-   pool's longest menu (with My stats). Narrower, the header wraps: menu and search get rows. */
-@media (min-width: 1181px) {
-  .brand { flex: none; width: 236px; }
-  .search { flex: none; width: clamp(160px, calc(min(100vw - 2 * var(--page-padding-x), var(--page-width)) - 960px), 380px); }
-  /* the price chip takes its room from the search, the menu keeps its own */
-  .price-chip { margin-left: auto; }
-  .price-chip ~ .main-nav { margin-left: 0; flex: none; }
-  .top-row:has(.price-chip) .search { flex: 0 1 380px; width: auto; min-width: 160px; }
-}
-@media (max-width: 1180px) {
-  .top-row { flex-wrap: wrap; height: auto; padding: 12px 0; gap: 12px; }
-  .search { order: 3; flex: 1 1 100%; }
-  /* the menu takes its own full-width row and fits, no sideways scroll */
-  .main-nav { order: 2; flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; justify-content: space-between; }
-  /* the price goes to the right end of the brand's row */
-  .price-chip { order: 1; margin-left: auto; }
-}
 @media (max-width: 560px) {
   .main-nav a { padding: 8px 8px; font-size: 12px; }
   .tile .v { font-size: 18px; }
@@ -420,7 +440,10 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .code pre { min-width: 0; overflow-x: auto; }
 .main-nav { max-width: 100%; }
 @media (max-width: 560px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tiles { gap: 10px; }
+  /* two tiles side by side on a phone */
+  .tile { padding: 12px; }
+  .tile .s { font-size: 10.5px; }
   .page-head .btn { padding: 6px 10px; }
   .panel-meta { margin-left: 0; }
   .main-nav { gap: 0; }
@@ -446,16 +469,6 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .md pre code { background: none; padding: 0; font-size: 11.5px; line-height: 1.55; white-space: pre; }
 .md .table-wrap { margin-bottom: 14px; }
 .md h3 code { font-size: inherit; color: var(--accent); background: none; padding: 0; }
-
-/* phones (below the width where the menu and the button share one row): Start mining leaves
-   the menu for the logo's row */
-@media (max-width: 700px) {
-  .top-row .cta-top { display: inline-flex; order: 1; margin-left: auto; padding: 6px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
-  .main-nav a.nav-cta { display: none; }
-  /* the logo's row is full: the price shares the search's row */
-  .search { flex: 1 1 0; }
-  .price-chip { order: 4; margin-left: 0; }
-}
 
 /* copy buttons keep one width for "copy", "copied" and "failed" (monospace, 7ch), so the text
    next to them does not jump */
@@ -496,3 +509,25 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .bb-tip.below { transform: translateY(-4px); }
 .bb-tip.on { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .bb-tip { transition: none; } }
+
+/* the chart's crosshair (chartHover in app.js), as on the DEX terminal */
+.chart { touch-action: pan-y; }
+.chart .cross { stroke: rgba(255, 255, 255, 0.35); stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.chart .dot { stroke: var(--bg); stroke-width: 1.5; }
+.chart .hv-pill { fill: #193b55; stroke: rgba(255, 255, 255, 0.35); vector-effect: non-scaling-stroke; }
+.chart text.hv-text { font: 700 9.5px var(--font-mono); fill: var(--text); }
+
+/* the pool's hashrate panel, when its head does not fit one line (~860px of it): the title and the
+   network's hashrate, then the block, difficulty and block time on the right, then the mode on the
+   left and the range on the right. By the panel's own width, so it follows the head, not the window. */
+.panel:has(> .hr-head) { container-type: inline-size; }
+@container (max-width: 900px) {
+  .hr-head { display: grid; grid-template-columns: auto auto; justify-content: space-between; row-gap: 8px; }
+  .hr-head .panel-meta { display: contents; }
+  .hr-head .net-hr { justify-self: end; }
+  .hr-head .net-more { grid-column: 1 / -1; justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
+  .hr-head .seg:last-child { justify-self: end; }
+}
+.net-more { display: contents; }
+.chart .hover { pointer-events: none; }
+

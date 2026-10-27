@@ -270,10 +270,29 @@ const BB = (() => {
     }
   }
 
+  // The pool's own check (/api/health): the stratum process answers and the node gave a block
+  // template in the last 10 minutes. 'live', 'degraded' (the API answers, mining does not work:
+  // `reason` says why) or 'offline' (no answer at all).
+  async function health() {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetch(`${POOL_API}/api/health`, { signal: ctl.signal, cache: 'no-store' });
+      const h = await r.json().catch(() => null);
+      if (!h || typeof h.ok !== 'boolean') return { state: 'offline' };
+      if (h.ok) return { state: 'live' };
+      return { state: 'degraded', reason: h.stratum === 'down' ? 'stratum down' : !h.node ? 'no node' : 'node stalled' };
+    } catch (e) {
+      return { state: 'offline' };
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
   return {
     GROTH, MATURITY, FEE,
     blockReward, nextRewardChange,
-    network, networkBlocks, pool,
+    network, networkBlocks, pool, health,
     get mode() { return mode; },
     get dev() { return DEV; },
     stratumHost: (stats) => (stats && stats.stratumHost) || (mode === 'live' && POOL_API ? new URL(POOL_API).hostname : '<pool-host>'),
