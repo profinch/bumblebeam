@@ -19,6 +19,34 @@ extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint
 #define LOAD_D2  8
 #define CHUNK    16384
 static uint32_t DRAM_ATTR s_tbl[32];
+static const uint8_t genesis[80] = {
+    0x01,0x00,0x00,0x00, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0x3b,0xa3,0xed,0xfd,0x7a,0x7b,0x12,0xb2,0x7a,0xc7,0x2c,0x3e,0x67,0x76,0x8f,0x61,0x7f,0xc8,0x1b,0xc3,0x88,0x8a,0x51,0x32,0x3a,0x9f,0xb8,0xaa,0x4b,0x1e,0x5e,0x4a,
+    0x29,0xab,0x5f,0x49, 0xff,0xff,0x00,0x1d, 0x1d,0xac,0x2b,0x7c };
+bench_t g_bench;
+// live per-stage waits (tbl[25..29]): before CONTINUE, before LOAD H1, before LOAD H2, settle after LOAD H1, after LOAD H2.
+// Swept with /api/bench (fixed header, 8-bit mask, hit set vs a reference run): hard limits 30/35/22/3-4/6;
+// 30/36/23/6/7 gave 0 errors in 64M nonces = 258.4 bench cycles/nonce vs 272.4 for the old uniform E=68/d2=8.
+volatile uint32_t g_timing[5] = { 30, 36, 23, 6, 7 };
+static void set_timing(const volatile uint32_t *t) { for (int i = 0; i < 5; i++) s_tbl[25 + i] = t[i]; }
+static void run_bench(void) {
+    // fixed header (genesis words) and an 8-bit mask: ~n/256 hits, each re-verified in software; the hit set must match a reference run
+    uint32_t save[32]; memcpy(save, s_tbl, sizeof save);
+    uint32_t w[19]; for (int i = 0; i < 19; i++) w[i] = s_tbl[i] = ((uint32_t)genesis[4*i] << 24) | ((uint32_t)genesis[4*i+1] << 16) | ((uint32_t)genesis[4*i+2] << 8) | genesis[4*i+3];
+    s_tbl[23] = 0x000000FFu; set_timing(g_bench.t);
+    uint32_t hits = 0, bad = 0, sum = 0; uint64_t cyc = 0; const uint32_t base = 0x40000000u, end = base + g_bench.n; uint32_t n = base;
+    while (n < end) {
+        uint32_t cnt = end - n < CHUNK ? end - n : CHUNK;
+        s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = hwmine(s_tbl, n, cnt, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS();
+        if (s_tbl[24]) { uint32_t H[8]; job_hash(w, r, H); hits++; if (H[7] & 0xFF) bad++; sum = sum * 31 + r; n = r + 1; } else n = r;
+        if ((hits & 63) == 0) taskYIELD();
+    }
+    memcpy(s_tbl, save, sizeof save);
+    g_bench.cyc_per_kn = (uint32_t)(cyc * 1000 / g_bench.n); g_bench.hits = hits; g_bench.bad = bad; g_bench.sum = sum;
+    if (g_bench.apply && bad == 0) for (int i = 0; i < 5; i++) g_timing[i] = g_bench.t[i];
+    set_timing(g_timing);
+    ESP_LOGI(TAG, "bench t=%u/%u/%u/%u/%u n=%u: %u.%03u cyc/nonce hits %u bad %u sum %08x", (unsigned)g_bench.t[0], (unsigned)g_bench.t[1], (unsigned)g_bench.t[2], (unsigned)g_bench.t[3], (unsigned)g_bench.t[4], (unsigned)g_bench.n, (unsigned)(g_bench.cyc_per_kn / 1000), (unsigned)(g_bench.cyc_per_kn % 1000), (unsigned)hits, (unsigned)bad, (unsigned)sum);
+}
 static uint32_t hit_mask_for(double pool_diff) {
     // a share needs >= 32 + floor(log2(diff)) leading zero bits of the hash number, whose top 32 bits are bswap(word7)
     int bits = 32 + (int)floor(log2(pool_diff > 0 ? pool_diff : 1e-9));
@@ -26,10 +54,6 @@ static uint32_t hit_mask_for(double pool_diff) {
     if (bits <= 8) return 0x000000FFu;
     return __builtin_bswap32(~(0xFFFFFFFFu >> bits));
 }
-static const uint8_t genesis[80] = {
-    0x01,0x00,0x00,0x00, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0x3b,0xa3,0xed,0xfd,0x7a,0x7b,0x12,0xb2,0x7a,0xc7,0x2c,0x3e,0x67,0x76,0x8f,0x61,0x7f,0xc8,0x1b,0xc3,0x88,0x8a,0x51,0x32,0x3a,0x9f,0xb8,0xaa,0x4b,0x1e,0x5e,0x4a,
-    0x29,0xab,0x5f,0x49, 0xff,0xff,0x00,0x1d, 0x1d,0xac,0x2b,0x7c };
 static bool selftest(void) {
     for (int i = 0; i < 19; i++) s_tbl[i] = ((uint32_t)genesis[4*i] << 24) | ((uint32_t)genesis[4*i+1] << 16) | ((uint32_t)genesis[4*i+2] << 8) | genesis[4*i+3];
     s_tbl[23] = 0xFFFFFFFFu; const uint32_t tgt = 0x1dac2b7cu; uint32_t hits = 0, hitn = 0, cyc = 0, total = 0;
@@ -49,12 +73,13 @@ static bool selftest(void) {
 }
 static void task(void *arg) {
     periph_module_enable(PERIPH_SHA_MODULE);
-    s_tbl[19] = 0x80000000u; s_tbl[20] = 640; s_tbl[21] = 256; s_tbl[22] = 1; s_tbl[23] = 0xFFFFFFFFu;
+    s_tbl[19] = 0x80000000u; s_tbl[20] = 640; s_tbl[21] = 256; s_tbl[22] = 1; s_tbl[23] = 0xFFFFFFFFu; set_timing(g_timing);
     selftest();
     static job_t job; static session_t sess; uint32_t seq = 0; static uint32_t w[19]; uint32_t en2 = 0, nonce = 0; bool have = false;
     int64_t win_t = esp_timer_get_time(); uint64_t win_h = 0; g_miner.start_us = win_t;
     s_tbl[19] = 0x80000000u; s_tbl[20] = 640; s_tbl[21] = 256; s_tbl[22] = 1; s_tbl[23] = 0xFFFFFFFFu;
     for (;;) {
+        if (g_bench.req) { g_bench.req = 0; run_bench(); g_bench.done = 1; }
         if (stratum_get_job(&job, &sess, &seq)) {
             en2 = (uint32_t)(esp_timer_get_time() & 0xffff) << 8;   // spread extranonce2 between restarts
             nonce = 0; job_build_words(&job, &sess, en2, w); memcpy(s_tbl, w, 19 * 4); have = true;

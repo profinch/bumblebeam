@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 static const char *TAG = "web";
-#define FW_VERSION "0.3.0"
+#define FW_VERSION "0.4.0"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
@@ -33,12 +33,25 @@ static esp_err_t h_info(httpd_req_t *r) {
     char b[1800];
     snprintf(b, sizeof b,
         "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"ESP32 open fw\",\"board\":\"esp32-wroom-32\"},"
-        "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"-\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"freeHeap\":%u,\"minFreeHeap\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu},"
+        "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"-\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"freeHeap\":%u,\"minFreeHeap\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu},"
         "\"stratum\":{\"url\":\"%s\",\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
-        s_host, FW_VERSION, wifi_rssi(), (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), pd, ld, bs, be,
+        s_host, FW_VERSION, wifi_rssi(), (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), pd, ld, bs, be, (int)esp_reset_reason(),
         (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)g_miner.kernel_cycles, g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes,
         g_stratum.pool_desc, g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
         (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);
+    httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
+}
+static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&n=NONCES[&apply=1]
+    char q[128] = "", v[48]; httpd_req_get_url_query_str(r, q, sizeof q);
+    uint32_t t[5]; for (int i = 0; i < 5; i++) t[i] = g_timing[i];
+    if (httpd_query_key_value(q, "t", v, sizeof v) == ESP_OK) sscanf(v, "%u,%u,%u,%u,%u", (unsigned *)&t[0], (unsigned *)&t[1], (unsigned *)&t[2], (unsigned *)&t[3], (unsigned *)&t[4]);
+    uint32_t n = 262144; if (httpd_query_key_value(q, "n", v, sizeof v) == ESP_OK) n = strtoul(v, NULL, 10); if (n < 16384) n = 16384; if (n > 16777216) n = 16777216;
+    for (int i = 0; i < 5; i++) if (t[i] > 200) t[i] = 200;
+    memcpy(g_bench.t, t, sizeof t); g_bench.n = n; g_bench.apply = httpd_query_key_value(q, "apply", v, sizeof v) == ESP_OK; g_bench.done = 0; g_bench.req = 1;
+    for (int i = 0; i < 600 && !g_bench.done; i++) vTaskDelay(pdMS_TO_TICKS(100));
+    char b[256]; snprintf(b, sizeof b, "{\"t\":[%u,%u,%u,%u,%u],\"n\":%u,\"done\":%s,\"cycPerNonce\":%.3f,\"hits\":%u,\"bad\":%u,\"sum\":\"%08x\",\"live\":[%u,%u,%u,%u,%u]}",
+        (unsigned)t[0], (unsigned)t[1], (unsigned)t[2], (unsigned)t[3], (unsigned)t[4], (unsigned)n, g_bench.done ? "true" : "false", g_bench.cyc_per_kn / 1000.0, (unsigned)g_bench.hits, (unsigned)g_bench.bad, (unsigned)g_bench.sum,
+        (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4]);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, "{\"status\":\"ok\"}", -1); }
@@ -98,6 +111,6 @@ void web_start(void) {
         { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
-        { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
+        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
 }

@@ -6,6 +6,7 @@
 //   tbl[24] <- 1 if a nonce with digest word7==0 was found (returned in a2); else returns nonce_start+count
 //   E  = engine time budget in cycles between a START/CONTINUE store and the following control store (>= 44)
 //   d2 = delay cycles after a LOAD store before using TEXT
+//   (E and d2 are no longer used by the loop: per-stage waits come from tbl[25..29], see miner.c)
     .section .iram1, "ax"
     .align 4
     .global hwmine
@@ -61,6 +62,7 @@ hwmine:
     l32i a15, a2, 72
     s32i a14, a7, 4
     s32i a15, a7, 8
+    l32i a13, a2, 100               // tbl[25]: wait before CONTINUE (loaded early: no load-use stall)
     s32i a3,  a7, 12                // nonce word
     s32i a9,  a7, 16                // 0x80000000
     s32i a8,  a7, 20
@@ -74,22 +76,22 @@ hwmine:
     s32i a8,  a7, 52
     s32i a8,  a7, 56
     s32i a10, a7, 60                // 640
-    addi a13, a5, -38               // remaining engine time after ~38 cycles of stores
     loopnez a13, .Ld1
     nop
 .Ld1:
     s32i a12, a7, 0x94              // CONTINUE (block 2)
-    nop; nop; nop; nop; nop; nop; nop; nop; nop; nop
+    l32i a13, a2, 104               // tbl[26]: wait before LOAD H1
+    l32i a14, a2, 112               // tbl[28]: settle after LOAD H1
+    nop; nop; nop; nop; nop; nop; nop; nop
     nop; nop; nop; nop; nop; nop; nop; nop; nop; nop   // let the engine read W[8..15] first
     s32i a9,  a7, 32                // 2nd-hash padding: word 8 = 0x80000000
     l32i a11, a2, 84                // 256
     s32i a11, a7, 60                // word 15 = 256
-    addi a13, a5, -24
     loopnez a13, .Ld2
     nop
 .Ld2:
     s32i a12, a7, 0x98              // LOAD -> H1 into TEXT[0..7]
-    loopnez a6, .Ld3
+    loopnez a14, .Ld3
     nop
 .Ld3:
     s32i a12, a7, 0x90              // START (2nd hash)
@@ -109,14 +111,15 @@ hwmine:
     l32i a13, a2, 56
     s32i a15, a7, 52
     l32i a14, a2, 60
+    l32i a15, a2, 108               // tbl[27]: wait before LOAD H2
+    l32i a11, a2, 116               // tbl[29]: settle after LOAD H2
     s32i a13, a7, 56
     s32i a14, a7, 60
-    addi a13, a5, -42
-    loopnez a13, .Ld4
+    loopnez a15, .Ld4
     nop
 .Ld4:
     s32i a12, a7, 0x98              // LOAD -> H2
-    loopnez a6, .Ld5
+    loopnez a11, .Ld5
     nop
 .Ld5:
     l32i a11, a2, 92                // hit mask
