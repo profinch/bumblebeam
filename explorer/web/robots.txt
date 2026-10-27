@@ -1,0 +1,8 @@
+# BumbleBeam Explorer - https://explorer.bumblebeam.org
+# Every crawler is welcome, search and AI alike. Single blocks, kernels and contracts carry
+# X-Robots-Tag: noindex instead of a Disallow here, so crawlers can see it and drop them.
+User-agent: *
+Allow: /
+Disallow: /mcp
+
+Sitemap: https://explorer.bumblebeam.org/sitemap.xml

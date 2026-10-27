@@ -11,6 +11,9 @@
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const view = $('#view');
+  // A prerendered snapshot (deploy/docker/containers/prerender) may already fill #view: it stays
+  // until this run has its own data. data-ready on <html> tells the prerenderer this run rendered.
+  delete document.documentElement.dataset.ready;
   const params = new URLSearchParams(location.search);
   const DEV = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   const API = ((DEV && params.get('api')) || '/api').replace(/\/$/, '');
@@ -1240,6 +1243,58 @@
     return null;
   }
 
+  // ---------- page titles and meta, per route ----------
+  // Search engines and AI crawlers read these from the prerendered snapshot. Lists and asset
+  // pages are indexed; single blocks, kernels and contracts are millions of thin pages and are not
+  // (nginx also sends X-Robots-Tag: noindex for them).
+  const META = {
+    home: ['Beam (BEAM) Block Explorer — Mimblewimble Blocks, Assets, DEX | BumbleBeam',
+      'Open-source block explorer for Beam (BEAM), the Mimblewimble privacy coin: latest blocks, confidential assets, DEX pools, contracts and names, from our own archival node.'],
+    assets: ['Beam Confidential Assets — List | BumbleBeam Explorer',
+      'Every confidential asset issued on Beam (BEAM): name, ticker, supply, issuer deposit and lock height.'],
+    contracts: ['Beam Shader Contracts | BumbleBeam Explorer',
+      'Shader contracts deployed on Beam (BEAM): DEX, names, bridges, DAOs and more, with their versions and state.'],
+    dex: ['Beam DEX Pools, Orders & Trades | BumbleBeam Explorer',
+      'Liquidity pools of Beam\'s on-chain DEX: pairs, reserves, prices and trades of BEAM and confidential assets.'],
+    names: ['Beam Names (BANS) | BumbleBeam Explorer',
+      'Names registered in the Beam Anonymous Name Service (BANS): who holds which name and until when.'],
+    peers: ['Peers | BumbleBeam Explorer', 'Beam nodes our explorer node is connected to.'],
+    api: ['Beam Explorer API & MCP Server (JSON /v1) | BumbleBeam',
+      'A plain JSON API (/v1) and an MCP server over a Beam (BEAM) archival node: blocks, kernels, assets, contracts, DEX pools and names.'],
+    block: ['Beam Block | BumbleBeam Explorer', 'A block on the Beam (BEAM) blockchain.'],
+    kernel: ['Beam Kernel | BumbleBeam Explorer', 'A transaction kernel on the Beam (BEAM) blockchain.'],
+    contract: ['Beam Contract | BumbleBeam Explorer', 'A shader contract on Beam (BEAM).'],
+    notfound: ['Not found | BumbleBeam Explorer', 'There is no such page on the BumbleBeam Explorer.'],
+  };
+  const INDEXED = new Set(['home', 'assets', 'contracts', 'dex', 'names', 'api']);
+  function headTag(sel, make, attr, value) {
+    let el = document.head.querySelector(sel);
+    if (value == null) { if (el) el.remove(); return; }
+    if (!el) { el = make(); document.head.appendChild(el); }
+    el.setAttribute(attr, value);
+  }
+  // <meta name|property="..." content="...">, or none when value is null
+  const metaTag = (attr, name, value) => headTag(`meta[${attr}="${name}"]`, () => { const m = document.createElement('meta'); m.setAttribute(attr, name); return m; }, 'content', value);
+  function setMeta(route, arg) {
+    let [title, desc] = META[route] || META.notfound;
+    const h1 = (view.querySelector('h1') || {}).textContent || '';
+    const missing = h1.trim() === 'Not found';
+    // an asset page is named after its asset: "Tether (asset #1)"
+    if (route === 'asset' && !missing) {
+      const name = h1.trim() || `Asset #${arg}`;
+      title = `${name} — Beam Confidential Asset #${arg} | BumbleBeam Explorer`;
+      desc = `${name} (asset #${arg}) on Beam (BEAM): supply, issuer deposit, lock height, history and DEX pools.`;
+    }
+    if (route === 'block' && arg) title = `Beam Block ${arg} | BumbleBeam Explorer`;
+    const index = !missing && ((INDEXED.has(route) && arg == null) || (route === 'asset' && /^\d{1,10}$/.test(arg || '')));
+    const url = index ? location.origin + (route === 'home' ? '/' : route === 'asset' ? `/asset/${Number(arg)}` : `/${route}`) : null;
+    document.title = title;
+    metaTag('name', 'description', desc);
+    metaTag('name', 'robots', index ? null : 'noindex');
+    headTag('link[rel="canonical"]', () => Object.assign(document.createElement('link'), { rel: 'canonical' }), 'href', url);
+    for (const [p, v] of [['og:title', title], ['og:description', desc], ['og:url', url], ['og:type', 'website'], ['og:site_name', 'BumbleBeam Explorer']]) metaTag('property', p, v);
+  }
+
   // ---------- routing: clean paths over the History API ----------
   function parse() {
     const p = location.pathname.replace(/^\/+|\/+$/g, '');
@@ -1265,6 +1320,9 @@
       const html = await views[route](arg);
       if (my !== seq) return;
       view.innerHTML = html;
+      setMeta(route, arg);
+      view.removeAttribute('data-snap');
+      document.documentElement.dataset.ready = '1';
       if (route === 'home') bindHome();
       if (route === 'names') bindNames();
       if (route === 'contracts') bindContracts();
@@ -1272,7 +1330,8 @@
       if (route === 'dex') bindDex();
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
-      if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
+      // a snapshot already on the page is better than an error, until a refresh brings data
+      if (my === seq && !view.hasAttribute('data-snap')) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
     }
     setStatus();
   }

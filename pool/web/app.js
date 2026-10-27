@@ -7,6 +7,9 @@
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const view = $('#view');
+  // A prerendered snapshot (deploy/docker/containers/prerender) may already fill #view: it stays
+  // until this run has its own data. data-ready on <html> tells the prerenderer this run rendered.
+  delete document.documentElement.dataset.ready;
 
   // ---------- formatting ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1035,6 +1038,46 @@
   views.notfound = async () => `<div class="page-head"><h1 class="page-title">Not found</h1></div>
     <div class="panel empty">There is no such page. <a href="/">Back to the pool</a></div>`;
 
+  // ---------- page titles and meta, per route ----------
+  // Search engines and AI crawlers read these from the prerendered snapshot, so each indexable
+  // page has its own title, description and canonical URL. Figures here (fee, payouts) are the
+  // pool's published terms; keep them in step with pool.toml.
+  const META = {
+    dashboard: ['Beam Mining Pool (BEAM) — PPLNS & Solo, 0.5% Fee | BumbleBeam',
+      'BumbleBeam is an open-source mining pool for Beam (BEAM), the Mimblewimble privacy coin: BeamHash III, PPLNS and solo, 0.5% fee, payouts every 2 hours from 1 BEAM.'],
+    network: ['Beam Network Hashrate, Difficulty & Pool Shares — Live | BumbleBeam',
+      'Live Beam (BEAM) network hashrate and difficulty, and which mining pools found the latest blocks, read from the BumbleBeam pool\'s own node.'],
+    blocks: ['Beam Blocks Found by the BumbleBeam Pool',
+      'Every Beam (BEAM) block the BumbleBeam pool found, PPLNS and solo: height, reward, effort, finder and confirmations.'],
+    miners: ['Miners | BumbleBeam Pool', 'Miners on the BumbleBeam pool for Beam (BEAM).'],
+    payments: ['Payments | BumbleBeam Pool', 'Payouts sent by the BumbleBeam pool for Beam (BEAM).'],
+    connect: ['How to Mine Beam (BeamHash III): lolMiner, GMiner, HiveOS | BumbleBeam',
+      'Mine Beam (BEAM) on BumbleBeam: wallet address, miner command lines for lolMiner, GMiner and MXBM, HiveOS and NiceHash setup, stratum ports with TLS, and a profit calculator.'],
+    api: ['BumbleBeam Pool API & MCP Server for Beam Mining Data',
+      'The BumbleBeam pool API (JSON, open-ethereum-pool compatible) and MCP server: pool and network hashrate, blocks, miners and payouts for Beam (BEAM).'],
+    notfound: ['Page not found | BumbleBeam Pool', 'There is no such page on the BumbleBeam pool.'],
+  };
+  // pages that are someone's data or a filter: shown, not indexed
+  const NOINDEX = new Set(['miners', 'payments', 'notfound']);
+  function headTag(sel, make, attr, value) {
+    let el = document.head.querySelector(sel);
+    if (value == null) { if (el) el.remove(); return; }
+    if (!el) { el = make(); document.head.appendChild(el); }
+    el.setAttribute(attr, value);
+  }
+  // <meta name|property="..." content="...">, or none when value is null
+  const metaTag = (attr, name, value) => headTag(`meta[${attr}="${name}"]`, () => { const m = document.createElement('meta'); m.setAttribute(attr, name); return m; }, 'content', value);
+  function setMeta(route, arg) {
+    const [title, desc] = META[route] || META.notfound;
+    const index = !NOINDEX.has(route) && arg == null;
+    const url = index ? location.origin + (route === 'dashboard' ? '/' : `/${route}`) : null;
+    document.title = title;
+    metaTag('name', 'description', desc);
+    metaTag('name', 'robots', index ? null : 'noindex');
+    headTag('link[rel="canonical"]', () => Object.assign(document.createElement('link'), { rel: 'canonical' }), 'href', url);
+    for (const [p, v] of [['og:title', title], ['og:description', desc], ['og:url', url], ['og:type', 'website'], ['og:site_name', 'BumbleBeam Pool']]) metaTag('property', p, v);
+  }
+
   // ---------- routing: clean paths (/network, /miners/<address>) over the History API ----------
   // The pool server answers every path that is not a file or /api/* with index.html.
   function parse() {
@@ -1068,6 +1111,9 @@
       // the 30 s refresh often brings the same page: leave the DOM (selection, an open tooltip) alone then
       if (scrollTop || html !== lastHtml) view.innerHTML = html;
       lastHtml = html;
+      setMeta(route, arg);
+      view.removeAttribute('data-snap');
+      document.documentElement.dataset.ready = '1';
       // a miner page can make its address "my stats" while loading, so mark the tab again
       markNav(route, arg);
       setFooter();
@@ -1076,7 +1122,8 @@
       if (route === 'miners') bindBlocksPanel(mine);
       if (scrollTop) window.scrollTo(0, 0);
     } catch (e) {
-      if (my === seq) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
+      // a snapshot already on the page is better than an error, until a refresh brings data
+      if (my === seq && !view.hasAttribute('data-snap')) view.innerHTML = `<div class="panel empty err">Could not load: ${esc(e.message)}</div>`;
     }
   }
 

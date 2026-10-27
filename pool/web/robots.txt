@@ -1,0 +1,8 @@
+# BumbleBeam Pool - https://pool.bumblebeam.org
+# Every crawler is welcome, search and AI alike. Miner and payout pages carry
+# X-Robots-Tag: noindex instead of a Disallow here, so crawlers can see it and drop them.
+User-agent: *
+Allow: /
+Disallow: /dash
+
+Sitemap: https://pool.bumblebeam.org/sitemap.xml
