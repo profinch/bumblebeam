@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 static const char *TAG = "web";
-#define FW_VERSION "0.4.0"
+#define FW_VERSION "0.5.0"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
@@ -45,13 +45,14 @@ static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&
     char q[128] = "", v[48]; httpd_req_get_url_query_str(r, q, sizeof q);
     uint32_t t[5]; for (int i = 0; i < 5; i++) t[i] = g_timing[i];
     if (httpd_query_key_value(q, "t", v, sizeof v) == ESP_OK) sscanf(v, "%u,%u,%u,%u,%u", (unsigned *)&t[0], (unsigned *)&t[1], (unsigned *)&t[2], (unsigned *)&t[3], (unsigned *)&t[4]);
+    uint32_t k = g_kernel; if (httpd_query_key_value(q, "k", v, sizeof v) == ESP_OK) k = strtoul(v, NULL, 10);
     uint32_t n = 262144; if (httpd_query_key_value(q, "n", v, sizeof v) == ESP_OK) n = strtoul(v, NULL, 10); if (n < 16384) n = 16384; if (n > 16777216) n = 16777216;
     for (int i = 0; i < 5; i++) if (t[i] > 200) t[i] = 200;
-    memcpy(g_bench.t, t, sizeof t); g_bench.n = n; g_bench.apply = httpd_query_key_value(q, "apply", v, sizeof v) == ESP_OK; g_bench.done = 0; g_bench.req = 1;
+    memcpy(g_bench.t, t, sizeof t); g_bench.n = n; g_bench.k = k; g_bench.apply = httpd_query_key_value(q, "apply", v, sizeof v) == ESP_OK; g_bench.done = 0; g_bench.req = 1;
     for (int i = 0; i < 600 && !g_bench.done; i++) vTaskDelay(pdMS_TO_TICKS(100));
-    char b[256]; snprintf(b, sizeof b, "{\"t\":[%u,%u,%u,%u,%u],\"n\":%u,\"done\":%s,\"cycPerNonce\":%.3f,\"hits\":%u,\"bad\":%u,\"sum\":\"%08x\",\"live\":[%u,%u,%u,%u,%u]}",
-        (unsigned)t[0], (unsigned)t[1], (unsigned)t[2], (unsigned)t[3], (unsigned)t[4], (unsigned)n, g_bench.done ? "true" : "false", g_bench.cyc_per_kn / 1000.0, (unsigned)g_bench.hits, (unsigned)g_bench.bad, (unsigned)g_bench.sum,
-        (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4]);
+    char b[256]; snprintf(b, sizeof b, "{\"k\":%u,\"t\":[%u,%u,%u,%u,%u],\"n\":%u,\"done\":%s,\"cycPerNonce\":%.3f,\"hits\":%u,\"bad\":%u,\"sum\":\"%08x\",\"live\":[%u,%u,%u,%u,%u],\"liveKernel\":%u}",
+        (unsigned)k, (unsigned)t[0], (unsigned)t[1], (unsigned)t[2], (unsigned)t[3], (unsigned)t[4], (unsigned)n, g_bench.done ? "true" : "false", g_bench.cyc_per_kn / 1000.0, (unsigned)g_bench.hits, (unsigned)g_bench.bad, (unsigned)g_bench.sum,
+        (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4], (unsigned)g_kernel);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, "{\"status\":\"ok\"}", -1); }
@@ -105,7 +106,7 @@ static const char PAGE[] =
 static esp_err_t h_root(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); return httpd_resp_send(r, PAGE, -1); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, "ESP32Miner-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 12; c.stack_size = 8192; c.lru_purge_enable = true;
+    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 12; c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
     httpd_handle_t s; if (httpd_start(&s, &c) != ESP_OK) { ESP_LOGE(TAG, "httpd start failed"); return; }
     httpd_uri_t u[] = {
         { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },

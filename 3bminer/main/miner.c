@@ -15,6 +15,16 @@
 static const char *TAG = "miner";
 miner_stats_t g_miner;
 extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint32_t E, uint32_t d2);
+// mine2.S (tools/gen_mine2.py): START of block 1 after K header words + deferred hit test; same interface
+extern uint32_t hwmine_k8(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k7(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t),
+    hwmine_k6(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k5(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k4(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+typedef uint32_t (*kernel_fn)(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+static const kernel_fn s_kernels[] = { hwmine, hwmine_k8, hwmine_k7, hwmine_k6, hwmine_k5, hwmine_k4 };
+#define NKERNELS (sizeof s_kernels / sizeof s_kernels[0])
+// hwmine_k6 (index 3): START after 6 words + deferred hit test. Swept: W1 passes 23..40, W2 >= 35, W3 >= 22, L1 >= 3, L2 8 (reads word 7 one cycle
+// earlier than hwmine, so L2 needs +1); 25/36/23/6/8 = 251.7 bench cycles/nonce, misses at the same ~1 per 4-30M noise level as hwmine.
+// k5/k4 (START after 5 or 4 words) never pass: the stores lose the race against the engine reading W[i].
+volatile uint32_t g_kernel = 3;
 #define ENGINE_E 68
 #define LOAD_D2  8
 #define CHUNK    16384
@@ -27,7 +37,7 @@ bench_t g_bench;
 // live per-stage waits (tbl[25..29]): before CONTINUE, before LOAD H1, before LOAD H2, settle after LOAD H1, after LOAD H2.
 // Swept with /api/bench (fixed header, 8-bit mask, hit set vs a reference run): hard limits 30/35/22/3-4/6;
 // 30/36/23/6/7 gave 0 errors in 64M nonces = 258.4 bench cycles/nonce vs 272.4 for the old uniform E=68/d2=8.
-volatile uint32_t g_timing[5] = { 30, 36, 23, 6, 7 };
+volatile uint32_t g_timing[5] = { 25, 36, 23, 6, 8 };   // live waits for g_kernel (hwmine itself: 30/36/23/6/7)
 static void set_timing(const volatile uint32_t *t) { for (int i = 0; i < 5; i++) s_tbl[25 + i] = t[i]; }
 static void run_bench(void) {
     // fixed header (genesis words) and an 8-bit mask: ~n/256 hits, each re-verified in software; the hit set must match a reference run
@@ -37,15 +47,16 @@ static void run_bench(void) {
     uint32_t hits = 0, bad = 0, sum = 0; uint64_t cyc = 0; const uint32_t base = 0x40000000u, end = base + g_bench.n; uint32_t n = base;
     while (n < end) {
         uint32_t cnt = end - n < CHUNK ? end - n : CHUNK;
-        s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = hwmine(s_tbl, n, cnt, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS();
+        s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = s_kernels[g_bench.k < NKERNELS ? g_bench.k : 0](s_tbl, n, cnt, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS();
         if (s_tbl[24]) { uint32_t H[8]; job_hash(w, r, H); hits++; if (H[7] & 0xFF) bad++; sum = sum * 31 + r; n = r + 1; } else n = r;
         if ((hits & 63) == 0) taskYIELD();
+        if (hits > (g_bench.n >> 6) + 64) { bad += 1000000; break; }   // broken timing reports ~every nonce as a hit: bail out instead of crawling
     }
     memcpy(s_tbl, save, sizeof save);
     g_bench.cyc_per_kn = (uint32_t)(cyc * 1000 / g_bench.n); g_bench.hits = hits; g_bench.bad = bad; g_bench.sum = sum;
-    if (g_bench.apply && bad == 0) for (int i = 0; i < 5; i++) g_timing[i] = g_bench.t[i];
+    if (g_bench.apply && bad == 0) { for (int i = 0; i < 5; i++) g_timing[i] = g_bench.t[i]; if (g_bench.k < NKERNELS) g_kernel = g_bench.k; }
     set_timing(g_timing);
-    ESP_LOGI(TAG, "bench t=%u/%u/%u/%u/%u n=%u: %u.%03u cyc/nonce hits %u bad %u sum %08x", (unsigned)g_bench.t[0], (unsigned)g_bench.t[1], (unsigned)g_bench.t[2], (unsigned)g_bench.t[3], (unsigned)g_bench.t[4], (unsigned)g_bench.n, (unsigned)(g_bench.cyc_per_kn / 1000), (unsigned)(g_bench.cyc_per_kn % 1000), (unsigned)hits, (unsigned)bad, (unsigned)sum);
+    ESP_LOGI(TAG, "bench k=%u t=%u/%u/%u/%u/%u n=%u: %u.%03u cyc/nonce hits %u bad %u sum %08x", (unsigned)g_bench.k, (unsigned)g_bench.t[0], (unsigned)g_bench.t[1], (unsigned)g_bench.t[2], (unsigned)g_bench.t[3], (unsigned)g_bench.t[4], (unsigned)g_bench.n, (unsigned)(g_bench.cyc_per_kn / 1000), (unsigned)(g_bench.cyc_per_kn % 1000), (unsigned)hits, (unsigned)bad, (unsigned)sum);
 }
 static uint32_t hit_mask_for(double pool_diff) {
     // a share needs >= 32 + floor(log2(diff)) leading zero bits of the hash number, whose top 32 bits are bswap(word7)
@@ -59,13 +70,13 @@ static bool selftest(void) {
     s_tbl[23] = 0xFFFFFFFFu; const uint32_t tgt = 0x1dac2b7cu; uint32_t hits = 0, hitn = 0, cyc = 0, total = 0;
     for (uint32_t n0 = tgt - 100000; n0 < tgt + 100000; n0 += 20000) {
         uint32_t n = n0, endn = n0 + 20000;
-        while (n < endn) { s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = hwmine(s_tbl, n, endn - n, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS(); if (s_tbl[24]) { hits++; hitn = r; n = r + 1; } else n = endn; }
+        while (n < endn) { s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = s_kernels[g_kernel](s_tbl, n, endn - n, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS(); if (s_tbl[24]) { hits++; hitn = r; n = r + 1; } else n = endn; }
         total += 20000; vTaskDelay(1);
     }
     bool ok = (hits == 1 && hitn == tgt);
     // single-nonce digest check: after hwmine returns, TEXT[0..7] holds H2 of the last nonce processed
     { uint32_t w[19]; for (int i = 0; i < 19; i++) w[i] = s_tbl[i]; uint32_t H[8]; job_hash(w, tgt, H);
-      s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t r = hwmine(s_tbl, tgt, 1, ENGINE_E, LOAD_D2); portENABLE_INTERRUPTS();
+      s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t r = s_kernels[g_kernel](s_tbl, tgt, 1, ENGINE_E, LOAD_D2); portENABLE_INTERRUPTS();
       volatile uint32_t *T = (volatile uint32_t *)0x3ff03000; uint32_t E[8]; for (int i = 0; i < 8; i++) E[i] = T[i];
       ESP_LOGI(TAG, "single nonce: ret %08x hit %u | engine %08x %08x .. %08x | sw %08x %08x .. %08x", (unsigned)r, (unsigned)s_tbl[24], (unsigned)E[0], (unsigned)E[1], (unsigned)E[7], (unsigned)H[0], (unsigned)H[1], (unsigned)H[7]); }
     ESP_LOGI(TAG, "SELFTEST %s: %.1f cycles/nonce = %.1f KH/s (hits %u, nonce %08x)", ok ? "OK" : "WRONG", (double)cyc / total, 240000.0 * total / cyc, (unsigned)hits, (unsigned)hitn);
@@ -92,7 +103,7 @@ static void task(void *arg) {
         s_tbl[24] = 0;
         portDISABLE_INTERRUPTS();
         uint32_t c0 = esp_cpu_get_cycle_count();
-        uint32_t r = hwmine(s_tbl, nonce, count, ENGINE_E, LOAD_D2);
+        uint32_t r = s_kernels[g_kernel](s_tbl, nonce, count, ENGINE_E, LOAD_D2);
         uint32_t cyc = esp_cpu_get_cycle_count() - c0;
         portENABLE_INTERRUPTS();
         uint32_t done = (s_tbl[24] ? r + 1 : r) - nonce;
