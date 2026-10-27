@@ -531,3 +531,5 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .net-more { display: contents; }
 .chart .hover { pointer-events: none; }
 
+/* a head whose meta is one quiet link ("All blocks") keeps it at the right end on phones too */
+.panel-head .panel-meta:has(> a.text-link:only-child) { margin-left: auto; }
