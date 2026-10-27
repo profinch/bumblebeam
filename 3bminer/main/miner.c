@@ -25,6 +25,7 @@ static const kernel_fn s_kernels[] = { hwmine, hwmine_k8, hwmine_k7, hwmine_k6, 
 // earlier than hwmine, so L2 needs +1); 25/36/23/6/8 = 251.7 bench cycles/nonce, misses at the same ~1 per 4-30M noise level as hwmine.
 // k5/k4 (START after 5 or 4 words) never pass: the stores lose the race against the engine reading W[i].
 volatile uint32_t g_kernel = 3;
+volatile uint32_t g_sw_enabled = 1;   // core-1 software hasher on/off (A/B against the engine rate)
 #define ENGINE_E 68
 #define LOAD_D2  8
 #define CHUNK    16384
@@ -126,7 +127,7 @@ static void swtask(void *arg) {
             for (int i = 0; i < 19; i++) { hdr[4*i] = w[i] >> 24; hdr[4*i+1] = w[i] >> 16; hdr[4*i+2] = w[i] >> 8; hdr[4*i+3] = w[i]; }
             nerd_mids(mid, hdr); nerd_sha256_bake(mid, hdr + 64, bake); have = true;
         }
-        if (!have || !g_stratum.connected) { have = have && g_stratum.connected; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
+        if (!have || !g_stratum.connected || !g_sw_enabled) { have = have && g_stratum.connected; if (!g_sw_enabled) g_miner.sw_hashrate = 0; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         for (int k = 0; k < 2048; k++, nonce++) {
             hdr[76] = nonce >> 24; hdr[77] = nonce >> 16; hdr[78] = nonce >> 8; hdr[79] = nonce;
             uint8_t dh[32];
@@ -138,5 +139,14 @@ static void swtask(void *arg) {
         if (now - win_t >= 5000000) { g_miner.sw_hashrate = (double)win_h * 1e6 / (now - win_t); win_t = now; win_h = 0; }
         taskYIELD();
     }
+}
+// cycles per software hash on the calling core (core 1 when called from httpd)
+uint32_t sw_bench_cycles(void) {
+    static uint8_t hdr[80]; static uint32_t mid[8], bake[16]; uint8_t dh[32];
+    for (int i = 0; i < 80; i++) hdr[i] = genesis[i];
+    nerd_mids(mid, hdr); nerd_sha256_bake(mid, hdr + 64, bake);
+    uint32_t c0 = esp_cpu_get_cycle_count();
+    for (uint32_t n = 0; n < 4096; n++) { hdr[79] = n; hdr[78] = n >> 8; nerd_sha256d_baked(mid, hdr + 64, bake, dh); }
+    return (esp_cpu_get_cycle_count() - c0) / 4096;
 }
 void miner_start(void) { xTaskCreatePinnedToCore(task, "miner", 16384, NULL, 10, NULL, 0); xTaskCreatePinnedToCore(swtask, "swminer", 12288, NULL, 1, NULL, 1); }

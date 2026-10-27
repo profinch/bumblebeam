@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 static const char *TAG = "web";
-#define FW_VERSION "0.5.0"
+#define FW_VERSION "0.5.2"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
@@ -41,11 +41,16 @@ static esp_err_t h_info(httpd_req_t *r) {
         (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
+static esp_err_t h_swbench(httpd_req_t *r) {   // GET /api/swbench: software sha256d cost on core 1
+    uint32_t c = sw_bench_cycles(); char b[96]; snprintf(b, sizeof b, "{\"cyclesPerHash\":%u,\"khsOneCore\":%.1f}", (unsigned)c, 240000.0 / c);
+    httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, b, -1);
+}
 static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&n=NONCES[&apply=1]
     char q[128] = "", v[48]; httpd_req_get_url_query_str(r, q, sizeof q);
     uint32_t t[5]; for (int i = 0; i < 5; i++) t[i] = g_timing[i];
     if (httpd_query_key_value(q, "t", v, sizeof v) == ESP_OK) sscanf(v, "%u,%u,%u,%u,%u", (unsigned *)&t[0], (unsigned *)&t[1], (unsigned *)&t[2], (unsigned *)&t[3], (unsigned *)&t[4]);
     uint32_t k = g_kernel; if (httpd_query_key_value(q, "k", v, sizeof v) == ESP_OK) k = strtoul(v, NULL, 10);
+    if (httpd_query_key_value(q, "sw", v, sizeof v) == ESP_OK) g_sw_enabled = strtoul(v, NULL, 10) != 0;
     uint32_t n = 262144; if (httpd_query_key_value(q, "n", v, sizeof v) == ESP_OK) n = strtoul(v, NULL, 10); if (n < 16384) n = 16384; if (n > 16777216) n = 16777216;
     for (int i = 0; i < 5; i++) if (t[i] > 200) t[i] = 200;
     memcpy(g_bench.t, t, sizeof t); g_bench.n = n; g_bench.k = k; g_bench.apply = httpd_query_key_value(q, "apply", v, sizeof v) == ESP_OK; g_bench.done = 0; g_bench.req = 1;
@@ -106,12 +111,12 @@ static const char PAGE[] =
 static esp_err_t h_root(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); return httpd_resp_send(r, PAGE, -1); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, "ESP32Miner-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 12; c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
+    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 14; c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
     httpd_handle_t s; if (httpd_start(&s, &c) != ESP_OK) { ESP_LOGE(TAG, "httpd start failed"); return; }
     httpd_uri_t u[] = {
         { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
-        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
+        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
 }

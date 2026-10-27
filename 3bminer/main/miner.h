@@ -7,4 +7,6 @@ void miner_start(void);
 typedef struct { volatile int req, done; uint32_t t[5], n, k; uint32_t cyc_per_kn, hits, bad, sum; int apply; } bench_t;
 extern bench_t g_bench;
 extern volatile uint32_t g_timing[5];
-extern volatile uint32_t g_kernel;   // index: 0 = hwmine, 1..5 = hwmine_k8..k4
+extern volatile uint32_t g_kernel;
+extern volatile uint32_t g_sw_enabled;   // index: 0 = hwmine, 1..5 = hwmine_k8..k4
+uint32_t sw_bench_cycles(void);
