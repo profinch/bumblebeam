@@ -41,7 +41,8 @@ render() {
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   mkdir -p "$(dirname "$out")"
   {
-    printf '<!doctype html>\n'
+    # Chromium's DOM dump carries the doctype; without one the page would render in quirks mode
+    head -c 200 "$dom" | grep -qi '<!doctype' || printf '<!doctype html>\n'
     sed -e 's| data-ready="1"||' -e "s|<main id=\"view\"|<main id=\"view\" data-snap=\"$now\"|" "$dom"
   } >"$out.tmp" && mv "$out.tmp" "$out"
 }
