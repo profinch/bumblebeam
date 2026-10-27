@@ -220,8 +220,10 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
    row and changed while scrolling; they are told by their own accent marks (sparkline, share bar, badges) */
 /* blocks lists: fixed widths, so rows loaded or refreshed later do not shift the columns */
 .blocks-table { table-layout: fixed; min-width: 760px; }
-.blocks-table col.w-h { width: 110px; } .blocks-table col.w-t { width: 120px; } .blocks-table col.w-m { width: 90px; }
-.blocks-table col.w-r { width: 130px; } .blocks-table col.w-e { width: 90px; } .blocks-table col.w-s { width: 120px; }
+/* every column a fixed share of the width (sorting and filtering never move them), the room
+   spread over all of them rather than left between Finder and Reward */
+.blocks-table col.w-h { width: 13%; } .blocks-table col.w-t { width: 15%; } .blocks-table col.w-m { width: 11%; }
+.blocks-table col.w-e { width: 11%; } .blocks-table col.w-f { width: 20%; } .blocks-table col.w-r { width: 16%; } .blocks-table col.w-s { width: 14%; }
 .blocks-table td { overflow: hidden; text-overflow: ellipsis; }
 .name { color: var(--accent); font-weight: 700; }
 .sub { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
