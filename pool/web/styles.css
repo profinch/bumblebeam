@@ -338,6 +338,14 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .foot a { color: var(--muted); }
 .foot a:hover { color: var(--text); text-decoration: none; }
 .foot .dim { font-weight: 400; letter-spacing: 0.02em; text-transform: none; color: var(--muted2); }
+/* the stats sites that track the pool, above the footer links: their marks alone, grey until
+   hovered, then in their own colours; the name is in the tooltip. Local copies (img/): the pages
+   load nothing from other hosts. */
+.foot .tracked-by { flex-basis: 100%; display: flex; justify-content: center; gap: 24px; margin-bottom: 4px; }
+.foot .tracked-by a { display: block; line-height: 0; padding: 4px; border-radius: 8px; }
+.foot .tracked-by img { width: auto; height: 30px; filter: grayscale(1) brightness(1.5); opacity: .45; transition: filter .25s, opacity .25s, transform .25s; }
+.foot .tracked-by a:hover img, .foot .tracked-by a:focus-visible img { filter: none; opacity: 1; transform: scale(1.12); }
+@media (prefers-reduced-motion: reduce) { .foot .tracked-by img { transition: none; } }
 .pill-status {
   display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 999px;
   font: 700 11px var(--font-mono); letter-spacing: 0.02em; text-transform: none;
