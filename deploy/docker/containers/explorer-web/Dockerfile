@@ -10,5 +10,5 @@ RUN sed -i "s/?v=dev/?v=$(git -C /src rev-parse --short HEAD)/g" /src/explorer/w
 
 FROM nginx:1.28-alpine
 COPY --from=src /src/explorer/web/ /usr/share/nginx/html/
-COPY --from=src /src/pool/web/styles.css /src/pool/web/tips.js /src/pool/web/favicon.svg /usr/share/nginx/html/
+COPY --from=src /src/pool/web/styles.css /src/pool/web/tips.js /src/pool/web/favicon.svg /src/pool/web/404.svg /usr/share/nginx/html/
 COPY default.conf /etc/nginx/conf.d/default.conf

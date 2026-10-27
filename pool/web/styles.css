@@ -330,6 +330,9 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 
 .empty { color: var(--muted); font: 12px var(--font-mono); padding: 24px 0; text-align: center; }
 .err { color: var(--color-red); }
+/* the 404 page (pool and explorer): the empty honeycomb cell and the bee, 404.svg */
+.nf { padding: 28px 16px 30px; }
+.nf-art { display: block; width: min(420px, 100%); height: auto; margin: 0 auto 18px; }
 .foot {
   max-width: var(--page-width); margin: 0 auto; padding: 22px var(--page-padding-x) 30px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; justify-content: center;

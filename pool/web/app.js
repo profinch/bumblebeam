@@ -1036,7 +1036,7 @@
   });
 
   views.notfound = async () => `<div class="page-head"><h1 class="page-title">Not found</h1></div>
-    <div class="panel empty">There is no such page. <a href="/">Back to the pool</a></div>`;
+    <div class="panel empty nf"><img class="nf-art" src="/404.svg" alt="404: an empty honeycomb cell" width="420" height="188">There is no such page. <a href="/">Back to the pool</a></div>`;
 
   // ---------- page titles and meta, per route ----------
   // Search engines and AI crawlers read these from the prerendered snapshot, so each indexable
