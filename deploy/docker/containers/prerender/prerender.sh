@@ -2,7 +2,8 @@
 # Prerenders the indexable pages of pool.bumblebeam.org and explorer.bumblebeam.org.
 #
 # Every INTERVAL seconds each page is opened in headless Chromium through the host nginx
-# (127.0.0.1:443, the real certificate, no Cloudflare), app.js renders it with live data, and the
+# (127.0.0.1:443, the real certificate, no Cloudflare; ?prerender=1 makes nginx serve the bare app,
+# not the previous snapshot), app.js renders it with live data, and the
 # DOM is saved as /snap/<site>/<page>.html. A page counts only when app.js marked <html
 # data-ready="1"> (its own data arrived); otherwise the previous snapshot stays, and one older than
 # MAX_AGE minutes is removed, so the site falls back to the bare app instead of old numbers.
@@ -33,7 +34,7 @@ render() {
     --no-first-run --no-default-browser-check --disable-extensions --disable-background-networking \
     --hide-scrollbars --mute-audio --window-size=1280,2000 --user-data-dir="$PROFILE" \
     --host-resolver-rules="MAP pool.bumblebeam.org 127.0.0.1,MAP explorer.bumblebeam.org 127.0.0.1" \
-    --virtual-time-budget=15000 --dump-dom "$url" >"$dom" 2>/dev/null
+    --virtual-time-budget=15000 --dump-dom "$url?prerender=1" >"$dom" 2>/dev/null
   if ! grep -q '<html[^>]* data-ready="1"' "$dom" || [ "$(wc -c <"$dom")" -lt 2000 ]; then
     log "skip $url (not rendered)"
     return 1
