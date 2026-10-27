@@ -58,6 +58,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8091:8080"             # for the host nginx
+    volumes:
+      - /data/bumblebeam/snap/pool:/usr/share/nginx/html/_snap:ro   # from prerender
     networks:
       - bumblebeam
 
@@ -91,10 +93,32 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8080"             # for the host nginx
+    volumes:
+      - /data/bumblebeam/snap/explorer:/usr/share/nginx/html/_snap:ro   # from prerender
     depends_on:
       - explorer-node
     networks:
       - bumblebeam
+
+  # Prerendered pages: headless Chromium fills each indexable page of the pool and the explorer
+  # through the host nginx every 10 minutes and saves the HTML for pool-web and explorer-web to
+  # serve, so search engines and AI crawlers that run no JavaScript read the page with its data.
+  # Stopping it changes nothing for visitors: old snapshots expire and the sites are the bare app.
+  prerender:
+    image: bumblebeam-prerender
+    container_name: prerender
+    build:
+      context: ./containers/prerender
+    restart: unless-stopped
+    network_mode: host                  # reaches the host nginx on 127.0.0.1:443
+    init: true                          # reaps Chromium's processes
+    mem_limit: 1g
+    volumes:
+      - /data/bumblebeam/snap:/snap
+    logging:
+      driver: journald
+      options:
+        tag: bumblebeam-prerender
 
   # Payouts. Anyone who can reach 10001 can spend the wallet: it is on its own
   # internal network, published nowhere, and only answers the pool's address.
