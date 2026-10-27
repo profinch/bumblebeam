@@ -537,3 +537,10 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 
 /* a head whose meta is one quiet link ("All blocks") keeps it at the right end on phones too */
 .panel-head .panel-meta:has(> a.text-link:only-child) { margin-left: auto; }
+
+/* a table's sideways scrollbar: away from the table's last row and the card's sides, close to the
+   card's bottom (it runs in the panel's bottom padding) */
+.table-wrap { padding-bottom: 6px; }
+.panel > .table-wrap:last-child { margin-bottom: -10px; }
+.table-wrap::-webkit-scrollbar-track { margin: 0 10px; }
+@media (max-width: 560px) { .table-wrap::-webkit-scrollbar-track { margin: 0 8px; } }
