@@ -1185,7 +1185,9 @@
   };
 
 
-  views.notfound = async () => notFound('This page');
+  // a path that is no page at all (a typo, an old link): not a chain question, so no word about syncing
+  views.notfound = async () => `<div class="page-head"><h1 class="page-title">Not found</h1></div>
+    <div class="panel empty nf"><img class="nf-art" src="/404.svg" alt="404: an empty honeycomb cell" width="420" height="188">There is no such page. <a href="/">Back to the explorer</a></div>`;
 
   // ---------- status: footer pill and a banner while the node catches up ----------
   async function setStatus() {
