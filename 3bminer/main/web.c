@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 static const char *TAG = "web";
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.3.0"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
@@ -29,14 +29,16 @@ static esp_err_t h_probe(httpd_req_t *r) {
 static esp_err_t h_alive(httpd_req_t *r) { char b[96]; snprintf(b, sizeof b, "{\"self\":\"%s\",\"ips\":[\"%s\"]}", wifi_ip(), wifi_ip()); httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1); }
 static esp_err_t h_info(httpd_req_t *r) {
     char pd[24], ld[24], bs[24], be[24]; fmt_diff(g_stratum.pool_diff, pd, sizeof pd); fmt_diff(g_stratum.last_share_diff, ld, sizeof ld); fmt_diff(g_stratum.best_session, bs, sizeof bs); fmt_diff(g_stratum.best_ever, be, sizeof be);
-    char b[1400];
+    char lr[96]; int k = 0; for (const char *q = g_stratum.last_reject; *q && k < 90; q++) if (*q != '"' && *q != '\\') lr[k++] = *q; lr[k] = 0;
+    char b[1800];
     snprintf(b, sizeof b,
         "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"ESP32 open fw\",\"board\":\"esp32-wroom-32\"},"
         "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"-\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"freeHeap\":%u,\"minFreeHeap\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu},"
-        "\"stratum\":{\"url\":\"%s\",\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
+        "\"stratum\":{\"url\":\"%s\",\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
         s_host, FW_VERSION, wifi_rssi(), (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), pd, ld, bs, be,
         (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)g_miner.kernel_cycles, g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes,
-        g_stratum.pool_desc, g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted);
+        g_stratum.pool_desc, g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
+        (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, "{\"status\":\"ok\"}", -1); }

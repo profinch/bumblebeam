@@ -20,13 +20,11 @@ extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint
 #define CHUNK    16384
 static uint32_t DRAM_ATTR s_tbl[32];
 static uint32_t hit_mask_for(double pool_diff) {
-    // top bits of the hash number that must be zero ~= 16 + log2(1/diff); low bytes of word7 hold the top bytes of the number
-    // leading zero bits required ~= 32 + log2(diff); the kernel checks whole bytes, software verifies exactly
-    double bits = 32.0 + log2(pool_diff > 0 ? pool_diff : 1e-9);
+    // a share needs >= 32 + floor(log2(diff)) leading zero bits of the hash number, whose top 32 bits are bswap(word7)
+    int bits = 32 + (int)floor(log2(pool_diff > 0 ? pool_diff : 1e-9));
     if (bits >= 32) return 0xFFFFFFFFu;
-    if (bits >= 24) return 0x00FFFFFFu;
-    if (bits >= 16) return 0x0000FFFFu;
-    return 0x000000FFu;
+    if (bits <= 8) return 0x000000FFu;
+    return __builtin_bswap32(~(0xFFFFFFFFu >> bits));
 }
 static const uint8_t genesis[80] = {
     0x01,0x00,0x00,0x00, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
