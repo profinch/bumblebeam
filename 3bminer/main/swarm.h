@@ -6,5 +6,6 @@ extern volatile bool g_ota_busy;            // set by the firmware upload: the s
 extern volatile int g_web_long;             // web handlers that hold the server for seconds (engine check, card format): the health check waits
 void swarm_start(void);
 bool swarm_add(uint32_t ip);
-bool swarm_forget(uint32_t ip);             // dropped from the list (the Swarm page's Forget); a scan may find it again                // a miner added by hand (network byte order), kept with the found ones
+bool swarm_forget(uint32_t ip);
+bool swarm_scan(uint32_t net);              // a pass over net's /24 now (the page's Scan network), its miners added             // dropped from the list (the Swarm page's Forget); a scan may find it again                // a miner added by hand (network byte order), kept with the found ones
 int swarm_alive_json(char *b, int cap, const char *self);

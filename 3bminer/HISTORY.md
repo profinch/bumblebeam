@@ -47,6 +47,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 19:30-21:54 | devkit, ESP32-CAM | 0.6.1 builds: audit 2, swarm search, own hasher | OTA; the camera "hangs" were it joining the Linksys (empty AP lock); hasher 5-9 -> 31 KH/s |
 | 2026-10-28 21:59 | devkit, ESP32-CAM | 0.7.0, devkit 881,792 B, esp32cam 1,090,272 B | OTA; 983 KH/s on both, shares accepted |
 | 2026-10-28 22:15-22:24 | devkit, ESP32-CAM | 0.7.1 (dev), engine waits 24/35/22/4/8 | OTA; devkit 1003 KH/s (971 + 32), 246 cycles/nonce |
+| 2026-10-28 23:14 | devkit, ESP32-CAM | 0.8.0 (dev; 0.7.1 renamed), board-side subnet scan | OTA; 192.168.1.0 scanned by the camera in 31 s, NMMiner found on the first pass |
 
 ## Comparisons
 
