@@ -6,6 +6,8 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+#include "freertos/idf_additions.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "cJSON.h"
@@ -149,5 +151,10 @@ static void task(void *arg) {
 }
 void stratum_start(void) {
     s_lock = xSemaphoreCreateMutex(); s_cands = xQueueCreate(32, sizeof(candidate_t)); g_stratum.pool_diff = 1.0;
+#ifdef CONFIG_SPIRAM
+    // PSRAM boards: the camera's DMA buffers leave little internal RAM, and this task never touches flash, so its stack can live in PSRAM
+    xTaskCreatePinnedToCoreWithCaps(task, "stratum", 24576, NULL, 5, NULL, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
     xTaskCreatePinnedToCore(task, "stratum", 24576, NULL, 5, NULL, 1);
+#endif
 }

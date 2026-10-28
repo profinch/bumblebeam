@@ -249,6 +249,13 @@ static esp_err_t h_stream(httpd_req_t *r) {
     return res;
 }
 
+// Flash writes disable the cache on both cores; the camera's DMA interrupt keeps firing meanwhile, its queue overflows
+// and core 0 ended in the coprocessor-exception vector until the interrupt watchdog reset the board mid-OTA.
+void camera_stop(void) {
+    if (!s_ok) return;
+    s_ok = false; vTaskDelay(pdMS_TO_TICKS(50));   // let a running /stream or /capture notice and leave
+    led_set(0); esp_camera_deinit(); ESP_LOGI(TAG, "camera stopped");
+}
 int camera_http_handler_count(void) { return 10; }
 void camera_register_http(httpd_handle_t s) {
     const httpd_uri_t u[] = {
@@ -265,6 +272,7 @@ void camera_register_http(httpd_handle_t s) {
 }
 #else
 void camera_start(void) {}
+void camera_stop(void) {}
 void camera_register_http(httpd_handle_t s) { (void)s; }
 int camera_http_handler_count(void) { return 0; }
 #endif
