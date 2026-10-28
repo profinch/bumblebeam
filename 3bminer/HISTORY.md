@@ -36,3 +36,4 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 10:58 | ESP32-CAM | 0.6.0 (esp32miner name, camera only) | USB, after the full backup |
 | 2026-10-28 11:12-11:43 | ESP32-CAM | 0.6.0 (3BMiner) builds | USB and OTA while fixing OTA and internal RAM |
 | 2026-10-28 11:43 | ESP32-CAM | 0.6.0, mining switched on | USB, then `POST /api/config {"mining":true}` |
+| 2026-10-28 11:58 | devkit | 0.6.0 (3BMiner, from c2a1804) | OTA from 0.5.6; 981 KH/s, 251 cycles/nonce |
