@@ -2,6 +2,12 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## 0.7.1 (not released yet)
+- Engine waits 24/35/22/4/8 instead of 25/36/23/6/8: 246.75 cycles a nonce instead of 251.77 (+2%, ~972 KH/s from the
+  engine), as few engine errors over ~100M nonces each (2 against 4); 23 for the first wait gives 10-16 errors in 16M.
+- The web server's health check restarts after 5 misses in a row (2.5 minutes) instead of 4, and waits while a long request holds it (engine check, card format): back-to-back engine
+  checks no longer read as a hung server and restart the board.
+
 ## 0.7.0 (2026-10-28)
 Developed as 0.6.1 (the images flashed during the day report that number).
 - Hashrate history on the board: a sample a minute for 24 h (`GET /api/history`), averages for the last hour and day
@@ -49,7 +55,7 @@ Developed as 0.6.1 (the images flashed during the day report that number).
   the browser marks them cross-site from a page outside the LAN. Programs (curl, VLC, Home Assistant) are not affected.
   The preview is served from localhost now (`python3 -m http.server` in its folder).
 - Audit 2, health: the main loop runs under the task watchdog (60 s); a board whose Wi-Fi stays down 5 minutes or whose
-  web server does not answer itself 4 times in a row restarts and reports why (`miner.restartWhy`, shown after "last
+  web server does not answer itself 4 times in a row (5 since 0.7.1) restarts and reports why (`miner.restartWhy`, shown after "last
   reset" on the dashboard).
 - The board looks for other miners itself, like NMMiner: its own /24 in the background (one address at a time, a pass
   every 30 minutes, the known ones every 2 minutes, paused during an OTA or a camera stream), the list in NVS, served

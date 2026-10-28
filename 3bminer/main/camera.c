@@ -3,6 +3,7 @@
 //   :81  /stream (MJPEG), its own server so a running stream never blocks the dashboard
 #include "camera.h"
 #include "web.h"
+#include "swarm.h"
 #include "sdkconfig.h"
 #ifdef CONFIG_BOARD_HAS_CAMERA
 #include "esp_camera.h"
@@ -297,10 +298,10 @@ static esp_err_t h_sd(httpd_req_t *r) {   // GET /api/sd: the card, its size and
 }
 static esp_err_t h_sd_format(httpd_req_t *r) {   // POST /api/sd/format: a new FAT on the whole card
     if (!web_post_allowed(r)) return ESP_OK;
-    esp_err_t e;
-    if (!s_card) { sd_mount(true); e = s_sd_err; if (!s_card) return json(r, "{\"status\":\"no card\"}"); }   // mounting with format makes the FAT
+    esp_err_t e; g_web_long++;
+    if (!s_card) { sd_mount(true); e = s_sd_err; if (!s_card) { g_web_long--; return json(r, "{\"status\":\"no card\"}"); } }   // mounting with format makes the FAT
     else { e = esp_vfs_fat_sdcard_format(SD_PATH, s_card); if (e == ESP_OK) s_sd_err = ESP_OK; }
-    ESP_LOGI(TAG, "SD format: %s", esp_err_to_name(e));
+    g_web_long--; ESP_LOGI(TAG, "SD format: %s", esp_err_to_name(e));
     char b[96]; snprintf(b, sizeof b, "{\"status\":\"%s\"}", e == ESP_OK ? "ok" : esp_err_to_name(e)); return json(r, b);
 }
 static esp_err_t h_sd_snap(httpd_req_t *r) {   // POST /api/sd/snap: the next frame to the card as /photos/<date>_<time>.jpg

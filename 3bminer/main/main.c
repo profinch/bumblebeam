@@ -26,7 +26,7 @@ static RTC_NOINIT_ATTR char s_why[32]; static RTC_NOINIT_ATTR uint32_t s_why_mag
 static char s_last_why[32];
 const char *main_restart_why(void) { return s_last_why; }
 static void restart_because(const char *why) { ESP_LOGE(TAG, "restarting: %s", why); strncpy(s_why, why, sizeof s_why - 1); s_why[sizeof s_why - 1] = 0; s_why_magic = 0x3B3B3B3B; vTaskDelay(pdMS_TO_TICKS(200)); esp_restart(); }
-// the web server answers its own /alive over loopback within 3 s (an OTA or an engine check holds it longer, hence 4 misses in a row)
+// the web server answers its own /alive over loopback within 3 s (an OTA or an engine check holds it longer, hence 5 misses in a row)
 static bool web_alive(void) {
     int s = socket(AF_INET, SOCK_STREAM, 0); if (s < 0) return false;
     struct timeval tv = { .tv_sec = 3 }; setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv); setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
@@ -54,6 +54,7 @@ void app_main(void) {
     for (;;) { vTaskDelay(pdMS_TO_TICKS(30000)); esp_task_wdt_reset(); history_save();
         int64_t now = esp_timer_get_time();
         if (wifi_connected()) wifi_ok = now; else if (now - wifi_ok > 300LL * 1000000) restart_because("wifi down 5 min");
-        if (wifi_connected() && !g_ota_busy) { if (web_alive()) web_miss = 0; else if (++web_miss >= 4) restart_because("web server not answering"); }
+        if (wifi_connected() && !g_ota_busy && !g_web_long) { if (web_alive()) web_miss = 0; else if (++web_miss >= 5) restart_because("web server not answering"); }
+        else web_miss = 0;   // a long request holds the server: no verdict
         ESP_LOGI(TAG, "hashrate %.1f KH/s (engine) + %.1f KH/s (sw core1), shares %u/%u, best %.4g, jobs %u, kernel %u cyc/nonce, heap %u", g_miner.hashrate / 1e3, g_miner.sw_hashrate / 1e3, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, g_stratum.best_session, (unsigned)g_stratum.jobs, (unsigned)g_miner.kernel_cycles, (unsigned)esp_get_free_heap_size()); }
 }
