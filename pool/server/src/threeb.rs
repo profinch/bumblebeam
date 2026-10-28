@@ -1,7 +1,7 @@
 //! Endpoints for 3BMiner (3bminer/): small helpers its web UI on a miner cannot get from a browser
 //! itself (the public MAC-vendor services send no CORS headers). Public, under the API's permissive CORS.
 //!
-//! GET /api/3bminer/oui/:mac           -> {"mac":"D0EA11B21D6A","prefix":"D0:EA:11","vendor":"Routerboard.com"}
+//! GET /api/3bminer/oui/:mac           -> {"mac":"D0EA11B21D6A","prefix":"D0:EA:11","vendor":"MikroTik"}
 //! GET /api/3bminer/oui?mac=a,b,...    -> {"vendors":{"<mac as given>":"<vendor or null>", ...}} (up to 64)
 //!
 //! The vendor list is Wireshark's manuf file (IEEE MA-L/MA-M/MA-S assignments, also /28 and /36
@@ -20,6 +20,15 @@ use tracing::{info, warn};
 const MANUF_URL: &str = "https://www.wireshark.org/download/automated/data/manuf";
 const REFRESH: Duration = Duration::from_secs(24 * 3600);
 const RETRY: Duration = Duration::from_secs(600);
+
+/// registrations under a company name nobody knows the device by: MikroTik's are "Routerboard.com" (its hardware line)
+/// and "Mikrotikls SIA" (the company)
+fn brand(name: &str) -> &str {
+    match name {
+        "Routerboard.com" | "Mikrotikls SIA" => "MikroTik",
+        _ => name,
+    }
+}
 
 /// prefix bits (24, 28 or 36) -> (the prefix's leading hex digits -> vendor)
 #[derive(Default)]
@@ -47,7 +56,7 @@ impl Manuf {
             if hex.len() < digits || !matches!(bits, 24 | 28 | 36) {
                 continue;
             }
-            by_bits.entry(bits).or_default().insert(hex[..digits].to_string(), long.to_string());
+            by_bits.entry(bits).or_default().insert(hex[..digits].to_string(), brand(long).to_string());
         }
         let mut blocks: Vec<_> = by_bits.into_iter().collect();
         blocks.sort_by(|a, b| b.0.cmp(&a.0)); // the most specific first
@@ -167,7 +176,7 @@ D0:EA:11\tRouterboardc\tRouterboard.com\n\
     #[test]
     fn parses_and_finds_the_most_specific_block() {
         let m = Manuf::parse(SAMPLE);
-        assert_eq!(m.lookup("d0:ea:11:b2:1d:6a"), Some(("D0:EA:11".into(), "Routerboard.com".into())));
+        assert_eq!(m.lookup("d0:ea:11:b2:1d:6a"), Some(("D0:EA:11".into(), "MikroTik".into())));
         assert_eq!(m.lookup("74-12-13-07-85-a6").map(|x| x.1), Some("Linksys USA, Inc".into()));
         assert_eq!(m.lookup("741213").map(|x| x.1), Some("Linksys USA, Inc".into()));
         // a /36 block inside a /24 one: the /36 wins, the rest of the /24 stays with the /24
@@ -186,7 +195,7 @@ D0:EA:11\tRouterboardc\tRouterboard.com\n\
         let Ok(p) = std::env::var("MANUF") else { return };
         let m = Manuf::parse(&std::fs::read_to_string(p).unwrap());
         assert!(m.len() > 30000, "{} prefixes", m.len());
-        assert_eq!(m.lookup("d0:ea:11:b2:1d:6a").map(|x| x.1), Some("Routerboard.com".into()));
+        assert_eq!(m.lookup("d0:ea:11:b2:1d:6a").map(|x| x.1), Some("MikroTik".into()));
         assert_eq!(m.lookup("74:12:13:07:85:a6").map(|x| x.1), Some("Linksys USA, Inc".into()));
         assert_eq!(m.lookup("e4:65:b8:da:0e:98").map(|x| x.1.contains("Espressif")), Some(true));
     }

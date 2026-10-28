@@ -364,10 +364,10 @@ from a browser (they send no CORS headers). The maker of a network device by the
 
 ```json
 GET /api/3bminer/oui/d0:ea:11:b2:1d:6a
-{ "mac": "D0EA11B21D6A", "prefix": "D0:EA:11", "vendor": "Routerboard.com" }
+{ "mac": "D0EA11B21D6A", "prefix": "D0:EA:11", "vendor": "MikroTik" }
 
 GET /api/3bminer/oui?mac=d0:ea:11:b2:1d:6a,74:12:13:07:85:a6
-{ "vendors": { "d0:ea:11:b2:1d:6a": "Routerboard.com", "74:12:13:07:85:a6": "Linksys USA, Inc" } }
+{ "vendors": { "d0:ea:11:b2:1d:6a": "MikroTik", "74:12:13:07:85:a6": "Linksys USA, Inc" } }
 ```
 
 `vendor` is `null` for an unassigned prefix. The list is Wireshark's `manuf` (the IEEE assignments),
