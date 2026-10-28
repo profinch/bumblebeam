@@ -18,6 +18,7 @@
 #include <stdio.h>
 static const char *TAG = "web";
 #include "version.h"
+#include <time.h>
 #include "camera.h"
 #include "history.h"
 static char s_host[32];
@@ -34,10 +35,10 @@ static esp_err_t h_info(httpd_req_t *r) {
     char lr[96]; int k = 0; for (const char *q = g_stratum.last_reject; *q && k < 90; q++) if (*q != '"' && *q != '\\') lr[k++] = *q; lr[k] = 0;
     char b[1800];
     snprintf(b, sizeof b,
-        "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s},"
+        "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"time\":%lld,\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s},"
         "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"%s\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"freeHeap\":%u,\"minFreeHeap\":%u,\"freeInternal\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu,\"swHashes\":%llu,\"avg1hKhs\":%.1f,\"avg24hKhs\":%.1f,\"avgAllKhs\":%.1f,\"allSeconds\":%u,\"historyMinutes\":%u},"
         "\"stratum\":{\"url\":\"%s\",\"solo\":%s,\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
-        s_host, FW_VERSION, wifi_rssi(), CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), nd, pd, ld, bs, be, (int)esp_reset_reason(),
+        s_host, FW_VERSION, wifi_rssi(), (long long)(time(NULL) > 1700000000 ? time(NULL) : 0), CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), nd, pd, ld, bs, be, (int)esp_reset_reason(),
         (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)g_miner.kernel_cycles, g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes, (unsigned long long)g_miner.sw_hashes, history_avg_khs(60), history_avg_khs(HISTORY_MINUTES), history_avg_all_khs(), (unsigned)history_all_seconds(), (unsigned)history_count(),
         g_stratum.pool_desc, g_stratum.solo < 0 ? "null" : g_stratum.solo ? "true" : "false", g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
         (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);

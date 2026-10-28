@@ -24,7 +24,7 @@ h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margi
 .v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .v small,.sm{font-size:12px;color:var(--m);font-weight:400}
 .hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:34px}
-svg.sp{width:100%;height:70px;display:block;margin-top:12px}.spx{display:flex;justify-content:space-between;font:10px var(--mono);color:rgba(255,255,255,.35);margin-top:4px}
+svg.sp{width:100%;height:70px;display:block;margin-top:12px}
 .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}@media(max-width:900px){.g{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .g.t{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:900px){.g.t{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
@@ -84,7 +84,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div><div class=k><span class=tipped id=havk>Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
-<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=1 stop-color="#fff"/></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg><div class=spx><span id=sp-l>5 min ago</span><span>now</span></div></div>
+<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
@@ -98,15 +98,15 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
 <div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr><tr><td><span class=tipped title="The code the pool sent with the last reject, as it came. Stratum v1 has no formal standard; most pools follow the early convention: 20 other, 21 job not found (stale: the pool already moved on), 22 duplicate share, 23 difficulty too low, 24 unauthorized worker, 25 not subscribed. A pool may use its own codes, -1, or none at all (then -)">error code</span><td id=rcode></table></div>
-<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td><span class=tipped title="The board's own clock, set from pool.ntp.org once it is on Wi-Fi (firmware 0.6.1+), shown in this browser's time zone">board time</span><td id=bt><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
 </section>
 
 <section class=view id=v-swarm>
 <div class=g>
 <div class=p><div class=k>Miners online</div><div class=v id=sw-n>0</div><div class=sm id=sw-scan>not scanned</div></div>
-<div class=p><div class=k>Total hashrate</div><div class=v id=sw-h>-</div></div>
-<div class=p><div class=k>Best diff</div><div class=v id=sw-b>-</div></div>
-<div class=p><div class=k>Shares</div><div class=v id=sw-s>-</div></div></div>
+<div class=p><div class=k>Total hashrate</div><div class=v id=sw-h>-</div><div class=sm id=sw-hn></div></div>
+<div class=p><div class=k>Best diff</div><div class=v id=sw-b>-</div><div class=sm id=sw-bn></div></div>
+<div class=p><div class=k>Shares</div><div class=v id=sw-s>-</div><div class=sm id=sw-sr></div></div></div>
 <div class=p><div class=row style="margin:0 0 12px"><button class=btn id=sw-go>Scan network</button><span class=sm>subnet <input id=sw-net style="display:inline;width:130px;margin:0 0 0 6px" value=""></span><input id=sw-add placeholder="add IP" style="display:inline;width:140px;margin:0"><button class="btn gh" id=sw-addb>Add</button></div>
 <div class=sc><table><thead><tr id=sw-th></tr></thead><tbody id=sw-tb></tbody></table></div>
 <p class=hint>Finds NMMiner, NerdMiner-style and AxeOS (Bitaxe, NerdQaxe) devices by their /probe and /api/system/info. Found addresses are remembered in this browser.</p></div>
@@ -180,17 +180,15 @@ let realK='loading';
 function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('boot')&&k!='offline')k='loading';const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.setAttribute('data-tip',v[2])}
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
-function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
+function route(){if(location.hash=='#/'||location.hash=='#')history.replaceState(null,'',location.pathname+location.search);   // the dashboard has a clean address
+const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
 if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
 addEventListener('hashchange',route);
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
-// a real time axis: 'now' at the right edge, a fixed window (the board's 24 h a minute apart, or this page's last 5 min of 3 s readings
-// with older firmware); the time before the first reading is drawn at zero, so the line always spans the window; the scale starts at zero
-function spark(){const hb=HH.length>=2,A=hb?HH:H,N=hb?1440:100;if(A.length<1)return;const v=A.slice(-N),pad=N-v.length,mx=Math.max(1,...v)*1.1,sx=300/(N-1),y=q=>70-q/mx*66-2;
-let d='M0 '+y(0).toFixed(1);if(pad>0)d+='L'+((pad-1)*sx).toFixed(1)+' '+y(0).toFixed(1);v.forEach((q,i)=>d+='L'+((pad+i)*sx).toFixed(1)+' '+y(q).toFixed(1));
-$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z');txt('sp-l',hb?'24h ago':'5 min ago')}
+function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Math.max(...A)*1.01,mn=Math.min(...A)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
+let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
 htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');   // a time: 19.5B years, no space
 htm('odn','expected time to find a block<br>one block in '+fx(1/pday,1).replace(' ','')+' daily');
@@ -209,9 +207,9 @@ htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'))
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+u+'">'+(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('hn',d.identity.hostName);txt('bt',d.identity.time>0?new Date(d.identity.time*1000).toLocaleTimeString('en-GB'):'not set');txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
-H.push(k);if(H.length>100)H.shift();spark();odds();return 1}catch(e){if(!document.body.classList.contains('boot')||Date.now()-T0>=5000)status('offline');return 0}}
+H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){if(!document.body.classList.contains('boot')||Date.now()-T0>=5000)status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
 const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
@@ -253,10 +251,11 @@ async function swScan(){swScanned=1;const net=$('sw-net').value.trim().replace(/
 try{for(const ip of JSON.parse(localStorage.getItem(SK)||'[]'))swPoll(ip)}catch(e){}
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
 const worker=async()=>{while(q.length){const ip=q.shift();await swProbe(ip);done++;txt('sw-scan','scanning '+done+'/254')}};
-await Promise.all(Array.from({length:24},worker));txt('sw-scan','scan done · '+new Date().toLocaleTimeString())}
-function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-b',sp(bb.bestS));txt('sw-s',a.reduce((s,o)=>s+(o.acc||0),0)+' / '+a.reduce((s,o)=>s+(o.rej||0),0));
+await Promise.all(Array.from({length:24},worker));txt('sw-scan','last scan '+new Date().toLocaleTimeString('en-GB'))}
+function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-hn',a.length==1?'1 miner':a.length+' miners');txt('sw-b',sp(bb.bestS));txt('sw-bn',bb.host||'');
+const ac=a.reduce((s,o)=>s+(o.acc||0),0),rj=a.reduce((s,o)=>s+(o.rej||0),0);htm('sw-s',ac+' <small>/ <span class=r>'+rj+'</span></small>');txt('sw-sr',ac+rj?(100*rj/(ac+rj)).toFixed(2)+'% rejected':'');
 const rows=[...SW.values()].sort((x,y)=>{const p=x[swSort],q=y[swSort];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*swDir});
-$('sw-tb').innerHTML=rows.map(o=>'<tr'+(o.ip==DEV||o.ip==location.hostname?' class=me':'')+(o.off?' style="opacity:.4"':'')+'><td>'+o.host+'<td><a href="http://'+o.ip+'/" target=_blank>'+o.ip+'</a><td>'+o.model+'<td class=n>'+hm(o.hr||0)+'<td class=n>'+o.acc+' / <span class=r>'+o.rej+'</span><td class=n>'+(o.bestS||'-')+'<td class=n>'+fx(o.pdiff||0,3)+'<td class=n>'+ut(o.up)+'<td class=n>'+(o.rssi??'-')+'<td class=n>'+(o.heap?(o.heap/1024|0)+'K':'-')+'<td>'+o.ver+'<td class=n>'+(o.off?'offline':Math.round((Date.now()-o.seen)/1000)+'s')+'<td><button class="btn gh" style="padding:3px 8px" onclick="swRst(\''+o.ip+'\')">restart</button>').join('')}
+$('sw-tb').innerHTML=rows.map(o=>'<tr'+(o.ip==DEV||o.ip==location.hostname?' class=me':'')+(o.off?' style="opacity:.4"':'')+'><td>'+o.host+'<td><a href="http://'+o.ip+'/" target=_blank>'+o.ip+'</a><td>'+o.model+'<td class=n>'+hm(o.hr||0)+'<td class=n>'+o.acc+' / <span class=r>'+o.rej+'</span><td class=n>'+sp(o.bestS)+'<td class=n>'+fx(o.pdiff||0,3)+'<td class=n>'+ut(o.up)+'<td class=n>'+(o.rssi??'-')+'<td class=n>'+(o.heap?(o.heap/1024|0)+'K':'-')+'<td>'+o.ver+'<td class=n>'+(o.off?'offline':Math.round((Date.now()-o.seen)/1000)+'s')+'<td><button class="btn gh" style="padding:3px 8px" onclick="swRst(\''+o.ip+'\')">restart</button>').join('')}
 window.swRst=async ip=>{if(await ask('Restart a miner',['Restart the miner at ',{b:ip},'? It is back in about 10 seconds.'],{ok:'Restart',danger:true}))fetch('http://'+ip+'/api/system/restart',{method:'POST'})};
 $('sw-go').onclick=swScan;$('sw-addb').onclick=()=>{const ip=$('sw-add').value.trim();if(ip)swPoll(ip)};
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');

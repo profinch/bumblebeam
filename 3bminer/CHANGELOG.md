@@ -8,6 +8,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   all-time average across restarts (`avgAllKhs`, `allSeconds`; totals saved to NVS every 10 minutes).
 - Solo or shared pool from the job itself: `stratum.solo` is true when the coinbase pays the configured address
   (bech32, bech32m, P2PKH and P2SH addresses), no list of pool names.
+- The board's clock from NTP (pool.ntp.org) once Wi-Fi is up, as `identity.time` (Unix seconds, 0 until set).
 
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
