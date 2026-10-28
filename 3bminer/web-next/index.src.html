@@ -59,17 +59,23 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 @media(prefers-reduced-motion:reduce){.ask-bg,.ask{transition:none}}
 /* until the first answer: only the header and a waiting panel */
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
-/* the logo's bee (same wings, stripes and trail, animated by the logo rules) flying a slow figure eight while the miner is asked */
-#boot .stage{position:relative;height:150px;max-width:420px;margin:0 auto}.flybee{position:absolute;left:50%;top:50%;width:64px!important;height:46px!important;margin:-23px 0 0 -32px;animation:fly 3.2s ease-in-out infinite}
-@keyframes fly{0%{transform:translate(0,0) rotate(0)}12%{transform:translate(70px,-30px) rotate(-8deg)}25%{transform:translate(120px,0) rotate(0)}37%{transform:translate(70px,30px) rotate(8deg)}50%{transform:translate(0,0) rotate(0)}62%{transform:translate(-70px,-30px) scaleX(-1) rotate(-8deg)}75%{transform:translate(-120px,0) scaleX(-1)}87%{transform:translate(-70px,30px) scaleX(-1) rotate(8deg)}100%{transform:translate(0,0)}}
-@media(prefers-reduced-motion:reduce){.flybee{animation:none}}@media(max-width:420px){@keyframes fly{0%,50%,100%{transform:none}25%{transform:translate(80px,-20px)}75%{transform:translate(-80px,20px) scaleX(-1)}}}
+/* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
+   the turns and turns round gently, leaving a fading trail of light behind; the honeycomb cells under it light up in turn */
+#boot .stage{position:relative;height:170px;max-width:520px;margin:0 auto}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
+.flybee{position:absolute;left:0;top:0;width:64px!important;height:46px!important;will-change:transform}
+.loading{display:inline-flex;align-items:center;gap:10px;margin-top:6px;font:700 11px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--m)}
+.loading svg{width:13px;height:15px}.loading path{fill:rgba(255,255,255,.05);stroke:rgba(255,255,255,.22);stroke-width:1.5;animation:honey 2s ease-in-out infinite}
+/* the 404 page's honey cell (#f4ce4a, edge #c9a227) runs along the empty comb cells, fading in and out */
+.loading svg:nth-child(2) path{animation-delay:.4s}.loading svg:nth-child(3) path{animation-delay:.8s}.loading svg:nth-child(4) path{animation-delay:1.2s}.loading svg:nth-child(5) path{animation-delay:1.6s}
+@keyframes honey{0%,40%,100%{fill:rgba(255,255,255,.05);stroke:rgba(255,255,255,.22)}15%,20%{fill:rgba(244,206,74,.82);stroke:#c9a227}}
+@media(prefers-reduced-motion:reduce){.loading path{animation:none}}
 #boot p{font:12px/1.6 var(--mono);color:var(--m);margin:10px auto 0;max-width:460px}
 </style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
 <span id=st class="pill idle" title="Waiting for the first answer from the miner">connecting</span></header>
 
-<div id=boot><div class=stage><svg class="logo flybee" viewBox="2 7 24 17" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
+<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="2 7 24 17" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg></div><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
 <div><div class=k><span class=tipped id=havk title="">Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
@@ -79,13 +85,13 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
-<div class=p><div class=k>Pool / network diff</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
+<div class=p><div class=k>Difficulty</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
 <div class=p><div class=k>Uptime</div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
 <div class=p><div class=k id=odk>Block chance</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
 <div class=p><div class=k><span class=tipped title="BTC price from mempool.space (/api/v1/prices), fetched by this browser every 2 minutes; the board does not fetch it">Bitcoin price</span></div><div class=v id=px>-</div><div class=sm id=pxn></div></div>
 <div class=p><div class=k>Block height</div><div class=v id=bh>-</div><div class=sm id=bhn></div></div>
-<div class=p><div class=k><span class=tipped title="Fee rates mempool.space recommends right now, in satoshi per virtual byte of a transaction: to get into the next block, within about an hour, and the cheapest that still confirms">Fees, sat/vB</span></div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
+<div class=p><div class=k><span class=tipped title="Fee rates mempool.space recommends right now, in satoshi per virtual byte of a transaction: to get into the next block, within about an hour, and the cheapest that still confirms">Fees (sat/vB)</span></div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
 <div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr></table></div>
@@ -178,7 +184,7 @@ async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if
 function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Math.max(...A)*1.01,mn=Math.min(...A)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
 let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
-htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+' B':yrs>1e6?(yrs/1e6).toFixed(1)+' M':yrs>1e3?(yrs/1e3).toFixed(1)+' K':yrs.toFixed(0))+' <small>years</small>');
+htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');   // a time: 19.5B years, no space
 htm('odn','expected time to find a block<br>1 in '+fx(1/pday,1)+' per day');
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
@@ -259,6 +265,19 @@ document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cu
 // first paint only with data: wait for the miner, give mempool.space and the history 2.5 s more, then show everything at once
 let tries=0;
 const T0=Date.now();
+// the waiting bee: a lemniscate (x = A sin t, y = B sin 2t) at a steady pace; tilt from the path's slope, a smooth turn-round when x changes
+// direction, light dots dropped behind it that shrink and fade over 0.9 s
+(()=>{const st=$('stage'),bee=$('flybee'),cv=$('trail'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion: reduce)').matches;let dots=[],last=0,t0=performance.now(),dpr=1;
+const fit=()=>{dpr=devicePixelRatio||1;cv.width=st.clientWidth*dpr;cv.height=st.clientHeight*dpr};fit();addEventListener('resize',fit);
+function frame(now){if(!document.body.classList.contains('boot'))return;const W=st.clientWidth,H=st.clientHeight,A=Math.min(W*.38,190),Bv=H*.3,t=(now-t0)/1000*.85;
+const x=W/2+A*Math.sin(t),y=H/2+Bv*Math.sin(2*t),vx=A*Math.cos(t),vy=2*Bv*Math.cos(2*t);
+const sg=1,tilt=Math.max(-.22,Math.min(.22,Math.atan2(vy,Math.abs(vx)+80)))*(vx>=0?1:-1);
+bee.style.transform=still?'translate('+(W/2-32)+'px,'+(H/2-23)+'px)':'translate('+(x-32)+'px,'+(y-23)+'px) rotate('+tilt+'rad)';
+if(!still&&now-last>90){dots.push({x:x-sg*24,y:y+5,t:now});last=now}
+cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);dots=dots.filter(d=>now-d.t<900);
+for(const d of dots){const a=1-(now-d.t)/900;cx.beginPath();cx.arc(d.x,d.y,1.8,0,7);cx.fillStyle='rgba(57,255,242,'+(.6*a)+')';cx.shadowColor='rgba(57,255,242,.8)';cx.shadowBlur=5*a;cx.fill()}
+requestAnimationFrame(frame)}
+requestAnimationFrame(frame)})();
 async function boot(){if(!await tick()){tries++;txt('boot-m','No answer from the miner at '+DEV+(tries>1?' ('+tries+' tries)':'')+'. Trying again every 3 seconds.');$('boot-h').hidden=tries<3;setTimeout(boot,3000);return}
 await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500))]);spark();
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
