@@ -11,10 +11,12 @@ def slim(s):
     s = re.sub(r'<!--.*?-->', '', s, flags=re.S)
     def css(m): return m.group(1) + re.sub(r'/\*.*?\*/', '', m.group(2), flags=re.S) + m.group(3)
     s = re.sub(r'(<style>)(.*?)(</style>)', css, s, flags=re.S)
-    if shutil.which('terser'):
+    if not shutil.which('terser'): sys.exit('terser is needed: npm i -g terser')
+    if True:
         def js(m):
             r = subprocess.run(['terser', '-c', '-m'], input=m.group(2), capture_output=True, text=True)
-            return m.group(1) + (r.stdout if r.returncode == 0 and r.stdout else m.group(2)) + m.group(3)
+            if r.returncode or not r.stdout: sys.exit('terser failed (a syntax error in the script?):\n' + r.stderr[:2000])   # never ship a broken page
+            return m.group(1) + r.stdout + m.group(3)
         s = re.sub(r'(<script>)(.*?)(</script>)', js, s, flags=re.S)
     return s
 for name in ('index', 'display'):
