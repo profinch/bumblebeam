@@ -1,3 +1,4 @@
+#include "esp_wifi.h"
 #include "web.h"
 #include "config.h"
 #include "wifi.h"
@@ -70,6 +71,21 @@ static esp_err_t h_history(httpd_req_t *r) {   // GET /api/history: {"step":60,"
     for (uint32_t i = 0; i < c; i++) { n += snprintf(b + n, sizeof b - n, i ? ",%u" : "%u", history_get(i)); if (n > 500) { httpd_resp_send_chunk(r, b, n); n = 0; } }
     n += snprintf(b + n, sizeof b - n, "]}"); httpd_resp_send_chunk(r, b, n); return httpd_resp_send_chunk(r, NULL, 0);
 }
+static esp_err_t h_wifiscan(httpd_req_t *r) {   // GET /api/wifi/scan: access points in reach, strongest first, for the settings' AP lock list
+    httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*");
+    wifi_scan_config_t sc = { .show_hidden = false };
+    if (esp_wifi_scan_start(&sc, true) != ESP_OK) return httpd_resp_send(r, "{\"aps\":[],\"error\":\"scan failed\"}", -1);
+    uint16_t n = 20; wifi_ap_record_t *ap = calloc(n, sizeof *ap); if (!ap) return httpd_resp_send_500(r);
+    esp_wifi_scan_get_ap_records(&n, ap);
+    char b[160]; httpd_resp_send_chunk(r, "{\"aps\":[", -1);
+    for (int i = 0; i < n; i++) {
+        char ss[66]; int k = 0; for (const char *q = (const char *)ap[i].ssid; *q && k < 64; q++) if (*q != '"' && *q != '\\' && (unsigned char)*q >= 32) ss[k++] = *q; ss[k] = 0;
+        int l = snprintf(b, sizeof b, "%s{\"ssid\":\"%s\",\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\",\"rssi\":%d,\"ch\":%u}", i ? "," : "", ss,
+            ap[i].bssid[0], ap[i].bssid[1], ap[i].bssid[2], ap[i].bssid[3], ap[i].bssid[4], ap[i].bssid[5], ap[i].rssi, ap[i].primary);
+        httpd_resp_send_chunk(r, b, l);
+    }
+    free(ap); httpd_resp_send_chunk(r, "]}", -1); return httpd_resp_send_chunk(r, NULL, 0);
+}
 static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "{\"status\":\"ok\"}", -1); }
 static void restart_later(void *a) { vTaskDelay(pdMS_TO_TICKS(600)); esp_restart(); }
 static esp_err_t h_restart(httpd_req_t *r) { h_ok(r); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK; }
@@ -127,13 +143,13 @@ static esp_err_t h_favicon(httpd_req_t *r) { httpd_resp_set_type(r, "image/svg+x
 static esp_err_t h_campage(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); return httpd_resp_send(r, (const char *)cam_gz_start, cam_gz_end - cam_gz_start); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, CONFIG_BOARD_HOST_PREFIX "-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 22 + camera_http_handler_count(); c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
+    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 23 + camera_http_handler_count(); c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
     httpd_handle_t s; if (httpd_start(&s, &c) != ESP_OK) { ESP_LOGE(TAG, "httpd start failed"); return; }
     httpd_uri_t u[] = {
         { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/swarm", .method = HTTP_GET, .handler = h_root }, { .uri = "/settings", .method = HTTP_GET, .handler = h_root }, { .uri = "/firmware", .method = HTTP_GET, .handler = h_root }, { .uri = "/favicon.svg", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/favicon.ico", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
-        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/history", .method = HTTP_GET, .handler = h_history }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
+        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/history", .method = HTTP_GET, .handler = h_history }, { .uri = "/api/wifi/scan", .method = HTTP_GET, .handler = h_wifiscan }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
     camera_register_http(s);
 #ifdef CONFIG_BOARD_HAS_CAMERA

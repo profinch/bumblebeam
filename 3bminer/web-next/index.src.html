@@ -33,7 +33,7 @@ table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6p
 tr.me td:first-child{box-shadow:inset 2px 0 var(--a)}#v-swarm td:first-child,#v-swarm th:first-child{padding-left:10px}#v-swarm .sc{margin-top:10px}
 .btn.ib{padding:2px 4px;font-size:13px;line-height:1;border:0;background:none;transition:transform .12s}.btn.ib:hover{background:none;transform:scale(1.2)}
 .bar{height:6px;border-radius:3px;background:var(--b);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0b76ff,#39fff2)}
-form{margin:0}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px 14px}
+form{margin:0}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px 14px}@media(max-width:560px){.fg{grid-template-columns:1fr}}
 label{font:10px var(--mono);color:var(--m);text-transform:uppercase;letter-spacing:.06em}
 input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background:var(--f);border:1px solid var(--b);border-radius:6px;color:#fff;font:13px var(--mono)}input:focus,select:focus{outline:1px solid var(--a)}input:disabled,select:disabled{opacity:.45}
 .hint{font:11px var(--mono);color:var(--m);margin:4px 0 0;text-transform:none;letter-spacing:0}
@@ -70,6 +70,13 @@ html::-webkit-scrollbar{width:6px}.sc::-webkit-scrollbar{height:4px}html::-webki
 html::-webkit-scrollbar-thumb,.sc::-webkit-scrollbar-thumb{background:rgba(0,246,210,.45);border-radius:3px}html::-webkit-scrollbar-thumb:hover,.sc::-webkit-scrollbar-thumb:hover{background:rgba(0,246,210,.7)}
 html::-webkit-scrollbar-button,.sc::-webkit-scrollbar-button{display:none;width:0;height:0}.sc{padding-bottom:6px}
 @supports(-moz-appearance:none){html,.sc{scrollbar-width:thin;scrollbar-color:rgba(0,246,210,.45) transparent}}
+/* drop-downs as on the pool site (a listbox in place of a native select, the select stays in the form, hidden) */
+select[hidden]{display:none!important}.dd{position:relative;margin-top:5px}.dd-btn{width:100%;height:36px;padding:0 30px 0 10px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font:13px var(--mono);background:var(--f) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--b);border-radius:6px}
+.dd-btn:focus-visible{outline:none;border-color:rgba(0,246,210,.5)}.dd-btn:disabled{opacity:.45;cursor:default}
+.dd.open .dd-btn{border-color:rgba(0,246,210,.5);border-bottom-color:transparent;border-radius:6px 6px 0 0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E")}
+.dd-list{position:absolute;left:0;right:0;top:calc(100% - 1px);z-index:30;margin:0;padding:2px 0 6px;list-style:none;max-height:300px;overflow-y:auto;background:var(--f);border:1px solid rgba(0,246,210,.5);border-top:0;border-radius:0 0 6px 6px;box-shadow:0 12px 24px rgba(0,0,0,.35);clip-path:inset(0 -40px -40px -40px)}
+.dd-list [role=option]{padding:7px 10px 7px 20px;font:13px var(--mono);text-transform:none;letter-spacing:0;color:var(--td);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-list [role=option].active{background:rgba(0,246,210,.12);color:#fff}.dd-list [role=option][aria-selected=true]{color:var(--a)}
+.dd-list::-webkit-scrollbar{width:4px}.dd-list::-webkit-scrollbar-thumb{background:rgba(0,246,210,.45);border-radius:2px}.dd-list::-webkit-scrollbar-track{background:transparent}
 /* until the first answer: only the header and a waiting panel */
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
 /* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
@@ -129,14 +136,17 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <label>Bitcoin address<input name=wallet spellcheck=false></label>
 <label>Worker name<input name=worker placeholder="esp32"><p class=hint>shown by the pool after the address</p></label></div></div>
 <div class=p><h2 style="margin-top:0">Pool</h2><div class=fg>
-<label>Stratum server<input name=url placeholder="pool.example.com:3333" spellcheck=false><p class=hint>host:port, stratum+tcp:// is optional</p></label>
-<label>Start difficulty<input name=suggest type=number step=any><p class=hint>suggested to the pool on connect</p></label>
-<label>Backup server <span class=soon>next fw</span><input name=url2 disabled placeholder="used when the main one is down"></label>
+<label>Stratum server<input name=url placeholder="pool.example.com:3333" spellcheck=false><p class=hint>host:port (stratum+tcp:// is optional)</p></label>
+<label><span class=tipped title="The share difficulty the miner asks the pool for when it connects (mining.suggest_difficulty). The pool may honour it or set its own (vardiff). At about 1 MH/s, 0.001 means a share every ~4 s: often enough for a steady hashrate estimate, rare enough not to load the pool">Start difficulty</span><input name=suggest type=number step=any></label>
 <label>Pool password <span class=soon>next fw</span><input name=ppass disabled placeholder="x"></label></div></div>
+<div class=p><h2 style="margin-top:0">Fallback pool <span class=soon>next fw</span></h2><div class=fg>
+<label>Stratum server<input name=url2 disabled placeholder="used when the main one is down"></label>
+<label>Bitcoin address<input name=wallet2 disabled placeholder="the main one if empty"></label>
+<label>Pool password<input name=ppass2 disabled placeholder="x"></label></div></div>
 <div class=p><h2 style="margin-top:0">Wi-Fi</h2><div class=fg>
 <label>Network name<input name=ssid></label>
 <label>Password<input name=pass type=password placeholder="unchanged if empty"></label>
-<label>Access point lock<input name=bssid placeholder="aa:bb:cc:dd:ee:ff" spellcheck=false><p class=hint>optional: stick to one router when several share the name</p></label>
+<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
 <label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
@@ -190,6 +200,21 @@ off:['mining off','idle','Mining is switched off in the settings; the board keep
 offline:['offline','bad','No answer from the miner: it is off, restarting or out of Wi-Fi reach. This page keeps asking every 3 seconds']};
 let realK='loading';
 function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('boot')&&k!='offline')k='loading';const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.setAttribute('data-tip',v[2])}
+// drop-downs: each select gets the pool's listbox; the select stays (hidden) as the value the form sends
+function ddify(sel){const d=document.createElement('div');d.className='dd';d.innerHTML='<button type=button class=dd-btn aria-haspopup=listbox aria-expanded=false></button><ul class=dd-list role=listbox tabindex=-1 hidden></ul>';
+sel.hidden=true;sel.after(d);const btn=d.firstChild,list=d.lastChild;let items=[],act=-1;
+const mark=i=>{act=i;items.forEach((li,j)=>li.classList.toggle('active',j==i));if(items[i])items[i].scrollIntoView({block:'nearest'})};
+const sync=()=>{list.innerHTML=[...sel.options].map(o=>'<li role=option data-v="'+o.value.replace(/"/g,'&quot;')+'">'+o.textContent.replace(/</g,'&lt;')+'</li>').join('');items=[...list.children];
+items.forEach(li=>li.setAttribute('aria-selected',String(li.dataset.v==sel.value)));const o=sel.selectedOptions[0];btn.textContent=o?o.textContent:'';btn.disabled=sel.disabled};
+const open=()=>{if(btn.disabled)return;list.hidden=false;d.classList.add('open');btn.setAttribute('aria-expanded','true');mark(Math.max(0,items.findIndex(li=>li.dataset.v==sel.value)))};
+const close=(f=1)=>{list.hidden=true;d.classList.remove('open');btn.setAttribute('aria-expanded','false');if(f)btn.focus()};
+const pick=i=>{const li=items[i];if(!li)return;sel.value=li.dataset.v;sync();close();sel.dispatchEvent(new Event('change',{bubbles:true}))};
+btn.onclick=()=>list.hidden?open():close();list.onmousedown=e=>e.preventDefault();list.onclick=e=>{const li=e.target.closest('[role=option]');if(li)pick(items.indexOf(li))};
+list.onmousemove=e=>{const li=e.target.closest('[role=option]');if(li&&items.indexOf(li)!=act)mark(items.indexOf(li))};
+btn.onkeydown=e=>{const k=e.key;if(list.hidden){if(['ArrowDown','ArrowUp','Enter',' '].includes(k)){e.preventDefault();open()}return}
+if(k=='ArrowDown'){e.preventDefault();mark(Math.min(items.length-1,act+1))}else if(k=='ArrowUp'){e.preventDefault();mark(Math.max(0,act-1))}else if(k=='Enter'||k==' '){e.preventDefault();pick(act)}else if(k=='Escape'||k=='Tab')close(k=='Escape')};
+btn.onblur=()=>setTimeout(()=>{if(!d.contains(document.activeElement))close(0)},0);sel._dd={sync};sync();return d}
+const ddsync=()=>document.querySelectorAll('select').forEach(s=>s._dd&&s._dd.sync());
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 // sections: /swarm on the board (the firmware serves this page there too), #/swarm when opened from a file
@@ -243,13 +268,18 @@ const TZ=[['UTC','UTC0'],['Europe/London','GMT0BST,M3.5.0/1,M10.5.0'],['Europe/L
 ['Asia/Bangkok','<+07>-7'],['Asia/Shanghai','CST-8'],['Asia/Singapore','<+08>-8'],['Asia/Tokyo','JST-9'],['Australia/Sydney','AEST-10AEDT,M10.1.0,M4.1.0/3'],['Pacific/Auckland','NZST-12NZDT,M9.5.0,M4.1.0/3'],
 ['America/Sao_Paulo','<-03>3'],['America/New_York','EST5EDT,M3.2.0,M11.1.0'],['America/Chicago','CST6CDT,M3.2.0,M11.1.0'],['America/Denver','MST7MDT,M3.2.0,M11.1.0'],['America/Los_Angeles','PST8PDT,M3.2.0,M11.1.0']];
 $('tzsel').innerHTML=TZ.map(z=>'<option value="'+z[1]+'">'+z[0].replace('_',' ')+'</option>').join('');
+// access points the board sees (GET /api/wifi/scan), strongest first; older firmware: only 'any' and the saved one
+async function apScan(saved){const sel=$('apsel'),keep=saved!=null?saved:sel.value;let aps=[];try{const j=await(await fetch(B+'/api/wifi/scan')).json();aps=j.aps||[]}catch(e){}
+const net=($('cf').elements.ssid.value||'').trim(),mine=aps.filter(a=>!net||a.ssid==net);
+let o='<option value="">any access point</option>'+mine.map(a=>'<option value="'+a.bssid+'">'+a.bssid+' · '+(net?'':a.ssid+' · ')+'ch '+a.ch+' · '+a.rssi+' dBm</option>').join('');
+if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'">'+keep+' · not in reach now</option>';sel.innerHTML=o;sel.value=keep||'';ddsync()}
 // ---- settings
 let cfgLoaded=0;
-function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
+function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>txt('cf-m','could not read the settings'))}
 $('cf-rl').onclick=loadCfg;
 try{$('clk').value=localStorage.getItem('clock')||'24'}catch(e){}$('clk').onchange=e=>{try{localStorage.setItem('clock',e.target.value)}catch(x){}};
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
-$('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
+$('curr').value=cur();setTimeout(ddsync,0);$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
 $('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid','tz'])if(f[n].value!=='')o[n]=f[n].value.trim();
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!await ask('Save the settings','The miner restarts with them and is back mining in about 10 seconds.',{ok:'Save & restart'}))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
@@ -330,5 +360,6 @@ await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
 document.body.classList.remove('boot');status(realK);
 setInterval(tick,3000);setInterval(net,120000);setInterval(hist,60000)}
+document.querySelectorAll('select').forEach(ddify);
 route();boot();
 </script></body></html>
