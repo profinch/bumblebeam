@@ -110,13 +110,13 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
 <div><div class=k><span class=tipped id=havk>Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
-<div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
+<div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: SHA-256 in C on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
-<div class=p><div class=k>Pool difficulty</div><div class=v id=df>-</div><div class=sm id=dfn title="Network: the Bitcoin network's difficulty from the pool's job. Next adj.: the network re-sets its difficulty every 2016 blocks (about two weeks) so that a block takes 10 minutes on average; this is mempool.space's estimate of the next change from how fast blocks come now. Up means a block gets harder to find"></div></div>
+<div class=p><div class=k>Pool difficulty</div><div class=v id=df>-</div><div class=sm id=dfn title="Network: the Bitcoin network's difficulty from the pool's job. Next adjustment: the network re-sets its difficulty every 2016 blocks (about two weeks) so that a block takes 10 minutes on average; this is mempool.space's estimate of the next change from how fast blocks come now. Up means a block gets harder to find"></div></div>
 <div class=p><div class=k><span class=tipped title="How long the board has been running since its last start. Why the board last started. power on: switched on or plugged in. software: a firmware update, saved settings or the Restart button. reset pin: the reset button, or the USB adapter re-opening the port. crash: the firmware failed. int watchdog / task watchdog / watchdog: it hung and the watchdog restarted it. brownout: the supply voltage dipped. deep sleep: woke from sleep (not used here). Power on and software are normal; the rest mean something to look at">Uptime</span></div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
 <div class=p><div class=k id=odk>Block chance</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
@@ -203,7 +203,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 
 <footer><p class=foot-copy><span class=fp>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a></span><span class="fd d1"> &middot; </span><span class=fp>a community PoW miner for Bitcoin (BTC)</span><span class="fd d2"> &middot; </span><span class=fp>open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></span></p></footer></div>
 <script>
-const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||(()=>{try{return localStorage.getItem('dev')||''}catch(e){return''}})()):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
+const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:'||/^(localhost|127\.0\.0\.1)$/.test(location.hostname),DEV=LOCAL?(Q.get('h')||(()=>{try{return localStorage.getItem('dev')||''}catch(e){return''}})()):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={};
 if(LOCAL&&Q.get('h'))try{localStorage.setItem('dev',Q.get('h'))}catch(e){}   // a preview file remembers the miner it was last pointed at
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+' T':v>=1e9?(v/1e9).toFixed(d)+' G':v>=1e6?(v/1e6).toFixed(d)+' M':v>=1e3?(v/1e3).toFixed(d)+' K':(+v).toPrecision(4).replace(/\.?0+$/,'');
@@ -212,6 +212,8 @@ const hm=k=>k>=1e6?(k/1e6).toFixed(2)+' GH/s':k>=1e3?(k/1e3).toFixed(2)+' MH/s':
 // 2.63K -> 2.63 K: a space before the K/M/G/T/P of a difficulty
 const sp=v=>String(v??'-').trim().replace(/(\d)([KMGTPB])$/,'$1 $2');
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
+// a version as people read it: v0.6.1 (the firmware reports 0.6.1; NMMiner and AxeOS already put the v in)
+const vv=x=>x&&!/^v/i.test(x)?'v'+x:(x||'');
 const BN=b=>({'esp32-wroom-32':'ESP32-WROOM-32','esp32-cam':'ESP32-CAM'})[b]||String(b||'').toUpperCase();
 const RR=['?','power on','reset pin','software','crash','int watchdog','task watchdog','watchdog','deep sleep','brownout','sdio'];
 // the pool's error as the firmware keeps it, e.g. [21,Job not found,]: only the message
@@ -261,7 +263,7 @@ document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||
 if(LOCAL)history.pushState(null,'',location.pathname+location.search+(v=='dash'?'':'#/'+v));else history.pushState(null,'',(v=='dash'?'/':'/'+v)+location.search);route()});
 addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>{a.classList.toggle('on',a.dataset.v==v);a.toggleAttribute('aria-current',a.dataset.v==v)});
-if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swOpened){swOpened=1;for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw()}}
+if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swOpened){swOpened=1;for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw();swAlive()}}
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
@@ -269,7 +271,7 @@ function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Mat
 let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
 htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');   // a time: 19.5B years, no space
-htm('odn','expected time to find a block<br>one block in '+fx(1/pday,1).replace(' ','')+' daily');
+htm('odn','expected time<br>one block in '+fx(1/pday,1).replace(' ','')+' daily');
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 let lastOk=0,busy=0,BUILD=null;
@@ -283,12 +285,12 @@ all:['Avg all time',m.avgAllKhs,'The board\'s average over all its running time,
 const av=AV[1]>=0?AV[1]:since;txt('havk',AV[0]);$('havk').setAttribute('data-tip',AV[2]);htm('havg',since?av.toFixed(1)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 txt('bd',sp(m.bestDiffSession));txt('bde','ever '+sp(m.bestDiffEver));txt('df',sp(m.poolDiff));dfn();
-htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
+htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-')+(m.restartWhy?' ('+m.restartWhy+')':''));
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+he(u)+'">'+he(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+he(u.slice(i))+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);if(d.identity.camera&&$('nav-cam').hidden){$('nav-cam').hidden=false;if(view()=='camera')cvLoad()}txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
-txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
+txt('hn',d.identity.hostName);if(d.identity.camera&&$('nav-cam').hidden){$('nav-cam').hidden=false;if(view()=='camera')cvLoad()}txt('fw',vv(d.identity.fwVersion));txt('bo',BN(d.identity.board||d.identity.hwModel));txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('f-ver',vv(d.identity.fwVersion));txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
 if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
 CK={t:d.identity.time||0,at:Date.now(),tz:d.identity.tz,sync:d.identity.ntpSync||0,src:d.identity.ntp};boardClock();
 if(view()=='settings'&&!cfgLoaded)loadCfg();
@@ -302,7 +304,7 @@ if(f&&f.fastestFee!=null){htm('fe',he(f.fastestFee)+' <small>/ '+he(f.hourFee)+'
 if(p&&p.USD){N.px=p;prices()}
 if(da&&typeof da.difficultyChange=='number'){N.da=da;dfn()}}
 // the pool difficulty card's second line: the network's difficulty and, once known, the next adjustment
-function dfn(){if(!D)return;txt('dfn','network '+sp(D.miner.networkDiff)+(N.da?' -> next adj. '+(N.da.difficultyChange>0?'+':'')+N.da.difficultyChange.toFixed(1)+'%':''))}
+function dfn(){if(!D)return;htm('dfn','network '+he(sp(D.miner.networkDiff))+(N.da?'<br>next adjustment '+(N.da.difficultyChange>0?'+':'')+N.da.difficultyChange.toFixed(1)+'%':''))}
 function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'},main=cur();htm('px',C[main]+(p[main]||0).toLocaleString('en'));
 htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
 function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
@@ -330,7 +332,7 @@ const now=new Date((CK.t+(Date.now()-CK.at)/1000)*1000),tz=tzName(CK.tz);txt('c-
 txt('c-tz',tz?tz.replace('_',' '):(CK.tz||'UTC'));txt('c-sync',CK.sync?clock(new Date(CK.sync*1000),tz||'UTC')+' ('+ago(CK.sync*1000)+' ago)':'never');txt('c-src',CK.src||'-')}
 setInterval(boardClock,1000);
 function tzExample(){const sel=$('tzsel');if(!sel)return;const z=TZ.find(z=>z[1]==sel.value),t=CK&&CK.t?new Date((CK.t+(Date.now()-CK.at)/1000)*1000):new Date();try{txt('tzx',clock(t,z?z[0]:'UTC')+', '+t.toLocaleDateString('en-GB',{timeZone:z?z[0]:'UTC',day:'numeric',month:'short',year:'numeric'}))}catch(e){}}
-setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample();if(e.target.id=='clk'&&LS)txt('sw-scan','last scan '+clock(LS))});
+setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample();if(e.target.id=='clk')lastScan()});
 // ---- settings
 let cfgLoaded=0,cfgBusy=0;
 function loadCfg(say){if(cfgBusy)return;cfgBusy=1;fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;
@@ -363,8 +365,8 @@ $('sw-th').onclick=e=>{const k=e.target.dataset.k;if(!k)return;if(swSort!=k){swS
 [...$('sw-th').children].forEach(t=>{const on=t.dataset.k&&t.dataset.k==swSort;t.dataset.dir=on?(swDir>0?'▲':'▼'):'';t.setAttribute('aria-sort',on?(swDir>0?'ascending':'descending'):'none')});swDraw()};
 // Board: the hardware; Firmware: whose firmware and its version. 3BMiner names both (displayName, board); NMMiner gives only its own
 // name as hwModel, no board; AxeOS gives the ASIC and the board revision
-function mapInfo(ip,d){const I=d.identity;if(d.miner)return{ip,host:I.hostName,model:I.displayName?BN(I.board):'-',ver:(I.displayName||I.hwModel||'')+' '+(I.fwVersion||''),hr:d.miner.hashRate*1e6,acc:d.miner.sAccepted,rej:d.miner.sRejected,best:pd(d.miner.bestDiffEver),bestS:d.miner.bestDiffEver,pdiff:pd(d.miner.poolDiff),up:d.miner.uptimeSeconds,rssi:d.identity.rssi,heap:d.miner.freeHeap};
-return{ip,host:d.hostname,model:[d.ASICModel,d.boardVersion&&'rev '+d.boardVersion].filter(Boolean).join(', ')||'-',ver:'AxeOS '+(d.version||''),hr:(d.hashRate||0)*1e6,acc:d.sharesAccepted,rej:d.sharesRejected,best:pd(d.bestDiff),bestS:d.bestDiff,pdiff:d.poolDifficulty||0,up:d.uptimeSeconds,rssi:d.wifiRSSI,heap:d.freeHeap}}
+function mapInfo(ip,d){const I=d.identity;if(d.miner)return{ip,host:I.hostName,model:I.displayName?BN(I.board):'-',ver:(I.displayName||I.hwModel||'')+' '+vv(I.fwVersion),hr:d.miner.hashRate*1e6,acc:d.miner.sAccepted,rej:d.miner.sRejected,best:pd(d.miner.bestDiffEver),bestS:d.miner.bestDiffEver,pdiff:pd(d.miner.poolDiff),up:d.miner.uptimeSeconds,rssi:d.identity.rssi,heap:d.miner.freeHeap};
+return{ip,host:d.hostname,model:[d.ASICModel,d.boardVersion&&'rev '+d.boardVersion].filter(Boolean).join(', ')||'-',ver:'AxeOS '+vv(d.version),hr:(d.hashRate||0)*1e6,acc:d.sharesAccepted,rej:d.sharesRejected,best:pd(d.bestDiff),bestS:d.bestDiff,pdiff:d.poolDifficulty||0,up:d.uptimeSeconds,rssi:d.wifiRSSI,heap:d.freeHeap}}
 async function swPoll(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),2500);const d=await(await fetch('http://'+ip+'/api/system/info',{signal:c.signal})).json();if(FG.has(ip))return 0;const o=mapInfo(ip,d);o.seen=Date.now();SW.set(ip,o);swSave();swDraw();return 1}catch(e){const o=SW.get(ip);if(o){o.off=1;if(Date.now()-(o.seen||0)>FORGET)SW.delete(ip);swSave()}swDraw();return 0}}
 async function swProbe(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),1500);const r=await fetch('http://'+ip+'/probe',{signal:c.signal});if(!r.ok)return;const j=await r.json();if('hr' in j||'hashRate' in j)await swPoll(ip)}catch(e){}}
 const FORGET=864e5;   // a miner silent for 24 h leaves the list
@@ -372,13 +374,19 @@ function swSave(){try{localStorage.setItem(SK,JSON.stringify(Object.fromEntries(
 // this board is in the swarm from the first answer, no scan needed; the saved ones come back (offline until they answer)
 function swSelf(d){if(FG.has(DEV))return;const o=mapInfo(DEV,d);o.seen=Date.now();SW.set(DEV,o);swSave();if(view()=='swarm')swDraw()}
 try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]})}}catch(e){}
+// the miners the board found itself (fw 0.6.1+ searches its subnet in the background) and when it last did
+let BS=null;
+async function swAlive(){try{const j=await(await fetch(B+'/alive')).json();for(const ip of j.ips||[])if(ip!=j.self&&ip!=DEV&&!FG.has(ip)&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:Date.now()});swPoll(ip)}
+if(j.lastScanAgo>=0)BS=new Date(Date.now()-j.lastScanAgo*1000);lastScan();swDraw()}catch(e){}}
+// 'last scan': the latest of the board's pass and this browser's scan
+function lastScan(){const t=[BS,LS].filter(Boolean).sort((a,b)=>b-a)[0];if(t)txt('sw-scan','last scan '+clock(t))}
 let scanning=0;
 async function swScan(){if(scanning)return;const m3=$('sw-net').value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\.\d*)?$/);if(!m3||m3.slice(1,4).some(x=>+x>255)){fade('sw-prog','subnet like 192.168.88.0');return}
 scanning=1;$('sw-go').disabled=1;FG.clear();const net=m3.slice(1,4).join('.');
 for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw();   // the known ones first
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
 const worker=async()=>{while(q.length){const ip=q.shift();fade('sw-prog','network scanning... '+ip,1);await swProbe(ip)}};
-await Promise.all(Array.from({length:24},worker));scanning=0;$('sw-go').disabled=0;LS=new Date();txt('sw-scan','last scan '+clock(LS));fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 3 s
+await Promise.all(Array.from({length:24},worker));scanning=0;$('sw-go').disabled=0;LS=new Date();lastScan();fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 3 s
 function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-hn',a.length==1?'1 miner':a.length+' miners');txt('sw-b',sp(bb.bestS));txt('sw-bn',bb.host||'');
 const ac=a.reduce((s,o)=>s+(o.acc||0),0),rj=a.reduce((s,o)=>s+(o.rej||0),0);htm('sw-s',ac+' <small>/ <span class=r>'+rj+'</span></small>');txt('sw-sr',ac+rj?(100*rj/(ac+rj)).toFixed(2)+'% rejected':'');
 const sk=swSort||'hr',sd=swSort?swDir:-1;const rows=[...SW.values()].sort((x,y)=>{const p=x[sk],q=y[sk];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*sd});
@@ -395,10 +403,10 @@ const fade=(id,t,stay)=>{const e=$(id);clearTimeout(e._f);e.style.transition='no
 if(!stay)e._f=setTimeout(()=>e.classList.add('gone'),3000)};
 async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;FG.delete(ip);if(!okIP(ip)){fade('sw-am','not an IP address, e.g. 192.168.1.232');return}
 if(SW.has(ip)&&!SW.get(ip).off){fade('sw-am','this miner already added');return}
-fade('sw-am','asking '+ip+'…',1);fade('sw-am',await swPoll(ip)?'added '+ip+' miner':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
+fade('sw-am','asking '+ip+'…',1);const ok=await swPoll(ip);fade('sw-am',ok?'added '+ip+' miner':'no miner answers at '+ip);if(ok&&!ip.includes(':'))fetch(B+'/api/swarm/add',{method:'POST',body:JSON.stringify({ip})}).catch(()=>{});if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
 $('sw-addb').onclick=swAdd;$('sw-add').onkeydown=e=>{if(e.key=='Enter')swAdd()};$('sw-add').oninput=()=>fade('sw-am','',1);
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'').replace(/\.\d+$/,'.0');
-setInterval(()=>{if(view()=='swarm'&&!document.hidden)for(const ip of SW.keys())if(ip!=DEV)swPoll(ip)},15000);
+setInterval(()=>{if(view()=='swarm'&&!document.hidden){for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swAlive()}},15000);
 // tooltips as on the pool site (tips.js): title -> data-tip, shown on hover, focus and tap
 (()=>{const t=document.createElement('div');t.className='bb-tip';let cur=null,tm=0;const own=n=>{for(;n&&n.nodeType==1;n=n.parentNode)if(n.getAttribute('title')||n.hasAttribute('data-tip'))return n;return null};
 const tx=e=>{const v=e.getAttribute('title');if(v){e.setAttribute('data-tip',v);e.removeAttribute('title')}return e.getAttribute('data-tip')||''};

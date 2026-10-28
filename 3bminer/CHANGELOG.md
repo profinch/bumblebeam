@@ -34,7 +34,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   takes 0 or 3.
 - The best share ever (`bestDiffEver`) is kept in NVS: it survives restarts and firmware updates.
 - ESP32-CAM stream speed: the limit was the 5.7 KB TCP send buffer (~290 KB/s at any frame size); 32 KB, with Wi-Fi and
-  lwip buffers in PSRAM: UXGA quality 4 3.9 -> 6.3 fps, VGA quality 4 21 -> 42 fps, VGA quality 10 40 -> 49 fps,
+  lwip buffers in PSRAM: 1280x720 quality 4 3.9 -> 6.3 fps, 400x296 quality 4 21 -> 42 fps, quality 10 40 -> 49 fps,
   internal RAM free 76 -> 104 KB. Mining on or off made no measurable difference (they share no core).
 - ESP32-CAM microSD (1-bit SDMMC, the flash LED keeps GPIO4): `GET /api/sd` (card, size, free), `POST /api/sd/format`,
   `POST /api/sd/snap` (a photo to `photos/<date>_<time>.jpg`); a Memory card panel on the Camera tab.
@@ -42,6 +42,28 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Settings: Mining on/off; Wi-Fi fields in the order network name, password, device name, the AP lock on its own row.
   Swarm: this board is listed from the first answer, the saved miners come back without a scan.
 - The loading screen (the bee and the honeycomb) sits a little above the middle of the screen.
+- Audit 2, security: the board's JSON answers (wallet, Wi-Fi name) may be read only by a page on the LAN or localhost
+  (CORS names that origin instead of `*`); a POST from "null" (a sandboxed frame or a file) is refused like one from the
+  internet; GETs that change something (`/control`, `/xclk`, `/reg`, `/pll`, `/resolution`, `/api/bench`) are refused when
+  the browser marks them cross-site from a page outside the LAN. Programs (curl, VLC, Home Assistant) are not affected.
+  The preview is served from localhost now (`python3 -m http.server` in its folder).
+- Audit 2, health: the main loop runs under the task watchdog (60 s); a board whose Wi-Fi stays down 5 minutes or whose
+  web server does not answer itself 4 times in a row restarts and reports why (`miner.restartWhy`, shown after "last
+  reset" on the dashboard).
+- The board looks for other miners itself, like NMMiner: its own /24 in the background (one address at a time, a pass
+  every 30 minutes, the known ones every 2 minutes, paused during an OTA or a camera stream), the list in NVS, served
+  by `/alive` (NMMiner's format plus `lastScanAgo`); `POST /api/swarm/add` keeps a miner added by hand. The Swarm page
+  takes the list from there, "last scan" is the latest of the board's pass and a browser scan, and opening the Swarm
+  no longer scans the network.
+- The software hasher is a compact SHA-256 with a midstate instead of the unrolled nerdSHA256plus: ~24 KH/s on both
+  boards in every build (nerdSHA ran 5 to 29 KH/s depending on where the linker put other code, 9 on the ESP32-CAM);
+  its hits use the engine's pool-difficulty mask. nerdsha.c is gone, the image is 34 KB smaller.
+- The page is served with an ETag (the image's SHA-256) and `no-cache`: 304 when unchanged, a new firmware's page at once.
+- Fixed: Settings saved before the board's Wi-Fi scan answered stored an empty AP lock (with two APs of one name the
+  camera then joined the other one and seemed gone); a save before the settings were read, or without a Wi-Fi name, is
+  refused; the stream's 5 s refresh no longer resets the controls; a hidden tab polls nothing and drops the stream.
+- Swarm: Board is the hardware (ESP32-WROOM-32, ESP32-CAM), Firmware whose firmware and version (3BMiner v0.6.1,
+  NMMiner v2.0.04); versions shown as v0.6.1 on the page.
 - The AP lock list names MikroTik access points "MikroTik" (the pool's `/api/3bminer/oui` maps its "Routerboard.com"
   registration).
 

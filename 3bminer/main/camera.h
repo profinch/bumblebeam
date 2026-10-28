@@ -4,4 +4,5 @@
 void camera_start(void);                        // sensor + flash LED + stream server on :81
 void camera_register_http(httpd_handle_t s);    // /capture /bmp /status /control /xclk /reg /greg /pll /resolution /api/camera/save
 int camera_http_handler_count(void);
+bool camera_streaming(void);                    // a stream is being sent (the background swarm search waits)
 void camera_stop(void);                         // before flash writes (OTA): the running camera breaks them, see camera.c

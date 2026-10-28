@@ -154,7 +154,7 @@ void camera_start(void) {
     ESP_LOGI(TAG, "sensor PID 0x%04x ready, framesize %d", s->id.PID, s->status.framesize);
 }
 
-static esp_err_t cors(httpd_req_t *r) { return httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); }
+static esp_err_t cors(httpd_req_t *r) { web_cors(r); return ESP_OK; }
 static esp_err_t not_ready(httpd_req_t *r) { httpd_resp_set_status(r, "503 Service Unavailable"); return httpd_resp_send(r, "camera not ready", -1); }
 static int qint(httpd_req_t *r, const char *k, int def) {
     char q[200], v[16]; if (httpd_req_get_url_query_str(r, q, sizeof q) != ESP_OK || httpd_query_key_value(q, k, v, sizeof v) != ESP_OK) return def; return atoi(v);
@@ -192,6 +192,7 @@ static esp_err_t h_status(httpd_req_t *r) {
     httpd_resp_set_type(r, "application/json"); cors(r); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_control(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     char q[128], var[32], val[16];
     if (httpd_req_get_url_query_str(r, q, sizeof q) != ESP_OK || httpd_query_key_value(q, "var", var, sizeof var) != ESP_OK || httpd_query_key_value(q, "val", val, sizeof val) != ESP_OK) return httpd_resp_send_404(r);
@@ -200,12 +201,14 @@ static esp_err_t h_control(httpd_req_t *r) {
     cors(r); return httpd_resp_send(r, NULL, 0);
 }
 static esp_err_t h_xclk(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     int x = qint(r, "xclk", -1); if (x <= 0) return httpd_resp_send_404(r);
     sensor_t *s = esp_camera_sensor_get(); if (s->set_xclk(s, LEDC_TIMER_0, x)) return httpd_resp_send_500(r);
     cors(r); return httpd_resp_send(r, NULL, 0);
 }
 static esp_err_t h_reg(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     int reg = qint(r, "reg", -1), mask = qint(r, "mask", -1), val = qint(r, "val", -1); if (reg < 0 || mask < 0 || val < 0) return httpd_resp_send_404(r);
     sensor_t *s = esp_camera_sensor_get(); if (s->set_reg(s, reg, mask, val)) return httpd_resp_send_500(r);
@@ -218,12 +221,14 @@ static esp_err_t h_greg(httpd_req_t *r) {
     char b[16]; snprintf(b, sizeof b, "%d", v); cors(r); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_pll(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     sensor_t *s = esp_camera_sensor_get();
     if (s->set_pll(s, qint(r, "bypass", 0), qint(r, "mul", 0), qint(r, "sys", 0), qint(r, "root", 0), qint(r, "pre", 0), qint(r, "seld5", 0), qint(r, "pclken", 0), qint(r, "pclk", 0))) return httpd_resp_send_500(r);
     cors(r); return httpd_resp_send(r, NULL, 0);
 }
 static esp_err_t h_resolution(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     sensor_t *s = esp_camera_sensor_get();
     if (s->set_res_raw(s, qint(r, "sx", 0), qint(r, "sy", 0), qint(r, "ex", 0), qint(r, "ey", 0), qint(r, "offx", 0), qint(r, "offy", 0), qint(r, "tx", 0), qint(r, "ty", 0), qint(r, "ox", 0), qint(r, "oy", 0), qint(r, "scale", 0), qint(r, "binning", 0)))
@@ -313,6 +318,7 @@ static esp_err_t h_sd_snap(httpd_req_t *r) {   // POST /api/sd/snap: the next fr
     return json(r, b);
 }
 int camera_http_handler_count(void) { return 13; }
+bool camera_streaming(void) { return s_streaming; }
 void camera_register_http(httpd_handle_t s) {
     const httpd_uri_t u[] = {
         { .uri = "/capture", .method = HTTP_GET, .handler = h_capture }, { .uri = "/bmp", .method = HTTP_GET, .handler = h_bmp },
@@ -330,6 +336,7 @@ void camera_register_http(httpd_handle_t s) {
 #else
 void camera_start(void) {}
 void camera_stop(void) {}
+bool camera_streaming(void) { return false; }
 void camera_register_http(httpd_handle_t s) { (void)s; }
 int camera_http_handler_count(void) { return 0; }
 #endif

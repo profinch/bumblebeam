@@ -14,6 +14,13 @@ void sha256_compress(uint32_t st[8], const uint32_t w16[16]) {
     for (int i=0;i<64;i++){ uint32_t S1=ROR(e,6)^ROR(e,11)^ROR(e,25), ch=(e&f)^(~e&g), t1=h+S1+ch+KK[i]+w[i], S0=ROR(a,2)^ROR(a,13)^ROR(a,22), mj=(a&b)^(a&c)^(b&c), t2=S0+mj; h=g;g=f;f=e;e=d+t1;d=c;c=b;b=a;a=t1+t2; }
     st[0]+=a;st[1]+=b;st[2]+=c;st[3]+=d;st[4]+=e;st[5]+=f;st[6]+=g;st[7]+=h;
 }
+uint32_t sha256_h7(const uint32_t w16[16]) {
+    uint32_t w[61]; for (int i=0;i<16;i++) w[i]=w16[i];
+    for (int i=16;i<61;i++){ uint32_t s0=ROR(w[i-15],7)^ROR(w[i-15],18)^(w[i-15]>>3), s1=ROR(w[i-2],17)^ROR(w[i-2],19)^(w[i-2]>>10); w[i]=w[i-16]+s0+w[i-7]+s1; }
+    uint32_t a=SHA256_IV[0],b=SHA256_IV[1],c=SHA256_IV[2],d=SHA256_IV[3],e=SHA256_IV[4],f=SHA256_IV[5],g=SHA256_IV[6],h=SHA256_IV[7];
+    for (int i=0;i<61;i++){ uint32_t S1=ROR(e,6)^ROR(e,11)^ROR(e,25), ch=(e&f)^(~e&g), t1=h+S1+ch+KK[i]+w[i], S0=ROR(a,2)^ROR(a,13)^ROR(a,22), mj=(a&b)^(a&c)^(b&c), t2=S0+mj; h=g;g=f;f=e;e=d+t1;d=c;c=b;b=a;a=t1+t2; }
+    return SHA256_IV[7] + e;
+}
 static inline uint32_t be32(const uint8_t *p) { return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3]; }
 void sha256_raw(const uint8_t *data, size_t len, uint8_t out[32]) {
     uint32_t st[8]; memcpy(st, SHA256_IV, 32);

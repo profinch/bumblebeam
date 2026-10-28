@@ -7,12 +7,12 @@ theirs.
 
 The SHA-256 engine of the classic ESP32 is driven by a cycle-scheduled Xtensa kernel on core 0 with
 interrupts off; core 1 keeps Wi-Fi, the web server, the camera and a software hasher
-(nerdSHA256plus) for its idle time.
+(a compact SHA-256 with a midstate) for its idle time.
 
 | Board | Profile | What it does | Measured |
 |---|---|---|---|
-| ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~952 KH/s engine + ~29 KH/s software = **~981 KH/s**, 252 cycles/nonce |
-| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream (quality 10 / 4) 49 / 42 fps at 640x480, 25 / 13 at 1024x768, 12.5 / 6.3 at 1600x1200; mining ~951 KH/s engine + ~9 software = **~960 KH/s**, ~930 while streaming; microSD for photos |
+| ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~951 KH/s engine + ~24 KH/s software = **~975 KH/s**, 251 cycles/nonce |
+| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream (quality 10 / 4) 50 / 33 fps at 400x296, 25 / 25 at 640x480, 12.5 / 5.6 at 1280x720, 3.5 / 3.0 at 1600x1200 (the sensor's limit there); mining ~951 KH/s engine + ~24 software = **~975 KH/s**, ~930 while streaming; microSD for photos |
 
 For scale: NerdMiner v2 does ~350 KH/s on the same chip, NMMiner (closed, paid license on boards
 other than its own) ~1.03 MH/s. Over 7.6 h side by side on one pool (fw 0.5.2 against NMMiner
@@ -59,7 +59,8 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 | Path | What |
 |---|---|
 | `/`, `/swarm`, `/settings`, `/firmware` | the web UI (one page, built from `web-next/`); `/camera` on camera boards |
-| `/probe`, `/alive`, `/api/system/info`, `/api/system/restart`, `/api/swarm/find` | NMMiner-compatible; `info` adds the engine/software split, kernel cycles, reject reasons, reset reason, board id |
+| `/probe`, `/alive`, `/api/system/info`, `/api/system/restart`, `/api/swarm/find` | NMMiner-compatible; `info` adds the engine/software split, kernel cycles, reject reasons, reset reason and why the firmware restarted itself, board id; `/alive` lists the miners the board found on its subnet (background search) with `lastScanAgo` |
+| `POST /api/swarm/add` | `{"ip":"a.b.c.d"}`: a miner the board keeps in its list (another subnet, say) |
 | `GET /api/history` | the board's hashrate, a value a minute for the last 24 h; `info` has the 1 h and 24 h averages and `stratum.solo` (the coinbase pays the configured address) |
 | `GET/POST /api/config` | Wi-Fi (with an optional BSSID lock), pool, address, worker, start difficulty, `mining` on/off |
 | `POST /update` | raw image, written to the spare slot |
@@ -79,7 +80,10 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 - `main/camera.c` camera boards: esp32-camera, flash LED, the CameraWebServer API, settings in NVS.
 - `main/web.c`, `main/www/` web server and the page (gzipped by the build, ~23 KB in the image).
 - `web-next/` the web UI source (menu like the pool's, swarm scan, settings, firmware, camera, display previews);
-  `web-next/build.py` minifies it into `main/www/index.html`; plans in [`web-next/ROADMAP.md`](web-next/ROADMAP.md).
+  `web-next/build.py` minifies it into `main/www/index.html` (and stops when terser fails); `build.py <dir>` also copies it
+  there for a preview: `python3 -m http.server 8765` in that folder, then `http://localhost:8765/?h=<board ip>` (the board
+  answers LAN and localhost pages only, not a file opened from disk); plans in [`web-next/ROADMAP.md`](web-next/ROADMAP.md).
+- `main/swarm.c` the background search for other miners; `main/main.c` the health checks (task watchdog, Wi-Fi, web).
 
 ## What the engine and the chip allow (measured)
 
@@ -112,10 +116,10 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
   KB/s at a ~20 ms round trip, whatever the frame size. The camera profile uses 32 KB (64 KB measured the same) with
   Wi-Fi and lwip buffers allowed in PSRAM, which also left more internal RAM free. Switching mining off changed nothing
   measurable: the kernel is on core 0, the camera and the network on core 1.
-- The software hasher costs 2.2x the cycles on the ESP32-CAM (17,850 per hash against 8,179 on the devkit, camera idle):
-  its code runs from flash through the cache, which on a PSRAM board also serves PSRAM. Moving it to IRAM would cost
-  the engine far more (see above); QIO 80 MHz flash might win back part of the ~20 KH/s, but needs a USB flash of the
-  bootloader.
+- The software hasher was nerdSHA256plus, 20 KB of unrolled code run from flash through the 32 KB two-way cache: it took
+  8,179 cycles a hash in one build and 44,000 in the next (other hot code landed on the same cache lines), and 17,850 on
+  the ESP32-CAM, whose cache also serves PSRAM. A compact rolled SHA-256 with a midstate (~1 KB) takes ~10,200 cycles on
+  both boards in every build: ~24 KH/s instead of 5-29. Moving the unrolled one to IRAM would cost the engine far more (above).
 - The microSD slot runs in 1-bit SDMMC mode: in 4-bit mode its D1 is GPIO4, the flash LED.
 
 Changes per version: [CHANGELOG.md](CHANGELOG.md); which image ran on which board, when and with what
