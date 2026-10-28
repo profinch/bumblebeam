@@ -288,7 +288,8 @@ window.swRst=async ip=>{if(await ask('Restart a miner',['Restart the miner at ',
 $('sw-go').onclick=swScan;// a custom miner: an IPv4 address (an optional :port is fine), checked before it is asked
 const okIP=v=>{const m=v.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/);return!!m&&m.slice(1,5).every(x=>+x<=255)&&(!m[5]||+m[5]<=65535)};
 // a message that stays 3 s, then fades out (the line keeps its room)
-const fade=(id,t,stay)=>{const e=$(id);clearTimeout(e._f);e.classList.remove('gone');e.textContent=t;if(!stay)e._f=setTimeout(()=>e.classList.add('gone'),3000)};
+const fade=(id,t,stay)=>{const e=$(id);clearTimeout(e._f);e.style.transition='none';e.classList.remove('gone');e.textContent=t;void e.offsetWidth;e.style.transition='';   // in at once, out slowly
+if(!stay)e._f=setTimeout(()=>e.classList.add('gone'),3000)};
 async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;if(!okIP(ip)){fade('sw-am','not an IP address, e.g. 192.168.1.232');return}
 if(SW.has(ip)&&!SW.get(ip).off){fade('sw-am','this miner already added');return}
 fade('sw-am','asking '+ip+'…',1);fade('sw-am',await swPoll(ip)?'added '+ip+' miner':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
