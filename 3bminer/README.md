@@ -60,7 +60,7 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 |---|---|
 | `/`, `/swarm`, `/settings`, `/firmware` | the web UI (one page, built from `web-next/`); `/camera` on camera boards |
 | `/probe`, `/alive`, `/api/system/info`, `/api/system/restart`, `/api/swarm/find` | NMMiner-compatible; `info` adds the engine/software split, kernel cycles, reject reasons, reset reason and why the firmware restarted itself, board id; `/alive` lists the miners the board found on its subnet (background search) with `lastScanAgo` |
-| `POST /api/swarm/add` | `{"ip":"a.b.c.d"}`: a miner the board keeps in its list (another subnet, say) |
+| `POST /api/swarm/add`, `POST /api/swarm/forget` | `{"ip":"a.b.c.d"}`: a miner the board keeps in its list (another subnet, say), or drops |
 | `GET /api/history` | the board's hashrate, a value a minute for the last 24 h; `info` has the 1 h and 24 h averages and `stratum.solo` (the coinbase pays the configured address) |
 | `GET/POST /api/config` | Wi-Fi (with an optional BSSID lock), pool, address, worker, start difficulty, `mining` on/off |
 | `POST /update` | raw image, written to the spare slot |

@@ -58,7 +58,7 @@ static int get(uint32_t ip, const char *path, char *buf, int cap) {
     struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(80), .sin_addr.s_addr = ip };
     int n = -1;
     if (connect(s, (struct sockaddr *)&a, sizeof a) == 0 || errno == EINPROGRESS) {
-        fd_set w; FD_ZERO(&w); FD_SET(s, &w); struct timeval tv = { .tv_sec = 0, .tv_usec = 300000 };   // a host that is not there costs 0.3 s
+        fd_set w; FD_ZERO(&w); FD_SET(s, &w); struct timeval tv = { .tv_sec = 0, .tv_usec = 800000 };   // 0.8 s: a peer on Wi-Fi power save answers ARP late; an absent host costs that
         int e = 0; socklen_t el = sizeof e;
         if (select(s + 1, NULL, &w, NULL, &tv) == 1 && getsockopt(s, SOL_SOCKET, SO_ERROR, &e, &el) == 0 && e == 0) {
             fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) & ~O_NONBLOCK);
@@ -110,6 +110,12 @@ static void task(void *arg) {
     }
 }
 void swarm_start(void) { xTaskCreatePinnedToCore(task, "swarm", 4096, NULL, 2, NULL, 1); }
+bool swarm_forget(uint32_t ip) {
+    if (!s_lock) return false;
+    bool had = false; xSemaphoreTake(s_lock, portMAX_DELAY);
+    int i = find(ip); if (i >= 0) { s_m[i] = s_m[--s_n]; had = true; }
+    xSemaphoreGive(s_lock); if (had) save(); return true;
+}
 bool swarm_add(uint32_t ip) { if (!s_lock) return false; bool nw = add(ip); if (nw) save(); return true; }
 int swarm_alive_json(char *b, int cap, const char *self) {
     int n = snprintf(b, cap, "{\"self\":\"%s\",\"ips\":[\"%s\"", self, self);

@@ -72,15 +72,19 @@ static esp_err_t h_probe(httpd_req_t *r) {
 }
 // NMMiner's /alive: this board and the miners its background search found (swarm.c), with the time since the last pass
 static esp_err_t h_alive(httpd_req_t *r) { static char b[700]; swarm_alive_json(b, sizeof b, wifi_ip()); httpd_resp_set_type(r, "application/json"); web_cors(r); return httpd_resp_send(r, b, -1); }
-// POST /api/swarm/add {"ip":"a.b.c.d"}: a miner the board keeps checking (e.g. on another subnet)
-static esp_err_t h_swarm_add(httpd_req_t *r) {
+// POST /api/swarm/add or /api/swarm/forget {"ip":"a.b.c.d"}: a miner the board keeps checking (e.g. on another subnet), or drops
+static uint32_t body_ip(httpd_req_t *r) {
+    char buf[96]; int n = httpd_req_recv(r, buf, sizeof buf - 1); if (n <= 0) return 0; buf[n] = 0;
+    unsigned a, b, c, d; char *p = strstr(buf, "\"ip\"");
+    if (p && (p = strchr(p + 4, '"')) && sscanf(p + 1, "%u.%u.%u.%u", &a, &b, &c, &d) == 4 && a < 256 && b < 256 && c < 256 && d < 256) return a | b << 8 | c << 16 | d << 24;
+    return 0;
+}
+static esp_err_t h_swarm_ip(httpd_req_t *r) {
     if (!web_post_allowed(r)) return ESP_OK;
-    char buf[96]; int n = httpd_req_recv(r, buf, sizeof buf - 1); if (n <= 0) return httpd_resp_send_500(r); buf[n] = 0;
-    unsigned a, b, c, d; char *p = strstr(buf, "\"ip\""); uint32_t ip = 0;
-    if (p && (p = strchr(p + 4, '"')) && sscanf(p + 1, "%u.%u.%u.%u", &a, &b, &c, &d) == 4 && a < 256 && b < 256 && c < 256 && d < 256) ip = a | b << 8 | c << 16 | d << 24;
-    httpd_resp_set_type(r, "application/json"); web_cors(r);
+    uint32_t ip = body_ip(r); httpd_resp_set_type(r, "application/json"); web_cors(r);
     if (!ip) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "{\"status\":\"ip like 192.168.1.50\"}", -1); }
-    return httpd_resp_send(r, swarm_add(ip) ? "{\"status\":\"ok\"}" : "{\"status\":\"not ready\"}", -1);
+    bool ok = strstr(r->uri, "forget") ? swarm_forget(ip) : swarm_add(ip);
+    return httpd_resp_send(r, ok ? "{\"status\":\"ok\"}" : "{\"status\":\"not ready\"}", -1);
 }
 static esp_err_t h_info(httpd_req_t *r) {
     char nd[24], pd[24], ld[24], bs[24], be[24]; if (g_stratum.net_diff > 0) fmt_diff(g_stratum.net_diff, nd, sizeof nd); else strcpy(nd, "-"); fmt_diff(g_stratum.pool_diff, pd, sizeof pd); fmt_diff(g_stratum.last_share_diff, ld, sizeof ld); fmt_diff(g_stratum.best_session, bs, sizeof bs); fmt_diff(g_stratum.best_ever, be, sizeof be);
@@ -226,13 +230,13 @@ static esp_err_t h_root(httpd_req_t *r) {
 static esp_err_t h_favicon(httpd_req_t *r) { httpd_resp_set_type(r, "image/svg+xml"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=86400"); return httpd_resp_send(r, (const char *)fav_gz_start, fav_gz_end - fav_gz_start); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, CONFIG_BOARD_HOST_PREFIX "-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 24 + camera_http_handler_count(); c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
+    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 25 + camera_http_handler_count(); c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
     httpd_handle_t s; if (httpd_start(&s, &c) != ESP_OK) { ESP_LOGE(TAG, "httpd start failed"); return; }
     httpd_uri_t u[] = {
         { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/swarm", .method = HTTP_GET, .handler = h_root }, { .uri = "/settings", .method = HTTP_GET, .handler = h_root }, { .uri = "/firmware", .method = HTTP_GET, .handler = h_root }, { .uri = "/favicon.svg", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/favicon.ico", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
-        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/history", .method = HTTP_GET, .handler = h_history }, { .uri = "/api/wifi/scan", .method = HTTP_GET, .handler = h_wifiscan }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/api/swarm/add", .method = HTTP_POST, .handler = h_swarm_add }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
+        { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/history", .method = HTTP_GET, .handler = h_history }, { .uri = "/api/wifi/scan", .method = HTTP_GET, .handler = h_wifiscan }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/api/swarm/add", .method = HTTP_POST, .handler = h_swarm_ip }, { .uri = "/api/swarm/forget", .method = HTTP_POST, .handler = h_swarm_ip }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
     camera_register_http(s);
 #ifdef CONFIG_BOARD_HAS_CAMERA
