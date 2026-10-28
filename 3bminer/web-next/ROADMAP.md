@@ -27,3 +27,15 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
 - microSD: video recording (MJPEG AVI, by schedule or on motion), a file list with download and delete on the Camera tab.
+## Remote access (since 0.6.1 the board answers LAN and localhost pages only)
+- Options, roughly from the least firmware work:
+  - A Tailscale subnet router on an always-on box on the LAN: the boards' subnet appears on the tailnet, the board's own page
+    works from anywhere as it is (same origin). No firmware change; the first thing to try.
+  - WireGuard in the firmware (ports for ESP-IDF exist): the board dials a WireGuard server itself. Tailscale has no ESP32
+    client, so not a tailnet member directly. Costs RAM and a key per board.
+  - An access token: set in Settings, sent as a header; with it the board also answers pages from outside the LAN. The board
+    speaks plain HTTP, so through a port forward the token travels in clear: only behind a TLS proxy or a tunnel.
+  - A relay through the pool: the board keeps one outbound connection to pool.bumblebeam.org, which serves its dashboard behind
+    a login (no port forward, works behind NAT); the biggest change, on both sides.
+- A proper refusal: instead of the bare "cross-site request refused", a short page in the site's style saying the board is
+  reachable from its own network only and how to get remote access (the chosen option above).
