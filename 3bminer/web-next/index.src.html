@@ -41,13 +41,10 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
 .msg{font:12px var(--mono);color:var(--y)}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
 .view{display:none}.view.on{display:block}
-.scr{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}.scr figure{margin:0}.scr figcaption{font:11px var(--mono);color:var(--m);margin-top:6px}
-canvas{zoom:1.25;border-radius:6px;box-shadow:0 0 0 6px #111,0 0 0 7px #333;image-rendering:pixelated}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs .btn.on{background:var(--ad)}
 footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
 </style></head><body><div class=w>
 <header><a class=brand href="#/">{{LOGO}}<span><b>3B</b>Miner <em id=host></em></span></a>
-<nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a><a href="#/display" data-v=display>Display</a></nav>
+<nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
 <span id=st class="pill bad">offline</span></header>
 
 <section class=view id=v-dash>
@@ -114,16 +111,9 @@ footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
-<section class=view id=v-display>
-<div class=p><div class=k>Screens for boards with a display</div><p class=hint>A preview drawn from the live data: the layout a TFT version of the firmware would show. Tap a screen to cycle pages, as the button on the board would.</p>
-<div class=tabs id=d-tabs><button class="btn on" data-s=0>Miner</button><button class=btn data-s=1>Network</button><button class=btn data-s=2>Clock</button></div>
-<div class=scr><figure><canvas id=c1 width=240 height=240></canvas><figcaption>1.54" 240x240 (NMMiner board)</figcaption></figure>
-<figure><canvas id=c2 width=320 height=170></canvas><figcaption>1.9" 320x170 (T-Display S3)</figcaption></figure>
-<figure><canvas id=c3 width=320 height=240></canvas><figcaption>2.8" 320x240 (ESP32-2432S028 "CYD")</figcaption></figure></div></div>
-</section>
 <footer>open firmware &middot; NMMiner-compatible API &middot; <a href="https://bumblebeam.org">bumblebeam.org</a></footer></div>
 <script>
-const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.1.16'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
+const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.228'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={},T0=Date.now(),HS=0,HN=0;
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+'T':v>=1e9?(v/1e9).toFixed(d)+'G':v>=1e6?(v/1e6).toFixed(d)+'M':v>=1e3?(v/1e3).toFixed(d)+'K':(+v).toPrecision(4).replace(/\.?0+$/,'');
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
@@ -133,7 +123,7 @@ const RR=['?','power on','reset pin','software','crash','int watchdog','task wat
 const txt=(i,t)=>{const e=$(i);if(e)e.textContent=t},htm=(i,t)=>{const e=$(i);if(e)e.innerHTML=t};
 // ---- router
 function route(){const v=(location.hash.replace('#/','')||'dash');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
-if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan();if(v=='display')draw()}
+if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
 addEventListener('hashchange',route);
 // ---- dashboard
 function spark(){const n=H.length;if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
@@ -152,7 +142,7 @@ txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',m.lastDiff);txt('sph',
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',s.lastReject||'-');txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
 txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');txt('rr',RR[m.resetReason]||'-');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
-H.push(k);if(H.length>200)H.shift();spark();odds();if(location.hash=='#/display')draw()}catch(e){txt('st','offline');$('st').className='pill bad'}}
+H.push(k);if(H.length>200)H.shift();spark();odds()}catch(e){txt('st','offline');$('st').className='pill bad'}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
 const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
@@ -196,26 +186,5 @@ window.swRst=ip=>{if(confirm('Restart '+ip+'?'))fetch('http://'+ip+'/api/system/
 $('sw-go').onclick=swScan;$('sw-addb').onclick=()=>{const ip=$('sw-add').value.trim();if(ip)swPoll(ip)};
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
 setInterval(()=>{if(location.hash=='#/swarm')for(const ip of SW.keys())swPoll(ip)},15000);
-// ---- display previews (canvas): the layouts a TFT build would draw
-let scr=0;$('d-tabs').onclick=e=>{const s=e.target.dataset.s;if(s==null)return;scr=+s;[...$('d-tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.s==s));draw()};
-document.querySelectorAll('canvas').forEach(c=>c.onclick=()=>$('d-tabs').children[(scr+1)%3].click());
-function draw(){for(const id of['c1','c2','c3'])paint($(id))}
-function paint(c){const x=c.getContext('2d'),W=c.width,Hh=c.height,u=W/Hh>1.6?Hh/150:Math.min(W/240,Hh/220),M=D&&D.miner,F=(s,w=700)=>w+' '+Math.round(s*u)+'px ui-monospace,Menlo,Consolas,monospace';
-const g=x.createLinearGradient(0,0,0,Hh);g.addColorStop(0,'#031d35');g.addColorStop(1,'#0a5a80');x.fillStyle=g;x.fillRect(0,0,W,Hh);
-const T=(t,X,Y,s,col='#fff',al='left',w=700)=>{x.font=F(s,w);x.fillStyle=col;x.textAlign=al;x.fillText(t,X,Y)};
-// header: hex mark + title + status dot
-x.fillStyle='#00c8ee';hex(x,14*u,14*u,9*u);T(['MINER','NETWORK','CLOCK'][scr],28*u,19*u,12,'#fff');x.fillStyle=D&&D.stratum&&D.stratum.connected?'#00f6d2':'#f25f5b';x.beginPath();x.arc(W-12*u,14*u,4*u,0,7);x.fill();
-const k=M?M.hashRate*1e6:0,wide=W/Hh>1.6;
-if(scr==0){T(k?k.toFixed(1):'-',wide?12*u:W/2,wide?66*u:84*u,wide?44:46,'#00f6d2',wide?'left':'center');T('KH/s',wide?12*u:W/2,wide?82*u:104*u,12,'rgba(255,255,255,.55)',wide?'left':'center',400);
-const sx=wide?W*.52:10*u,sw=wide?W*.45:W-20*u,sy=wide?32*u:118*u,sh=wide?52*u:34*u;sparkC(x,sx,sy,sw,sh);
-const rows=[['SHARES',M?M.sAccepted+' / '+M.sRejected:'-'],['BEST',M?M.bestDiffSession:'-'],['UPTIME',M?ut(M.uptimeSeconds):'-'],['POOL DIFF',M?M.poolDiff:'-']];
-const y0=wide?104*u:170*u,cw=wide?W/4:W/2;rows.forEach((r,i)=>{const cx=(wide?i:i%2)*cw+10*u,cy=y0+(wide?0:(i>>1)*32*u);T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(String(r[1]),cx,cy+13*u,12,'#fff')})}
-if(scr==1){const rows=[['BLOCK',N.h?N.h.toLocaleString('en'):'-','#fff'],['BTC',N.p?'$'+N.p.toLocaleString('en'):'-','#f4ce4a'],['NET DIFF',M?M.networkDiff:'-','#fff'],['FEES',N.f?N.f.fastestFee+' / '+N.f.hourFee+' sat/vB':'-','#fff'],['HALVING',N.h?((Math.floor(N.h/210000)+1)*210000-N.h).toLocaleString('en')+' blocks':'-','#00f6d2']];
-const per=wide?2:1,lh=(Hh-40*u)/Math.ceil(rows.length/per);rows.forEach((r,i)=>{const cx=(i%per)*(W/per)+10*u,cy=36*u+Math.floor(i/per)*lh+12*u;T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(r[1],cx,cy+(wide?18:20)*u,wide?15:17,r[2])})}
-if(scr==2){const d=new Date(),hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');T(hh+':'+mm,W/2,Hh*.5+10*u,wide?70:64,'#fff','center');
-T(d.toDateString().toUpperCase(),W/2,Hh*.5+32*u,10,'rgba(255,255,255,.55)','center',400);T((k?k.toFixed(0):'-')+' KH/s',12*u,Hh-14*u,13,'#00f6d2');T(N.p?'$'+Math.round(N.p).toLocaleString('en'):'',W-12*u,Hh-14*u,13,'#f4ce4a','right');if(N.h)T('#'+N.h,W/2,Hh-14*u,11,'rgba(255,255,255,.7)','center',400)}}
-function hex(x,cx,cy,r){x.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2;x.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}x.closePath();x.fill()}
-function sparkC(x,X,Y,W,Hh){const n=H.length;x.strokeStyle='rgba(255,255,255,.08)';x.strokeRect(X,Y,W,Hh);if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99;x.beginPath();H.forEach((v,i)=>{const px=X+i*W/(n-1),py=Y+Hh-(v-mn)/(mx-mn||1)*Hh;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#00f6d2';x.lineWidth=1.5;x.stroke()}
-setInterval(()=>{if(location.hash=='#/display'&&scr==2)draw()},10000);
 route();tick();setInterval(tick,3000);net();setInterval(net,120000);
 </script></body></html>

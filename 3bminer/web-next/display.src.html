@@ -1,0 +1,87 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>3BMiner displays</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+:root{--a:#00f6d2;--ad:rgba(0,246,210,.18);--y:#f4ce4a;--r:#f25f5b;--bl:#0bccf7;--m:rgba(255,255,255,.5);--td:rgba(255,255,255,.8);--b:rgba(255,255,255,.07);--s:rgba(255,255,255,.04);--f:#193b55;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{background:#0a5a80;overflow-y:scroll}
+body{margin:0;min-height:100vh;color:#fff;font:14px -apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#031d35,#043a5b 55%,#0a5a80) fixed}
+a{color:var(--a);text-decoration:none}
+.w{max-width:1100px;margin:0 auto;padding:0 16px 24px}
+header{display:flex;align-items:center;flex-wrap:wrap;gap:0 18px;min-height:64px}
+.brand{display:flex;align-items:center;gap:11px;color:#fff;font-weight:700;font-size:19px;white-space:nowrap;min-width:0}
+.brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m);font-size:15px}
+{{LOGOCSS}}
+nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
+nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
+.pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
+.ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}
+@media(max-width:760px){#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}.brand em{display:none}}
+h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 12px}
+.p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
+.k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
+.v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.v small,.sm{font-size:12px;color:var(--m);font-weight:400}
+.hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:40px;color:var(--a)}
+svg.sp{width:100%;height:70px;display:block;margin-top:12px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}
+.g.t{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
+.kv{table-layout:fixed}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
+.sc{overflow-x:auto}th{color:var(--m);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}td.n,th.n{text-align:right}
+tr.me td:first-child{box-shadow:inset 2px 0 var(--a)}
+.bar{height:6px;border-radius:3px;background:var(--b);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0b76ff,#39fff2)}
+form{margin:0}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px 14px}
+label{font:10px var(--mono);color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background:var(--f);border:1px solid var(--b);border-radius:6px;color:#fff;font:13px var(--mono)}input:focus,select:focus{outline:1px solid var(--a)}input:disabled,select:disabled{opacity:.45}
+.hint{font:11px var(--mono);color:var(--m);margin:4px 0 0;text-transform:none;letter-spacing:0}
+.soon{font:700 9px var(--mono);color:var(--y);border:1px solid rgba(244,206,74,.5);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.btn{cursor:pointer;font:700 12px var(--mono);color:var(--a);background:rgba(0,246,210,.06);border:1px solid rgba(0,246,210,.6);border-radius:6px;padding:8px 14px}.btn:hover{background:var(--ad)}
+.btn.gh{color:var(--td);border-color:rgba(255,255,255,.18);background:none}.btn.x{color:var(--r);border-color:rgba(242,95,91,.6);background:none}.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.msg{font:12px var(--mono);color:var(--y)}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
+.view{display:none}.view.on{display:block}
+footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
+.scr{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}.scr figure{margin:0}.scr figcaption{font:11px var(--mono);color:var(--m);margin-top:6px}
+canvas{zoom:1.25;border-radius:6px;box-shadow:0 0 0 6px #111,0 0 0 7px #333;image-rendering:pixelated}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs .btn.on{background:var(--ad)}
+.w{max-width:1200px}
+</style></head><body><div class=w>
+<header><a class=brand href="index.html">{{LOGO}}<span><b>3B</b>Miner <em>display layouts</em></span></a><span id=st class="pill bad" style="margin-left:auto">offline</span></header>
+<p class=hint style="margin:0 0 12px">Review page, not part of the web UI: the screens a firmware build for boards with a display would draw, fed with live data from the miner (<code>?h=&lt;ip&gt;</code>, default 192.168.88.228) and mempool.space.</p>
+<section>
+<div class=p><div class=k>Screens for boards with a display</div><p class=hint>A preview drawn from the live data: the layout a TFT version of the firmware would show. Tap a screen to cycle pages, as the button on the board would.</p>
+<div class=tabs id=d-tabs><button class="btn on" data-s=0>Miner</button><button class=btn data-s=1>Network</button><button class=btn data-s=2>Clock</button></div>
+<div class=scr><figure><canvas id=c1 width=240 height=240></canvas><figcaption>1.54" 240x240 (NMMiner board)</figcaption></figure>
+<figure><canvas id=c2 width=320 height=170></canvas><figcaption>1.9" 320x170 (T-Display S3)</figcaption></figure>
+<figure><canvas id=c3 width=320 height=240></canvas><figcaption>2.8" 320x240 (ESP32-2432S028 "CYD")</figcaption></figure></div></div>
+</section>
+</div><script>
+const Q=new URLSearchParams(location.search),DEV=Q.get('h')||'192.168.88.228',$=i=>document.getElementById(i),H=[];let D=null,N={};
+const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
+async function tick(){try{D=await(await fetch('http://'+DEV+'/api/system/info')).json();H.push(D.miner.hashRate*1e6);if(H.length>200)H.shift();$('st').textContent=D.identity.hostName;$('st').className='pill ok';draw()}catch(e){$('st').textContent='offline';$('st').className='pill bad'}}
+async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
+const [h,f,p]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices')]);if(h)N.h=+h;if(f)N.f=f;if(p)N.p=p.USD;draw()}
+// ---- display previews (canvas): the layouts a TFT build would draw
+let scr=0;$('d-tabs').onclick=e=>{const s=e.target.dataset.s;if(s==null)return;scr=+s;[...$('d-tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.s==s));draw()};
+document.querySelectorAll('canvas').forEach(c=>c.onclick=()=>$('d-tabs').children[(scr+1)%3].click());
+function draw(){for(const id of['c1','c2','c3'])paint($(id))}
+function paint(c){const x=c.getContext('2d'),W=c.width,Hh=c.height,u=W/Hh>1.6?Hh/150:Math.min(W/240,Hh/220),M=D&&D.miner,F=(s,w=700)=>w+' '+Math.round(s*u)+'px ui-monospace,Menlo,Consolas,monospace';
+const g=x.createLinearGradient(0,0,0,Hh);g.addColorStop(0,'#031d35');g.addColorStop(1,'#0a5a80');x.fillStyle=g;x.fillRect(0,0,W,Hh);
+const T=(t,X,Y,s,col='#fff',al='left',w=700)=>{x.font=F(s,w);x.fillStyle=col;x.textAlign=al;x.fillText(t,X,Y)};
+// header: hex mark + title + status dot
+x.fillStyle='#00c8ee';hex(x,14*u,14*u,9*u);T(['MINER','NETWORK','CLOCK'][scr],28*u,19*u,12,'#fff');x.fillStyle=D&&D.stratum&&D.stratum.connected?'#00f6d2':'#f25f5b';x.beginPath();x.arc(W-12*u,14*u,4*u,0,7);x.fill();
+const k=M?M.hashRate*1e6:0,wide=W/Hh>1.6;
+if(scr==0){T(k?k.toFixed(1):'-',wide?12*u:W/2,wide?66*u:84*u,wide?44:46,'#00f6d2',wide?'left':'center');T('KH/s',wide?12*u:W/2,wide?82*u:104*u,12,'rgba(255,255,255,.55)',wide?'left':'center',400);
+const sx=wide?W*.52:10*u,sw=wide?W*.45:W-20*u,sy=wide?32*u:118*u,sh=wide?52*u:34*u;sparkC(x,sx,sy,sw,sh);
+const rows=[['SHARES',M?M.sAccepted+' / '+M.sRejected:'-'],['BEST',M?M.bestDiffSession:'-'],['UPTIME',M?ut(M.uptimeSeconds):'-'],['POOL DIFF',M?M.poolDiff:'-']];
+const y0=wide?104*u:170*u,cw=wide?W/4:W/2;rows.forEach((r,i)=>{const cx=(wide?i:i%2)*cw+10*u,cy=y0+(wide?0:(i>>1)*32*u);T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(String(r[1]),cx,cy+13*u,12,'#fff')})}
+if(scr==1){const rows=[['BLOCK',N.h?N.h.toLocaleString('en'):'-','#fff'],['BTC',N.p?'$'+N.p.toLocaleString('en'):'-','#f4ce4a'],['NET DIFF',M?M.networkDiff:'-','#fff'],['FEES',N.f?N.f.fastestFee+' / '+N.f.hourFee+' sat/vB':'-','#fff'],['HALVING',N.h?((Math.floor(N.h/210000)+1)*210000-N.h).toLocaleString('en')+' blocks':'-','#00f6d2']];
+const per=wide?2:1,lh=(Hh-40*u)/Math.ceil(rows.length/per);rows.forEach((r,i)=>{const cx=(i%per)*(W/per)+10*u,cy=36*u+Math.floor(i/per)*lh+12*u;T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(r[1],cx,cy+(wide?18:20)*u,wide?15:17,r[2])})}
+if(scr==2){const d=new Date(),hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');T(hh+':'+mm,W/2,Hh*.5+10*u,wide?70:64,'#fff','center');
+T(d.toDateString().toUpperCase(),W/2,Hh*.5+32*u,10,'rgba(255,255,255,.55)','center',400);T((k?k.toFixed(0):'-')+' KH/s',12*u,Hh-14*u,13,'#00f6d2');T(N.p?'$'+Math.round(N.p).toLocaleString('en'):'',W-12*u,Hh-14*u,13,'#f4ce4a','right');if(N.h)T('#'+N.h,W/2,Hh-14*u,11,'rgba(255,255,255,.7)','center',400)}}
+function hex(x,cx,cy,r){x.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2;x.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}x.closePath();x.fill()}
+function sparkC(x,X,Y,W,Hh){const n=H.length;x.strokeStyle='rgba(255,255,255,.08)';x.strokeRect(X,Y,W,Hh);if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99;x.beginPath();H.forEach((v,i)=>{const px=X+i*W/(n-1),py=Y+Hh-(v-mn)/(mx-mn||1)*Hh;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#00f6d2';x.lineWidth=1.5;x.stroke()}
+setInterval(()=>{if(scr==2)draw()},10000);
+tick();setInterval(tick,3000);net();setInterval(net,120000);
+</script></body></html>

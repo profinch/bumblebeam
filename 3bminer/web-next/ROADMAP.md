@@ -1,14 +1,14 @@
 # Web UI / firmware roadmap (from 2026-10-28)
 
-Preview of the next UI: web-next/index.src.html -> build.py -> Downloads\esp32miner-web-next\index.html (local only, fw 0.5.6 stays on the board).
+Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.html (local only, not flashed yet).
 
 ## Done in the preview (browser side, no firmware change)
-- Menu like the BumbleBeam pool header: Dashboard / Swarm / Settings / Firmware / Display; the status pill sits on the right on phones.
+- Menu like the BumbleBeam pool header: Dashboard / Swarm / Settings / Firmware; the status pill sits on the right on phones.
 - Dashboard: block odds (expected years, 1 in N per day, best diff vs network diff on a log bar), BTC price, block height + halving countdown, fees, next difficulty adjustment (mempool.space, fetched by the browser), average hashrate since the page opened, shares/hour.
 - Swarm: the browser scans the subnet (/probe, then /api/system/info), understands NMMiner and AxeOS (Bitaxe/NerdQaxe) answers, sortable table, totals, restart, remembers addresses in localStorage.
 - Settings: Payout / Pool / Wi-Fi / Device; host:port parsing; fields the firmware lacks are marked "next fw".
 - Firmware: version, kernel, upload with a progress bar, engine check (/api/bench), restart.
-- Display: canvas previews of Miner / Network / Clock screens for 240x240, 320x170, 320x240.
+- Display layouts moved out of the web UI into `display.src.html` -> `display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
 
 ## Needs firmware
 - Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2), time zone.
