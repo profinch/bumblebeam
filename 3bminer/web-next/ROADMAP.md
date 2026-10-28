@@ -11,9 +11,9 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Display layouts moved out of the web UI into `display.src.html` -> `display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
 
 ## Needs firmware
-- Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2). (Time zone: done in 0.6.1.)
+- Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2). (Time zone: done in 0.7.0.)
 - /alive with an on-device subnet scan (as NMMiner) so Swarm works without a browser scan.
-- (Done in 0.6.1: hashrate history on the device, a value a minute for 24 h, `/api/history`.)
+- (Done in 0.7.0: hashrate history on the device, a value a minute for 24 h, `/api/history`.)
 - Logs page: ring buffer of recent log lines at /api/logs.
 - Block height from the coinbase (BIP34) so it shows without internet access from the browser.
 - Serve favicon/page with ETag (the page is ~24 KB gzip since web-next).
@@ -23,11 +23,11 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Draw on core 1 only; measure the effect on the engine first (SPI DMA / bus contention), refresh ~1 Hz.
 
 ## Camera board (ESP32-CAM)
-- Camera tab is in web-next (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). Since 0.6.1 web-next is the firmware's page, /camera included; main/www/camera.html is gone.
+- Camera tab is in web-next (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). Since 0.7.0 web-next is the firmware's page, /camera included; main/www/camera.html is gone.
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
 - microSD: video recording (MJPEG AVI, by schedule or on motion), a file list with download and delete on the Camera tab.
-## Remote access (since 0.6.1 the board answers LAN and localhost pages only)
+## Remote access (since 0.7.0 the board answers LAN and localhost pages only)
 - Options, roughly from the least firmware work:
   - A Tailscale subnet router on an always-on box on the LAN: the boards' subnet appears on the tailnet, the board's own page
     works from anywhere as it is (same origin). No firmware change; the first thing to try.
