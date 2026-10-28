@@ -106,7 +106,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a><a href="/camera" data-v=camera id=nav-cam hidden>Camera</a></nav>
 <span id=st aria-live=polite class="pill idle" title="The page is loading the miner's data">loading</span></header>
 
-<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
+<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks the miner given as <code>?h=&lt;ip&gt;</code> (192.168.88.69 without it).</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
 <div><div class=k><span class=tipped id=havk>Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
@@ -241,7 +241,7 @@ function ddify(sel){const d=document.createElement('div');d.className='dd';d.inn
 sel.hidden=true;sel.after(d);const btn=d.firstChild,list=d.lastChild,lb=sel.closest('label');if(lb){const t=(lb.firstChild&&lb.firstChild.textContent||lb.textContent).trim();btn.setAttribute('aria-label',t);list.setAttribute('aria-label',t)}let items=[],act=-1;
 const mark=i=>{act=i;items.forEach((li,j)=>li.classList.toggle('active',j==i));if(items[i])items[i].scrollIntoView({block:'nearest'})};
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'),lab=o=>'<span class=ddl>'+esc(o.textContent)+'</span>'+(o.dataset.r?'<span class=ddr>'+esc(o.dataset.r)+'</span>':'');
-const sync=()=>{list.innerHTML=[...sel.options].map(o=>'<li role=option data-v="'+o.value.replace(/"/g,'&quot;')+'">'+lab(o)+'</li>').join('');items=[...list.children];
+const sync=()=>{list.innerHTML=[...sel.options].map(o=>'<li role=option data-v="'+he(o.value)+'">'+lab(o)+'</li>').join('');items=[...list.children];
 items.forEach(li=>li.setAttribute('aria-selected',String(li.dataset.v==sel.value)));const o=sel.selectedOptions[0];btn.innerHTML=o?lab(o):'';btn.disabled=sel.disabled};
 const open=()=>{if(btn.disabled)return;list.hidden=false;d.classList.add('open');btn.setAttribute('aria-expanded','true');mark(Math.max(0,items.findIndex(li=>li.dataset.v==sel.value)))};
 const close=(f=1)=>{list.hidden=true;d.classList.remove('open');btn.setAttribute('aria-expanded','false');if(f)btn.focus()};
@@ -271,8 +271,9 @@ htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>
 htm('odn','expected time to find a block<br>one block in '+fx(1/pday,1).replace(' ','')+' daily');
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
-let lastOk=0,busy=0;
+let lastOk=0,busy=0,BUILD=null;
 async function tick(){if(busy)return 1;try{const ac=new AbortController(),to=setTimeout(()=>ac.abort(),5000);const d=await(await fetch(B+'/api/system/info',{signal:ac.signal})).json();clearTimeout(to);const m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;lastOk=Date.now();swSelf(d);
+if(!LOCAL&&d.identity.build){if(BUILD&&BUILD!=d.identity.build)return location.reload();BUILD=d.identity.build}   // updated firmware: its page, not the cached one
 status(d.identity.mining===false?'off':s.connected?'mining':'nopool');
 htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
 const AVS={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a sample a minute), or since it started if that is shorter'],
@@ -293,7 +294,7 @@ if(view()=='settings'&&!cfgLoaded)loadCfg();
 H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){if(Date.now()-(lastOk||T0)>=5000)status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);if(!r.ok)return null;return j?await r.json():await r.text()}catch(e){return null}};
-const [h,f,p,da,hr]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment'),g('/v1/mining/hashrate/3d')]);
+const [h,f,p,da,hr]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment'),N.diff||(D&&pd(D.miner.networkDiff))?null:g('/v1/mining/hashrate/3d')]);
 if(hr&&hr.currentDifficulty)N.diff=hr.currentDifficulty;   // block chance before the pool's first job
 if(+h>0){N.h=+h;txt('bh',N.h.toLocaleString('en'));const left=(Math.floor(N.h/210000)+1)*210000-N.h;htm('bhn','halving in '+left.toLocaleString('en')+' blocks<br>~'+(left/144).toFixed(0)+' days')}
 if(f&&f.fastestFee!=null){htm('fe',he(f.fastestFee)+' <small>/ '+he(f.hourFee)+' / '+he(f.economyFee)+'</small>');txt('fen','next block / 1 hour / economy')}
@@ -330,13 +331,15 @@ setInterval(boardClock,1000);
 function tzExample(){const sel=$('tzsel');if(!sel)return;const z=TZ.find(z=>z[1]==sel.value),t=CK&&CK.t?new Date((CK.t+(Date.now()-CK.at)/1000)*1000):new Date();try{txt('tzx',clock(t,z?z[0]:'UTC')+', '+t.toLocaleDateString('en-GB',{timeZone:z?z[0]:'UTC',day:'numeric',month:'short',year:'numeric'}))}catch(e){}}
 setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample();if(e.target.id=='clk'&&LS)txt('sw-scan','last scan '+clock(LS))});
 // ---- settings
-let cfgLoaded=0;
-function loadCfg(say){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const t=$('tzsel'),here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);if(c.tz&&!TZ.some(z=>z[1]==c.tz))t.add(new Option(c.tz,c.tz));t.value=c.tz||(z?z[1]:'UTC0')}if(say)fade('cf-m','settings reloaded from the board');else txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>fade('cf-m','could not read the settings from the board'))}
+let cfgLoaded=0,cfgBusy=0;
+function loadCfg(say){if(cfgBusy)return;cfgBusy=1;fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const t=$('tzsel'),here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);if(c.tz&&!TZ.some(z=>z[1]==c.tz))t.add(new Option(c.tz,c.tz));t.value=c.tz||(z?z[1]:'UTC0')}if(say)fade('cf-m','settings reloaded from the board');else txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>fade('cf-m','could not read the settings from the board')).finally(()=>cfgBusy=0)}
 $('cf-rl').onclick=()=>loadCfg(1);
 try{$('clk').value=localStorage.getItem('clock')||'24'}catch(e){}$('clk').onchange=e=>{try{localStorage.setItem('clock',e.target.value)}catch(x){}};
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
 $('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker'])o[n]=f[n].value.trim();for(const n of['ssid','bssid','tz'])o[n]=f[n].value;o.mining=f.mining.value=='true';if(f.pass.value!=='')o.pass=f.pass.value;
+if(!cfgLoaded){txt('cf-m','the settings are not read from the board yet: Reload');return}
+if(!o.ssid.trim()){txt('cf-m','a Wi-Fi network name is needed');return}   // the board would be off the network until a USB flash
 if(/["\\]/.test(o.wallet+o.worker+o.ssid+f.url.value)){txt('cf-m','quotes and backslashes are not allowed');return}
 if(f.suggest.value!==''){const v=parseFloat(f.suggest.value.replace(',','.'));if(!(v>0)){txt('cf-m','start difficulty must be a number above 0');return}o.suggest=v}const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!o.wallet){txt('cf-m','a Bitcoin address is needed');return}
@@ -364,12 +367,11 @@ const FORGET=864e5;   // a miner silent for 24 h leaves the list
 function swSave(){try{localStorage.setItem(SK,JSON.stringify(Object.fromEntries([...SW.values()].map(o=>[o.ip,o.seen||0]))))}catch(e){}}
 // this board is in the swarm from the first answer, no scan needed; the saved ones come back (offline until they answer)
 function swSelf(d){if(FG.has(DEV))return;const o=mapInfo(DEV,d);o.seen=Date.now();SW.set(DEV,o);swSave();if(view()=='swarm')swDraw()}
-try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});if(ip!=DEV)swPoll(ip)}}catch(e){}
+try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]})}}catch(e){}
 let scanning=0;
 async function swScan(){if(scanning)return;const m3=$('sw-net').value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\.\d*)?$/);if(!m3||m3.slice(1,4).some(x=>+x>255)){fade('sw-prog','subnet like 192.168.88.0');return}
 scanning=1;$('sw-go').disabled=1;swScanned=1;FG.clear();const net=m3.slice(1,4).join('.');
-try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));   // older lists: plain addresses
-for(const ip in k){if(Date.now()-k[ip]>FORGET)continue;if(!SW.has(ip))SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});swPoll(ip)}swSave();swDraw()}catch(e){}
+for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw();   // the known ones first
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
 const worker=async()=>{while(q.length){const ip=q.shift();fade('sw-prog','network scanning... '+ip,1);await swProbe(ip)}};
 await Promise.all(Array.from({length:24},worker));scanning=0;$('sw-go').disabled=0;LS=new Date();txt('sw-scan','last scan '+clock(LS));fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 3 s
@@ -392,7 +394,7 @@ if(SW.has(ip)&&!SW.get(ip).off){fade('sw-am','this miner already added');return}
 fade('sw-am','asking '+ip+'…',1);fade('sw-am',await swPoll(ip)?'added '+ip+' miner':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
 $('sw-addb').onclick=swAdd;$('sw-add').onkeydown=e=>{if(e.key=='Enter')swAdd()};$('sw-add').oninput=()=>fade('sw-am','',1);
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
-setInterval(()=>{if(view()=='swarm')for(const ip of SW.keys())swPoll(ip)},15000);
+setInterval(()=>{if(view()=='swarm'&&!document.hidden)for(const ip of SW.keys())if(ip!=DEV)swPoll(ip)},15000);
 // tooltips as on the pool site (tips.js): title -> data-tip, shown on hover, focus and tap
 (()=>{const t=document.createElement('div');t.className='bb-tip';let cur=null,tm=0;const own=n=>{for(;n&&n.nodeType==1;n=n.parentNode)if(n.getAttribute('title')||n.hasAttribute('data-tip'))return n;return null};
 const tx=e=>{const v=e.getAttribute('title');if(v){e.setAttribute('data-tip',v);e.removeAttribute('title')}return e.getAttribute('data-tip')||''};
@@ -427,7 +429,8 @@ async function boot(){if(!await tick()){tries++;txt('boot-m','No answer from the
 try{await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500))])}catch(e){}spark();
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
 document.body.classList.remove('boot');status(realK);
-(async function loop(){await tick();setTimeout(loop,3000)})();setInterval(net,120000);setInterval(hist,60000)}
+(async function loop(){if(!document.hidden)await tick();setTimeout(loop,3000)})();setInterval(()=>document.hidden||net(),120000);setInterval(()=>document.hidden||hist(),60000)}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cvStop();else if(!document.body.classList.contains('boot')){tick();hist()}});
 // ---- camera (camera boards): the CameraWebServer API of the firmware - /status, /control, /capture, :81/stream, /api/camera/save
 const CS='http://'+(LOCAL?DEV:location.hostname)+':81/stream';
 const FS=[['UXGA 1600x1200',15],['SXGA 1280x1024',14],['HD 1280x720',13],['XGA 1024x768',12],['SVGA 800x600',11],['VGA 640x480',10],['HVGA 480x320',9],['CIF 400x296',8],['QVGA 320x240',6],['240x240',5],['HQVGA 240x176',4],['QCIF 176x144',3],['QQVGA 160x120',1],['96x96',0]];
@@ -448,10 +451,11 @@ $('sd-fmt').onclick=async()=>{if(!await ask('Format the memory card','Everything
 function cvLoad(say){sdLoad();$('cv-l1').href=B+'/capture';$('cv-l3').href=B+'/bmp';$('cv-l4').href=B+'/status';$('cv-l2').href=CS;
 fetch(B+'/status').then(r=>r.json()).then(c=>{cvLoaded=1;for(const v in c){const e=$('cv-c-'+v);if(!e)continue;if(e.type=='checkbox')e.checked=!!c[v];else e.value=c[v];if(e.type=='range')txt('cv-o-'+v,c[v])}$('cv-xclk').value=c.xclk;cvDep();ddsync();
 txt('cv-info',c.streaming?'streaming, '+c.fps+' fps':'');if(say)fade('cv-m','camera settings reloaded')}).catch(()=>fade('cv-m','camera not reachable'))}
+function cvInfo(){fetch(B+'/status').then(r=>r.json()).then(c=>txt('cv-info',c.streaming?'streaming, '+c.fps+' fps':'')).catch(()=>{})}
 function cvStop(){if(!cvOn)return;$('cv-view').innerHTML='<span>stream stopped</span>';cvOn=0;txt('cv-strm','Start stream');txt('cv-info','')}
 $('cv-still').onclick=()=>{cvStop();fetch(B+'/capture?_='+Date.now()).then(r=>r.blob()).then(b=>{if(cvUrl)URL.revokeObjectURL(cvUrl);cvUrl=URL.createObjectURL(b);$('cv-view').innerHTML='<img alt="still" src="'+cvUrl+'">';$('cv-save').href=cvUrl;$('cv-save').hidden=false;txt('cv-info',(b.size/1024).toFixed(0)+' KB')}).catch(()=>fade('cv-m','no picture from the camera'))};
-$('cv-strm').onclick=()=>{if(cvOn)return cvStop();$('cv-view').innerHTML='<img alt="stream" src="'+CS+'">';cvOn=1;txt('cv-strm','Stop stream');$('cv-save').hidden=true;setTimeout(()=>cvOn&&cvLoad(),2500)};
-setInterval(()=>{if(cvOn)cvLoad()},5000);
+$('cv-strm').onclick=()=>{if(cvOn)return cvStop();$('cv-view').innerHTML='<img alt="stream" src="'+CS+'">';cvOn=1;txt('cv-strm','Stop stream');$('cv-save').hidden=true;setTimeout(()=>cvOn&&cvInfo(),2500)};
+setInterval(()=>{if(cvOn)cvInfo()},5000);
 $('cv-sv').onclick=()=>fetch(B+'/api/camera/save',{method:'POST'}).then(r=>r.json()).then(j=>fade('cv-m',j.status=='ok'?'saved on the board':'save failed')).catch(()=>fade('cv-m','save failed'));
 $('cv-rl').onclick=()=>cvLoad(1);
 $('cv-xs').onclick=()=>fetch(B+'/xclk?xclk='+$('cv-xclk').value).then(r=>fade('cv-rm',r.ok?'xclk set':'rejected'));
