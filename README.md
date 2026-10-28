@@ -24,6 +24,7 @@ oracle and test vectors.
 | [`docs/deploy.md`](docs/deploy.md) | How to put the node, wallet-api, PostgreSQL and the pool on a server: systemd units in [`pool/deploy`](pool/deploy), or the Docker stack in [`deploy/docker`](deploy/docker) | guide |
 | [`pool/server`](pool/server) | The pool: stratum proxy to our node, oracle share checks, PPLNS and solo accounting, payouts, HTTP API (Rust) | **v0 running on a test server, mainnet** |
 | [`miner/`](miner) | CPU miner (Rust): the open reference solver, 100x the core's, every solution oracle-checked, Beam stratum over TLS. 0.5–0.75 Sol/s on an M5 Pro, so a dev tool and a way to mine without a GPU, not an earner. For GPUs use [MXBM](https://git.maxnflaxl.dev/maxnflaxl/MXBM), verified against this pool (RTX 3090: 52 Sol/s, 0 rejects) | **v0** |
+| [`3bminer/`](3bminer) | 3BMiner: open firmware for ESP32 boards that mines Bitcoin solo on the chip's SHA-256 engine (~0.98 MH/s on an ESP32-WROOM-32, NMMiner-compatible API) and keeps the board's own job, such as the ESP32-CAM's camera. One source, a build per board | **v0.6** |
 
 ## Numbers that set the bar
 

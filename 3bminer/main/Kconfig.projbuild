@@ -1,0 +1,33 @@
+menu "3BMiner board"
+choice MINER_BOARD
+    prompt "Board"
+    default BOARD_DEVKIT
+config BOARD_DEVKIT
+    bool "ESP32-WROOM-32 devkit (no peripherals)"
+config BOARD_ESP32CAM
+    bool "AI-Thinker ESP32-CAM (OV2640, PSRAM, flash LED on GPIO4)"
+    select BOARD_HAS_CAMERA
+endchoice
+config BOARD_HAS_CAMERA
+    bool
+config BOARD_ID
+    string
+    default "devkit" if BOARD_DEVKIT
+    default "esp32cam" if BOARD_ESP32CAM
+config BOARD_NAME
+    string
+    default "esp32-wroom-32" if BOARD_DEVKIT
+    default "esp32-cam" if BOARD_ESP32CAM
+config BOARD_HOST_PREFIX
+    string
+    default "3BMiner" if BOARD_DEVKIT
+    default "3BMiner-Cam" if BOARD_ESP32CAM
+config BOARD_DEFAULT_WORKER
+    string
+    default "esp32" if BOARD_DEVKIT
+    default "esp32cam" if BOARD_ESP32CAM
+config BOARD_MINING_DEFAULT
+    bool "Mine by default (until changed in the settings)"
+    default y if BOARD_DEVKIT
+    default n if BOARD_ESP32CAM
+endmenu
