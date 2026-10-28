@@ -2,7 +2,7 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
-## 0.8.0 (not released yet)
+## 0.8.0 (2026-10-28)
 - Hashrates in KH/s up to 10 MH/s: a board's total read 1.00 MH/s next to its 971 / 32 KH/s parts (two decimals of 1.003).
 - Swarm: Scan network asks the board to scan the subnet (`POST /api/swarm/scan {"ip":"a.b.c.0"}`, `/alive` says
   `"scanning"`): 8 connects at a time, 0.8 s each, ~31 s for a /24, the found miners in its list. The browser scan missed
@@ -12,10 +12,11 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Engine waits 24/35/22/4/8 instead of 25/36/23/6/8: 246.75 cycles a nonce instead of 251.77 (+2%, ~972 KH/s from the
   engine), as few engine errors over ~100M nonces each (2 against 4); 23 for the first wait gives 10-16 errors in 16M.
   On the ESP32-CAM the same (5 against 11 errors in 64M); a running stream adds ~10-20 errors per 16M with either timing.
-- Swarm: a miner on another subnet was found only by the second network scan (its first answer to the router's ARP came
-  the 1.5 s probe timeout; 3 s now, 32 at a time (see above for the real cause and fix). The board's own search waits 0.8 s.
+- Swarm, browser scan (boards without the scan above): probe timeout 3 s instead of 1.5, 32 addresses at a time. The board's
+  own search waits 0.8 s for a connect (a peer on Wi-Fi power save answers ARP late).
 - Swarm: Forget asks first, and the board drops the miner too (`POST /api/swarm/forget`); before, it came back from the
   board's list on the next page load.
+- Loading screen: "Trying again every 3 seconds." on a line of its own; the hint speaks of a preview, not a file.
 - The web server's health check restarts after 5 misses in a row (2.5 minutes) instead of 4, and waits while a long request holds it (engine check, card format): back-to-back engine
   checks no longer read as a hung server and restart the board.
 
@@ -81,6 +82,8 @@ Developed as 0.6.1 (the images flashed during the day report that number).
 - Fixed: Settings saved before the board's Wi-Fi scan answered stored an empty AP lock (with two APs of one name the
   camera then joined the other one and seemed gone); a save before the settings were read, or without a Wi-Fi name, is
   refused; the stream's 5 s refresh no longer resets the controls; a hidden tab polls nothing and drops the stream.
+- Dashboard: the pool difficulty card says "network 140.58 T" and, on the next line, "next adjustment +6.2%" (with a tip
+  on what the adjustment is); the block chance card "expected time"; the Device card names the board as ESP32-WROOM-32.
 - Swarm: Board is the hardware (ESP32-WROOM-32, ESP32-CAM), Firmware whose firmware and version (3BMiner v0.7.0,
   NMMiner v2.0.04); versions shown with a v on the page.
 - The AP lock list names MikroTik access points "MikroTik" (the pool's `/api/3bminer/oui` maps its "Routerboard.com"

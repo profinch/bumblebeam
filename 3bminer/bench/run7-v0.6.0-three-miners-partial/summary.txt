@@ -1,0 +1,19 @@
+Comparison over 5.4 h, 2026-10-28 17:25:48 UTC end
+
+metric                               nmminer          devkit        esp32cam
+----------------------------------------------------------------------------
+hashrate, device avg KH/s               1036           981.5           980.8
+hashrate, device min KH/s               1016             976             975
+hashrate, device max KH/s               1046             982             982
+hashrate, pool est. KH/s                1029            1005           996.4
+shares accepted                         2057            1966            1972
+shares rejected                           28              23              29
+accepted per hour                      380.9           364.1           365.2
+best diff (device)                     31.37            2630            9.42
+best diff (pool)                       31.37            2634            9.42
+reboots                                    0               0               0
+samples unreachable                        0               0               0
+samples                                  324             324             324
+
+ratio devkit/nmminer: device 0.947, pool 0.977, shares 0.956
+ratio esp32cam/nmminer: device 0.946, pool 0.969, shares 0.959
