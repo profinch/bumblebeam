@@ -419,7 +419,7 @@
     return `
       <div class="page-head"><h1 class="page-title">Beam Mining Pool</h1></div>
       <div class="tiles">
-        ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '', 'accent')}
+        ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '')}
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
         ${tile('Blocks 24h', int(stats.blocks24h), lines(expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)} blocks` : '', stats.effort24h != null ? `${pct(stats.effort24h, 0)} average effort` : ''))}
         ${tile('Last block', ago(stats.lastBlockFound), last ? lines(`block height ${int(last.height)}`, last.finder ? `worker ${esc(last.finder)}` : '') : '')}
@@ -460,7 +460,7 @@
     const next = BB.nextRewardChange(net && net.height);
     return `<div class="page-head"><h1 class="page-title">Network</h1></div>
       <div class="tiles">
-        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${hr(net && net.hashrate)}</span>`, '', 'accent')}
+        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${hr(net && net.hashrate)}</span>`)}
         ${tile('Difficulty', net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M` : '—', 'solutions per block, expected')}
         ${tile('Block reward', beam(BB.blockReward(net && net.height), 1), `${beam(next.reward, 1)} from height ${int(next.height)}`)}
         ${tile('Blocks 24h', int(net && net.blocks24h), net && net.avgBlock ? `avg block ${fix(net.avgBlock, 1)}s` : '')}
@@ -684,7 +684,7 @@
       <div class="panel addr"><span>${esc(m.address || address)}</span><button class="btn small" data-copy="${esc(m.address || address)}">copy</button></div>
       ${m.payoutFailures ? `<div class="panel" style="border-color:rgba(244,206,74,.45)"><b>Your payouts are not getting through</b> <span class="dim">— ${int(m.payoutFailures.count)} in a row${m.payoutFailures.reason ? `, the wallet says: ${esc(m.payoutFailures.reason)}` : ''}${m.payoutFailures.nextTryAt ? `; next try ${m.payoutFailures.nextTryAt > Date.now() / 1000 ? 'in about ' + esc(String(Math.max(1, Math.round((m.payoutFailures.nextTryAt - Date.now() / 1000) / 3600)))) + ' h' : 'with the next payout run'}` : ''}.</span><br><span class="dim">A regular address is paid only while its wallet is online. Keep the wallet running, or mine to an offline (or public offline) address, which is paid without the wallet being online. Your balance stays yours meanwhile.</span></div>` : ''}
       <div class="tiles">
-        ${tile(`Hashrate${modeNote}`, hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`, 'accent')}
+        ${tile(`Hashrate${modeNote}`, hr(m.hashrate), `24h avg ${hr(m.hashrate24h)}`)}
         ${m.coinbase ? (m.balance < 0 ? tile('Advance', beam(-m.balance), 'a block that paid you was orphaned; the next blocks work it off') : tile('Unpaid', beam(m.balance), 'goes into the next blocks the pool finds')) : tile('Unpaid', beam(m.balance), toPayout != null ? `owed by the pool · ${pct(toPayout, 0)} of the ${beam(stats.minPayout, 2)} threshold` : 'owed by the pool')}
         ${tile('Immature', beam(m.immature), 'blocks still confirming')}
         ${tile('Paid', beam(m.paid, 2), m.coinbase ? 'in the blocks themselves, to your own outputs' : (m.sending ? `confirmed; ${beam(m.sending, 2)} more sent, waiting for your wallet` : undefined))}
