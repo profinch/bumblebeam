@@ -144,7 +144,8 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <form id=cf>
 <div class=p><h2 style="margin-top:0">Payout</h2><div class=fg>
 <label>Bitcoin address<input name=wallet spellcheck=false></label>
-<label>Worker name<input name=worker placeholder="esp32"><p class=hint>shown by the pool after the address</p></label></div></div>
+<label>Worker name<input name=worker placeholder="esp32"><p class=hint>shown by the pool after the address</p></label>
+<label><span class=tipped title="Off: the board does not connect to the pool and both cores are left to the rest, the camera on a camera board. The settings stay; switch it back on any time. Takes effect after the restart">Mining</span><select name=mining><option value=true>on<option value=false>off</select></label></div></div>
 <div class=p><h2 style="margin-top:0">Pool</h2><div class=fg>
 <label>Stratum server<input name=url placeholder="pool.example.com:3333" spellcheck=false></label>
 <label>Pool password <span class=soon>next fw</span><input name=ppass disabled placeholder="x"></label>
@@ -333,7 +334,7 @@ $('cf-rl').onclick=()=>loadCfg(1);
 try{$('clk').value=localStorage.getItem('clock')||'24'}catch(e){}$('clk').onchange=e=>{try{localStorage.setItem('clock',e.target.value)}catch(x){}};
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
-$('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker'])o[n]=f[n].value.trim();for(const n of['ssid','bssid','tz'])o[n]=f[n].value;if(f.pass.value!=='')o.pass=f.pass.value;
+$('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker'])o[n]=f[n].value.trim();for(const n of['ssid','bssid','tz'])o[n]=f[n].value;o.mining=f.mining.value=='true';if(f.pass.value!=='')o.pass=f.pass.value;
 if(/["\\]/.test(o.wallet+o.worker+o.ssid+f.url.value)){txt('cf-m','quotes and backslashes are not allowed');return}
 if(f.suggest.value!==''){const v=parseFloat(f.suggest.value.replace(',','.'));if(!(v>0)){txt('cf-m','start difficulty must be a number above 0');return}o.suggest=v}const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!o.wallet){txt('cf-m','a Bitcoin address is needed');return}
