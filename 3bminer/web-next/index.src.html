@@ -193,7 +193,7 @@ let d='M0 '+y(0).toFixed(1);if(pad>0)d+='L'+((pad-1)*sx).toFixed(1)+' '+y(0).toF
 $('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z');txt('sp-l',hb?'24h ago':'5 min ago')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
 htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');   // a time: 19.5B years, no space
-htm('odn','expected time to find a block<br>daily chance: 1 in '+fx(1/pday,1));
+htm('odn','expected time to find a block<br>one block in '+fx(1/pday,1).replace(' ','')+' daily');
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 async function tick(){try{const ac=new AbortController(),to=setTimeout(()=>ac.abort(),5000);const d=await(await fetch(B+'/api/system/info',{signal:ac.signal})).json();clearTimeout(to);const m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
