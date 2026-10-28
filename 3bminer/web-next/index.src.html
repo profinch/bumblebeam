@@ -271,7 +271,7 @@ const T0=Date.now();
 // light dots of one size dropped behind it that fade over 0.9 s. Time counts from the first frame (the frame clock is not performance.now everywhere)
 (()=>{const st=$('stage'),bee=$('flybee'),cv=$('trail'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion: reduce)').matches;let dots=[],last=0,t0=null,dpr=1;
 const fit=()=>{dpr=devicePixelRatio||1;cv.width=st.clientWidth*dpr;cv.height=st.clientHeight*dpr};fit();addEventListener('resize',fit);
-function frame(now){if(!document.body.classList.contains('boot'))return;if(t0==null)t0=now;const W=st.clientWidth,H=st.clientHeight,m=34,span=W-2*m,v=Math.max(110,W*.3),u=(((now-t0)/1000*v+span*.3)%span+span)%span;   // inside the stage only; starts a third of the way across
+function frame(now){if(!document.body.classList.contains('boot'))return;if(t0==null)t0=now;const W=st.clientWidth,H=st.clientHeight,m=34,span=W-2*m,v=Math.max(110,W*.3),u=(((now-t0)/1000*v+span*.12)%span+span)%span;   // inside the stage only; the first pass starts at the left, already fully visible
 const x=m+u,fade=Math.min(1,u/(span*.12),(span-u)/(span*.12)),ph=x/W*Math.PI*2,y=H/2-36+14*Math.sin(ph),vy=14*Math.cos(ph)*Math.PI*2/W*v,tilt=Math.max(-.2,Math.min(.2,Math.atan2(vy,v)));const sg=1;
 bee.style.transform=still?'translate('+(W/2-22)+'px,'+(H/2-50)+'px)':'translate('+(x-22)+'px,'+(y-16)+'px) rotate('+tilt+'rad)';bee.style.opacity=still?1:fade.toFixed(3);   // fades out at the right edge, in at the left
 if(u<12)dots=[];   // a new pass from the left: the old trail does not jump across
