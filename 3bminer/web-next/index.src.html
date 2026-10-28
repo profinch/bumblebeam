@@ -208,7 +208,8 @@ let D=null,N={};
 if(LOCAL&&Q.get('h'))try{localStorage.setItem('dev',Q.get('h'))}catch(e){}   // a preview file remembers the miner it was last pointed at
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+' T':v>=1e9?(v/1e9).toFixed(d)+' G':v>=1e6?(v/1e6).toFixed(d)+' M':v>=1e3?(v/1e3).toFixed(d)+' K':(+v).toPrecision(4).replace(/\.?0+$/,'');
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
-const hm=k=>k>=1e6?(k/1e6).toFixed(2)+' GH/s':k>=1e3?(k/1e3).toFixed(2)+' MH/s':k.toFixed(1)+' KH/s';
+// KH/s up to 10 MH/s, so a board's total reads like its engine and software parts (1003.4 KH/s, not 1.00 MH/s)
+const hm=k=>k>=1e7?(k/1e6).toFixed(2)+' GH/s':k>=1e4?(k/1e3).toFixed(2)+' MH/s':k.toFixed(1)+' KH/s';
 // 2.63K -> 2.63 K: a space before the K/M/G/T/P of a difficulty
 const sp=v=>String(v??'-').trim().replace(/(\d)([KMGTPB])$/,'$1 $2');
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
