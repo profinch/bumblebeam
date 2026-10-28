@@ -44,7 +44,9 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .view{display:none}.view.on{display:block}
 .tipped{text-decoration:underline dotted rgba(255,255,255,.35);text-underline-offset:3px;cursor:help}
 .bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
-footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
+footer{padding:10px 0 30px}.foot-copy .fp{white-space:nowrap}
+/* narrower: the third part on its own line (its dot goes), then the second as well */
+@media(max-width:700px){.foot-copy .d2{display:none}.foot-copy .fp:last-child{display:block}}@media(max-width:440px){.foot-copy .d1{display:none}.foot-copy .fp{display:block}}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
 /* below the desktop layout: still one row, the sizes grow with the width from a 360 px phone to 760 px, units back once there is room */
 @media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}
 .hero .big{font-size:clamp(17px,4.2vw,28px);margin-top:6px}.hero>div:not(:first-child) .v{font-size:clamp(12px,2.4vw,16px)!important;margin-top:5px}
@@ -143,7 +145,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
-<footer><p class=foot-copy>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a> &middot; a community PoW miner for Bitcoin (BTC) &middot; open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></p></footer></div>
+<footer><p class=foot-copy><span class=fp>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a></span><span class="fd d1"> &middot; </span><span class=fp>a community PoW miner for Bitcoin (BTC)</span><span class="fd d2"> &middot; </span><span class=fp>open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></span></p></footer></div>
 <script>
 const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.228'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={};
