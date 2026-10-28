@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 static const char *TAG = "stratum";
 stratum_stats_t g_stratum;
 static job_t s_job; static session_t s_sess; static SemaphoreHandle_t s_lock; static QueueHandle_t s_cands;
@@ -46,6 +47,7 @@ static void handle_notify(cJSON *p) {
     j.nbits = strtoul(cJSON_GetArrayItem(p, 6)->valuestring, NULL, 16);
     strncpy(j.ntime_hex, cJSON_GetArrayItem(p, 7)->valuestring, 8); j.ntime = strtoul(j.ntime_hex, NULL, 16);
     j.clean = cJSON_IsTrue(cJSON_GetArrayItem(p, 8));
+    { int ex = j.nbits >> 24; double mant = j.nbits & 0xffffff; if (mant > 0) g_stratum.net_diff = 65535.0 * ldexp(1.0, 208) / (mant * ldexp(1.0, 8 * (ex - 3))); }   // network difficulty from nbits
     if (j.coinb1_len < 0 || j.coinb2_len < 0) return;
     xSemaphoreTake(s_lock, portMAX_DELAY); j.seq = ++s_seqctr; memcpy(&s_job, &j, sizeof j);
     if (j.clean) s_nrecent = 0;

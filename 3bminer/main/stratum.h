@@ -5,7 +5,7 @@
 typedef struct { uint32_t job_seq; uint32_t en2; uint32_t nonce_word; uint32_t w[19]; } candidate_t;
 typedef struct {
     volatile bool connected; volatile double pool_diff; volatile uint32_t accepted, rejected, submitted;
-    volatile double best_session, best_ever, last_share_diff; volatile uint32_t jobs; volatile int64_t last_job_us;
+    volatile double best_session, best_ever, last_share_diff, net_diff; volatile uint32_t jobs; volatile int64_t last_job_us;
     char pool_desc[96]; char user[128];
     volatile uint32_t cand_dropped, stale_dropped, old_job_submits, rej_stale, rej_dup, rej_lowdiff, rej_other; char last_reject[96];
 } stratum_stats_t;
