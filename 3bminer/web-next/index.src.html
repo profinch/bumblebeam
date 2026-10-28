@@ -294,7 +294,7 @@ const now=new Date((CK.t+(Date.now()-CK.at)/1000)*1000),tz=tzName(CK.tz);txt('c-
 txt('c-tz',tz?tz.replace('_',' '):(CK.tz||'UTC'));txt('c-sync',CK.sync?clock(new Date(CK.sync*1000),tz||'UTC')+' ('+ago(CK.sync*1000)+' ago)':'never');txt('c-src',CK.src||'-')}
 setInterval(boardClock,1000);
 function tzExample(){const sel=$('tzsel');if(!sel)return;const z=TZ.find(z=>z[1]==sel.value),t=CK&&CK.t?new Date((CK.t+(Date.now()-CK.at)/1000)*1000):new Date();try{txt('tzx',clock(t,z?z[0]:'UTC')+', '+t.toLocaleDateString('en-GB',{timeZone:z?z[0]:'UTC',day:'numeric',month:'short',year:'numeric'}))}catch(e){}}
-setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample()});
+setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample();if(e.target.id=='clk'&&LS)txt('sw-scan','last scan '+clock(LS))});
 // ---- settings
 let cfgLoaded=0;
 function loadCfg(say){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}if(say)fade('cf-m','settings reloaded from the board');else txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>fade('cf-m','could not read the settings from the board'))}
@@ -314,6 +314,7 @@ $('f-rst').onclick=async()=>{if(await ask('Restart the miner','Settings stay as 
 $('f-bench').onclick=()=>{fade('f-bm','running…',1);$('f-bench').disabled=1;fetch(B+'/api/bench?n=1048576').then(r=>r.json()).then(b=>{txt('f-tim',b.live.join('/')+' - kernel '+b.liveKernel);
 fade('f-bm','');$('f-bm').innerHTML=b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine<br>'+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct');fade5('f-bm')}).catch(()=>fade('f-bm','failed')).finally(()=>$('f-bench').disabled=0)};
 // ---- swarm
+let LS=null;   // when the last scan ended: redrawn when the time format changes
 const SK='swarm-ips';let SW=new Map(),swScanned=0,swSort=null,swDir=-1;
 const COLS=[['host','Miner'],['ip','IP'],['model','Board'],['hr','Hashrate','ct'],['acc','Shares','ct'],['best','Best','n'],['pdiff','Pool diff','n'],['up','Uptime','ct'],['rssi','RSSI','ct'],['heap','Heap','n'],['ver','Firmware','ct'],['seen','Seen','n']];
 $('sw-th').innerHTML=COLS.map(c=>'<th data-k='+c[0]+(c[2]?' class='+c[2]:'')+'>'+c[1]+'</th>').join('')+'<th class=ct style="cursor:default">Manage</th>';
@@ -330,7 +331,7 @@ try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Objec
 for(const ip in k){if(Date.now()-k[ip]>FORGET)continue;if(!SW.has(ip))SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});swPoll(ip)}swSave();swDraw()}catch(e){}
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
 const worker=async()=>{while(q.length){const ip=q.shift();fade('sw-prog','network scanning... '+ip,1);await swProbe(ip)}};
-await Promise.all(Array.from({length:24},worker));txt('sw-scan','last scan '+clock(new Date()));fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 3 s
+await Promise.all(Array.from({length:24},worker));LS=new Date();txt('sw-scan','last scan '+clock(LS));fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 3 s
 function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-hn',a.length==1?'1 miner':a.length+' miners');txt('sw-b',sp(bb.bestS));txt('sw-bn',bb.host||'');
 const ac=a.reduce((s,o)=>s+(o.acc||0),0),rj=a.reduce((s,o)=>s+(o.rej||0),0);htm('sw-s',ac+' <small>/ <span class=r>'+rj+'</span></small>');txt('sw-sr',ac+rj?(100*rj/(ac+rj)).toFixed(2)+'% rejected':'');
 const sk=swSort||'hr',sd=swSort?swDir:-1;const rows=[...SW.values()].sort((x,y)=>{const p=x[sk],q=y[sk];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*sd});
