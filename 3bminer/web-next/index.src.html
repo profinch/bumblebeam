@@ -187,7 +187,6 @@ if(LOCAL)history.pushState(null,'',location.pathname+location.search+(v=='dash'?
 addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
 if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
-addEventListener('hashchange',route);   // old #/ links still work
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
