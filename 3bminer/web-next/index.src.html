@@ -150,7 +150,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><h2 style="margin-top:0">Wi-Fi</h2><div class=fg>
 <label>Network name<input name=ssid></label>
 <label>Password<input name=pass type=password placeholder="unchanged if empty"></label>
-<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
+<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first; the saved one is marked off when it is out of reach">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
 <label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
@@ -277,7 +277,7 @@ $('tzsel').innerHTML=TZ.map(z=>'<option value="'+z[1]+'">'+z[0].replace('_',' ')
 async function apScan(saved){const sel=$('apsel'),keep=saved!=null?saved:sel.value;let aps=[];try{const j=await(await fetch(B+'/api/wifi/scan')).json();aps=j.aps||[]}catch(e){}
 const net=($('cf').elements.ssid.value||'').trim(),mine=aps.filter(a=>!net||a.ssid==net);
 let o='<option value="">any access point</option>'+mine.map(a=>'<option value="'+a.bssid+'">'+a.bssid+', '+(net?'':a.ssid+', ')+'ch '+a.ch+', '+a.rssi+' dBm</option>').join('');
-if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'">'+keep+', not in reach now</option>';sel.innerHTML=o;sel.value=keep||'';ddsync();
+if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'">'+keep+', off</option>';sel.innerHTML=o;sel.value=keep||'';ddsync();
 const macs=[...sel.options].map(x=>x.value).filter(Boolean);if(!macs.length)return;
 try{const v=(await(await fetch('https://pool.bumblebeam.org/api/3bminer/oui?mac='+macs.join(','))).json()).vendors||{};   // the board's makers, by the pool
 [...sel.options].forEach(x=>{const n=v[x.value];if(n)x.textContent=x.textContent.replace(x.value,x.value+', '+n)});ddsync()}catch(e){}}
