@@ -106,7 +106,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a><a href="/camera" data-v=camera id=nav-cam hidden>Camera</a></nav>
 <span id=st aria-live=polite class="pill idle" title="The page is loading the miner's data">loading</span></header>
 
-<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks the miner given as <code>?h=&lt;ip&gt;</code> (192.168.88.69 without it).</p></div>
+<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks the miner given as <code>?h=&lt;ip&gt;</code>, or the last one given.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
 <div><div class=k><span class=tipped id=havk>Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
@@ -116,7 +116,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
-<div class=p><div class=k>Pool difficulty</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
+<div class=p><div class=k>Pool difficulty</div><div class=v id=df>-</div><div class=sm id=dfn title="Network: the Bitcoin network's difficulty from the pool's job. Next adj.: the network re-sets its difficulty every 2016 blocks (about two weeks) so that a block takes 10 minutes on average; this is mempool.space's estimate of the next change from how fast blocks come now. Up means a block gets harder to find"></div></div>
 <div class=p><div class=k><span class=tipped title="How long the board has been running since its last start. Why the board last started. power on: switched on or plugged in. software: a firmware update, saved settings or the Restart button. reset pin: the reset button, or the USB adapter re-opening the port. crash: the firmware failed. int watchdog / task watchdog / watchdog: it hung and the watchdog restarted it. brownout: the supply voltage dipped. deep sleep: woke from sleep (not used here). Power on and software are normal; the rest mean something to look at">Uptime</span></div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
 <div class=p><div class=k id=odk>Block chance</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
@@ -203,8 +203,9 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 
 <footer><p class=foot-copy><span class=fp>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a></span><span class="fd d1"> &middot; </span><span class=fp>a community PoW miner for Bitcoin (BTC)</span><span class="fd d2"> &middot; </span><span class=fp>open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></span></p></footer></div>
 <script>
-const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.69'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
+const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||(()=>{try{return localStorage.getItem('dev')||''}catch(e){return''}})()):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={};
+if(LOCAL&&Q.get('h'))try{localStorage.setItem('dev',Q.get('h'))}catch(e){}   // a preview file remembers the miner it was last pointed at
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+' T':v>=1e9?(v/1e9).toFixed(d)+' G':v>=1e6?(v/1e6).toFixed(d)+' M':v>=1e3?(v/1e3).toFixed(d)+' K':(+v).toPrecision(4).replace(/\.?0+$/,'');
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
 const hm=k=>k>=1e6?(k/1e6).toFixed(2)+' GH/s':k>=1e3?(k/1e3).toFixed(2)+' MH/s':k.toFixed(1)+' KH/s';
@@ -260,7 +261,7 @@ document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||
 if(LOCAL)history.pushState(null,'',location.pathname+location.search+(v=='dash'?'':'#/'+v));else history.pushState(null,'',(v=='dash'?'/':'/'+v)+location.search);route()});
 addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>{a.classList.toggle('on',a.dataset.v==v);a.toggleAttribute('aria-current',a.dataset.v==v)});
-if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
+if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swOpened){swOpened=1;for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw()}}
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
@@ -301,7 +302,7 @@ if(f&&f.fastestFee!=null){htm('fe',he(f.fastestFee)+' <small>/ '+he(f.hourFee)+'
 if(p&&p.USD){N.px=p;prices()}
 if(da&&typeof da.difficultyChange=='number'){N.da=da;dfn()}}
 // the pool difficulty card's second line: the network's difficulty and, once known, the next adjustment
-function dfn(){if(!D)return;txt('dfn','network '+sp(D.miner.networkDiff)+(N.da?' · next adj. '+(N.da.difficultyChange>0?'+':'')+N.da.difficultyChange.toFixed(1)+'%':''))}
+function dfn(){if(!D)return;txt('dfn','network '+sp(D.miner.networkDiff)+(N.da?' -> next adj. '+(N.da.difficultyChange>0?'+':'')+N.da.difficultyChange.toFixed(1)+'%':''))}
 function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'},main=cur();htm('px',C[main]+(p[main]||0).toLocaleString('en'));
 htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
 function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
@@ -354,7 +355,7 @@ $('f-bench').onclick=()=>{fade('f-bm','running…',1);$('f-bench').disabled=1;bu
 fade('f-bm','');$('f-bm').innerHTML=b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine<br>'+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct');fade5('f-bm')}).catch(()=>fade('f-bm','failed')).finally(()=>{$('f-bench').disabled=0;busy=0})};
 // ---- swarm
 let LS=null;   // when the last scan ended: redrawn when the time format changes
-const SK='swarm-ips';let SW=new Map(),swScanned=0,swSort=null,swDir=-1;
+const SK='swarm-ips';let SW=new Map(),swOpened=0,swSort=null,swDir=-1;
 const COLS=[['host','Miner'],['ip','IP'],['model','Board'],['hr','Hashrate','ct'],['acc','Shares','ct'],['best','Best','n'],['pdiff','Pool diff','n'],['up','Uptime','ct'],['rssi','RSSI','ct'],['heap','Heap','n'],['ver','Firmware','ct'],['seen','Seen','n']];
 $('sw-th').innerHTML=COLS.map(c=>'<th data-k='+c[0]+(c[2]?' class='+c[2]:'')+'>'+c[1]+'</th>').join('')+'<th class=ct style="cursor:default">Manage</th>';
 $('sw-th').onclick=e=>{const k=e.target.dataset.k;if(!k)return;if(swSort!=k){swSort=k;swDir=-1}else if(swDir<0)swDir=1;else swSort=null;
@@ -370,7 +371,7 @@ function swSelf(d){if(FG.has(DEV))return;const o=mapInfo(DEV,d);o.seen=Date.now(
 try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]})}}catch(e){}
 let scanning=0;
 async function swScan(){if(scanning)return;const m3=$('sw-net').value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\.\d*)?$/);if(!m3||m3.slice(1,4).some(x=>+x>255)){fade('sw-prog','subnet like 192.168.88.0');return}
-scanning=1;$('sw-go').disabled=1;swScanned=1;FG.clear();const net=m3.slice(1,4).join('.');
+scanning=1;$('sw-go').disabled=1;FG.clear();const net=m3.slice(1,4).join('.');
 for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw();   // the known ones first
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
 const worker=async()=>{while(q.length){const ip=q.shift();fade('sw-prog','network scanning... '+ip,1);await swProbe(ip)}};
@@ -393,7 +394,7 @@ async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;FG.delete
 if(SW.has(ip)&&!SW.get(ip).off){fade('sw-am','this miner already added');return}
 fade('sw-am','asking '+ip+'…',1);fade('sw-am',await swPoll(ip)?'added '+ip+' miner':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
 $('sw-addb').onclick=swAdd;$('sw-add').onkeydown=e=>{if(e.key=='Enter')swAdd()};$('sw-add').oninput=()=>fade('sw-am','',1);
-$('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
+$('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'').replace(/\.\d+$/,'.0');
 setInterval(()=>{if(view()=='swarm'&&!document.hidden)for(const ip of SW.keys())if(ip!=DEV)swPoll(ip)},15000);
 // tooltips as on the pool site (tips.js): title -> data-tip, shown on hover, focus and tap
 (()=>{const t=document.createElement('div');t.className='bb-tip';let cur=null,tm=0;const own=n=>{for(;n&&n.nodeType==1;n=n.parentNode)if(n.getAttribute('title')||n.hasAttribute('data-tip'))return n;return null};
@@ -425,7 +426,8 @@ cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);dots=dots.filter(d=>now-d
 for(const d of dots){const a=1-(now-d.t)/900;cx.beginPath();cx.arc(d.x,d.y,1.5,0,7);cx.fillStyle='rgba(57,255,242,'+(.6*a)+')';cx.shadowColor='rgba(57,255,242,.8)';cx.shadowBlur=5*a;cx.fill()}
 requestAnimationFrame(frame)}
 requestAnimationFrame(frame)})();
-async function boot(){if(!await tick()){tries++;txt('boot-m','No answer from the miner at '+DEV+(tries>1?' ('+tries+' tries)':'')+'. Trying again every 3 seconds.');$('boot-h').hidden=tries<3;setTimeout(boot,3000);return}
+async function boot(){if(!DEV){txt('boot-m','Opened from a file: add the miner\'s address to the link, e.g. ?h=192.168.1.50');return}
+if(!await tick()){tries++;txt('boot-m','No answer from the miner at '+DEV+(tries>1?' ('+tries+' tries)':'')+'. Trying again every 3 seconds.');$('boot-h').hidden=tries<3;setTimeout(boot,3000);return}
 try{await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500))])}catch(e){}spark();
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
 document.body.classList.remove('boot');status(realK);
