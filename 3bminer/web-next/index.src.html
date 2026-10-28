@@ -61,7 +61,7 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
 /* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
    the turns and turns round gently, leaving a fading trail of light behind; the honeycomb cells under it light up in turn */
-#boot .stage{position:relative;height:150px;max-width:420px;margin:0 auto;overflow:hidden}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
+#boot .stage{position:relative;height:150px;max-width:480px;margin:0 auto;overflow:hidden}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
 .flybee{position:absolute;left:0;top:0;width:44px!important;height:32px!important;will-change:transform;filter:drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff) drop-shadow(0 0 7px rgba(57,255,242,.55))}
 #boot .loading{position:absolute;left:50%;top:80%;transform:translate(-50%,-50%);margin:0}
 .loading{display:inline-flex;align-items:center;gap:10px;margin-top:6px;font:700 11px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--m)}
@@ -271,10 +271,10 @@ const T0=Date.now();
 // light dots of one size dropped behind it that fade over 0.9 s. Time counts from the first frame (the frame clock is not performance.now everywhere)
 (()=>{const st=$('stage'),bee=$('flybee'),cv=$('trail'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion: reduce)').matches;let dots=[],last=0,t0=null,dpr=1;
 const fit=()=>{dpr=devicePixelRatio||1;cv.width=st.clientWidth*dpr;cv.height=st.clientHeight*dpr};fit();addEventListener('resize',fit);
-function frame(now){if(!document.body.classList.contains('boot'))return;if(t0==null)t0=now;const W=st.clientWidth,H=st.clientHeight,span=W+100,v=Math.max(110,W*.3),u=(((now-t0)/1000*v+W*.3+50)%span+span)%span;   // starts already in view, a third of the way across
-const x=u-50,ph=x/W*Math.PI*2,y=H/2-36+14*Math.sin(ph),vy=14*Math.cos(ph)*Math.PI*2/W*v,tilt=Math.max(-.2,Math.min(.2,Math.atan2(vy,v)));const sg=1;
-bee.style.transform=still?'translate('+(W/2-22)+'px,'+(H/2-50)+'px)':'translate('+(x-22)+'px,'+(y-16)+'px) rotate('+tilt+'rad)';
-if(u<16)dots=[];   // a new pass from the left: the old trail does not jump across
+function frame(now){if(!document.body.classList.contains('boot'))return;if(t0==null)t0=now;const W=st.clientWidth,H=st.clientHeight,m=34,span=W-2*m,v=Math.max(110,W*.3),u=(((now-t0)/1000*v+span*.3)%span+span)%span;   // inside the stage only; starts a third of the way across
+const x=m+u,fade=Math.min(1,u/(span*.12),(span-u)/(span*.12)),ph=x/W*Math.PI*2,y=H/2-36+14*Math.sin(ph),vy=14*Math.cos(ph)*Math.PI*2/W*v,tilt=Math.max(-.2,Math.min(.2,Math.atan2(vy,v)));const sg=1;
+bee.style.transform=still?'translate('+(W/2-22)+'px,'+(H/2-50)+'px)':'translate('+(x-22)+'px,'+(y-16)+'px) rotate('+tilt+'rad)';bee.style.opacity=still?1:fade.toFixed(3);   // fades out at the right edge, in at the left
+if(u<12)dots=[];   // a new pass from the left: the old trail does not jump across
 if(!still&&now-last>90){dots.push({x:x-sg*17,y:y+3,t:now});last=now}
 cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);dots=dots.filter(d=>now-d.t<900);
 for(const d of dots){const a=1-(now-d.t)/900;cx.beginPath();cx.arc(d.x,d.y,1.5,0,7);cx.fillStyle='rgba(57,255,242,'+(.6*a)+')';cx.shadowColor='rgba(57,255,242,.8)';cx.shadowBlur=5*a;cx.fill()}
