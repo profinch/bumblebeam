@@ -79,7 +79,12 @@ static void handle_line(char *line) {
             bool pend = false; for (int i = 0; i < s_npend; i++) if (s_pending_submit_ids[i] == (uint32_t)rid) { pend = true; s_pending_submit_ids[i] = s_pending_submit_ids[--s_npend]; break; }
             if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
                 char *e = err ? cJSON_PrintUnformatted(err) : NULL; snprintf((char *)g_stratum.last_reject, sizeof g_stratum.last_reject, "%s", e ? e : "?"); free(e);
-                if (e && strstr(g_stratum.last_reject, "tale")) g_stratum.rej_stale++; else if (strstr(g_stratum.last_reject, "uplicate")) g_stratum.rej_dup++; else if (strstr(g_stratum.last_reject, "ifficult") || strstr(g_stratum.last_reject, "low")) g_stratum.rej_lowdiff++; else g_stratum.rej_other++; } }
+                // stratum error codes: 21 job not found (stale), 22 duplicate share, 23 low difficulty; fall back to the message text
+                cJSON *ec = cJSON_IsArray(err) ? cJSON_GetArrayItem(err, 0) : NULL; int code = cJSON_IsNumber(ec) ? ec->valueint : 0; const char *lr = (const char *)g_stratum.last_reject;
+                if (code == 21 || strstr(lr, "tale") || strstr(lr, "not found")) g_stratum.rej_stale++;
+                else if (code == 22 || strstr(lr, "uplicate")) g_stratum.rej_dup++;
+                else if (code == 23 || strstr(lr, "ifficult") || strstr(lr, "low")) g_stratum.rej_lowdiff++;
+                else g_stratum.rej_other++; } }
         }
     }
     (void)err; cJSON_Delete(m);
