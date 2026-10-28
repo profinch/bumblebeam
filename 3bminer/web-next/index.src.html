@@ -14,9 +14,10 @@ header{display:flex;align-items:center;flex-wrap:wrap;gap:0 18px;min-height:64px
 nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
 nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
-.pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
-.ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}
-@media(max-width:760px){header{gap:0 10px}.brand{gap:9px;font-size:18px}.brand em{font-size:.66em;margin-left:3px}#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0 0 14px;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}}
+/* one width for every state (the longest is 10 characters), so the header never moves */
+.pill{font:700 11px var(--mono);padding:5px 0;width:calc(10ch + 22px);text-align:center;border-radius:99px;border:1px solid;white-space:nowrap;flex:none;cursor:help}
+.ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}.warn{color:var(--y);border-color:rgba(244,206,74,.5)}.idle{color:var(--m);border-color:rgba(255,255,255,.2)}
+@media(max-width:760px){header{gap:0 10px;flex-wrap:wrap}.brand{gap:9px;font-size:18px;flex:1 1 0;min-width:0}.brand>span{overflow:hidden;text-overflow:ellipsis}.brand em{font-size:.66em;margin-left:3px}#st{margin-left:auto;font-size:10px;width:calc(10ch + 16px)}nav{order:3;flex:1 1 100%;margin:0 0 14px;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}}
 h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 12px}
 .p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
 .k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
@@ -49,6 +50,7 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 .hero .big{font-size:clamp(17px,4.4vw,30px);margin-top:6px}.hero>div:not(:first-child) .v{font-size:clamp(12px,2.4vw,16px)!important;margin-top:5px}
 .hero .k{font-size:clamp(8px,1.5vw,10px);letter-spacing:0;white-space:nowrap}.hero .u{display:none}}
 @media(min-width:560px) and (max-width:760px){.hero .u{display:inline}}
+@media(max-width:380px){.brand{font-size:17px;gap:7px}.brand em{font-size:.6em;margin-left:2px}#st{font-size:9px;width:calc(10ch + 12px)}}
 /* confirmations (ask()): the operator dashboard's dialog, the tooltips' look instead of the browser's own */
 .ask-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,18,34,.55);opacity:0;transition:opacity .14s}.ask-bg.on{opacity:1}
 .ask{width:min(440px,100%);padding:18px 18px 16px 20px;font:12px/1.6 var(--mono);color:rgba(255,255,255,.9);background:linear-gradient(180deg,rgba(18,108,150,.98),rgba(10,90,128,.98));border:1px solid rgba(0,246,210,.32);border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45),inset 3px 0 0 rgba(0,246,210,.55);transform:translateY(6px);transition:transform .14s;overflow-wrap:anywhere;white-space:pre-line}
@@ -60,7 +62,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-
 </style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
-<span id=st class="pill bad">offline</span></header>
+<span id=st class="pill idle" title="Waiting for the first answer from the miner">connecting</span></header>
 
 <div id=boot><p id=boot-m>Connecting to the miner…</p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
@@ -154,6 +156,12 @@ const done=v=>{document.removeEventListener('keydown',key,true);bg.remove();if(b
 const key=e=>{if(e.key=='Escape'){e.preventDefault();done(false)}else if(e.key=='Enter'&&document.activeElement!==no){e.preventDefault();done(true)}else if(e.key=='Tab'){e.preventDefault();(document.activeElement===yes?no:yes).focus()}};
 bg.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a)done(a.dataset.a=='yes');else if(e.target===bg)done(false)});
 document.addEventListener('keydown',key,true);document.body.appendChild(bg);requestAnimationFrame(()=>bg.classList.add('on'));yes.focus()})}
+// the header's status: what the miner is doing, as one word with a tip
+const ST={connecting:['connecting','idle','Waiting for the first answer from the miner'],mining:['mining','ok','Hashing on the engine and in software, connected to the pool'],
+nopool:['no pool','warn','The miner answers but is not connected to the pool: the pool is down or unreachable, or the server in the settings is wrong. It retries every few seconds'],
+off:['mining off','idle','Mining is switched off in the settings; the board keeps doing its other work (a camera, for one)'],
+offline:['offline','bad','No answer from the miner: it is off, restarting or out of Wi-Fi reach. This page keeps asking every 3 seconds']};
+function status(k){const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.removeAttribute('data-tip');e.title=v[2]}
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
@@ -170,7 +178,7 @@ htm('odn','expected time to find a block<br>1 in '+fx(1/pday,1)+' per day');
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
-txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
+status(d.identity.mining===false?'off':s.connected?'mining':'nopool');
 htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
 const AV={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a sample a minute), or since it started if that is shorter'],
 '24h':['Avg 24h',m.avg24hKhs,'The board\'s average over the last 24 hours (a sample a minute), or since it started if that is shorter'],
@@ -184,7 +192,7 @@ txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('s
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
 txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
-H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){txt('st','offline');$('st').className='pill bad';return 0}}
+H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
 const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
