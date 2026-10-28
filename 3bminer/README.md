@@ -99,5 +99,13 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 - The camera driver's grab task runs at Wi-Fi's priority and, in latest-frame mode, copies every
   frame to PSRAM with the CPU even with nobody watching. On core 1 next to Wi-Fi that made the network
   take seconds per request; it is lowered under lwip and grabs only on demand.
+- The ESP32-CAM here carries 8 MB of PSRAM, and the classic ESP32 maps only 4 MB of it ("Virtual address
+  not enough for PSRAM" at boot): its external-memory window is 4 MB, a chip limit no driver or IDF
+  update changes. The other 4 MB are reachable only through himem (`CONFIG_SPIRAM_BANKSWITCH_ENABLE`),
+  as 32 KB banks switched into the window, not as heap and not for the camera, whose driver writes into
+  directly mapped memory. The mapped 4 MB hold two 384 KB frame buffers and the stratum stack with over
+  3 MB left; himem would only pay for something like a pre-event video buffer.
+- The CH340 on the ESP32-CAM-MB: see Flash above; plain esptool and the Arduino IDE cannot talk to it.
 
-Changes per version: [CHANGELOG.md](CHANGELOG.md).
+Changes per version: [CHANGELOG.md](CHANGELOG.md); which image ran on which board, when and with what
+result: [HISTORY.md](HISTORY.md).
