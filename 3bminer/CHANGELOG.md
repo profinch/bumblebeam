@@ -9,6 +9,9 @@
   Frame buffers and large allocations in PSRAM; the camera's grab task under lwip's priority, grabbing on demand.
 - `mining` on/off in the settings (off by default on the camera board); stratum user agent `3BMiner/<version>`.
 - Web pages are gzipped by the build instead of being kept in git.
+- ESP32-CAM: OTA works (the camera is stopped while the image is written; it crashed the board before), mining runs
+  next to the camera: ~981 KH/s idle, ~946 KH/s while streaming 640x480 at 24 fps (stratum stack in PSRAM, 8 KB
+  mining stacks, internal RAM and its use in `/api/system/info` as `freeInternal`).
 
 ## 0.5.6
 - The pool's logo and favicon byte for byte; network difficulty from nbits; CORS on config, update and restart.

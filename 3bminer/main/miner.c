@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include "nerdsha.h"
+#include "esp_heap_caps.h"
 static const char *TAG = "miner";
 miner_stats_t g_miner;
 extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint32_t E, uint32_t d2);
@@ -149,4 +150,8 @@ uint32_t sw_bench_cycles(void) {
     for (uint32_t n = 0; n < 4096; n++) { hdr[79] = n; hdr[78] = n >> 8; nerd_sha256d_baked(mid, hdr + 64, bake, dh); }
     return (esp_cpu_get_cycle_count() - c0) / 4096;
 }
-void miner_start(void) { xTaskCreatePinnedToCore(task, "miner", 16384, NULL, 10, NULL, 0); xTaskCreatePinnedToCore(swtask, "swminer", 12288, NULL, 1, NULL, 1); }
+void miner_start(void) {
+    if (xTaskCreatePinnedToCore(task, "miner", 8192, NULL, 10, NULL, 0) != pdPASS) ESP_LOGE(TAG, "miner task not created (internal RAM %u free)", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    if (xTaskCreatePinnedToCore(swtask, "swminer", 8192, NULL, 1, NULL, 1) != pdPASS) ESP_LOGE(TAG, "software miner task not created");
+    ESP_LOGI(TAG, "tasks started, internal RAM %u free", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+}

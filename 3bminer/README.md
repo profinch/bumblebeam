@@ -12,7 +12,7 @@ interrupts off; core 1 keeps Wi-Fi, the web server, the camera and a software ha
 | Board | Profile | What it does | Measured |
 |---|---|---|---|
 | ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~952 KH/s engine + ~29 KH/s software = **~981 KH/s**, 252 cycles/nonce |
-| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 4 MB PSRAM) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does), miner off by default | stream 50 fps at 320x240, 25 at 640x480, 10 at 1280x720, 3.6 at 1600x1200 |
+| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream 50 fps at 320x240, 25 at 640x480, 10 at 1280x720, 3.6 at 1600x1200; mining **~981 KH/s** idle, ~946 KH/s while streaming 640x480 at 24 fps |
 
 For scale: NerdMiner v2 does ~350 KH/s on the same chip, NMMiner (closed, paid license on boards
 other than its own) ~1.03 MH/s. Over 7.6 h side by side on one pool (fw 0.5.2 against NMMiner
@@ -91,6 +91,11 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 - mbedtls uses the same engine and switches its clock off: `CONFIG_MBEDTLS_HARDWARE_SHA=n`.
 - Code in IRAM on core 1 slows the core-0 kernel from 252 to ~370 cycles (shared SRAM banks); the
   software hasher runs from flash, where it costs the engine nothing.
+- Flash writes switch the cache off on both cores while the camera's DMA interrupt keeps firing; core 0 then
+  hung in the coprocessor-exception vector until the interrupt watchdog reset the board in the middle of
+  an OTA. The camera is stopped for the upload.
+- The camera's DMA buffers leave ~40 KB of internal RAM: the stratum task's 24 KB stack goes to PSRAM
+  (it never touches flash), the mining tasks get 8 KB each.
 - The camera driver's grab task runs at Wi-Fi's priority and, in latest-frame mode, copies every
   frame to PSRAM with the CPU even with nobody watching. On core 1 next to Wi-Fi that made the network
   take seconds per request; it is lowered under lwip and grabs only on demand.

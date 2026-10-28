@@ -34,10 +34,10 @@ static esp_err_t h_info(httpd_req_t *r) {
     char b[1800];
     snprintf(b, sizeof b,
         "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s},"
-        "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"%s\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"freeHeap\":%u,\"minFreeHeap\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu},"
+        "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"%s\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"freeHeap\":%u,\"minFreeHeap\":%u,\"freeInternal\":%u,\"kernelCycles\":%u,\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu},"
         "\"stratum\":{\"url\":\"%s\",\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
         s_host, FW_VERSION, wifi_rssi(), CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), nd, pd, ld, bs, be, (int)esp_reset_reason(),
-        (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)g_miner.kernel_cycles, g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes,
+        (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)g_miner.kernel_cycles, g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes,
         g_stratum.pool_desc, g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
         (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
@@ -88,23 +88,26 @@ static const char s_marker[] = FW_BOARD_MARKER;
 static int marker_scan(const char *buf, int n, char *tail, int *tl) {   // 1 = ours, -1 = other board, 0 = not seen yet
     static const char key[] = "3BMINER_BOARD="; char w[96 + 4096]; int wl = *tl; memcpy(w, tail, wl); memcpy(w + wl, buf, n); wl += n;
     int res = 0;
+    // only "key<id>;" with id = [a-z0-9_-]+ counts: the key itself also sits in this code as a bare string
     for (int i = 0; i + (int)sizeof key - 1 <= wl; i++) if (!memcmp(w + i, key, sizeof key - 1)) {
-        const char *e = memchr(w + i, ';', wl - i); if (!e) break;
-        res = ((size_t)(e - (w + i) + 1) == sizeof s_marker - 1 && !memcmp(w + i, s_marker, sizeof s_marker - 1)) ? 1 : -1; if (res < 0) break; }
+        int j = i + sizeof key - 1; while (j < wl && ((w[j] >= 'a' && w[j] <= 'z') || (w[j] >= '0' && w[j] <= '9') || w[j] == '_' || w[j] == '-')) j++;
+        if (j == i + (int)sizeof key - 1 || j >= wl || w[j] != ';') continue;
+        res = (j - i + 1 == (int)sizeof s_marker - 1 && !memcmp(w + i, s_marker, sizeof s_marker - 1)) ? 1 : -1; if (res < 0) break; }
     int keep = wl < 96 ? wl : 96; memcpy(tail, w + wl - keep, keep); *tl = keep; return res;
 }
 static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL); if (!part) return httpd_resp_send_500(r);
-    esp_ota_handle_t h; if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &h) != ESP_OK) return httpd_resp_send_500(r);
+    camera_stop();   // no-op without a camera; on a camera board the image is written with the sensor off, a restart follows anyway
+    esp_ota_handle_t h; if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &h) != ESP_OK) { camera_start(); return httpd_resp_send_500(r); }
     char *buf = malloc(4096); int remaining = r->content_len, total = 0; char tail[96]; int tl = 0, mk = 0;
     ESP_LOGI(TAG, "OTA start, %d bytes -> %s", remaining, part->label);
-    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT) continue; esp_ota_abort(h); free(buf); return httpd_resp_send_500(r); }
+    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT) continue; esp_ota_abort(h); free(buf); camera_start(); return httpd_resp_send_500(r); }
         if (mk == 0 || mk == 1) { int m = marker_scan(buf, n, tail, &tl); if (m) mk = m; }
-        if (mk < 0) { esp_ota_abort(h); free(buf); httpd_resp_set_status(r, "409 Conflict"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
-        if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
+        if (mk < 0) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "409 Conflict"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
+        if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
     free(buf);
     if (!mk) ESP_LOGW(TAG, "OTA image has no board marker (pre-0.6 build?), accepted");
-    if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(part) != ESP_OK) { httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota end/validate failed", -1); }
+    if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(part) != ESP_OK) { camera_start(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota end/validate failed", -1); }
     char b[96]; snprintf(b, sizeof b, "{\"status\":\"ok\",\"bytes\":%d,\"partition\":\"%s\",\"note\":\"restarting\"}", total, part->label);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); httpd_resp_send(r, b, -1); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK;
 }
