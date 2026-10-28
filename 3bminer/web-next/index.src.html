@@ -212,7 +212,7 @@ const hm=k=>k>=1e6?(k/1e6).toFixed(2)+' GH/s':k>=1e3?(k/1e3).toFixed(2)+' MH/s':
 // 2.63K -> 2.63 K: a space before the K/M/G/T/P of a difficulty
 const sp=v=>String(v??'-').trim().replace(/(\d)([KMGTPB])$/,'$1 $2');
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
-// a version as people read it: v0.6.1 (the firmware reports 0.6.1; NMMiner and AxeOS already put the v in)
+// a version as people read it: v0.7.0 (the firmware reports 0.7.0; NMMiner and AxeOS already put the v in)
 const vv=x=>x&&!/^v/i.test(x)?'v'+x:(x||'');
 const BN=b=>({'esp32-wroom-32':'ESP32-WROOM-32','esp32-cam':'ESP32-CAM'})[b]||String(b||'').toUpperCase();
 const RR=['?','power on','reset pin','software','crash','int watchdog','task watchdog','watchdog','deep sleep','brownout','sdio'];
@@ -265,7 +265,7 @@ addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>{a.classList.toggle('on',a.dataset.v==v);a.toggleAttribute('aria-current',a.dataset.v==v)});
 if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swOpened){swOpened=1;for(const ip of SW.keys())if(ip!=DEV)swPoll(ip);swDraw();swAlive()}}
 // ---- dashboard
-let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
+let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.7.0+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
 function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Math.max(...A)*1.01,mn=Math.min(...A)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
 let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
@@ -374,7 +374,7 @@ function swSave(){try{localStorage.setItem(SK,JSON.stringify(Object.fromEntries(
 // this board is in the swarm from the first answer, no scan needed; the saved ones come back (offline until they answer)
 function swSelf(d){if(FG.has(DEV))return;const o=mapInfo(DEV,d);o.seen=Date.now();SW.set(DEV,o);swSave();if(view()=='swarm')swDraw()}
 try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]})}}catch(e){}
-// the miners the board found itself (fw 0.6.1+ searches its subnet in the background) and when it last did
+// the miners the board found itself (fw 0.7.0+ searches its subnet in the background) and when it last did
 let BS=null;
 async function swAlive(){try{const j=await(await fetch(B+'/alive')).json();for(const ip of j.ips||[])if(ip!=j.self&&ip!=DEV&&!FG.has(ip)&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:Date.now()});swPoll(ip)}
 if(j.lastScanAgo>=0)BS=new Date(Date.now()-j.lastScanAgo*1000);lastScan();swDraw()}catch(e){}}

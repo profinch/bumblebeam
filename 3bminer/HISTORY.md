@@ -18,7 +18,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 0.5.3 | 2026-10-28 | 881,504 B | 251 | 981 KH/s | rejects sorted by stratum code |
 | 0.5.4-0.5.6 | 2026-10-28 | 883,840-884,976 B | 251 | 981 KH/s | network difficulty, gzipped pool-style page, the pool's logo and favicon |
 | 0.6.0 | 2026-10-28 | devkit 886,384 B, esp32cam 1,036,976 B | 251 | devkit 981 KH/s; ESP32-CAM 981 idle, 946 streaming VGA | renamed 3BMiner, BumbleBeam repo, builds per board, ESP32-CAM; 5.4 h three-way run below |
-| 0.6.1 | 2026-10-28 | devkit 895,536 B, esp32cam 1,103,728 B | 251 | devkit 952 + 30 = 981 KH/s; ESP32-CAM 951 + 9 = 960 KH/s | history, solo detection, NTP and time zone, web-next as the page, code audit, best ever in NVS, camera stream 32 KB TCP buffer, microSD |
+| 0.7.0 | 2026-10-28 | see the flash log | 251 | 951 + 31 = 983 KH/s on both boards | developed as 0.6.1: history, solo detection, NTP and time zone, web-next as the page, code audit, best ever in NVS, camera stream 32 KB TCP buffer, microSD, audit 2 (LAN-only access, health checks, background swarm search), own SHA-256d software hasher |
 
 ## Boards
 
@@ -44,6 +44,8 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 18:20-18:33 | ESP32-CAM | 0.6.1, TCP send buffer 32 KB / 64 KB | OTA; stream 1280x720 q4 3.9 -> 6.3 fps, 400x296 q4 21 -> 42 fps (first noted as UXGA and VGA: framesize 13 and 8 are HD and CIF); mining off measured no faster; 64 KB same as 32 KB |
 | 2026-10-28 18:39-18:43 | ESP32-CAM | 0.6.1 with microSD | OTA; SanDisk 8 GB (SA08G) formatted FAT from the page in 5 s, photos written |
 | 2026-10-28 18:44-19:23 | devkit, ESP32-CAM | 0.6.1 final page (loader fix) | OTA; both mining, best ever kept across the updates |
+| 2026-10-28 19:30-21:54 | devkit, ESP32-CAM | 0.6.1 builds: audit 2, swarm search, own hasher | OTA; the camera "hangs" were it joining the Linksys (empty AP lock); hasher 5-9 -> 31 KH/s |
+| 2026-10-28 21:59 | devkit, ESP32-CAM | 0.7.0, devkit 881,792 B, esp32cam 1,090,272 B | OTA; 983 KH/s on both, shares accepted |
 
 ## Comparisons
 

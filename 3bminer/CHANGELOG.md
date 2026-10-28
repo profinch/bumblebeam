@@ -2,7 +2,8 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
-## 0.6.1 (not released yet)
+## 0.7.0 (2026-10-28)
+Developed as 0.6.1 (the images flashed during the day report that number).
 - Hashrate history on the board: a sample a minute for 24 h (`GET /api/history`), averages for the last hour and day
   in `/api/system/info` (`avg1hKhs`, `avg24hKhs`, `historyMinutes`), the software hash counter (`swHashes`), and an
   all-time average across restarts (`avgAllKhs`, `allSeconds`; totals saved to NVS every 10 minutes).
@@ -63,8 +64,8 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Fixed: Settings saved before the board's Wi-Fi scan answered stored an empty AP lock (with two APs of one name the
   camera then joined the other one and seemed gone); a save before the settings were read, or without a Wi-Fi name, is
   refused; the stream's 5 s refresh no longer resets the controls; a hidden tab polls nothing and drops the stream.
-- Swarm: Board is the hardware (ESP32-WROOM-32, ESP32-CAM), Firmware whose firmware and version (3BMiner v0.6.1,
-  NMMiner v2.0.04); versions shown as v0.6.1 on the page.
+- Swarm: Board is the hardware (ESP32-WROOM-32, ESP32-CAM), Firmware whose firmware and version (3BMiner v0.7.0,
+  NMMiner v2.0.04); versions shown with a v on the page.
 - The AP lock list names MikroTik access points "MikroTik" (the pool's `/api/3bminer/oui` maps its "Routerboard.com"
   registration).
 
