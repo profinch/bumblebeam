@@ -9,3 +9,4 @@ double history_avg_khs(uint32_t minutes); // average of the last `minutes` sampl
 // all-time average: hashes and seconds over every run, kept in NVS (saved every 10 minutes, so a power cut loses at most that)
 double history_avg_all_khs(void);
 uint32_t history_all_seconds(void);
+void history_save(void);                 // writes the all-time totals when due; called from the main loop

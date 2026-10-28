@@ -5,15 +5,19 @@
 #include <stdlib.h>
 #include "nvs.h"
 static uint16_t *s_h; static volatile uint32_t s_n, s_pos; static uint64_t s_last;
-static uint64_t s_base_h, s_start_h; static uint32_t s_base_s; static int64_t s_start_us; static uint32_t s_minutes;
+static volatile bool s_save; static uint64_t s_base_h, s_start_h; static uint32_t s_base_s; static int64_t s_start_us; static uint32_t s_minutes;
 static void sample(void *arg) {
     uint64_t t = g_miner.total_hashes + g_miner.sw_hashes, d = t - s_last; s_last = t;
     uint32_t khs = (uint32_t)(d / 60000); if (khs > 65535) khs = 65535;
     s_h[s_pos] = khs; s_pos = (s_pos + 1) % HISTORY_MINUTES; if (s_n < HISTORY_MINUTES) s_n++;
-    if (++s_minutes % 10 == 0) {   // all-time totals to NVS every 10 minutes (~144 small writes a day, far below flash wear limits)
-        nvs_handle_t h; if (nvs_open("stats", NVS_READWRITE, &h) == ESP_OK) {
-            nvs_set_u64(h, "hashes", s_base_h + (t - s_start_h)); nvs_set_u32(h, "secs", history_all_seconds()); nvs_commit(h); nvs_close(h); }
-    }
+    if (++s_minutes % 10 == 0) s_save = true;   // all-time totals to NVS every 10 minutes (~144 small writes a day, far below flash wear limits)
+}
+// from the main task, not the esp_timer callback: a flash write stalls both cores for milliseconds, which the timer task must not carry
+void history_save(void) {
+    if (!s_save) return;
+    s_save = false;
+    nvs_handle_t h; if (nvs_open("stats", NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u64(h, "hashes", s_base_h + (g_miner.total_hashes + g_miner.sw_hashes - s_start_h)); nvs_set_u32(h, "secs", history_all_seconds()); nvs_commit(h); nvs_close(h);
 }
 void history_start(void) {
     s_h = heap_caps_calloc(HISTORY_MINUTES, sizeof *s_h, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);   // PSRAM boards keep internal RAM free

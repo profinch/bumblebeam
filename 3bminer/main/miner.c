@@ -17,11 +17,12 @@ static const char *TAG = "miner";
 miner_stats_t g_miner;
 extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint32_t E, uint32_t d2);
 // mine2.S (tools/gen_mine2.py): START of block 1 after K header words + deferred hit test; same interface
-extern uint32_t hwmine_k8(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k7(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t),
-    hwmine_k6(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k5(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t), hwmine_k4(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t);
+extern uint32_t hwmine_k6(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t);
 typedef uint32_t (*kernel_fn)(uint32_t *, uint32_t, uint32_t, uint32_t, uint32_t);
-static const kernel_fn s_kernels[] = { hwmine, hwmine_k8, hwmine_k7, hwmine_k6, hwmine_k5, hwmine_k4 };
+// the index is the API's kernel number (info "kernel", /api/bench?k=); 1, 2, 4, 5 were k8, k7, k5, k4, no longer built (1.3 KB of IRAM)
+static const kernel_fn s_kernels[] = { hwmine, NULL, NULL, hwmine_k6 };
 #define NKERNELS (sizeof s_kernels / sizeof s_kernels[0])
+bool miner_kernel_ok(uint32_t k) { return k < NKERNELS && s_kernels[k]; }
 // hwmine_k6 (index 3): START after 6 words + deferred hit test. Swept: W1 passes 23..40, W2 >= 35, W3 >= 22, L1 >= 3, L2 8 (reads word 7 one cycle
 // earlier than hwmine, so L2 needs +1); 25/36/23/6/8 = 251.7 bench cycles/nonce, misses at the same ~1 per 4-30M noise level as hwmine.
 // k5/k4 (START after 5 or 4 words) never pass: the stores lose the race against the engine reading W[i].
@@ -49,14 +50,14 @@ static void run_bench(void) {
     uint32_t hits = 0, bad = 0, sum = 0; uint64_t cyc = 0; const uint32_t base = 0x40000000u, end = base + g_bench.n; uint32_t n = base;
     while (n < end) {
         uint32_t cnt = end - n < CHUNK ? end - n : CHUNK;
-        s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = s_kernels[g_bench.k < NKERNELS ? g_bench.k : 0](s_tbl, n, cnt, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS();
+        s_tbl[24] = 0; portDISABLE_INTERRUPTS(); uint32_t c0 = esp_cpu_get_cycle_count(); uint32_t r = s_kernels[miner_kernel_ok(g_bench.k) ? g_bench.k : 0](s_tbl, n, cnt, ENGINE_E, LOAD_D2); cyc += esp_cpu_get_cycle_count() - c0; portENABLE_INTERRUPTS();
         if (s_tbl[24]) { uint32_t H[8]; job_hash(w, r, H); hits++; if (H[7] & 0xFF) bad++; sum = sum * 31 + r; n = r + 1; } else n = r;
         if ((hits & 63) == 0) taskYIELD();
         if (hits > (g_bench.n >> 6) + 64) { bad += 1000000; break; }   // broken timing reports ~every nonce as a hit: bail out instead of crawling
     }
     memcpy(s_tbl, save, sizeof save);
     g_bench.cyc_per_kn = (uint32_t)(cyc * 1000 / g_bench.n); g_bench.hits = hits; g_bench.bad = bad; g_bench.sum = sum;
-    if (g_bench.apply && bad == 0) { for (int i = 0; i < 5; i++) g_timing[i] = g_bench.t[i]; if (g_bench.k < NKERNELS) g_kernel = g_bench.k; }
+    if (g_bench.apply && bad == 0) { for (int i = 0; i < 5; i++) g_timing[i] = g_bench.t[i]; if (miner_kernel_ok(g_bench.k)) g_kernel = g_bench.k; }
     set_timing(g_timing);
     ESP_LOGI(TAG, "bench k=%u t=%u/%u/%u/%u/%u n=%u: %u.%03u cyc/nonce hits %u bad %u sum %08x", (unsigned)g_bench.k, (unsigned)g_bench.t[0], (unsigned)g_bench.t[1], (unsigned)g_bench.t[2], (unsigned)g_bench.t[3], (unsigned)g_bench.t[4], (unsigned)g_bench.n, (unsigned)(g_bench.cyc_per_kn / 1000), (unsigned)(g_bench.cyc_per_kn % 1000), (unsigned)hits, (unsigned)bad, (unsigned)sum);
 }

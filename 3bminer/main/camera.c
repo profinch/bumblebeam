@@ -2,6 +2,7 @@
 //   :80  /capture /bmp /status /control?var=&val= /xclk /reg /greg /pll /resolution, /api/camera/save (ours: keep settings in NVS)
 //   :81  /stream (MJPEG), its own server so a running stream never blocks the dashboard
 #include "camera.h"
+#include "web.h"
 #include "sdkconfig.h"
 #ifdef CONFIG_BOARD_HAS_CAMERA
 #include "esp_camera.h"
@@ -36,7 +37,7 @@ static const char *TAG = "camera";
 #define PIN_FLASH 4                  // white flash LED, LEDC PWM (timer/channel 1: 0 is the sensor XCLK)
 #define FLASH_MAX 255
 
-static bool s_ok = false;
+static volatile bool s_ok = false;
 static int s_led = 0;                // flash intensity 0..255, lit while streaming and for a capture
 static volatile bool s_streaming = false;
 static volatile float s_fps = 0;
@@ -223,6 +224,7 @@ static esp_err_t h_resolution(httpd_req_t *r) {
     cors(r); return httpd_resp_send(r, NULL, 0);
 }
 static esp_err_t h_save(httpd_req_t *r) {
+    if (!web_post_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     bool ok = settings_save(esp_camera_sensor_get());
     httpd_resp_set_type(r, "application/json"); cors(r); return httpd_resp_send(r, ok ? "{\"status\":\"ok\"}" : "{\"status\":\"nvs error\"}", -1);
@@ -234,7 +236,7 @@ static esp_err_t h_stream(httpd_req_t *r) {
     httpd_resp_set_type(r, "multipart/x-mixed-replace;boundary=" BOUNDARY); cors(r); httpd_resp_set_hdr(r, "X-Framerate", "60");
     s_streaming = true; if (s_led) led_set(s_led);
     int64_t t_last = esp_timer_get_time(); int frames = 0; esp_err_t res = ESP_OK;
-    while (res == ESP_OK) {
+    while (res == ESP_OK && s_ok) {
         camera_fb_t *fb = esp_camera_fb_get(); if (!fb) { ESP_LOGW(TAG, "frame grab failed"); res = ESP_FAIL; break; }
         uint8_t *jpg = fb->buf; size_t n = fb->len; bool conv = false;
         if (fb->format != PIXFORMAT_JPEG) { conv = frame2jpg(fb, 80, &jpg, &n); if (!conv) { esp_camera_fb_return(fb); res = ESP_FAIL; break; } }
@@ -253,7 +255,8 @@ static esp_err_t h_stream(httpd_req_t *r) {
 // and core 0 ended in the coprocessor-exception vector until the interrupt watchdog reset the board mid-OTA.
 void camera_stop(void) {
     if (!s_ok) return;
-    s_ok = false; vTaskDelay(pdMS_TO_TICKS(50));   // let a running /stream or /capture notice and leave
+    s_ok = false;   // a running /stream (its own server task) leaves after the frame it is sending; /capture runs in this server task
+    for (int i = 0; i < 100 && s_streaming; i++) vTaskDelay(pdMS_TO_TICKS(20));
     led_set(0); esp_camera_deinit(); ESP_LOGI(TAG, "camera stopped");
 }
 int camera_http_handler_count(void) { return 10; }

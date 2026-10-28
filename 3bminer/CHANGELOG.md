@@ -14,6 +14,24 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Two time servers, pool.ntp.org and time.google.com as the fallback; `identity.ntp` names the one that answered.
 - The clock's last NTP sync and its server in `/api/system/info` (`identity.ntpSync`, `identity.ntp`, with `identity.tz`).
 - A time zone setting (`tz` in `/api/config`, a POSIX TZ string such as `GMT0BST,M3.5.0/1,M10.5.0`), applied to the board's clock.
+- The new web UI (web-next) is the board's page: Dashboard, Swarm, Settings, Firmware and, on camera boards, Camera at
+  `/`, `/swarm`, `/settings`, `/firmware`, `/camera`; minified, 23 KB gzipped. The old camera page is gone.
+- Audit, robustness: pool messages checked before use (missing or non-string fields, extranonce1 over 16 bytes,
+  extranonce2 size outside 1..8, coinbase or branch hex that is odd or does not fit, difficulty that is not a positive
+  number) instead of crashing or mining a cut coinbase; `client.reconnect` reconnects (to the configured pool);
+  send timeout and TCP keepalive on the pool socket; `stratum.authorized` in `/api/system/info`.
+- Audit, settings: `POST /api/config` reads the whole body, checks every value (lengths, port 1..65535, no quotes,
+  backslashes or control characters in strings that end up in JSON and stratum lines) and changes nothing when one
+  is wrong, answering 400 with the reason.
+- Audit, cross-site writes: POSTs that change the board (settings, restart, firmware, camera save) are refused with
+  403 when the browser says they come from a site outside the LAN; the board's own page, other miners' pages on the
+  LAN and a local preview file still work.
+- Audit, OTA: the upload size is checked against the slot, only the image's size is erased, a stalled upload gives
+  up after 10 timeouts; the camera's stream server is waited for before the camera stops.
+- Audit, flash and RAM: the all-time totals are written to NVS from the main task instead of the timer task; Wi-Fi no
+  longer keeps its own copy of the settings in NVS (`CONFIG_ESP_WIFI_NVS_ENABLED=n`, they come from the settings at
+  every start); IPv6 off; only kernels 0 and 3 are built (k8, k7, k5, k4 removed, 1.3 KB of IRAM); `/api/bench?k=`
+  takes 0 or 3.
 
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
