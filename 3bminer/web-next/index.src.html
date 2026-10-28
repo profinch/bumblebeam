@@ -27,7 +27,7 @@ svg.sp{width:100%;height:70px;display:block;margin-top:12px}
 .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}
 .g.t{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
 table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
-.kv{table-layout:fixed;margin-top:4px}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
+.kv{table-layout:fixed;margin-top:10px}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
 .sc{overflow-x:auto}th{color:var(--m);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}td.n,th.n{text-align:right}
 tr.me td:first-child{box-shadow:inset 2px 0 var(--a)}
 .bar{height:6px;border-radius:3px;background:var(--b);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0b76ff,#39fff2)}
@@ -42,16 +42,18 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .msg{font:12px var(--mono);color:var(--y)}.w1{color:#fff}.sm{line-height:1.5}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
 .view{display:none}.view.on{display:block}
 .tipped{text-decoration:underline dotted rgba(255,255,255,.35);text-underline-offset:3px;cursor:help}
-.bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(300px,calc(100vw - 16px));padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
-footer{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 22px;padding:22px 0 30px;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}footer a{color:var(--m)}footer a:hover{color:#fff}footer .dim{font-weight:400;letter-spacing:.02em;text-transform:none;color:rgba(255,255,255,.4)}
+.bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
+footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
+/* phones: the hashrate on its own row, the three small figures on one row under it (after the base rules so they win) */
+@media(max-width:760px){.hero{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:10px 8px}.hero>div:first-child{grid-column:1/-1}.hero .big{font-size:36px}.hero>div:not(:first-child) .v{font-size:13px!important;margin-top:5px}.hero>div:not(:first-child) .k{font-size:9px;letter-spacing:.03em}}
 </style></head><body><div class=w>
-<header><a class=brand href="#/">{{LOGO}}<span><b>3B</b>Miner <em id=board></em></span></a>
+<header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
 <span id=st class="pill bad">offline</span></header>
 
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k><span class=tipped title="Average of the hashrate readings since this page was opened (one every 3 s)">Avg since open</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped title="All hashes the board has done divided by its uptime: the average since it started, the same in every browser">Avg since start</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine + Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
@@ -68,7 +70,7 @@ footer{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
 <div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr></table></div>
-<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp><tr><td><span class=tipped title="Why the board last started: power on, software (update, settings, restart button), crash, watchdog, brownout (power dip), reset pin">last reset</span><td id=rr></table></div></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
 </section>
 
 <section class=view id=v-swarm>
@@ -114,10 +116,10 @@ footer{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
-<footer><a href="https://bumblebeam.org" target=_blank rel=noopener>&copy; 2026 BumbleBeam</a><span class=dim>a community PoW miner for Bitcoin (BTC)</span><a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>open source under Apache-2.0 on GitHub</a></footer></div>
+<footer><p class=foot-copy>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a> &middot; a community PoW miner for Bitcoin (BTC) &middot; open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></p></footer></div>
 <script>
 const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.228'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
-let D=null,N={},T0=Date.now(),HS=0,HN=0;
+let D=null,N={};
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+'T':v>=1e9?(v/1e9).toFixed(d)+'G':v>=1e6?(v/1e6).toFixed(d)+'M':v>=1e3?(v/1e3).toFixed(d)+'K':(+v).toPrecision(4).replace(/\.?0+$/,'');
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
 const hm=(k,u=1)=>k>=1e6?(k/1e6).toFixed(2)+(u?' <small>GH/s</small>':' GH/s'):k>=1e3?(k/1e3).toFixed(2)+(u?' <small>MH/s</small>':' MH/s'):k.toFixed(1)+(u?' <small>KH/s</small>':' KH/s');
@@ -141,15 +143,15 @@ htm('odn','expected time to a block<br><span class=w1>1</span> in <span class=w1
 // solo pools pay the finder the whole block; on a shared pool these are still the odds of this board's hashes, not of a payout
 const solo=/solo|public-pool|ckpool/i.test((D.stratum||{}).url||'');txt('odk',solo?'Block odds (solo)':'Block odds (own hashes)')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
-txt('board',BN(d.identity.board||d.identity.hwModel));txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
-htm('hr',hm(k));HS+=k;HN++;txt('havg',hm(HS/HN,0));txt('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s':'-');txt('kc',m.kernelCycles??'-');
+txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
+htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds);txt('havg',m.uptimeSeconds>0?hm(hs/m.uptimeSeconds/1e3,0):'-');txt('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 htm('bd',m.bestDiffSession);txt('bde','ever '+m.bestDiffEver);htm('df',m.poolDiff);txt('dfn','network '+m.networkDiff);
-htm('up',ut(m.uptimeSeconds));
-txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);htm('wk',(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>'));$('wk').title=u;
+htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
+txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+u+'">'+(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',m.lastDiff);txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');txt('rr',RR[m.resetReason]||'-');
+txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
 H.push(k);if(H.length>200)H.shift();spark();odds()}catch(e){txt('st','offline');$('st').className='pill bad'}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
