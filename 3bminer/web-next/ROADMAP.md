@@ -11,12 +11,12 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Display layouts moved out of the web UI into `display.src.html` -> `display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
 
 ## Needs firmware
-- Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2), time zone.
+- Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2). (Time zone: done in 0.6.1.)
 - /alive with an on-device subnet scan (as NMMiner) so Swarm works without a browser scan.
-- Hashrate/share history kept on the device (ring buffer, e.g. 288 x 5 min) for a 24 h chart.
+- (Done in 0.6.1: hashrate history on the device, a value a minute for 24 h, `/api/history`.)
 - Logs page: ring buffer of recent log lines at /api/logs.
 - Block height from the coinbase (BIP34) so it shows without internet access from the browser.
-- Serve favicon/page with ETag; keep the page under ~12 KB gzip.
+- Serve favicon/page with ETag (the page is ~24 KB gzip since web-next).
 
 ## Display builds (later)
 - Boards: NMMiner 1.54" 240x240 ST7789, LILYGO T-Display S3 (ESP32-S3: its SHA engine can take a midstate - a separate kernel, likely much faster), ESP32-2432S028 "CYD" 2.8" 320x240 (classic ESP32).
@@ -26,3 +26,4 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Camera tab is in web-next (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). Since 0.6.1 web-next is the firmware's page, /camera included; main/www/camera.html is gone.
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
+- microSD: video recording (MJPEG AVI, by schedule or on motion), a file list with download and delete on the Camera tab.
