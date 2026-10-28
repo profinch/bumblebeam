@@ -1,5 +1,5 @@
 <!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>3BMiner</title>
+<title>3BMiner - Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 :root{--a:#00f6d2;--ad:rgba(0,246,210,.18);--y:#f4ce4a;--r:#f25f5b;--bl:#0bccf7;--m:rgba(255,255,255,.5);--td:rgba(255,255,255,.8);--b:rgba(255,255,255,.07);--s:rgba(255,255,255,.04);--f:#193b55;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -16,18 +16,18 @@ nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-t
 nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
 .pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
 .ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}
-@media(max-width:760px){#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}.brand em{display:none}}
+@media(max-width:760px){#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0 0 14px;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}.brand em{font-size:13px}}
 h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 12px}
 .p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
 .k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
 .v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .v small,.sm{font-size:12px;color:var(--m);font-weight:400}
-.hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:40px;color:var(--a)}
+.hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:40px}
 svg.sp{width:100%;height:70px;display:block;margin-top:12px}
 .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}
 .g.t{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
 table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
-.kv{table-layout:fixed}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
+.kv{table-layout:fixed;margin-top:4px}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
 .sc{overflow-x:auto}th{color:var(--m);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}td.n,th.n{text-align:right}
 tr.me td:first-child{box-shadow:inset 2px 0 var(--a)}
 .bar{height:6px;border-radius:3px;background:var(--b);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0b76ff,#39fff2)}
@@ -39,34 +39,36 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .btn{cursor:pointer;font:700 12px var(--mono);color:var(--a);background:rgba(0,246,210,.06);border:1px solid rgba(0,246,210,.6);border-radius:6px;padding:8px 14px}.btn:hover{background:var(--ad)}
 .btn.gh{color:var(--td);border-color:rgba(255,255,255,.18);background:none}.btn.x{color:var(--r);border-color:rgba(242,95,91,.6);background:none}.btn:disabled{opacity:.4;cursor:default}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
-.msg{font:12px var(--mono);color:var(--y)}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
+.msg{font:12px var(--mono);color:var(--y)}.w1{color:#fff}.sm{line-height:1.5}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
 .view{display:none}.view.on{display:block}
-footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
+.tipped{text-decoration:underline dotted rgba(255,255,255,.35);text-underline-offset:3px;cursor:help}
+.bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(300px,calc(100vw - 16px));padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
+footer{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 22px;padding:22px 0 30px;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}footer a{color:var(--m)}footer a:hover{color:#fff}footer .dim{font-weight:400;letter-spacing:.02em;text-transform:none;color:rgba(255,255,255,.4)}
 </style></head><body><div class=w>
-<header><a class=brand href="#/">{{LOGO}}<span><b>3B</b>Miner <em id=host></em></span></a>
+<header><a class=brand href="#/">{{LOGO}}<span><b>3B</b>Miner <em id=board></em></span></a>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
 <span id=st class="pill bad">offline</span></header>
 
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k>Avg since open</div><div class=v style="font-size:16px" id=havg>-</div></div>
-<div><div class=k>Engine + software</div><div class=v style="font-size:16px" id=hs>-</div></div>
-<div><div class=k>Cycles / nonce</div><div class=v style="font-size:16px" id=kc>-</div></div></div>
-<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#39fff2" stop-opacity=.35 /><stop offset=1 stop-color="#39fff2" stop-opacity=0 /></linearGradient></defs><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.5 vector-effect=non-scaling-stroke /></svg></div>
+<div><div class=k><span class=tipped title="Average of the hashrate readings since this page was opened (one every 3 s)">Avg since open</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine + Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
+<div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
+<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
 <div class=p><div class=k>Pool / network diff</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
 <div class=p><div class=k>Uptime</div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
-<div class=p><div class=k>Block odds (solo)</div><div class=v id=od>-</div><div class=sm id=odn></div><div class=bar title="best diff vs network diff, log scale"><i id=odb style="width:0"></i></div></div>
+<div class=p><div class=k id=odk>Block odds</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
 <div class=p><div class=k>Bitcoin</div><div class=v id=px>-</div><div class=sm id=pxn></div></div>
 <div class=p><div class=k>Block height</div><div class=v id=bh>-</div><div class=sm id=bhn></div></div>
-<div class=p><div class=k>Fees, sat/vB</div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
+<div class=p><div class=k><span class=tipped title="Fee rates mempool.space recommends right now, in satoshi per virtual byte of a transaction: to get into the next block, within about an hour, and the cheapest that still confirms">Fees, sat/vB</span></div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
 <div class="g t">
-<div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares / hour<td id=sph></table></div>
-<div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td>last<td id=lr><tr><td>dropped<td id=cd></table></div>
-<div class=p><div class=k>Device</div><table class=kv><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td>free heap<td id=hp><tr><td>last reset<td id=rr></table></div></div>
+<div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
+<div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr></table></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp><tr><td><span class=tipped title="Why the board last started: power on, software (update, settings, restart button), crash, watchdog, brownout (power dip), reset pin">last reset</span><td id=rr></table></div></div>
 </section>
 
 <section class=view id=v-swarm>
@@ -97,7 +99,8 @@ footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
 <label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
-<label>Time zone <span class=soon>next fw</span><select name=tz disabled><option>UTC</select></label></div></div>
+<label>Time zone <span class=soon>next fw</span><select name=tz disabled><option>UTC</select></label>
+<label>Main currency<select id=curr><option value=USD>US dollar, $<option value=EUR>Euro, €<option value=GBP>Pound, £</select><p class=hint>shown large on the dashboard; kept in this browser</p></label></div></div>
 <div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class="btn gh" id=cf-rl>Reload</button><span class=msg id=cf-m></span></div>
 </form></section>
 
@@ -111,7 +114,7 @@ footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
-<footer>open firmware &middot; NMMiner-compatible API &middot; <a href="https://bumblebeam.org">bumblebeam.org</a></footer></div>
+<footer><a href="https://bumblebeam.org" target=_blank rel=noopener>&copy; 2026 BumbleBeam</a><span class=dim>a community PoW miner for Bitcoin (BTC)</span><a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>open source under Apache-2.0 on GitHub</a></footer></div>
 <script>
 const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.228'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={},T0=Date.now(),HS=0,HN=0;
@@ -119,41 +122,51 @@ const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+'T':v>=1e9?(v/1e9).toFixed(d)+'G':
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
 const hm=(k,u=1)=>k>=1e6?(k/1e6).toFixed(2)+(u?' <small>GH/s</small>':' GH/s'):k>=1e3?(k/1e3).toFixed(2)+(u?' <small>MH/s</small>':' MH/s'):k.toFixed(1)+(u?' <small>KH/s</small>':' KH/s');
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
+const BN=b=>({'esp32-wroom-32':'ESP32-WROOM-32','esp32-cam':'ESP32-CAM'})[b]||String(b||'').toUpperCase();
 const RR=['?','power on','reset pin','software','crash','int watchdog','task watchdog','watchdog','deep sleep','brownout','sdio'];
+// the pool's error as the firmware keeps it, e.g. [21,Job not found,]: only the message
+const rejMsg=r=>{if(!r)return'-';const p=String(r).replace(/^\[|\]$/g,'').split(',').map(x=>x.trim()).filter(x=>x&&!/^-?\d+$/.test(x)&&x!='null');return p[0]||r};
 const txt=(i,t)=>{const e=$(i);if(e)e.textContent=t},htm=(i,t)=>{const e=$(i);if(e)e.innerHTML=t};
 // ---- router
-function route(){const v=(location.hash.replace('#/','')||'dash');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
+const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
+function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
 if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
 addEventListener('hashchange',route);
 // ---- dashboard
 function spark(){const n=H.length;if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
 let d='';H.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
-htm('od',yrs>1e9?(yrs/1e9).toFixed(1)+' <small>B years</small>':yrs>1e6?(yrs/1e6).toFixed(1)+' <small>M years</small>':yrs>1e3?(yrs/1e3).toFixed(1)+' <small>K years</small>':yrs.toFixed(0)+' <small>years</small>');txt('odn','expected time to a block · 1 in '+fx(1/pday,1)+' per day');
-const be=pd(D.miner.bestDiffEver);if(be)$('odb').style.width=Math.min(100,Math.max(1,Math.log10(be)/Math.log10(nd)*100)).toFixed(1)+'%'}
+htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');
+htm('odn','expected time to a block<br><span class=w1>1</span> in <span class=w1>'+fx(1/pday,1)+'</span> per day');
+// solo pools pay the finder the whole block; on a shared pool these are still the odds of this board's hashes, not of a payout
+const solo=/solo|public-pool|ckpool/i.test((D.stratum||{}).url||'');txt('odk',solo?'Block odds (solo)':'Block odds (own hashes)')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
-txt('host',d.identity.hostName);txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
+txt('board',BN(d.identity.board||d.identity.hwModel));txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
 htm('hr',hm(k));HS+=k;HN++;txt('havg',hm(HS/HN,0));txt('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 htm('bd',m.bestDiffSession);txt('bde','ever '+m.bestDiffEver);htm('df',m.poolDiff);txt('dfn','network '+m.networkDiff);
-htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
-txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);txt('wk',(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':u.slice(i)));$('wk').title=u;
+htm('up',ut(m.uptimeSeconds));
+txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);htm('wk',(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>'));$('wk').title=u;
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',m.lastDiff);txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
-txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',s.lastReject||'-');txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');txt('rr',RR[m.resetReason]||'-');
+txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
+txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');txt('rr',RR[m.resetReason]||'-');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
 H.push(k);if(H.length>200)H.shift();spark();odds()}catch(e){txt('st','offline');$('st').className='pill bad'}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
 const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
-if(h){N.h=+h;txt('bh',N.h.toLocaleString('en'));const left=(Math.floor(N.h/210000)+1)*210000-N.h;txt('bhn','halving in '+left.toLocaleString('en')+' blocks · ~'+(left/144).toFixed(0)+' days')}
-if(f){N.f=f;htm('fe',f.fastestFee+' <small>/ '+f.hourFee+' / '+f.economyFee+'</small>');txt('fen','fast / hour / economy')}
-if(p){N.p=p.USD;htm('px','$'+p.USD.toLocaleString('en'));txt('pxn','€'+(p.EUR||0).toLocaleString('en'))}
+if(h){N.h=+h;txt('bh',N.h.toLocaleString('en'));const left=(Math.floor(N.h/210000)+1)*210000-N.h;htm('bhn','halving in '+left.toLocaleString('en')+' blocks<br>~<span class=w1>'+(left/144).toFixed(0)+'</span> days')}
+if(f){N.f=f;htm('fe',f.fastestFee+' <small>/ '+f.hourFee+' / '+f.economyFee+'</small>');txt('fen','next block / 1 hour / economy')}
+if(p){N.p=p.USD;N.px=p;prices()}
 if(da){N.da=da;txt('dfn',(D?'network '+D.miner.networkDiff+' · ':'')+'next adj. '+(da.difficultyChange>0?'+':'')+da.difficultyChange.toFixed(1)+'%')}}
+function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'},main=cur();htm('px',C[main]+(p[main]||0).toLocaleString('en'));
+htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
+function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
 // ---- settings
 let cfgLoaded=0;
 function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
 $('cf-rl').onclick=loadCfg;
+$('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
 $('cf').onsubmit=e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!confirm('Save and restart the miner?'))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
@@ -186,5 +199,14 @@ window.swRst=ip=>{if(confirm('Restart '+ip+'?'))fetch('http://'+ip+'/api/system/
 $('sw-go').onclick=swScan;$('sw-addb').onclick=()=>{const ip=$('sw-add').value.trim();if(ip)swPoll(ip)};
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
 setInterval(()=>{if(location.hash=='#/swarm')for(const ip of SW.keys())swPoll(ip)},15000);
+// tooltips as on the pool site (tips.js): title -> data-tip, shown on hover, focus and tap
+(()=>{const t=document.createElement('div');t.className='bb-tip';let cur=null,tm=0;const own=n=>{for(;n&&n.nodeType==1;n=n.parentNode)if(n.getAttribute('title')||n.hasAttribute('data-tip'))return n;return null};
+const tx=e=>{const v=e.getAttribute('title');if(v){e.setAttribute('data-tip',v);e.removeAttribute('title')}return e.getAttribute('data-tip')||''};
+const show=e=>{const v=tx(e);if(!v)return;if(!t.isConnected)document.body.appendChild(t);cur=e;t.textContent=v;t.classList.remove('on');const r=e.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,vw=document.documentElement.clientWidth,up=r.top-h-8>=8;
+t.style.left=Math.round(Math.min(Math.max(8,r.left+r.width/2-w/2),vw-w-8))+'px';t.style.top=Math.round(up?r.top-h-8:r.bottom+8)+'px';requestAnimationFrame(()=>t.classList.add('on'))};
+const hide=()=>{clearTimeout(tm);cur=null;t.classList.remove('on')};
+document.addEventListener('mouseover',e=>{const el=own(e.target);if(el===cur)return;clearTimeout(tm);if(!el)return hide();tx(el);tm=setTimeout(()=>show(el),cur?0:140)});
+document.addEventListener('mouseout',e=>{const el=own(e.target);if(el&&!(e.relatedTarget&&el.contains(e.relatedTarget)))hide()});
+document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cur)show(el);else if(!el)hide()},{passive:true});addEventListener('scroll',hide,{passive:true,capture:true})})();
 route();tick();setInterval(tick,3000);net();setInterval(net,120000);
 </script></body></html>
