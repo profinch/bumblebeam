@@ -1,0 +1,30 @@
+# 3BMiner changelog
+
+## 0.6.0 (2026-10-28)
+- Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
+  (`boards/<id>`, `tools/build.sh <id>`, `dist/3bminer-<board>-<version>.bin`); images name their board and OTA refuses
+  an image for another board.
+- AI-Thinker ESP32-CAM: the CameraWebServer API (`/capture`, `/bmp`, `/status`, `/control`, `/xclk`, `/reg`, `/greg`,
+  `/pll`, `/resolution`, MJPEG `:81/stream`), the flash LED, settings kept in NVS, a camera page in the pool's style.
+  Frame buffers and large allocations in PSRAM; the camera's grab task under lwip's priority, grabbing on demand.
+- `mining` on/off in the settings (off by default on the camera board); stratum user agent `3BMiner/<version>`.
+- Web pages are gzipped by the build instead of being kept in git.
+
+## 0.5.6
+- The pool's logo and favicon byte for byte; network difficulty from nbits; CORS on config, update and restart.
+- Rejects sorted by the pool's error code (21 = job not found, i.e. stale).
+
+## 0.5.2
+- Kernel with START after 6 header words and the hit test of the previous nonce inside the engine wait: 252
+  cycles/nonce, ~952 KH/s engine (+2.9%). Socket limit 16 (httpd ran out of sockets), interrupt watchdog on, the
+  on-board bench bails out on broken timings, `/api/swbench`.
+
+## 0.4.0
+- Per-stage engine waits instead of one, tuned with `/api/bench` on the board: 260 cycles/nonce, ~925 KH/s (+4.5%).
+
+## 0.3.0
+- Exact hit mask (128x fewer candidates), 20 ms stratum poll, shares for previous non-clean jobs, reject reasons and
+  the reset reason in the API.
+
+## 0.2.0
+- First release: asm kernel at 270 cycles/nonce (~885 KH/s), software hasher on core 1, stratum v1, NMMiner API, OTA.

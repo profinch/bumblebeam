@@ -1,0 +1,8 @@
+/build/
+/build-*/
+/dist/
+/managed_components/
+/sdkconfig
+/sdkconfig.old
+/main/secrets.h
+/web-next/index.html

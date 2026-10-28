@@ -1,0 +1,3 @@
+dependencies:
+  # only linked into boards with CONFIG_BOARD_HAS_CAMERA (unused code is dropped by the linker)
+  espressif/esp32-camera: "^2.1.8"

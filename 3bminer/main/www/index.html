@@ -1,0 +1,90 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>3BMiner</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+:root{--a:#00f6d2;--y:#f4ce4a;--r:#f25f5b;--m:rgba(255,255,255,.5);--b:rgba(255,255,255,.07);--s:rgba(255,255,255,.04);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{background:#0a5a80}
+body{margin:0;min-height:100vh;color:#fff;font:14px -apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#031d35,#043a5b 55%,#0a5a80) fixed}
+.w{max-width:980px;margin:0 auto;padding:0 16px 24px}
+header{display:flex;align-items:center;gap:11px;height:64px}
+.brand{font-weight:700;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}@media(max-width:520px){.brand em{display:none}.hero .v{font-size:32px}}.brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m)}
+.pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
+.on{color:var(--a);border-color:rgba(0,246,210,.5)}.off{color:var(--r);border-color:rgba(242,95,91,.5)}
+.logo { width: 42px; height: 42px; overflow: visible; }
+.logo .hex { filter: drop-shadow(0 0 0 rgba(57, 255, 242, 0)); animation: logo-glow 3s ease-in-out infinite; }
+.logo .bee { animation: logo-bob 3s ease-in-out infinite; }
+.logo .wing { transform-box: fill-box; transform-origin: 50% 100%; animation: logo-flutter .22s ease-in-out infinite alternate; }
+.logo .wr { animation-delay: -.11s; }
+.logo .trail path { animation: logo-trail 1.5s ease-in-out infinite; }
+.logo .trail .t2 { animation-delay: -.5s; }
+.logo .eye { animation: logo-blink 4s steps(1) infinite; }
+@keyframes logo-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(57, 255, 242, 0)); } 50% { filter: drop-shadow(0 0 6px rgba(57, 255, 242, .55)); } }
+@keyframes logo-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.9px); } }
+@keyframes logo-flutter { from { transform: rotate(-9deg) scaleY(.92); } to { transform: rotate(9deg) scaleY(1.05); } }
+@keyframes logo-trail { 0%, 100% { stroke-opacity: .25; transform: translateX(1.2px); } 50% { stroke-opacity: .85; transform: translateX(-1px); } }
+@keyframes logo-blink { 0%, 93%, 100% { opacity: 1; } 95%, 98% { opacity: 0; } }
+.brand:hover .logo .wing{animation-duration:.14s}
+@media (prefers-reduced-motion: reduce) { .logo .hex, .logo .bee, .logo .wing, .logo .trail path, .logo .eye { animation: none; } .logo .trail path { stroke-opacity: .6; } }
+.p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px}
+.k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
+.v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.v small{font-size:12px;color:var(--m);font-weight:400}
+.hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px}.hero .v{font-size:40px;color:var(--a)}
+svg.sp{width:100%;height:64px;display:block;margin-top:12px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g .p{margin:0}.g.t{grid-template-columns:repeat(auto-fit,minmax(min(270px,100%),1fr))}
+table{width:100%;border-collapse:collapse;font:12px var(--mono);table-layout:fixed}td{padding:6px 0;border-bottom:1px solid var(--b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td:first-child{width:40%}td:last-child{text-align:right}td:first-child{color:var(--m);padding-right:12px;white-space:nowrap}
+details summary{cursor:pointer;font:700 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;list-style:none}details summary::before{content:'+ ';color:var(--a)}details[open] summary::before{content:'- '}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px;margin-top:14px}
+label{font:10px var(--mono);color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+input{display:block;width:100%;margin-top:4px;padding:8px 10px;background:#193b55;border:1px solid var(--b);border-radius:6px;color:#fff;font:13px var(--mono)}input:focus{outline:1px solid var(--a)}
+.btn{cursor:pointer;font:700 12px var(--mono);color:var(--a);background:rgba(0,246,210,.06);border:1px solid rgba(0,246,210,.6);border-radius:6px;padding:8px 14px}.btn:hover{background:rgba(0,246,210,.18)}
+.btn.x{color:var(--r);border-color:rgba(242,95,91,.6);background:none}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+#msg{font:12px var(--mono);color:var(--y)}.y{color:var(--y)}.r{color:var(--r)}
+footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:8px}
+</style></head><body><div class=w>
+<header>
+<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient><clipPath id="lc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><path class="hex" d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#lg)"/><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#lc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg>
+<div class=brand><b>3B</b>Miner <em id=host></em></div><a id=cam href="/camera" style="display:none;margin-left:auto;font:700 13px var(--mono);color:#fff;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent">Camera</a><span id=st class="pill off" style="margin-left:12px">offline</span></header>
+<div class=p><div class=hero><div><div class=k>Hashrate</div><div class=v id=hr>-</div></div><div><div class=k>Engine + software</div><div class=v style="font-size:16px" id=hs>-</div></div><div><div class=k>Cycles / nonce</div><div class=v style="font-size:16px" id=kc>-</div></div></div>
+<svg class=sp viewBox="0 0 300 64" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#39fff2" stop-opacity=.35 /><stop offset=1 stop-color="#39fff2" stop-opacity=0 /></linearGradient></defs><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.5 vector-effect=non-scaling-stroke /></svg></div>
+<div class=g>
+<div class=p><div class=k>Shares</div><div class=v id=sh>-</div></div>
+<div class=p><div class=k>Best diff</div><div class=v id=bd>-</div></div>
+<div class=p><div class=k>Pool / network diff</div><div class=v id=df>-</div></div>
+<div class=p><div class=k>Uptime</div><div class=v id=up>-</div></div></div>
+<div class="g t">
+<div class=p><div class=k>Pool</div><table><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld></table></div>
+<div class=p><div class=k>Rejects</div><table><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td>last<td id=lr><tr><td>dropped<td id=cd></table></div>
+<div class=p><div class=k>Device</div><table><tr><td>firmware<td id=fw><tr><td>wi-fi<td id=rs><tr><td>free heap<td id=hp><tr><td>last reset<td id=rr></table></div></div>
+<div class=p><details><summary>Settings</summary><form id=cf>
+<label>Wi-Fi SSID<input name=ssid></label><label>Wi-Fi password<input name=pass type=password placeholder="unchanged if empty"></label><label>BSSID lock<input name=bssid placeholder="optional"></label>
+<label>Pool host<input name=pool></label><label>Port<input name=port type=number></label><label>Suggest diff<input name=suggest type=number step=any></label>
+<label>BTC address<input name=wallet></label><label>Worker<input name=worker></label>
+<div class=row><button class=btn>Save &amp; restart</button></div></form></details></div>
+<div class=p><details><summary>Firmware</summary><div class=row><input type=file id=fwf accept=".bin" style="max-width:320px"><button class=btn id=ota>Upload</button><button class="btn x" id=rst>Restart</button><span id=msg></span></div></details></div>
+<footer>open firmware &middot; NMMiner-compatible API &middot; <a style="color:var(--a)" href="https://bumblebeam.org">bumblebeam.org</a></footer></div>
+<script>
+const B=location.protocol=='file:'?'http://'+(new URLSearchParams(location.search).get('h')||'192.168.1.16'):'',$=i=>document.getElementById(i),H=[];
+const hm=k=>k>=1e3?(k/1e3).toFixed(2)+' <small>MH/s</small>':k.toFixed(1)+' <small>KH/s</small>';
+const ut=s=>{const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h+'h '+m+'m'};
+const RR=['?','power on','ext','software','panic','int wdt','task wdt','wdt','deep sleep','brownout','sdio'];
+function spark(){const n=H.length;if(n<2)return;const mx=Math.max(...H)*1.02,mn=Math.min(...H)*.98,sx=300/(n-1),y=v=>64-(v-mn)/(mx-mn||1)*60-2;
+let d='';H.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 64L0 64Z')}
+async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum,k=m.hashRate*1e6;
+$('host').textContent=d.identity.hostName;const mo=d.identity.mining!==false;$('st').textContent=!mo?'mining off':s.connected?'mining':'no pool';$('st').className='pill '+(mo&&s.connected?'on':'off');if(d.identity.camera)$('cam').style.display='';
+$('hr').innerHTML=hm(k);$('hs').textContent=(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s';$('kc').textContent=m.kernelCycles;
+const t=m.sAccepted+m.sRejected;$('sh').innerHTML=m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span>'+(t?' '+(100*m.sRejected/t).toFixed(1)+'%':'')+'</small>';
+$('bd').innerHTML=m.bestDiffSession+' <small>/ '+m.bestDiffEver+'</small>';$('df').innerHTML=m.poolDiff+' <small>/ '+m.networkDiff+'</small>';
+$('up').innerHTML=ut(m.uptimeSeconds)+' <small>'+(m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0)+'/h':'')+'</small>';
+$('pu').textContent=s.url;const u=s.user,i=u.indexOf('.'),a=i<0?u:u.slice(0,i);$('wk').textContent=(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':u.slice(i));$('wk').title=u;$('jb').textContent=s.jobs+' / '+s.submitted;$('ld').textContent=m.lastDiff;
+$('r1').textContent=(s.rejStale??'-')+' / '+(s.rejDup??'-');$('r2').textContent=(s.rejLowDiff??'-')+' / '+(s.rejOther??'-');$('lr').textContent=s.lastReject||'-';$('cd').textContent=(s.candDropped??0)+' / '+(s.staleDropped??0);
+$('fw').textContent=d.identity.fwVersion;$('rs').textContent=d.identity.rssi+' dBm';$('hp').textContent=(m.freeHeap/1024).toFixed(0)+' KB';$('rr').textContent=RR[m.resetReason]||m.resetReason||'-';
+H.push(k);if(H.length>150)H.shift();spark()}catch(e){$('st').textContent='offline';$('st').className='pill off'}}
+tick();setInterval(tick,3000);
+fetch(B+'/api/config').then(r=>r.json()).then(c=>{for(const k in c){const e=$('cf').elements[k];if(e&&k!='pass')e.value=c[k]}}).catch(()=>{});
+$('cf').onsubmit=e=>{e.preventDefault();const o={};for(const x of $('cf').elements)if(x.name&&x.value!=='')o[x.name]=x.type=='number'?+x.value:x.value;
+if(!confirm('Save and restart the miner?'))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.text()).then(t=>$('msg').textContent=t)};
+$('ota').onclick=()=>{const f=$('fwf').files[0];if(!f)return;$('msg').textContent='uploading '+(f.size/1024|0)+' KB...';
+fetch(B+'/update',{method:'POST',body:f}).then(r=>r.text()).then(t=>$('msg').textContent=t).catch(e=>$('msg').textContent='upload failed')};
+$('rst').onclick=()=>{if(confirm('Restart the miner?'))fetch(B+'/api/system/restart',{method:'POST'}).then(()=>$('msg').textContent='restarting...')};
+</script></body></html>

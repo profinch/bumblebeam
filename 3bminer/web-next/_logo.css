@@ -1,0 +1,15 @@
+.logo { width: 42px; height: 42px; overflow: visible; }
+.logo .hex { filter: drop-shadow(0 0 0 rgba(57, 255, 242, 0)); animation: logo-glow 3s ease-in-out infinite; }
+.logo .bee { animation: logo-bob 3s ease-in-out infinite; }
+.logo .wing { transform-box: fill-box; transform-origin: 50% 100%; animation: logo-flutter .22s ease-in-out infinite alternate; }
+.logo .wr { animation-delay: -.11s; }
+.logo .trail path { animation: logo-trail 1.5s ease-in-out infinite; }
+.logo .trail .t2 { animation-delay: -.5s; }
+.logo .eye { animation: logo-blink 4s steps(1) infinite; }
+@keyframes logo-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(57, 255, 242, 0)); } 50% { filter: drop-shadow(0 0 6px rgba(57, 255, 242, .55)); } }
+@keyframes logo-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.9px); } }
+@keyframes logo-flutter { from { transform: rotate(-9deg) scaleY(.92); } to { transform: rotate(9deg) scaleY(1.05); } }
+@keyframes logo-trail { 0%, 100% { stroke-opacity: .25; transform: translateX(1.2px); } 50% { stroke-opacity: .85; transform: translateX(-1px); } }
+@keyframes logo-blink { 0%, 93%, 100% { opacity: 1; } 95%, 98% { opacity: 0; } }
+.brand:hover .logo .wing{animation-duration:.14s}
+@media (prefers-reduced-motion: reduce) { .logo .hex, .logo .bee, .logo .wing, .logo .trail path, .logo .eye { animation: none; } .logo .trail path { stroke-opacity: .6; } }

@@ -1,0 +1,221 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>3BMiner</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+:root{--a:#00f6d2;--ad:rgba(0,246,210,.18);--y:#f4ce4a;--r:#f25f5b;--bl:#0bccf7;--m:rgba(255,255,255,.5);--td:rgba(255,255,255,.8);--b:rgba(255,255,255,.07);--s:rgba(255,255,255,.04);--f:#193b55;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{background:#0a5a80;overflow-y:scroll}
+body{margin:0;min-height:100vh;color:#fff;font:14px -apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(180deg,#031d35,#043a5b 55%,#0a5a80) fixed}
+a{color:var(--a);text-decoration:none}
+.w{max-width:1100px;margin:0 auto;padding:0 16px 24px}
+header{display:flex;align-items:center;flex-wrap:wrap;gap:0 18px;min-height:64px}
+.brand{display:flex;align-items:center;gap:11px;color:#fff;font-weight:700;font-size:19px;white-space:nowrap;min-width:0}
+.brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m);font-size:15px}
+{{LOGOCSS}}
+nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
+nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
+.pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
+.ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}
+@media(max-width:760px){#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}.brand em{display:none}}
+h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 12px}
+.p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
+.k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
+.v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.v small,.sm{font-size:12px;color:var(--m);font-weight:400}
+.hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:40px;color:var(--a)}
+svg.sp{width:100%;height:70px;display:block;margin-top:12px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}
+.g.t{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
+.kv{table-layout:fixed}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
+.sc{overflow-x:auto}th{color:var(--m);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}td.n,th.n{text-align:right}
+tr.me td:first-child{box-shadow:inset 2px 0 var(--a)}
+.bar{height:6px;border-radius:3px;background:var(--b);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0b76ff,#39fff2)}
+form{margin:0}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px 14px}
+label{font:10px var(--mono);color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background:var(--f);border:1px solid var(--b);border-radius:6px;color:#fff;font:13px var(--mono)}input:focus,select:focus{outline:1px solid var(--a)}input:disabled,select:disabled{opacity:.45}
+.hint{font:11px var(--mono);color:var(--m);margin:4px 0 0;text-transform:none;letter-spacing:0}
+.soon{font:700 9px var(--mono);color:var(--y);border:1px solid rgba(244,206,74,.5);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.btn{cursor:pointer;font:700 12px var(--mono);color:var(--a);background:rgba(0,246,210,.06);border:1px solid rgba(0,246,210,.6);border-radius:6px;padding:8px 14px}.btn:hover{background:var(--ad)}
+.btn.gh{color:var(--td);border-color:rgba(255,255,255,.18);background:none}.btn.x{color:var(--r);border-color:rgba(242,95,91,.6);background:none}.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.msg{font:12px var(--mono);color:var(--y)}.r{color:var(--r)}.y{color:var(--y)}.c{color:var(--a)}
+.view{display:none}.view.on{display:block}
+.scr{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}.scr figure{margin:0}.scr figcaption{font:11px var(--mono);color:var(--m);margin-top:6px}
+canvas{zoom:1.25;border-radius:6px;box-shadow:0 0 0 6px #111,0 0 0 7px #333;image-rendering:pixelated}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs .btn.on{background:var(--ad)}
+footer{font:11px var(--mono);color:var(--m);text-align:center;margin-top:10px}
+</style></head><body><div class=w>
+<header><a class=brand href="#/">{{LOGO}}<span><b>3B</b>Miner <em id=host></em></span></a>
+<nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a><a href="#/display" data-v=display>Display</a></nav>
+<span id=st class="pill bad">offline</span></header>
+
+<section class=view id=v-dash>
+<div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
+<div><div class=k>Avg since open</div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k>Engine + software</div><div class=v style="font-size:16px" id=hs>-</div></div>
+<div><div class=k>Cycles / nonce</div><div class=v style="font-size:16px" id=kc>-</div></div></div>
+<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#39fff2" stop-opacity=.35 /><stop offset=1 stop-color="#39fff2" stop-opacity=0 /></linearGradient></defs><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.5 vector-effect=non-scaling-stroke /></svg></div>
+<div class=g>
+<div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
+<div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
+<div class=p><div class=k>Pool / network diff</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
+<div class=p><div class=k>Uptime</div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
+<div class=g>
+<div class=p><div class=k>Block odds (solo)</div><div class=v id=od>-</div><div class=sm id=odn></div><div class=bar title="best diff vs network diff, log scale"><i id=odb style="width:0"></i></div></div>
+<div class=p><div class=k>Bitcoin</div><div class=v id=px>-</div><div class=sm id=pxn></div></div>
+<div class=p><div class=k>Block height</div><div class=v id=bh>-</div><div class=sm id=bhn></div></div>
+<div class=p><div class=k>Fees, sat/vB</div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
+<div class="g t">
+<div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares / hour<td id=sph></table></div>
+<div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td>last<td id=lr><tr><td>dropped<td id=cd></table></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td>free heap<td id=hp><tr><td>last reset<td id=rr></table></div></div>
+</section>
+
+<section class=view id=v-swarm>
+<div class=g>
+<div class=p><div class=k>Miners online</div><div class=v id=sw-n>0</div><div class=sm id=sw-scan>not scanned</div></div>
+<div class=p><div class=k>Total hashrate</div><div class=v id=sw-h>-</div></div>
+<div class=p><div class=k>Best diff</div><div class=v id=sw-b>-</div></div>
+<div class=p><div class=k>Shares</div><div class=v id=sw-s>-</div></div></div>
+<div class=p><div class=row style="margin:0 0 12px"><button class=btn id=sw-go>Scan network</button><span class=sm>subnet <input id=sw-net style="display:inline;width:130px;margin:0 0 0 6px" value=""></span><input id=sw-add placeholder="add IP" style="display:inline;width:140px;margin:0"><button class="btn gh" id=sw-addb>Add</button></div>
+<div class=sc><table><thead><tr id=sw-th></tr></thead><tbody id=sw-tb></tbody></table></div>
+<p class=hint>Finds NMMiner, NerdMiner-style and AxeOS (Bitaxe, NerdQaxe) devices by their /probe and /api/system/info. Found addresses are remembered in this browser.</p></div>
+</section>
+
+<section class=view id=v-settings>
+<form id=cf>
+<div class=p><h2 style="margin-top:0">Payout</h2><div class=fg>
+<label>Bitcoin address<input name=wallet spellcheck=false></label>
+<label>Worker name<input name=worker placeholder="esp32"><p class=hint>shown by the pool after the address</p></label></div></div>
+<div class=p><h2 style="margin-top:0">Pool</h2><div class=fg>
+<label>Stratum server<input name=url placeholder="pool.example.com:3333" spellcheck=false><p class=hint>host:port, stratum+tcp:// is optional</p></label>
+<label>Start difficulty<input name=suggest type=number step=any><p class=hint>suggested to the pool on connect</p></label>
+<label>Backup server <span class=soon>next fw</span><input name=url2 disabled placeholder="used when the main one is down"></label>
+<label>Pool password <span class=soon>next fw</span><input name=ppass disabled placeholder="x"></label></div></div>
+<div class=p><h2 style="margin-top:0">Wi-Fi</h2><div class=fg>
+<label>Network name<input name=ssid></label>
+<label>Password<input name=pass type=password placeholder="unchanged if empty"></label>
+<label>Access point lock<input name=bssid placeholder="aa:bb:cc:dd:ee:ff" spellcheck=false><p class=hint>optional: stick to one router when several share the name</p></label>
+<label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
+<div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
+<label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
+<label>Time zone <span class=soon>next fw</span><select name=tz disabled><option>UTC</select></label></div></div>
+<div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class="btn gh" id=cf-rl>Reload</button><span class=msg id=cf-m></span></div>
+</form></section>
+
+<section class=view id=v-firmware>
+<div class="g t">
+<div class=p><div class=k>Installed</div><table class=kv><tr><td>version<td id=f-ver><tr><td>kernel<td id=f-ker><tr><td>engine timing<td id=f-tim>run the check<tr><td>running for<td id=f-up></table></div>
+<div class=p><div class=k>Update</div><p class=hint>Upload 3bminer-&lt;board&gt;-&lt;version&gt;.bin. The board writes it to the spare slot and restarts; the old version stays in the other slot.</p>
+<div class=row><input type=file id=f-file accept=".bin" style="max-width:260px"><button class=btn id=f-up-b>Upload</button></div><div class=bar><i id=f-pr style="width:0"></i></div><div class="row msg" id=f-m></div></div>
+<div class=p><div class=k>Engine check</div><p class=hint>Runs 1M nonces of a fixed header on the SHA engine and checks every hit in software. Mining pauses for about two seconds.</p>
+<div class=row><button class=btn id=f-bench>Run check</button><span class=msg id=f-bm></span></div></div>
+<div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
+</section>
+
+<section class=view id=v-display>
+<div class=p><div class=k>Screens for boards with a display</div><p class=hint>A preview drawn from the live data: the layout a TFT version of the firmware would show. Tap a screen to cycle pages, as the button on the board would.</p>
+<div class=tabs id=d-tabs><button class="btn on" data-s=0>Miner</button><button class=btn data-s=1>Network</button><button class=btn data-s=2>Clock</button></div>
+<div class=scr><figure><canvas id=c1 width=240 height=240></canvas><figcaption>1.54" 240x240 (NMMiner board)</figcaption></figure>
+<figure><canvas id=c2 width=320 height=170></canvas><figcaption>1.9" 320x170 (T-Display S3)</figcaption></figure>
+<figure><canvas id=c3 width=320 height=240></canvas><figcaption>2.8" 320x240 (ESP32-2432S028 "CYD")</figcaption></figure></div></div>
+</section>
+<footer>open firmware &middot; NMMiner-compatible API &middot; <a href="https://bumblebeam.org">bumblebeam.org</a></footer></div>
+<script>
+const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.1.16'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
+let D=null,N={},T0=Date.now(),HS=0,HN=0;
+const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+'T':v>=1e9?(v/1e9).toFixed(d)+'G':v>=1e6?(v/1e6).toFixed(d)+'M':v>=1e3?(v/1e3).toFixed(d)+'K':(+v).toPrecision(4).replace(/\.?0+$/,'');
+const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
+const hm=(k,u=1)=>k>=1e6?(k/1e6).toFixed(2)+(u?' <small>GH/s</small>':' GH/s'):k>=1e3?(k/1e3).toFixed(2)+(u?' <small>MH/s</small>':' MH/s'):k.toFixed(1)+(u?' <small>KH/s</small>':' KH/s');
+const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
+const RR=['?','power on','reset pin','software','crash','int watchdog','task watchdog','watchdog','deep sleep','brownout','sdio'];
+const txt=(i,t)=>{const e=$(i);if(e)e.textContent=t},htm=(i,t)=>{const e=$(i);if(e)e.innerHTML=t};
+// ---- router
+function route(){const v=(location.hash.replace('#/','')||'dash');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
+if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan();if(v=='display')draw()}
+addEventListener('hashchange',route);
+// ---- dashboard
+function spark(){const n=H.length;if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
+let d='';H.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
+function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
+htm('od',yrs>1e9?(yrs/1e9).toFixed(1)+' <small>B years</small>':yrs>1e6?(yrs/1e6).toFixed(1)+' <small>M years</small>':yrs>1e3?(yrs/1e3).toFixed(1)+' <small>K years</small>':yrs.toFixed(0)+' <small>years</small>');txt('odn','expected time to a block · 1 in '+fx(1/pday,1)+' per day');
+const be=pd(D.miner.bestDiffEver);if(be)$('odb').style.width=Math.min(100,Math.max(1,Math.log10(be)/Math.log10(nd)*100)).toFixed(1)+'%'}
+async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
+txt('host',d.identity.hostName);txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
+htm('hr',hm(k));HS+=k;HN++;txt('havg',hm(HS/HN,0));txt('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s':'-');txt('kc',m.kernelCycles??'-');
+const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
+htm('bd',m.bestDiffSession);txt('bde','ever '+m.bestDiffEver);htm('df',m.poolDiff);txt('dfn','network '+m.networkDiff);
+htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
+txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);txt('wk',(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':u.slice(i)));$('wk').title=u;
+txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',m.lastDiff);txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
+txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',s.lastReject||'-');txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
+txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');txt('rr',RR[m.resetReason]||'-');
+txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
+H.push(k);if(H.length>200)H.shift();spark();odds();if(location.hash=='#/display')draw()}catch(e){txt('st','offline');$('st').className='pill bad'}}
+// network data from mempool.space, fetched by the browser (costs the board nothing)
+async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
+const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
+if(h){N.h=+h;txt('bh',N.h.toLocaleString('en'));const left=(Math.floor(N.h/210000)+1)*210000-N.h;txt('bhn','halving in '+left.toLocaleString('en')+' blocks · ~'+(left/144).toFixed(0)+' days')}
+if(f){N.f=f;htm('fe',f.fastestFee+' <small>/ '+f.hourFee+' / '+f.economyFee+'</small>');txt('fen','fast / hour / economy')}
+if(p){N.p=p.USD;htm('px','$'+p.USD.toLocaleString('en'));txt('pxn','€'+(p.EUR||0).toLocaleString('en'))}
+if(da){N.da=da;txt('dfn',(D?'network '+D.miner.networkDiff+' · ':'')+'next adj. '+(da.difficultyChange>0?'+':'')+da.difficultyChange.toFixed(1)+'%')}}
+// ---- settings
+let cfgLoaded=0;
+function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
+$('cf-rl').onclick=loadCfg;
+$('cf').onsubmit=e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
+if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
+if(!confirm('Save and restart the miner?'))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
+// ---- firmware
+$('f-up-b').onclick=()=>{const fl=$('f-file').files[0];if(!fl)return;if(!confirm('Install '+fl.name+' ('+(fl.size/1024|0)+' KB)?'))return;const x=new XMLHttpRequest();x.open('POST',B+'/update');
+x.upload.onprogress=e=>{$('f-pr').style.width=(100*e.loaded/e.total).toFixed(0)+'%';txt('f-m','uploading '+(100*e.loaded/e.total).toFixed(0)+'%')};
+x.onload=()=>txt('f-m',x.status==200?'installed, restarting…':'failed: '+x.responseText);x.onerror=()=>txt('f-m','upload failed');x.send(fl)};
+$('f-rst').onclick=()=>{if(confirm('Restart the miner?'))fetch(B+'/api/system/restart',{method:'POST'}).then(()=>txt('f-m','restarting…'))};
+$('f-bench').onclick=()=>{txt('f-bm','running…');$('f-bench').disabled=1;fetch(B+'/api/bench?n=1048576').then(r=>r.json()).then(b=>{txt('f-tim',b.live.join('/')+' · kernel '+b.liveKernel);
+txt('f-bm',b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine · '+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct'))}).catch(()=>txt('f-bm','failed')).finally(()=>$('f-bench').disabled=0)};
+// ---- swarm
+const SK='swarm-ips';let SW=new Map(),swScanned=0,swSort='hr',swDir=-1;
+const COLS=[['host','Miner'],['ip','IP'],['model','Board'],['hr','Hashrate',1],['acc','Shares',1],['best','Best',1],['pdiff','Pool diff',1],['up','Uptime',1],['rssi','RSSI',1],['heap','Heap',1],['ver','Firmware'],['seen','Seen',1]];
+$('sw-th').innerHTML=COLS.map(c=>'<th data-k='+c[0]+(c[2]?' class=n':'')+'>'+c[1]+'</th>').join('')+'<th></th>';
+$('sw-th').onclick=e=>{const k=e.target.dataset.k;if(!k)return;swDir=swSort==k?-swDir:-1;swSort=k;swDraw()};
+function mapInfo(ip,d){if(d.miner)return{ip,host:d.identity.hostName,model:d.identity.board||d.identity.hwModel,ver:d.identity.fwVersion,hr:d.miner.hashRate*1e6,acc:d.miner.sAccepted,rej:d.miner.sRejected,best:pd(d.miner.bestDiffEver),bestS:d.miner.bestDiffEver,pdiff:pd(d.miner.poolDiff),up:d.miner.uptimeSeconds,rssi:d.identity.rssi,heap:d.miner.freeHeap};
+return{ip,host:d.hostname,model:d.ASICModel||d.boardVersion||'AxeOS',ver:d.version,hr:(d.hashRate||0)*1e6,acc:d.sharesAccepted,rej:d.sharesRejected,best:pd(d.bestDiff),bestS:d.bestDiff,pdiff:d.poolDifficulty||0,up:d.uptimeSeconds,rssi:d.wifiRSSI,heap:d.freeHeap,temp:d.temp}}
+async function swPoll(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),2500);const d=await(await fetch('http://'+ip+'/api/system/info',{signal:c.signal})).json();const o=mapInfo(ip,d);o.seen=Date.now();SW.set(ip,o);swSave();swDraw();return 1}catch(e){const o=SW.get(ip);if(o)o.off=1;swDraw();return 0}}
+async function swProbe(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),1500);const r=await fetch('http://'+ip+'/probe',{signal:c.signal});if(!r.ok)return;const j=await r.json();if('hr' in j||'hashRate' in j)await swPoll(ip)}catch(e){}}
+function swSave(){try{localStorage.setItem(SK,JSON.stringify([...SW.keys()]))}catch(e){}}
+async function swScan(){swScanned=1;const net=$('sw-net').value.trim().replace(/\.\d+$/,'').replace(/\.$/,'');let done=0;
+try{for(const ip of JSON.parse(localStorage.getItem(SK)||'[]'))swPoll(ip)}catch(e){}
+const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
+const worker=async()=>{while(q.length){const ip=q.shift();await swProbe(ip);done++;txt('sw-scan','scanning '+done+'/254')}};
+await Promise.all(Array.from({length:24},worker));txt('sw-scan','scan done · '+new Date().toLocaleTimeString())}
+function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-b',bb.bestS||'-');txt('sw-s',a.reduce((s,o)=>s+(o.acc||0),0)+' / '+a.reduce((s,o)=>s+(o.rej||0),0));
+const rows=[...SW.values()].sort((x,y)=>{const p=x[swSort],q=y[swSort];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*swDir});
+$('sw-tb').innerHTML=rows.map(o=>'<tr'+(o.ip==DEV||o.ip==location.hostname?' class=me':'')+(o.off?' style="opacity:.4"':'')+'><td>'+o.host+'<td><a href="http://'+o.ip+'/" target=_blank>'+o.ip+'</a><td>'+o.model+'<td class=n>'+hm(o.hr||0,0)+'<td class=n>'+o.acc+' / <span class=r>'+o.rej+'</span><td class=n>'+(o.bestS||'-')+'<td class=n>'+fx(o.pdiff||0,3)+'<td class=n>'+ut(o.up)+'<td class=n>'+(o.rssi??'-')+'<td class=n>'+(o.heap?(o.heap/1024|0)+'K':'-')+'<td>'+o.ver+'<td class=n>'+(o.off?'offline':Math.round((Date.now()-o.seen)/1000)+'s')+'<td><button class="btn gh" style="padding:3px 8px" onclick="swRst(\''+o.ip+'\')">restart</button>').join('')}
+window.swRst=ip=>{if(confirm('Restart '+ip+'?'))fetch('http://'+ip+'/api/system/restart',{method:'POST'})};
+$('sw-go').onclick=swScan;$('sw-addb').onclick=()=>{const ip=$('sw-add').value.trim();if(ip)swPoll(ip)};
+$('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
+setInterval(()=>{if(location.hash=='#/swarm')for(const ip of SW.keys())swPoll(ip)},15000);
+// ---- display previews (canvas): the layouts a TFT build would draw
+let scr=0;$('d-tabs').onclick=e=>{const s=e.target.dataset.s;if(s==null)return;scr=+s;[...$('d-tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.s==s));draw()};
+document.querySelectorAll('canvas').forEach(c=>c.onclick=()=>$('d-tabs').children[(scr+1)%3].click());
+function draw(){for(const id of['c1','c2','c3'])paint($(id))}
+function paint(c){const x=c.getContext('2d'),W=c.width,Hh=c.height,u=W/Hh>1.6?Hh/150:Math.min(W/240,Hh/220),M=D&&D.miner,F=(s,w=700)=>w+' '+Math.round(s*u)+'px ui-monospace,Menlo,Consolas,monospace';
+const g=x.createLinearGradient(0,0,0,Hh);g.addColorStop(0,'#031d35');g.addColorStop(1,'#0a5a80');x.fillStyle=g;x.fillRect(0,0,W,Hh);
+const T=(t,X,Y,s,col='#fff',al='left',w=700)=>{x.font=F(s,w);x.fillStyle=col;x.textAlign=al;x.fillText(t,X,Y)};
+// header: hex mark + title + status dot
+x.fillStyle='#00c8ee';hex(x,14*u,14*u,9*u);T(['MINER','NETWORK','CLOCK'][scr],28*u,19*u,12,'#fff');x.fillStyle=D&&D.stratum&&D.stratum.connected?'#00f6d2':'#f25f5b';x.beginPath();x.arc(W-12*u,14*u,4*u,0,7);x.fill();
+const k=M?M.hashRate*1e6:0,wide=W/Hh>1.6;
+if(scr==0){T(k?k.toFixed(1):'-',wide?12*u:W/2,wide?66*u:84*u,wide?44:46,'#00f6d2',wide?'left':'center');T('KH/s',wide?12*u:W/2,wide?82*u:104*u,12,'rgba(255,255,255,.55)',wide?'left':'center',400);
+const sx=wide?W*.52:10*u,sw=wide?W*.45:W-20*u,sy=wide?32*u:118*u,sh=wide?52*u:34*u;sparkC(x,sx,sy,sw,sh);
+const rows=[['SHARES',M?M.sAccepted+' / '+M.sRejected:'-'],['BEST',M?M.bestDiffSession:'-'],['UPTIME',M?ut(M.uptimeSeconds):'-'],['POOL DIFF',M?M.poolDiff:'-']];
+const y0=wide?104*u:170*u,cw=wide?W/4:W/2;rows.forEach((r,i)=>{const cx=(wide?i:i%2)*cw+10*u,cy=y0+(wide?0:(i>>1)*32*u);T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(String(r[1]),cx,cy+13*u,12,'#fff')})}
+if(scr==1){const rows=[['BLOCK',N.h?N.h.toLocaleString('en'):'-','#fff'],['BTC',N.p?'$'+N.p.toLocaleString('en'):'-','#f4ce4a'],['NET DIFF',M?M.networkDiff:'-','#fff'],['FEES',N.f?N.f.fastestFee+' / '+N.f.hourFee+' sat/vB':'-','#fff'],['HALVING',N.h?((Math.floor(N.h/210000)+1)*210000-N.h).toLocaleString('en')+' blocks':'-','#00f6d2']];
+const per=wide?2:1,lh=(Hh-40*u)/Math.ceil(rows.length/per);rows.forEach((r,i)=>{const cx=(i%per)*(W/per)+10*u,cy=36*u+Math.floor(i/per)*lh+12*u;T(r[0],cx,cy,8,'rgba(255,255,255,.5)');T(r[1],cx,cy+(wide?18:20)*u,wide?15:17,r[2])})}
+if(scr==2){const d=new Date(),hh=String(d.getHours()).padStart(2,'0'),mm=String(d.getMinutes()).padStart(2,'0');T(hh+':'+mm,W/2,Hh*.5+10*u,wide?70:64,'#fff','center');
+T(d.toDateString().toUpperCase(),W/2,Hh*.5+32*u,10,'rgba(255,255,255,.55)','center',400);T((k?k.toFixed(0):'-')+' KH/s',12*u,Hh-14*u,13,'#00f6d2');T(N.p?'$'+Math.round(N.p).toLocaleString('en'):'',W-12*u,Hh-14*u,13,'#f4ce4a','right');if(N.h)T('#'+N.h,W/2,Hh-14*u,11,'rgba(255,255,255,.7)','center',400)}}
+function hex(x,cx,cy,r){x.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2;x.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}x.closePath();x.fill()}
+function sparkC(x,X,Y,W,Hh){const n=H.length;x.strokeStyle='rgba(255,255,255,.08)';x.strokeRect(X,Y,W,Hh);if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99;x.beginPath();H.forEach((v,i)=>{const px=X+i*W/(n-1),py=Y+Hh-(v-mn)/(mx-mn||1)*Hh;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle='#00f6d2';x.lineWidth=1.5;x.stroke()}
+setInterval(()=>{if(location.hash=='#/display'&&scr==2)draw()},10000);
+route();tick();setInterval(tick,3000);net();setInterval(net,120000);
+</script></body></html>
