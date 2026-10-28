@@ -62,7 +62,7 @@ footer{padding:10px 0 30px}.foot-copy .fp{white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.ask-bg,.ask{transition:none}}
 /* Swarm controls: scan on the left, a custom address on the right; on phones the custom one gets its own row, left-aligned */
 .swc{margin:0 0 6px;justify-content:space-between;align-items:flex-start}.swg{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.swg input{display:inline-block;width:150px;margin:0}.swr{margin-left:auto}
-/* a line kept free under each group for its message, so nothing jumps */.swm{transition:opacity .6s}.swm.gone{opacity:0}.swm{min-height:18px;margin-top:6px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.swr .swm{text-align:right}
+/* a line kept free under each group for its message, so nothing jumps */.swm,.fd{transition:opacity .6s}.fd.gone{opacity:0}.swm.gone{opacity:0}.swm{min-height:18px;margin-top:6px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.swr .swm{text-align:right}
 .swhint{margin-top:16px!important}
 /* Firmware: the cards' hints and tables start where the dashboard's tables do; the file picker is a pill like the status, filled on hover */
 #v-firmware .p>.k+.hint,#v-firmware .p>.k+.kv{margin-top:10px}
@@ -159,7 +159,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <label>Time format<select id=clk><option value=24>24-hour, 15:39:10<option value=12>12-hour, 3:39:10 PM</select><p class=hint>kept in this browser</p></label>
 <label>Average on the dashboard<select id=avgsel><option value=1h>last hour<option value=24h>last 24 hours<option value=all>all time</select><p class=hint>kept in this browser</p></label>
 <label>Main currency<select id=curr><option value=USD>US dollar, $<option value=EUR>Euro, €<option value=GBP>Pound, £</select><p class=hint>shown large on the dashboard; kept in this browser</p></label></div></div>
-<div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class="btn gh" id=cf-rl>Reload</button><span class=msg id=cf-m></span></div>
+<div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class=btn id=cf-rl title="Read the settings saved on the board again and refill the fields; edits not saved yet are dropped. The board is not touched and keeps mining">Reload</button><span class="msg fd" id=cf-m></span></div>
 </form></section>
 
 <section class=view id=v-firmware>
@@ -285,8 +285,8 @@ try{const v=(await(await fetch('https://pool.bumblebeam.org/api/3bminer/oui?mac=
 [...sel.options].forEach(x=>{const n=v[x.value];if(n)x.textContent=x.textContent.replace(x.value,x.value+', '+n)});ddsync()}catch(e){}}
 // ---- settings
 let cfgLoaded=0;
-function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>txt('cf-m','could not read the settings'))}
-$('cf-rl').onclick=loadCfg;
+function loadCfg(say){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}if(say)fade('cf-m','settings reloaded from the board');else txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>fade('cf-m','could not read the settings from the board'))}
+$('cf-rl').onclick=()=>loadCfg(1);
 try{$('clk').value=localStorage.getItem('clock')||'24'}catch(e){}$('clk').onchange=e=>{try{localStorage.setItem('clock',e.target.value)}catch(x){}};
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();setTimeout(ddsync,0);$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
