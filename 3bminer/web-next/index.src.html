@@ -45,16 +45,19 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
 footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
 /* phones: all four figures on one row as on a desktop, the hashrate smaller (after the base rules so they win) */
-@media(max-width:760px){.hero{display:grid;grid-template-columns:max-content repeat(3,minmax(0,1fr));align-items:end;gap:6px 10px}.hero .big{font-size:20px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:.02em;line-height:1.4}.hero .u{display:none}}
-</style></head><body><div class=w>
+@media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}.hero>div:not(:first-child) .k{width:min-content;min-width:100%}.hero .big{font-size:20px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:.02em;line-height:1.4}.hero .u{display:none}}
+/* until the first answer: only the header and a waiting panel */
+body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-align:center;padding:60px 16px}body.boot #boot{display:block}#boot .logo{width:56px;height:56px}#boot p{font:12px/1.6 var(--mono);color:var(--m);margin:16px auto 0;max-width:460px}
+</style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
 <span id=st class="pill bad">offline</span></header>
 
+<div id=boot><p id=boot-m>Connecting to the miner…</p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k><span class=tipped title="Averages the board keeps itself (a sample a minute): the last hour and the last 24 hours, or since it started if that is shorter">Avg&nbsp;1&nbsp;h&nbsp;/ 24&nbsp;h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
-<div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine + Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
+<div><div class=k><span class=tipped title="Averages the board keeps itself (a sample a minute): the last hour and the last 24 hours, or since it started if that is shorter">Avg 1h / 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles&nbsp;/ nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
@@ -149,7 +152,7 @@ txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
 txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
 htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
-const a1=m.avg1hKhs>=0?m.avg1hKhs:since,a24=m.avg24hKhs>=0?m.avg24hKhs:since;htm('havg',since?a1.toFixed(0)+' / '+a24.toFixed(0)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
+const a1=m.avg1hKhs>=0?m.avg1hKhs:since,a24=m.avg24hKhs>=0?m.avg24hKhs:since;htm('havg',since?a1.toFixed(0)+' / '+a24.toFixed(0)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 txt('bd',sp(m.bestDiffSession));txt('bde','ever '+sp(m.bestDiffEver));txt('df',sp(m.poolDiff));txt('dfn','network '+sp(m.networkDiff));
 htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
@@ -158,7 +161,7 @@ txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('s
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
 txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
-H.push(k);if(H.length>200)H.shift();spark();odds()}catch(e){txt('st','offline');$('st').className='pill bad'}}
+H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){txt('st','offline');$('st').className='pill bad';return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
 const [h,f,p,da]=await Promise.all([g('/blocks/tip/height',0),g('/v1/fees/recommended'),g('/v1/prices'),g('/v1/difficulty-adjustment')]);
@@ -215,5 +218,10 @@ const hide=()=>{clearTimeout(tm);cur=null;t.classList.remove('on')};
 document.addEventListener('mouseover',e=>{const el=own(e.target);if(el===cur)return;clearTimeout(tm);if(!el)return hide();tx(el);tm=setTimeout(()=>show(el),cur?0:140)});
 document.addEventListener('mouseout',e=>{const el=own(e.target);if(el&&!(e.relatedTarget&&el.contains(e.relatedTarget)))hide()});
 document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cur)show(el);else if(!el)hide()},{passive:true});addEventListener('scroll',hide,{passive:true,capture:true})})();
-route();tick();setInterval(tick,3000);net();setInterval(net,120000);hist();setInterval(hist,60000);
+// first paint only with data: wait for the miner, give mempool.space and the history 2.5 s more, then show everything at once
+let tries=0;
+async function boot(){if(!await tick()){tries++;txt('boot-m','No answer from the miner at '+DEV+(tries>1?' ('+tries+' tries)':'')+'. Trying again every 3 seconds.');$('boot-h').hidden=tries<3;setTimeout(boot,3000);return}
+await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500))]);spark();document.body.classList.remove('boot');
+setInterval(tick,3000);setInterval(net,120000);setInterval(hist,60000)}
+route();boot();
 </script></body></html>
