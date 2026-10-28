@@ -173,7 +173,14 @@ static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
 }
 extern const uint8_t www_gz_start[] asm("_binary_index_html_gz_start"), www_gz_end[] asm("_binary_index_html_gz_end"),
     fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end");   // main/www (web-next/build.py), gzipped by the build
-static esp_err_t h_root(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=300"); return httpd_resp_send(r, (const char *)www_gz_start, www_gz_end - www_gz_start); }
+// the page is part of the image: its ETag is the image's SHA-256 (the build time stays the same in incremental builds),
+// and the browser asks every time (no-cache) - an unchanged page
+// costs a 304, an updated firmware shows its own page at once instead of the cached one for 5 minutes
+static esp_err_t h_root(httpd_req_t *r) {
+    static char etag[24]; if (!etag[0]) { char h[17]; esp_app_get_elf_sha256(h, sizeof h); snprintf(etag, sizeof etag, "\"%s\"", h); }
+    char inm[48]; httpd_resp_set_hdr(r, "ETag", etag); httpd_resp_set_hdr(r, "Cache-Control", "no-cache");
+    if (httpd_req_get_hdr_value_str(r, "If-None-Match", inm, sizeof inm) == ESP_OK && !strcmp(inm, etag)) { httpd_resp_set_status(r, "304 Not Modified"); return httpd_resp_send(r, NULL, 0); }
+    httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); return httpd_resp_send(r, (const char *)www_gz_start, www_gz_end - www_gz_start); }
 static esp_err_t h_favicon(httpd_req_t *r) { httpd_resp_set_type(r, "image/svg+xml"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=86400"); return httpd_resp_send(r, (const char *)fav_gz_start, fav_gz_end - fav_gz_start); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, CONFIG_BOARD_HOST_PREFIX "-%02x%02x%02x", mac[3], mac[4], mac[5]);
