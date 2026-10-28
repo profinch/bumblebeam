@@ -45,7 +45,7 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
 footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
 /* phones: all four figures on one row as on a desktop, the hashrate smaller (after the base rules so they win) */
-@media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}.hero>div:not(:first-child) .k{width:min-content;min-width:100%}.hero .big{font-size:20px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:.02em;line-height:1.4}.hero .u{display:none}}
+@media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}.hero .big{font-size:17px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:0;white-space:nowrap}.hero .u{display:none}}
 /* until the first answer: only the header and a waiting panel */
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-align:center;padding:60px 16px}body.boot #boot{display:block}#boot .logo{width:56px;height:56px}#boot p{font:12px/1.6 var(--mono);color:var(--m);margin:16px auto 0;max-width:460px}
 </style></head><body class=boot><div class=w>
@@ -56,9 +56,9 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-
 <div id=boot><p id=boot-m>Connecting to the miner…</p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k><span class=tipped title="Averages the board keeps itself (a sample a minute): the last hour and the last 24 hours, or since it started if that is shorter">Avg 1h / 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped id=havk title="">Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
-<div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles&nbsp;/ nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
+<div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
@@ -105,6 +105,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
 <label>Time zone <span class=soon>next fw</span><select name=tz disabled><option>UTC</select></label>
+<label>Average on the dashboard<select id=avgsel><option value=1h>last hour<option value=24h>last 24 hours<option value=all>all time</select><p class=hint>kept in this browser</p></label>
 <label>Main currency<select id=curr><option value=USD>US dollar, $<option value=EUR>Euro, €<option value=GBP>Pound, £</select><p class=hint>shown large on the dashboard; kept in this browser</p></label></div></div>
 <div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class="btn gh" id=cf-rl>Reload</button><span class=msg id=cf-m></span></div>
 </form></section>
@@ -152,7 +153,10 @@ txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
 txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
 htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
-const a1=m.avg1hKhs>=0?m.avg1hKhs:since,a24=m.avg24hKhs>=0?m.avg24hKhs:since;htm('havg',since?a1.toFixed(0)+' / '+a24.toFixed(0)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
+const AV={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a sample a minute), or since it started if that is shorter'],
+'24h':['Avg 24h',m.avg24hKhs,'The board\'s average over the last 24 hours (a sample a minute), or since it started if that is shorter'],
+all:['Avg all time',m.avgAllKhs,'The board\'s average over all its running time, across restarts (saved every 10 minutes)']}[avgSel()]||[];
+const av=AV[1]>=0?AV[1]:since;txt('havk',AV[0]);$('havk').setAttribute(($('havk').hasAttribute('data-tip')?'data-tip':'title'),AV[2]);htm('havg',since?av.toFixed(1)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 txt('bd',sp(m.bestDiffSession));txt('bde','ever '+sp(m.bestDiffEver));txt('df',sp(m.poolDiff));txt('dfn','network '+sp(m.networkDiff));
 htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
@@ -172,10 +176,12 @@ if(da){N.da=da;txt('dfn',(D?'network '+sp(D.miner.networkDiff)+' · ':'')+'next 
 function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'},main=cur();htm('px',C[main]+(p[main]||0).toLocaleString('en'));
 htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
 function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
+function avgSel(){try{return localStorage.getItem('avg')||'24h'}catch(e){return'24h'}}
 // ---- settings
 let cfgLoaded=0;
 function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
 $('cf-rl').onclick=loadCfg;
+$('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
 $('cf').onsubmit=e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
