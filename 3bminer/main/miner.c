@@ -40,7 +40,7 @@ bench_t g_bench;
 // live per-stage waits (tbl[25..29]): before CONTINUE, before LOAD H1, before LOAD H2, settle after LOAD H1, after LOAD H2.
 // Swept with /api/bench (fixed header, 8-bit mask, hit set vs a reference run): hard limits 30/35/22/3-4/6;
 // 30/36/23/6/7 gave 0 errors in 64M nonces = 258.4 bench cycles/nonce vs 272.4 for the old uniform E=68/d2=8.
-// 24/35/22/4/8 (0.7.1): over ~100M nonces each against 25/36/23/6/8, as few engine errors (2 to 4) and 5 cycles a nonce
+// 24/35/22/4/8 (0.8.0): over ~100M nonces each against 25/36/23/6/8, as few engine errors (2 to 4) and 5 cycles a nonce
 // less (246.75 against 251.77); 23 for the first wait already gives 10-16 errors in 16M, 7 for the last breaks it
 volatile uint32_t g_timing[5] = { 24, 35, 22, 4, 8 };   // live waits for g_kernel (hwmine itself: 30/36/23/6/7)
 static void set_timing(const volatile uint32_t *t) { for (int i = 0; i < 5; i++) s_tbl[25 + i] = t[i]; }
