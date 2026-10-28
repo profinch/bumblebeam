@@ -8,5 +8,7 @@ typedef struct { volatile int req, done; uint32_t t[5], n, k; uint32_t cyc_per_k
 extern bench_t g_bench;
 extern volatile uint32_t g_timing[5];
 extern volatile uint32_t g_kernel;
-extern volatile uint32_t g_sw_enabled;   // index: 0 = hwmine, 1..5 = hwmine_k8..k4
+extern volatile uint32_t g_sw_enabled;   // core-1 software hasher on/off
 uint32_t sw_bench_cycles(void);
+#include <stdbool.h>
+bool miner_kernel_ok(uint32_t k);   // 0 = hwmine, 3 = hwmine_k6 (the default)

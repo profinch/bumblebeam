@@ -25,6 +25,5 @@ void app_main(void) {
 #endif
     if (g_cfg.mining) { stratum_start(); miner_start(); history_start(); } else ESP_LOGW(TAG, "mining is off (settings: mining=true to start)");
     const esp_partition_t *run = esp_ota_get_running_partition(); ESP_LOGI(TAG, "running from %s", run ? run->label : "?");
-    esp_ota_mark_app_valid_cancel_rollback();
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(30000)); ESP_LOGI(TAG, "hashrate %.1f KH/s (engine) + %.1f KH/s (sw core1), shares %u/%u, best %.4g, jobs %u, kernel %u cyc/nonce, heap %u", g_miner.hashrate / 1e3, g_miner.sw_hashrate / 1e3, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, g_stratum.best_session, (unsigned)g_stratum.jobs, (unsigned)g_miner.kernel_cycles, (unsigned)esp_get_free_heap_size()); }
+    for (;;) { vTaskDelay(pdMS_TO_TICKS(30000)); history_save(); ESP_LOGI(TAG, "hashrate %.1f KH/s (engine) + %.1f KH/s (sw core1), shares %u/%u, best %.4g, jobs %u, kernel %u cyc/nonce, heap %u", g_miner.hashrate / 1e3, g_miner.sw_hashrate / 1e3, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, g_stratum.best_session, (unsigned)g_stratum.jobs, (unsigned)g_miner.kernel_cycles, (unsigned)esp_get_free_heap_size()); }
 }

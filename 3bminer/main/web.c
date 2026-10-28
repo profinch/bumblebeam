@@ -24,6 +24,17 @@ static const char *TAG = "web";
 #include "history.h"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
+// POSTs that change the board come from its own page, another miner's swarm page on the LAN or a local preview file
+// ("null"); a page on the internet open in the same browser is refused (it could not read the answer anyway, but the write would land)
+bool web_post_allowed(httpd_req_t *r) {
+    char o[80]; if (httpd_req_get_hdr_value_str(r, "Origin", o, sizeof o) != ESP_OK || !strcmp(o, "null")) return true;
+    const char *h = strstr(o, "://"); h = h ? h + 3 : o; char host[64]; int k = 0; while (h[k] && h[k] != ':' && h[k] != '/' && k < 63) { host[k] = h[k]; k++; } host[k] = 0;
+    char self[64]; if (httpd_req_get_hdr_value_str(r, "Host", self, sizeof self) == ESP_OK) { char *c = strchr(self, ':'); if (c) *c = 0; if (!strcmp(self, host)) return true; }
+    unsigned a, b; if (sscanf(host, "%u.%u.", &a, &b) == 2 && (a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || (a == 169 && b == 254))) return true;
+    if (!strchr(host, '.') || (k > 6 && !strcmp(host + k - 6, ".local")) || (k > 4 && !strcmp(host + k - 4, ".lan"))) return true;
+    ESP_LOGW(TAG, "POST %s from %s refused", r->uri, o);
+    httpd_resp_set_status(r, "403 Forbidden"); httpd_resp_send(r, "cross-site request refused", -1); return false;
+}
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
 
 static esp_err_t h_probe(httpd_req_t *r) {
@@ -38,10 +49,10 @@ static esp_err_t h_info(httpd_req_t *r) {
     snprintf(b, sizeof b,
         "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"time\":%lld,\"tz\":\"%s\",\"ntp\":\"%s\",\"ntpSync\":%lld,\"build\":\"%s %s\",\"idf\":\"%s\",\"slot\":\"%s\",\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s},"
         "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"%s\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"freeHeap\":%u,\"minFreeHeap\":%u,\"freeInternal\":%u,\"kernelCycles\":%u,\"kernel\":%u,\"timing\":\"%u/%u/%u/%u/%u\",\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu,\"swHashes\":%llu,\"avg1hKhs\":%.1f,\"avg24hKhs\":%.1f,\"avgAllKhs\":%.1f,\"allSeconds\":%u,\"historyMinutes\":%u},"
-        "\"stratum\":{\"url\":\"%s\",\"solo\":%s,\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
+        "\"stratum\":{\"url\":\"%s\",\"solo\":%s,\"authorized\":%s,\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\"},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
         s_host, FW_VERSION, wifi_rssi(), (long long)(time(NULL) > 1700000000 ? time(NULL) : 0), g_cfg.tz, g_ntp_server, (long long)g_ntp_sync, esp_app_get_description()->date, esp_app_get_description()->time, esp_app_get_description()->idf_ver, esp_ota_get_running_partition() ? esp_ota_get_running_partition()->label : "?", CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)uptime_s(), nd, pd, ld, bs, be, (int)esp_reset_reason(),
         (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)g_miner.kernel_cycles, (unsigned)g_kernel, (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4], g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes, (unsigned long long)g_miner.sw_hashes, history_avg_khs(60), history_avg_khs(HISTORY_MINUTES), history_avg_all_khs(), (unsigned)history_all_seconds(), (unsigned)history_count(),
-        g_stratum.pool_desc, g_stratum.solo < 0 ? "null" : g_stratum.solo ? "true" : "false", g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
+        g_stratum.pool_desc, g_stratum.solo < 0 ? "null" : g_stratum.solo ? "true" : "false", g_stratum.authorized < 0 ? "null" : g_stratum.authorized ? "true" : "false", g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
         (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
@@ -50,11 +61,13 @@ static esp_err_t h_swbench(httpd_req_t *r) {   // GET /api/swbench: software sha
     httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&n=NONCES[&apply=1]
+    httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*");
     if (!g_cfg.mining) { httpd_resp_set_status(r, "409 Conflict"); return httpd_resp_send(r, "{\"error\":\"mining is off\"}", -1); }
     char q[128] = "", v[48]; httpd_req_get_url_query_str(r, q, sizeof q);
     uint32_t t[5]; for (int i = 0; i < 5; i++) t[i] = g_timing[i];
     if (httpd_query_key_value(q, "t", v, sizeof v) == ESP_OK) sscanf(v, "%u,%u,%u,%u,%u", (unsigned *)&t[0], (unsigned *)&t[1], (unsigned *)&t[2], (unsigned *)&t[3], (unsigned *)&t[4]);
     uint32_t k = g_kernel; if (httpd_query_key_value(q, "k", v, sizeof v) == ESP_OK) k = strtoul(v, NULL, 10);
+    if (!miner_kernel_ok(k)) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "{\"error\":\"kernel 0 or 3\"}", -1); }
     if (httpd_query_key_value(q, "sw", v, sizeof v) == ESP_OK) g_sw_enabled = strtoul(v, NULL, 10) != 0;
     uint32_t n = 262144; if (httpd_query_key_value(q, "n", v, sizeof v) == ESP_OK) n = strtoul(v, NULL, 10); if (n < 16384) n = 16384; if (n > 16777216) n = 16777216;
     for (int i = 0; i < 5; i++) if (t[i] > 200) t[i] = 200;
@@ -63,7 +76,7 @@ static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&
     char b[256]; snprintf(b, sizeof b, "{\"k\":%u,\"t\":[%u,%u,%u,%u,%u],\"n\":%u,\"done\":%s,\"cycPerNonce\":%.3f,\"hits\":%u,\"bad\":%u,\"sum\":\"%08x\",\"live\":[%u,%u,%u,%u,%u],\"liveKernel\":%u}",
         (unsigned)k, (unsigned)t[0], (unsigned)t[1], (unsigned)t[2], (unsigned)t[3], (unsigned)t[4], (unsigned)n, g_bench.done ? "true" : "false", g_bench.cyc_per_kn / 1000.0, (unsigned)g_bench.hits, (unsigned)g_bench.bad, (unsigned)g_bench.sum,
         (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4], (unsigned)g_kernel);
-    httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
+    return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_history(httpd_req_t *r) {   // GET /api/history: {"step":60,"khs":[oldest .. newest]}, one value a minute, up to 24 h
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*");
@@ -88,21 +101,32 @@ static esp_err_t h_wifiscan(httpd_req_t *r) {   // GET /api/wifi/scan: access po
 }
 static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "{\"status\":\"ok\"}", -1); }
 static void restart_later(void *a) { vTaskDelay(pdMS_TO_TICKS(600)); esp_restart(); }
-static esp_err_t h_restart(httpd_req_t *r) { h_ok(r); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK; }
+static esp_err_t h_restart(httpd_req_t *r) { if (!web_post_allowed(r)) return ESP_OK; h_ok(r); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK; }
 static esp_err_t h_config_get(httpd_req_t *r) {
     char b[480]; snprintf(b, sizeof b, "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"pool\":\"%s\",\"port\":%u,\"wallet\":\"%s\",\"worker\":\"%s\",\"suggest\":%g,\"mining\":%s,\"tz\":\"%s\"}", g_cfg.ssid, g_cfg.bssid, g_cfg.pool, g_cfg.port, g_cfg.wallet, g_cfg.worker, g_cfg.suggest, g_cfg.mining ? "true" : "false", g_cfg.tz);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
-static esp_err_t h_config_post(httpd_req_t *r) {
-    char buf[1024]; int n = httpd_req_recv(r, buf, sizeof buf - 1); if (n <= 0) return httpd_resp_send_500(r); buf[n] = 0;
-    cJSON *j = cJSON_Parse(buf); if (!j) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "bad json", -1); }
-    cJSON *x;
-    #define S(k, f) if ((x = cJSON_GetObjectItem(j, k)) && cJSON_IsString(x)) { strncpy(g_cfg.f, x->valuestring, sizeof g_cfg.f - 1); g_cfg.f[sizeof g_cfg.f - 1] = 0; }
-    S("ssid", ssid) S("pass", pass) S("bssid", bssid) S("pool", pool) S("wallet", wallet) S("worker", worker) S("tz", tz)
-    if ((x = cJSON_GetObjectItem(j, "port")) && cJSON_IsNumber(x)) g_cfg.port = x->valueint;
-    if ((x = cJSON_GetObjectItem(j, "suggest")) && cJSON_IsNumber(x)) g_cfg.suggest = x->valuedouble;
-    if ((x = cJSON_GetObjectItem(j, "mining")) && cJSON_IsBool(x)) g_cfg.mining = cJSON_IsTrue(x);
-    cJSON_Delete(j); bool ok = config_save();
+static esp_err_t bad(httpd_req_t *r, const char *status, const char *msg) { httpd_resp_set_status(r, status); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, msg, -1); }
+static esp_err_t h_config_post(httpd_req_t *r) {   // every value checked before any is taken: a refused request changes nothing
+    if (!web_post_allowed(r)) return ESP_OK;
+    char buf[1024]; int len = r->content_len, got = 0; if (len <= 0 || len >= (int)sizeof buf) return bad(r, "400 Bad Request", "body empty or over 1 KB");
+    for (int tries = 0; got < len && tries < 20; ) { int n = httpd_req_recv(r, buf + got, len - got); if (n == HTTPD_SOCK_ERR_TIMEOUT) { tries++; continue; } if (n <= 0) return httpd_resp_send_500(r); got += n; }
+    if (got < len) return bad(r, "408 Request Timeout", "body incomplete");
+    buf[got] = 0;
+    cJSON *j = cJSON_Parse(buf); if (!j) return bad(r, "400 Bad Request", "bad json");
+    miner_cfg_t c = g_cfg; const char *err = NULL; cJSON *x;
+    // strings land in JSON answers and stratum lines as they are: no quotes, backslashes or control characters (the password only goes to Wi-Fi)
+    #define S(k, f, plain) if (!err && (x = cJSON_GetObjectItem(j, k))) { if (!cJSON_IsString(x) || strlen(x->valuestring) >= sizeof c.f) err = k " too long or not a string"; \
+        else { if (plain) for (const char *q = x->valuestring; *q; q++) if (*q == '"' || *q == '\\' || (unsigned char)*q < 32) err = k " has quotes, backslashes or control characters"; \
+               if (!err) strcpy(c.f, x->valuestring); } }
+    S("ssid", ssid, true) S("pass", pass, false) S("bssid", bssid, true) S("pool", pool, true) S("wallet", wallet, true) S("worker", worker, true) S("tz", tz, true)
+    #undef S
+    if (!err && (x = cJSON_GetObjectItem(j, "port"))) { if (!cJSON_IsNumber(x) || x->valueint < 1 || x->valueint > 65535) err = "port 1..65535"; else c.port = x->valueint; }
+    if (!err && (x = cJSON_GetObjectItem(j, "suggest"))) { if (!cJSON_IsNumber(x) || !(x->valuedouble >= 0 && x->valuedouble <= 1e12)) err = "suggest: a difficulty, 0 or more"; else c.suggest = x->valuedouble; }
+    if (!err && (x = cJSON_GetObjectItem(j, "mining"))) { if (!cJSON_IsBool(x)) err = "mining: true or false"; else c.mining = cJSON_IsTrue(x); }
+    cJSON_Delete(j);
+    if (err) { char m[96]; snprintf(m, sizeof m, "{\"status\":\"%s\"}", err); httpd_resp_set_type(r, "application/json"); return bad(r, "400 Bad Request", m); }
+    g_cfg = c; bool ok = config_save();
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); httpd_resp_send(r, ok ? "{\"status\":\"ok\",\"note\":\"restarting\"}" : "{\"status\":\"nvs error\"}", -1);
     if (ok) xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL);
     return ESP_OK;
@@ -110,7 +134,8 @@ static esp_err_t h_config_post(httpd_req_t *r) {
 // an image names its board as "3BMINER_BOARD=<id>;" (version.h); an upload naming another board is refused
 static const char s_marker[] = FW_BOARD_MARKER;
 static int marker_scan(const char *buf, int n, char *tail, int *tl) {   // 1 = ours, -1 = other board, 0 = not seen yet
-    static const char key[] = "3BMINER_BOARD="; char w[96 + 4096]; int wl = *tl; memcpy(w, tail, wl); memcpy(w + wl, buf, n); wl += n;
+    static const char key[] = "3BMINER_BOARD="; static char w[96 + 4096];   // static: httpd runs one request at a time
+    int wl = *tl; memcpy(w, tail, wl); memcpy(w + wl, buf, n); wl += n;
     int res = 0;
     // only "key<id>;" with id = [a-z0-9_-]+ counts: the key itself also sits in this code as a bare string
     for (int i = 0; i + (int)sizeof key - 1 <= wl; i++) if (!memcmp(w + i, key, sizeof key - 1)) {
@@ -120,12 +145,17 @@ static int marker_scan(const char *buf, int n, char *tail, int *tl) {   // 1 = o
     int keep = wl < 96 ? wl : 96; memcpy(tail, w + wl - keep, keep); *tl = keep; return res;
 }
 static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
+    if (!web_post_allowed(r)) return ESP_OK;
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL); if (!part) return httpd_resp_send_500(r);
+    if (r->content_len < 65536 || r->content_len > part->size) return bad(r, "400 Bad Request", "no image or larger than the slot");
+    char *buf = malloc(4096); if (!buf) return httpd_resp_send_500(r);
     camera_stop();   // no-op without a camera; on a camera board the image is written with the sensor off, a restart follows anyway
-    esp_ota_handle_t h; if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &h) != ESP_OK) { camera_start(); return httpd_resp_send_500(r); }
-    char *buf = malloc(4096); int remaining = r->content_len, total = 0; char tail[96]; int tl = 0, mk = 0;
+    // the image size up front: only that much of the slot is erased, not all 1.875 MB (shorter flash time with the cache off)
+    esp_ota_handle_t h; if (esp_ota_begin(part, r->content_len, &h) != ESP_OK) { free(buf); camera_start(); return httpd_resp_send_500(r); }
+    int remaining = r->content_len, total = 0, waits = 0; char tail[96]; int tl = 0, mk = 0;
     ESP_LOGI(TAG, "OTA start, %d bytes -> %s", remaining, part->label);
-    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT) continue; esp_ota_abort(h); free(buf); camera_start(); return httpd_resp_send_500(r); }
+    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT && ++waits < 10) continue; esp_ota_abort(h); free(buf); camera_start(); return httpd_resp_send_500(r); }
+        waits = 0;
         if (mk == 0 || mk == 1) { int m = marker_scan(buf, n, tail, &tl); if (m) mk = m; }
         if (mk < 0) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "409 Conflict"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
         if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
@@ -136,11 +166,9 @@ static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); httpd_resp_send(r, b, -1); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK;
 }
 extern const uint8_t www_gz_start[] asm("_binary_index_html_gz_start"), www_gz_end[] asm("_binary_index_html_gz_end"),
-    fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end"),
-    cam_gz_start[] asm("_binary_camera_html_gz_start"), cam_gz_end[] asm("_binary_camera_html_gz_end");   // main/www, tools/build_www.py
+    fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end");   // main/www (web-next/build.py), gzipped by the build
 static esp_err_t h_root(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=300"); return httpd_resp_send(r, (const char *)www_gz_start, www_gz_end - www_gz_start); }
 static esp_err_t h_favicon(httpd_req_t *r) { httpd_resp_set_type(r, "image/svg+xml"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=86400"); return httpd_resp_send(r, (const char *)fav_gz_start, fav_gz_end - fav_gz_start); }
-static esp_err_t h_campage(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); return httpd_resp_send(r, (const char *)cam_gz_start, cam_gz_end - cam_gz_start); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, CONFIG_BOARD_HOST_PREFIX "-%02x%02x%02x", mac[3], mac[4], mac[5]);
     httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 23 + camera_http_handler_count(); c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
@@ -153,6 +181,6 @@ void web_start(void) {
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
     camera_register_http(s);
 #ifdef CONFIG_BOARD_HAS_CAMERA
-    const httpd_uri_t cp = { .uri = "/camera", .method = HTTP_GET, .handler = h_campage }; httpd_register_uri_handler(s, &cp);
+    const httpd_uri_t cp = { .uri = "/camera", .method = HTTP_GET, .handler = h_root }; httpd_register_uri_handler(s, &cp);   // the page's Camera tab
 #endif
 }

@@ -8,6 +8,7 @@ typedef struct {
     volatile double best_session, best_ever, last_share_diff, net_diff; volatile uint32_t jobs; volatile int64_t last_job_us;
     char pool_desc[96]; char user[128];
     volatile int8_t solo;           // 1 = the coinbase pays the configured address (solo pool), 0 = it does not, -1 = no job yet
+    volatile int8_t authorized;     // 1 = the pool took the user, 0 = refused it, -1 = no answer yet
     volatile uint32_t cand_dropped, stale_dropped, old_job_submits, rej_stale, rej_dup, rej_lowdiff, rej_other; char last_reject[96];
 } stratum_stats_t;
 extern stratum_stats_t g_stratum;

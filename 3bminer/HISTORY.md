@@ -17,7 +17,8 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 0.5.2 | 2026-10-27 | 881,440 B | 252 | 952 + 29 = 981 KH/s | 7.6 h next to NMMiner: device 982 vs 1036 KH/s, pool 1002 vs 999, rejects 0.95% vs 1.34% |
 | 0.5.3 | 2026-10-28 | 881,504 B | 251 | 981 KH/s | rejects sorted by stratum code |
 | 0.5.4-0.5.6 | 2026-10-28 | 883,840-884,976 B | 251 | 981 KH/s | network difficulty, gzipped pool-style page, the pool's logo and favicon |
-| 0.6.0 | 2026-10-28 | devkit 886,384 B, esp32cam 1,036,976 B | 251 | devkit 981 KH/s; ESP32-CAM 981 idle, 946 streaming VGA | renamed 3BMiner, BumbleBeam repo, builds per board, ESP32-CAM |
+| 0.6.0 | 2026-10-28 | devkit 886,384 B, esp32cam 1,036,976 B | 251 | devkit 981 KH/s; ESP32-CAM 981 idle, 946 streaming VGA | renamed 3BMiner, BumbleBeam repo, builds per board, ESP32-CAM; 5.4 h three-way run below |
+| 0.6.1 | 2026-10-28 | devkit 894,752 B, esp32cam 1,039,920 B | 251 | 981 KH/s | history, solo detection, NTP and time zone, web-next as the page, code audit |
 
 ## Boards
 
@@ -37,3 +38,10 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 11:12-11:43 | ESP32-CAM | 0.6.0 (3BMiner) builds | USB and OTA while fixing OTA and internal RAM |
 | 2026-10-28 11:43 | ESP32-CAM | 0.6.0, mining switched on | USB, then `POST /api/config {"mining":true}` |
 | 2026-10-28 11:58 | devkit | 0.6.0 (3BMiner, from c2a1804) | OTA from 0.5.6; 981 KH/s, 251 cycles/nonce |
+| 2026-10-28 17:29 | devkit | 0.6.1 (audit, web-next as the page), 894,752 B | OTA from 0.6.0; 981 KH/s, bench 251.7 cycles/nonce 0 bad in 1M, shares accepted, all pages without JS errors |
+
+## Comparisons
+
+| Run | Window (UTC) | Miners | Result |
+|---|---|---|---|
+| run7-v0.6.0-three-miners-partial | 2026-10-28 12:00-17:25, 5.4 h (stopped early for the 0.6.1 test) | NMMiner v2.0.04, devkit 0.6.0, ESP32-CAM 0.6.0 | device 1036 / 981.5 / 980.8 KH/s, pool 1029 / 1005 / 996 KH/s, accepted 2057 / 1966 / 1972, rejects 1.34% / 1.16% / 1.45%, no restarts; `Downloads\miner-compare\run7-v0.6.0-three-miners-partial` |

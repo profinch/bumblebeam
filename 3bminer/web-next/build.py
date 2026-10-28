@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # web-next/*.src.html + the exact pool logo -> index.html (the next web UI) and display.html (review page for the
-# screens of display boards, never served by the firmware); build.py <dir> also copies them there with the favicon.
+# screens of display boards, never served by the firmware); index.html also goes to main/www/ for the firmware;
+# build.py <dir> also copies both there with the favicon.
 # The page goes into the firmware gzipped: CSS and HTML comments are dropped and the script is minified with terser
 # (when installed: names stay, so inline handlers keep working); the source stays readable.
 import gzip, os, re, shutil, subprocess, sys
@@ -21,6 +22,8 @@ for name in ('index', 'display'):
     s = slim(s)
     open(os.path.join(d, name + '.html'), 'w').write(s)
     print(name + '.html', len(s.encode()), 'gzip', len(gzip.compress(s.encode(), 9)))
+# the firmware serves the built page as main/www/index.html
+shutil.copy(os.path.join(d, 'index.html'), os.path.join(d, '..', 'main', 'www', 'index.html'))
 if len(sys.argv) > 1:
     out = sys.argv[1]; os.makedirs(out, exist_ok=True)
     for f in ('index.html', 'display.html'): shutil.copy(os.path.join(d, f), out)

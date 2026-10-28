@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <math.h>
 static int hv(char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
-int hex2bin(const char *hex, uint8_t *out, int maxlen) { int n = 0; while (hex[0] && hex[1] && n < maxlen) { int a = hv(hex[0]), b = hv(hex[1]); if (a < 0 || b < 0) return -1; out[n++] = a * 16 + b; hex += 2; } return n; }
+// -1 for anything but whole hex bytes that fit: a silently cut coinbase would only give rejected shares
+int hex2bin(const char *hex, uint8_t *out, int maxlen) { int n = 0; if (!hex) return -1; while (hex[0]) { if (!hex[1] || n >= maxlen) return -1; int a = hv(hex[0]), b = hv(hex[1]); if (a < 0 || b < 0) return -1; out[n++] = a * 16 + b; hex += 2; } return n; }
 void bin2hex(const uint8_t *b, int n, char *out) { static const char *h = "0123456789abcdef"; for (int i = 0; i < n; i++) { out[2*i] = h[b[i] >> 4]; out[2*i+1] = h[b[i] & 15]; } out[2*n] = 0; }
 static inline uint32_t be32(const uint8_t *p) { return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3]; }
 void job_build_words(const job_t *j, const session_t *s, uint32_t en2, uint32_t w[19]) {
