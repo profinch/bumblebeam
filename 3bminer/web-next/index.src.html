@@ -12,7 +12,7 @@ header{display:flex;align-items:center;flex-wrap:wrap;gap:0 18px;min-height:64px
 .brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m);font-size:.8em;margin-left:4px}
 {{LOGOCSS}}
 nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
-nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
+nav a[hidden]{display:none}nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
 nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
 /* one width for every state (the longest is 10 characters), so the header never moves */
 .pill{font:700 11px var(--mono);padding:5px 0;width:calc(10ch + 22px);text-align:center;border-radius:99px;border:1px solid;white-space:nowrap;flex:none;cursor:help}
@@ -97,7 +97,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 #boot p{font:12px/1.6 var(--mono);color:var(--m);margin:10px auto 0;max-width:460px}
 </style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
-<nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a></nav>
+<nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a><a href="/camera" id=nav-cam hidden>Camera</a></nav>
 <span id=st class="pill idle" title="The page is loading the miner's data">loading</span></header>
 
 <div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
@@ -226,7 +226,7 @@ const ddsync=()=>document.querySelectorAll('select').forEach(s=>s._dd&&s._dd.syn
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 // sections: /swarm on the board (the firmware serves this page there too), #/swarm when opened from a file
 const view=()=>LOCAL?(location.hash.replace(/^#\/?/,'')||'dash'):(location.pathname.replace(/^\//,'')||'dash');
-document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();const v=a.dataset.v;
+document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||!a.dataset.v||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();const v=a.dataset.v;
 if(LOCAL)history.pushState(null,'',location.pathname+location.search+(v=='dash'?'':'#/'+v));else history.pushState(null,'',(v=='dash'?'/':'/'+v)+location.search);route()});
 addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
@@ -254,7 +254,7 @@ htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'))
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+u+'">'+(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('hn',d.identity.hostName);if(d.identity.camera){$('nav-cam').hidden=false;$('nav-cam').href=B+'/camera'}txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
 if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
 CK={t:d.identity.time||0,at:Date.now(),tz:d.identity.tz,sync:d.identity.ntpSync||0,src:d.identity.ntp};boardClock();
