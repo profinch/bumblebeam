@@ -41,6 +41,9 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - A failed OTA restarts a camera board (the camera did not always come back in place); OTA erases as it writes.
 - Settings: Mining on/off; Wi-Fi fields in the order network name, password, device name, the AP lock on its own row.
   Swarm: this board is listed from the first answer, the saved miners come back without a scan.
+- The loading screen (the bee and the honeycomb) sits a little above the middle of the screen.
+- The AP lock list names MikroTik access points "MikroTik" (the pool's `/api/3bminer/oui` maps its "Routerboard.com"
+  registration).
 
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
