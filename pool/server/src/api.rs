@@ -54,6 +54,9 @@ pub fn router(api: Api) -> Router {
         .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
         .route("/api/miningboard", get(miningboard))
         .route("/api/benchmarks", get(benchmarks).post(benchmark_report))
+        // 3BMiner (3bminer/): helpers its web UI on a miner cannot get from a browser itself
+        .route("/api/3bminer/oui", get(crate::threeb::oui_many))
+        .route("/api/3bminer/oui/:mac", get(crate::threeb::oui_one))
         .layer(middleware::from_fn(micro_cache))
         .layer(CorsLayer::permissive())
         // the operator's API is added after the CORS layer: no other site may call it from a browser

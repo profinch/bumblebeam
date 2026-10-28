@@ -355,6 +355,24 @@ BEAM, not groth. `network` is null while the pool has no block template.
   "stratum": [{ "url": "stratum+tcp://stratum.bumblebeam.org:3333", "tls": false, "mode": "PPLNS" }] }
 ```
 
+## `GET /api/3bminer/oui/:mac`, `GET /api/3bminer/oui?mac=a,b,...`
+
+For [3BMiner](../3bminer)'s web UI, which runs on a miner and cannot ask the public MAC-vendor services
+from a browser (they send no CORS headers). The maker of a network device by the first bytes of its MAC
+(the OUI): one address in the path, or up to 64 comma-separated in `mac`. Any notation (`d0:ea:11`,
+`D0-EA-11-00-00-01`, `d0ea11000001`); the most specific assigned block wins (/36, /28, then /24).
+
+```json
+GET /api/3bminer/oui/d0:ea:11:00:00:01
+{ "mac": "D0EA11000001", "prefix": "D0:EA:11", "vendor": "Routerboard.com" }
+
+GET /api/3bminer/oui?mac=d0:ea:11:00:00:01,74:12:13:00:00:02
+{ "vendors": { "d0:ea:11:00:00:01": "Routerboard.com", "74:12:13:00:00:02": "Linksys USA, Inc" } }
+```
+
+`vendor` is `null` for an unassigned prefix. The list is Wireshark's `manuf` (the IEEE assignments),
+fetched on first use and refreshed daily; until the first fetch succeeds the answer is `503`.
+
 ## Payout addresses
 
 Beam transactions are interactive. A **regular** wallet address expires (24 hours by default) and
