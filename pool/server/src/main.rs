@@ -25,6 +25,7 @@ mod payouts;
 mod pow;
 mod state;
 mod stratum;
+mod threeb;
 mod upstream;
 mod wallet;
 
