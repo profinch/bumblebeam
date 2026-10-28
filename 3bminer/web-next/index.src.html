@@ -293,7 +293,7 @@ function boardClock(){if(!CK||$('v-firmware').className.indexOf('on')<0&&CK.draw
 const now=new Date((CK.t+(Date.now()-CK.at)/1000)*1000),tz=tzName(CK.tz);txt('c-now',clock(now,tz||'UTC'));txt('c-date',now.toLocaleDateString('en-GB',{timeZone:tz||'UTC',year:'numeric',month:'short',day:'numeric',weekday:'short'}));
 txt('c-tz',tz?tz.replace('_',' '):(CK.tz||'UTC'));txt('c-sync',CK.sync?clock(new Date(CK.sync*1000),tz||'UTC')+' ('+ago(CK.sync*1000)+' ago)':'never');txt('c-src',CK.src||'-')}
 setInterval(boardClock,1000);
-function tzExample(){const sel=$('tzsel');if(!sel)return;const z=TZ.find(z=>z[1]==sel.value),t=CK&&CK.t?new Date((CK.t+(Date.now()-CK.at)/1000)*1000):new Date();try{txt('tzx',clock(t,z?z[0]:'UTC')+', '+t.toLocaleDateString('en-GB',{timeZone:z?z[0]:'UTC',day:'numeric',month:'short'}))}catch(e){}}
+function tzExample(){const sel=$('tzsel');if(!sel)return;const z=TZ.find(z=>z[1]==sel.value),t=CK&&CK.t?new Date((CK.t+(Date.now()-CK.at)/1000)*1000):new Date();try{txt('tzx',clock(t,z?z[0]:'UTC')+', '+t.toLocaleDateString('en-GB',{timeZone:z?z[0]:'UTC',day:'numeric',month:'short',year:'numeric'}))}catch(e){}}
 setInterval(()=>{if(view()=='settings')tzExample()},1000);document.addEventListener('change',e=>{if(e.target.id=='tzsel'||e.target.id=='clk')tzExample()});
 // ---- settings
 let cfgLoaded=0;
