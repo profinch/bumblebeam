@@ -64,6 +64,9 @@ footer{padding:10px 0 30px}.foot-copy .fp{white-space:nowrap}
 .swc{margin:0 0 6px;justify-content:space-between;align-items:flex-start}.swg{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.swg input{display:inline-block;width:150px;margin:0}.swr{margin-left:auto}
 /* a line kept free under each group for its message, so nothing jumps */.swm{transition:opacity .6s}.swm.gone{opacity:0}.swm{min-height:18px;margin-top:6px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.swr .swm{text-align:right}
 .swhint{margin-top:16px!important}
+/* Firmware: the cards' hints and tables start where the dashboard's tables do; the file picker is a pill like the status, filled on hover */
+#v-firmware .p>.k+.hint,#v-firmware .p>.k+.kv{margin-top:10px}
+.fpick{display:inline-block;font:700 11px var(--mono);letter-spacing:0;text-transform:none;color:var(--a);padding:7px 14px;border:1px solid rgba(0,246,210,.5);border-radius:99px;cursor:pointer;transition:background .15s}.fpick:hover{background:var(--ad)}
 @media(max-width:640px){.swr{margin-left:0;width:100%}.swr .swm{text-align:left}}
 /* scrollbars as on the pool site: a thin accent bar, no track, no arrows - the page and every scrolling box */
 html::-webkit-scrollbar{width:6px}.sc::-webkit-scrollbar{height:4px}html::-webkit-scrollbar-track,.sc::-webkit-scrollbar-track,html::-webkit-scrollbar-corner{background:transparent}
@@ -71,7 +74,7 @@ html::-webkit-scrollbar-thumb,.sc::-webkit-scrollbar-thumb{background:rgba(0,246
 html::-webkit-scrollbar-button,.sc::-webkit-scrollbar-button{display:none;width:0;height:0}.sc{padding-bottom:6px}
 @supports(-moz-appearance:none){html,.sc{scrollbar-width:thin;scrollbar-color:rgba(0,246,210,.45) transparent}}
 /* drop-downs as on the pool site (a listbox in place of a native select, the select stays in the form, hidden) */
-select[hidden]{display:none!important}.dd{position:relative;margin-top:5px}.dd-btn{width:100%;height:36px;padding:0 30px 0 10px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font:13px var(--mono);background:var(--f) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--b);border-radius:6px}
+select[hidden],input[hidden]{display:none!important}.dd{position:relative;margin-top:5px}.dd-btn{width:100%;height:36px;padding:0 30px 0 10px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font:13px var(--mono);background:var(--f) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--b);border-radius:6px}
 .dd-btn:focus-visible{outline:none;border-color:rgba(0,246,210,.5)}.dd-btn:disabled{opacity:.45;cursor:default}
 .dd.open .dd-btn{border-color:rgba(0,246,210,.5);border-bottom-color:transparent;border-radius:6px 6px 0 0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E")}
 .dd-list{position:absolute;left:0;right:0;top:calc(100% - 1px);z-index:30;margin:0;padding:2px 0 6px;list-style:none;max-height:300px;overflow-y:auto;background:var(--f);border:1px solid rgba(0,246,210,.5);border-top:0;border-radius:0 0 6px 6px;box-shadow:0 12px 24px rgba(0,0,0,.35);clip-path:inset(0 -40px -40px -40px)}
@@ -159,11 +162,11 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 
 <section class=view id=v-firmware>
 <div class="g t">
-<div class=p><div class=k>Installed</div><table class=kv><tr><td>version<td id=f-ver><tr><td>kernel<td id=f-ker><tr><td>engine timing<td id=f-tim>run the check<tr><td>running for<td id=f-up></table></div>
+<div class=p><div class=k>Installed</div><table class=kv><tr><td>version<td id=f-ver><tr><td>board<td id=f-bd><tr><td>built<td id=f-built>-<tr><td>ESP-IDF<td id=f-idf>-<tr><td><span class=tipped title="The app slot the board runs from. An update goes to the other one, so the previous version stays there">slot</span><td id=f-slot>-<tr><td><span class=tipped title="CPU cycles the SHA-engine kernel spends per nonce (240 MHz): 240,000 / cycles = the engine's KH/s. Lower is faster">kernel</span><td id=f-ker><tr><td><span class=tipped title="The kernel's five waits in CPU cycles (before CONTINUE, before LOAD H1, before LOAD H2, after LOAD H1, after LOAD H2) and which kernel variant runs; tuned on the board with the engine check">engine timing</span><td id=f-tim>-</table></div>
 <div class=p><div class=k>Update</div><p class=hint>Upload 3bminer-&lt;board&gt;-&lt;version&gt;.bin. The board writes it to the spare slot and restarts; the old version stays in the other slot.</p>
-<div class=row><input type=file id=f-file accept=".bin" style="max-width:260px"><button class=btn id=f-up-b>Upload</button></div><div class=bar><i id=f-pr style="width:0"></i></div><div class="row msg" id=f-m></div></div>
+<div class=row><input type=file id=f-file accept=".bin" hidden><label for=f-file class=fpick>choose file</label><span class=sm id=f-name>no file chosen</span><button class=btn id=f-up-b>Upload</button></div><div class=bar><i id=f-pr style="width:0"></i></div><div class="row msg" id=f-m></div></div>
 <div class=p><div class=k>Engine check</div><p class=hint>Runs 1M nonces of a fixed header on the SHA engine and checks every hit in software. Mining pauses for about two seconds.</p>
-<div class=row><button class=btn id=f-bench>Run check</button><span class=msg id=f-bm></span></div></div>
+<div class=row><button class=btn id=f-bench>Run check</button></div><div class="msg swm" id=f-bm style="white-space:normal;min-height:36px"></div></div>
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
@@ -248,7 +251,8 @@ txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
 txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
-txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
+txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
+if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
 H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){if(!document.body.classList.contains('boot')||Date.now()-T0>=5000)status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
@@ -284,12 +288,13 @@ $('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!await ask('Save the settings','The miner restarts with them and is back mining in about 10 seconds.',{ok:'Save & restart'}))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
 // ---- firmware
+$('f-file').onchange=()=>{const f=$('f-file').files[0];txt('f-name',f?f.name+' ('+(f.size/1024|0)+' KB)':'no file chosen')};
 $('f-up-b').onclick=async()=>{const fl=$('f-file').files[0];if(!fl)return;if(!await ask('Install firmware',['Write ',{b:fl.name},' ('+(fl.size/1024|0)+' KB) to the spare slot and restart into it? The installed version stays in the other slot.'],{ok:'Install'}))return;const x=new XMLHttpRequest();x.open('POST',B+'/update');
 x.upload.onprogress=e=>{$('f-pr').style.width=(100*e.loaded/e.total).toFixed(0)+'%';txt('f-m','uploading '+(100*e.loaded/e.total).toFixed(0)+'%')};
 x.onload=()=>txt('f-m',x.status==200?'installed, restarting…':'failed: '+x.responseText);x.onerror=()=>txt('f-m','upload failed');x.send(fl)};
 $('f-rst').onclick=async()=>{if(await ask('Restart the miner','Settings stay as they are; mining resumes in about 10 seconds.',{ok:'Restart',danger:true}))fetch(B+'/api/system/restart',{method:'POST'}).then(()=>txt('f-m','restarting…'))};
-$('f-bench').onclick=()=>{txt('f-bm','running…');$('f-bench').disabled=1;fetch(B+'/api/bench?n=1048576').then(r=>r.json()).then(b=>{txt('f-tim',b.live.join('/')+' · kernel '+b.liveKernel);
-txt('f-bm',b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine · '+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct'))}).catch(()=>txt('f-bm','failed')).finally(()=>$('f-bench').disabled=0)};
+$('f-bench').onclick=()=>{fade('f-bm','running…',1);$('f-bench').disabled=1;fetch(B+'/api/bench?n=1048576').then(r=>r.json()).then(b=>{txt('f-tim',b.live.join('/')+' - kernel '+b.liveKernel);
+fade('f-bm','');$('f-bm').innerHTML=b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine<br>'+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct');fade5('f-bm')}).catch(()=>fade('f-bm','failed')).finally(()=>$('f-bench').disabled=0)};
 // ---- swarm
 const SK='swarm-ips';let SW=new Map(),swScanned=0,swSort=null,swDir=-1;
 const COLS=[['host','Miner'],['ip','IP'],['model','Board'],['hr','Hashrate','ct'],['acc','Shares','ct'],['best','Best','n'],['pdiff','Pool diff','n'],['up','Uptime','ct'],['rssi','RSSI','ct'],['heap','Heap','n'],['ver','Firmware','ct'],['seen','Seen','n']];
@@ -318,6 +323,7 @@ window.swRst=async ip=>{if(await ask('Restart a miner',['Restart the miner at ',
 $('sw-go').onclick=swScan;// a custom miner: an IPv4 address (an optional :port is fine), checked before it is asked
 const okIP=v=>{const m=v.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/);return!!m&&m.slice(1,5).every(x=>+x<=255)&&(!m[5]||+m[5]<=65535)};
 // a message that stays 3 s, then fades out (the line keeps its room)
+const fade5=id=>{const e=$(id);clearTimeout(e._f);e._f=setTimeout(()=>e.classList.add('gone'),5000)};   // the engine check result stays 5 s
 const fade=(id,t,stay)=>{const e=$(id);clearTimeout(e._f);e.style.transition='none';e.classList.remove('gone');e.textContent=t;void e.offsetWidth;e.style.transition='';   // in at once, out slowly
 if(!stay)e._f=setTimeout(()=>e.classList.add('gone'),3000)};
 async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;if(!okIP(ip)){fade('sw-am','not an IP address, e.g. 192.168.1.232');return}
