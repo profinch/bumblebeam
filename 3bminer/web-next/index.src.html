@@ -61,8 +61,9 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
 /* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
    the turns and turns round gently, leaving a fading trail of light behind; the honeycomb cells under it light up in turn */
-#boot .stage{position:relative;height:170px;max-width:520px;margin:0 auto}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
-.flybee{position:absolute;left:0;top:0;width:64px!important;height:46px!important;will-change:transform}
+#boot .stage{position:relative;height:150px;max-width:420px;margin:0 auto;overflow:hidden}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
+.flybee{position:absolute;left:0;top:0;width:44px!important;height:32px!important;will-change:transform;filter:drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff) drop-shadow(0 0 7px rgba(57,255,242,.55))}
+#boot .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0}
 .loading{display:inline-flex;align-items:center;gap:10px;margin-top:6px;font:700 11px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--m)}
 .loading svg{width:13px;height:15px}.loading path{fill:rgba(255,255,255,.05);stroke:rgba(255,255,255,.22);stroke-width:1.5;animation:honey 2s ease-in-out infinite}
 /* the 404 page's honey cell (#f4ce4a, edge #c9a227) runs along the empty comb cells, fading in and out */
@@ -73,9 +74,9 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 </style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
-<span id=st class="pill idle" title="Waiting for the first answer from the miner">connecting</span></header>
+<span id=st class="pill idle" title="The page is loading the miner's data">loading</span></header>
 
-<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="2 7 24 17" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg></div><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
+<div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="2 7 24 17" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
 <div><div class=k><span class=tipped id=havk title="">Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
@@ -168,11 +169,12 @@ const key=e=>{if(e.key=='Escape'){e.preventDefault();done(false)}else if(e.key==
 bg.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a)done(a.dataset.a=='yes');else if(e.target===bg)done(false)});
 document.addEventListener('keydown',key,true);document.body.appendChild(bg);requestAnimationFrame(()=>bg.classList.add('on'));yes.focus()})}
 // the header's status: what the miner is doing, as one word with a tip
-const ST={connecting:['connecting','idle','Waiting for the first answer from the miner'],mining:['mining','ok','Hashing on the engine and in software, connected to the pool'],
+const ST={loading:['loading','idle','The page is loading the miner\'s data'],mining:['mining','ok','Hashing on the engine and in software, connected to the pool'],
 nopool:['no pool','warn','The miner answers but is not connected to the pool: the pool is down or unreachable, or the server in the settings is wrong. It retries every few seconds'],
 off:['mining off','idle','Mining is switched off in the settings; the board keeps doing its other work (a camera, for one)'],
 offline:['offline','bad','No answer from the miner: it is off, restarting or out of Wi-Fi reach. This page keeps asking every 3 seconds']};
-function status(k){const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.removeAttribute('data-tip');e.title=v[2]}
+let realK='loading';
+function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('boot')&&k!='offline')k='loading';const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.removeAttribute('data-tip');e.title=v[2]}
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
@@ -265,23 +267,23 @@ document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cu
 // first paint only with data: wait for the miner, give mempool.space and the history 2.5 s more, then show everything at once
 let tries=0;
 const T0=Date.now();
-// the waiting bee: a lemniscate (x = A sin t, y = B sin 2t) at a steady pace; tilt from the path's slope, a smooth turn-round when x changes
-// direction, light dots dropped behind it that shrink and fade over 0.9 s
-(()=>{const st=$('stage'),bee=$('flybee'),cv=$('trail'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion: reduce)').matches;let dots=[],last=0,t0=performance.now(),dpr=1;
+// the waiting bee: left to right across the whole stage on a gentle wave, in again from the left; a lean from the wave's slope,
+// light dots of one size dropped behind it that fade over 0.9 s. Time counts from the first frame (the frame clock is not performance.now everywhere)
+(()=>{const st=$('stage'),bee=$('flybee'),cv=$('trail'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion: reduce)').matches;let dots=[],last=0,t0=null,dpr=1;
 const fit=()=>{dpr=devicePixelRatio||1;cv.width=st.clientWidth*dpr;cv.height=st.clientHeight*dpr};fit();addEventListener('resize',fit);
-function frame(now){if(!document.body.classList.contains('boot'))return;const W=st.clientWidth,H=st.clientHeight,A=Math.min(W*.38,190),Bv=H*.3,t=(now-t0)/1000*.85;
-const x=W/2+A*Math.sin(t),y=H/2+Bv*Math.sin(2*t),vx=A*Math.cos(t),vy=2*Bv*Math.cos(2*t);
-const sg=1,tilt=Math.max(-.22,Math.min(.22,Math.atan2(vy,Math.abs(vx)+80)))*(vx>=0?1:-1);
-bee.style.transform=still?'translate('+(W/2-32)+'px,'+(H/2-23)+'px)':'translate('+(x-32)+'px,'+(y-23)+'px) rotate('+tilt+'rad)';
-if(!still&&now-last>90){dots.push({x:x-sg*24,y:y+5,t:now});last=now}
+function frame(now){if(!document.body.classList.contains('boot'))return;if(t0==null)t0=now;const W=st.clientWidth,H=st.clientHeight,span=W+100,v=Math.max(110,W*.3),u=(((now-t0)/1000*v)%span+span)%span;
+const x=u-50,ph=x/W*Math.PI*2,y=H/2-36+14*Math.sin(ph),vy=14*Math.cos(ph)*Math.PI*2/W*v,tilt=Math.max(-.2,Math.min(.2,Math.atan2(vy,v)));const sg=1;
+bee.style.transform=still?'translate('+(W/2-22)+'px,'+(H/2-50)+'px)':'translate('+(x-22)+'px,'+(y-16)+'px) rotate('+tilt+'rad)';
+if(u<16)dots=[];   // a new pass from the left: the old trail does not jump across
+if(!still&&now-last>90){dots.push({x:x-sg*17,y:y+3,t:now});last=now}
 cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);dots=dots.filter(d=>now-d.t<900);
-for(const d of dots){const a=1-(now-d.t)/900;cx.beginPath();cx.arc(d.x,d.y,1.8,0,7);cx.fillStyle='rgba(57,255,242,'+(.6*a)+')';cx.shadowColor='rgba(57,255,242,.8)';cx.shadowBlur=5*a;cx.fill()}
+for(const d of dots){const a=1-(now-d.t)/900;cx.beginPath();cx.arc(d.x,d.y,1.5,0,7);cx.fillStyle='rgba(57,255,242,'+(.6*a)+')';cx.shadowColor='rgba(57,255,242,.8)';cx.shadowBlur=5*a;cx.fill()}
 requestAnimationFrame(frame)}
 requestAnimationFrame(frame)})();
 async function boot(){if(!await tick()){tries++;txt('boot-m','No answer from the miner at '+DEV+(tries>1?' ('+tries+' tries)':'')+'. Trying again every 3 seconds.');$('boot-h').hidden=tries<3;setTimeout(boot,3000);return}
 await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500))]);spark();
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
-document.body.classList.remove('boot');
+document.body.classList.remove('boot');status(realK);
 setInterval(tick,3000);setInterval(net,120000);setInterval(hist,60000)}
 route();boot();
 </script></body></html>
