@@ -88,7 +88,7 @@ select[hidden],input[hidden]{display:none!important}.dd{position:relative;margin
 input[type=range]{padding:0;background:none;border:0;accent-color:#00f6d2}
 .sw{position:relative;width:34px!important;height:18px;padding:0!important;appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.15)!important;border:0!important;border-radius:9px!important;cursor:pointer;margin:0!important;justify-self:start}.sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.15s}.sw:checked{background:#00c8b0!important}.sw:checked::after{left:18px}
 /* until the first answer: only the header and a waiting panel */
-body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
+body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:0 16px 8vh;text-align:center}body.boot #boot{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 90px);min-height:calc(100dvh - 90px)}
 /* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
    the turns and turns round gently, leaving a fading trail of light behind; the honeycomb cells under it light up in turn */
 #boot .stage{position:relative;height:150px;max-width:480px;margin:0 auto;overflow:hidden}#boot canvas{position:absolute;inset:0;width:100%;height:100%}
@@ -270,7 +270,7 @@ htm('odn','expected time to find a block<br>one block in '+fx(1/pday,1).replace(
 // the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
 txt('odk',(D.stratum||{}).solo===true?'Block chance (solo)':'Block chance')}
 let lastOk=0,busy=0;
-async function tick(){if(busy)return 1;try{const ac=new AbortController(),to=setTimeout(()=>ac.abort(),5000);const d=await(await fetch(B+'/api/system/info',{signal:ac.signal})).json();clearTimeout(to);const m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;lastOk=Date.now();
+async function tick(){if(busy)return 1;try{const ac=new AbortController(),to=setTimeout(()=>ac.abort(),5000);const d=await(await fetch(B+'/api/system/info',{signal:ac.signal})).json();clearTimeout(to);const m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;lastOk=Date.now();swSelf(d);
 status(d.identity.mining===false?'off':s.connected?'mining':'nopool');
 htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
 const AVS={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a sample a minute), or since it started if that is shorter'],
@@ -360,6 +360,9 @@ async function swPoll(ip){try{const c=new AbortController();setTimeout(()=>c.abo
 async function swProbe(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),1500);const r=await fetch('http://'+ip+'/probe',{signal:c.signal});if(!r.ok)return;const j=await r.json();if('hr' in j||'hashRate' in j)await swPoll(ip)}catch(e){}}
 const FORGET=864e5;   // a miner silent for 24 h leaves the list
 function swSave(){try{localStorage.setItem(SK,JSON.stringify(Object.fromEntries([...SW.values()].map(o=>[o.ip,o.seen||0]))))}catch(e){}}
+// this board is in the swarm from the first answer, no scan needed; the saved ones come back (offline until they answer)
+function swSelf(d){if(FG.has(DEV))return;const o=mapInfo(DEV,d);o.seen=Date.now();SW.set(DEV,o);swSave();if(view()=='swarm')swDraw()}
+try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));for(const ip in k)if(Date.now()-k[ip]<=FORGET&&!SW.has(ip)){SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});if(ip!=DEV)swPoll(ip)}}catch(e){}
 let scanning=0;
 async function swScan(){if(scanning)return;const m3=$('sw-net').value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\.\d*)?$/);if(!m3||m3.slice(1,4).some(x=>+x>255)){fade('sw-prog','subnet like 192.168.88.0');return}
 scanning=1;$('sw-go').disabled=1;swScanned=1;FG.clear();const net=m3.slice(1,4).join('.');

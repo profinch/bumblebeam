@@ -144,24 +144,30 @@ static int marker_scan(const char *buf, int n, char *tail, int *tl) {   // 1 = o
         res = (j - i + 1 == (int)sizeof s_marker - 1 && !memcmp(w + i, s_marker, sizeof s_marker - 1)) ? 1 : -1; if (res < 0) break; }
     int keep = wl < 96 ? wl : 96; memcpy(tail, w + wl - keep, keep); *tl = keep; return res;
 }
+// a failed upload: the camera comes back by a restart (restarting the driver in place did not always work)
+static void ota_failed(void) {
+#ifdef CONFIG_BOARD_HAS_CAMERA
+    xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL);
+#endif
+}
 static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
     if (!web_post_allowed(r)) return ESP_OK;
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL); if (!part) return httpd_resp_send_500(r);
     if (r->content_len < 65536 || r->content_len > part->size) return bad(r, "400 Bad Request", "no image or larger than the slot");
     char *buf = malloc(4096); if (!buf) return httpd_resp_send_500(r);
     camera_stop();   // no-op without a camera; on a camera board the image is written with the sensor off, a restart follows anyway
-    // the image size up front: only that much of the slot is erased, not all 1.875 MB (shorter flash time with the cache off)
-    esp_ota_handle_t h; if (esp_ota_begin(part, r->content_len, &h) != ESP_OK) { free(buf); camera_start(); return httpd_resp_send_500(r); }
+    // erased sector by sector as the image arrives: no seconds-long erase up front with the cache off and Wi-Fi waiting
+    esp_ota_handle_t h; if (esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &h) != ESP_OK) { free(buf); ota_failed(); return httpd_resp_send_500(r); }
     int remaining = r->content_len, total = 0, waits = 0; char tail[96]; int tl = 0, mk = 0;
     ESP_LOGI(TAG, "OTA start, %d bytes -> %s", remaining, part->label);
-    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT && ++waits < 10) continue; esp_ota_abort(h); free(buf); camera_start(); return httpd_resp_send_500(r); }
+    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT && ++waits < 10) continue; esp_ota_abort(h); free(buf); ota_failed(); return httpd_resp_send_500(r); }
         waits = 0;
         if (mk == 0 || mk == 1) { int m = marker_scan(buf, n, tail, &tl); if (m) mk = m; }
-        if (mk < 0) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "409 Conflict"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
-        if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); camera_start(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
+        if (mk < 0) { esp_ota_abort(h); free(buf); ota_failed(); httpd_resp_set_status(r, "409 Conflict"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
+        if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); ota_failed(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
     free(buf);
     if (!mk) ESP_LOGW(TAG, "OTA image has no board marker (pre-0.6 build?), accepted");
-    if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(part) != ESP_OK) { camera_start(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota end/validate failed", -1); }
+    if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(part) != ESP_OK) { ota_failed(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota end/validate failed", -1); }
     char b[96]; snprintf(b, sizeof b, "{\"status\":\"ok\",\"bytes\":%d,\"partition\":\"%s\",\"note\":\"restarting\"}", total, part->label);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); httpd_resp_send(r, b, -1); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK;
 }
