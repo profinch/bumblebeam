@@ -81,6 +81,12 @@ select[hidden],input[hidden]{display:none!important}.dd{position:relative;margin
 .dd-btn,.dd-list [role=option]{display:flex;align-items:center;gap:10px}.ddl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.ddr{flex:none;font-size:11px;color:var(--m)}.ddr.on,.dd-list .ddr{}
 .dd-list [role=option]{padding:7px 10px 7px 20px;font:13px var(--mono);text-transform:none;letter-spacing:0;color:var(--td);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-list [role=option].active{background:rgba(0,246,210,.12);color:#fff}.dd-list [role=option][aria-selected=true]{color:var(--a)}
 .dd-list::-webkit-scrollbar{width:4px}.dd-list::-webkit-scrollbar-thumb{background:rgba(0,246,210,.45);border-radius:2px}.dd-list::-webkit-scrollbar-track{background:transparent}
+/* Camera: the view and its addresses on the left, the sensor's controls on the right */
+.cvl{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:start}@media(max-width:900px){.cvl{grid-template-columns:1fr}}
+.cvh{display:flex;justify-content:space-between;align-items:baseline}.cvv{margin-top:10px;background:#000;border-radius:6px;min-height:220px;display:flex;align-items:center;justify-content:center;overflow:hidden}.cvv img{max-width:100%;display:block}.cvv span{font:12px var(--mono);color:var(--m)}
+.cvg{margin-top:6px}.f{display:grid;grid-template-columns:120px minmax(0,1fr) 40px;align-items:center;gap:8px;margin:6px 0;font:12px var(--mono)}.f label{color:var(--td);text-transform:none;letter-spacing:0;font-size:12px}.f output{color:var(--m);text-align:right}.f input,.f .dd{margin:0}.f.off{opacity:.4}
+input[type=range]{padding:0;background:none;border:0;accent-color:#00f6d2}
+.sw{position:relative;width:34px!important;height:18px;padding:0!important;appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.15)!important;border:0!important;border-radius:9px!important;cursor:pointer;margin:0!important;justify-self:start}.sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.15s}.sw:checked{background:#00c8b0!important}.sw:checked::after{left:18px}
 /* until the first answer: only the header and a waiting panel */
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;padding:70px 16px 40px;text-align:center}body.boot #boot{display:block}
 /* the logo's bee (its own wing, trail and blink animations) flies a figure eight drawn by script: smooth speed, it leans into
@@ -97,7 +103,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 #boot p{font:12px/1.6 var(--mono);color:var(--m);margin:10px auto 0;max-width:460px}
 </style></head><body class=boot><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
-<nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a><a href="/camera" id=nav-cam hidden>Camera</a></nav>
+<nav id=nav><a href="/" data-v=dash>Dashboard</a><a href="/swarm" data-v=swarm>Swarm</a><a href="/settings" data-v=settings>Settings</a><a href="/firmware" data-v=firmware>Firmware</a><a href="/camera" data-v=camera id=nav-cam hidden>Camera</a></nav>
 <span id=st class="pill idle" title="The page is loading the miner's data">loading</span></header>
 
 <div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
@@ -175,9 +181,26 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
+<section class=view id=v-camera>
+<div class=cvl><div>
+<div class=p><div class=cvh><div class=k>View</div><span class=sm id=cv-info></span></div><div class=cvv id=cv-view><span>take a still or start the stream</span></div>
+<div class=row><button class=btn id=cv-still>Still</button><button class=btn id=cv-strm>Start stream</button><a class=btn id=cv-save download=capture.jpg href=# hidden>Save image</a></div></div>
+<div class=p><div class=k>Addresses</div><table class=kv><tr><td>still<td><a id=cv-l1 href=#>/capture</a><tr><td>bitmap<td><a id=cv-l3 href=#>/bmp</a><tr><td>stream<td><a id=cv-l2 href=#>:81/stream</a><tr><td>settings<td><a id=cv-l4 href=#>/status</a></table></div>
+</div><div>
+<div class=p><div class=k>Picture</div><div id=cv-g1 class=cvg></div></div>
+<div class=p><div class=k>Light</div><div id=cv-g2 class=cvg></div></div>
+<div class=p><div class=k>Corrections</div><div id=cv-g3 class=cvg></div></div>
+<div class=p><div class=row style="margin:0"><button class=btn id=cv-sv title="Keep the current camera settings on the board, so they come back after a restart">Save as default</button><button class=btn id=cv-rl title="Read the camera settings from the board again">Reload</button><span class="msg fd" id=cv-m></span></div></div>
+<div class=p><div class=k>Advanced</div><div class=cvg>
+<div class=f><label><span class=tipped title="The clock the ESP32 gives the sensor, in MHz (20 by default). Lower can steady a noisy picture, higher can raise the frame rate">XCLK, MHz</span></label><input id=cv-xclk inputmode=numeric><button class=btn id=cv-xs>Set</button></div>
+<div class=f><label><span class=tipped title="A sensor register, decimal or 0x hex, e.g. 0x111. For the OV2640 see its datasheet">Register</span></label><input id=cv-rg placeholder="0x111"><span></span></div>
+<div class=f><label>Mask / value</label><input id=cv-rmv placeholder="0xff / 0x00"><span></span></div>
+<div class=row><button class=btn id=cv-rget>Read</button><button class=btn id=cv-rset>Write</button><span class="msg fd" id=cv-rm></span></div></div></div>
+</div></div></section>
+
 <footer><p class=foot-copy><span class=fp>&copy; 2026 <a href="https://bumblebeam.org" target=_blank rel=noopener>BumbleBeam</a></span><span class="fd d1"> &middot; </span><span class=fp>a community PoW miner for Bitcoin (BTC)</span><span class="fd d2"> &middot; </span><span class=fp>open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/3bminer" target=_blank rel=noopener>GitHub</a></span></p></footer></div>
 <script>
-const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.228'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
+const Q=new URLSearchParams(location.search),LOCAL=location.protocol=='file:',DEV=LOCAL?(Q.get('h')||'192.168.88.69'):location.host,B=LOCAL?'http://'+DEV:'',$=i=>document.getElementById(i),H=[];
 let D=null,N={};
 const fx=(v,d=2)=>v>=1e12?(v/1e12).toFixed(d)+' T':v>=1e9?(v/1e9).toFixed(d)+' G':v>=1e6?(v/1e6).toFixed(d)+' M':v>=1e3?(v/1e3).toFixed(d)+' K':(+v).toPrecision(4).replace(/\.?0+$/,'');
 const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.slice(-1)];return m?parseFloat(s)*m:parseFloat(s)||0};
@@ -225,14 +248,14 @@ if(k=='ArrowDown'){e.preventDefault();mark(Math.min(items.length-1,act+1))}else 
 btn.onblur=()=>setTimeout(()=>{if(!d.contains(document.activeElement))close(0)},0);sel._dd={sync};sync();return d}
 const ddsync=()=>document.querySelectorAll('select').forEach(s=>s._dd&&s._dd.sync());
 // ---- router
-const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
+const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware',camera:'Camera'};
 // sections: /swarm on the board (the firmware serves this page there too), #/swarm when opened from a file
 const view=()=>LOCAL?(location.hash.replace(/^#\/?/,'')||'dash'):(location.pathname.replace(/^\//,'')||'dash');
-document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||!a.dataset.v||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();const v=a.dataset.v;
+document.addEventListener('click',e=>{const a=e.target.closest('#nav a');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();const v=a.dataset.v;
 if(LOCAL)history.pushState(null,'',location.pathname+location.search+(v=='dash'?'':'#/'+v));else history.pushState(null,'',(v=='dash'?'/':'/'+v)+location.search);route()});
 addEventListener('popstate',route);
 function route(){const v=TT[view()]?view():'dash';document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
-if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
+if(v!='camera')cvStop();else if(D&&D.identity.camera)cvLoad();if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
@@ -256,7 +279,7 @@ htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'))
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+u+'">'+(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);if(d.identity.camera){$('nav-cam').hidden=false;$('nav-cam').href=B+'/camera'}txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('hn',d.identity.hostName);if(d.identity.camera&&$('nav-cam').hidden){$('nav-cam').hidden=false;if(view()=='camera')cvLoad()}txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
 if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
 CK={t:d.identity.time||0,at:Date.now(),tz:d.identity.tz,sync:d.identity.ntpSync||0,src:d.identity.ntp};boardClock();
@@ -385,6 +408,33 @@ await Promise.race([Promise.all([net(),hist()]),new Promise(r=>setTimeout(r,2500
 await new Promise(r=>setTimeout(r,Math.max(0,3000-(Date.now()-T0))));   // the bee flies at least 3 s
 document.body.classList.remove('boot');status(realK);
 setInterval(tick,3000);setInterval(net,120000);setInterval(hist,60000)}
+// ---- camera (camera boards): the CameraWebServer API of the firmware - /status, /control, /capture, :81/stream, /api/camera/save
+const CS='http://'+(LOCAL?DEV:location.hostname)+':81/stream';
+const FS=[['UXGA 1600x1200',15],['SXGA 1280x1024',14],['HD 1280x720',13],['XGA 1024x768',12],['SVGA 800x600',11],['VGA 640x480',10],['HVGA 480x320',9],['CIF 400x296',8],['QVGA 320x240',6],['240x240',5],['HQVGA 240x176',4],['QCIF 176x144',3],['QQVGA 160x120',1],['96x96',0]];
+const FX=['none','negative','grayscale','red tint','green tint','blue tint','sepia'],WB=['auto','sunny','cloudy','office','home'],GC=['2x','4x','8x','16x','32x','64x','128x'];
+// [var, label, kind, min, max] kind: r range, s switch, o options
+const CG={'cv-g1':[['framesize','Resolution','o',FS],['quality','Quality','r',4,63,'JPEG quality: lower is better and bigger'],['brightness','Brightness','r',-2,2],['contrast','Contrast','r',-2,2],['saturation','Saturation','r',-2,2],['special_effect','Effect','o',FX.map((n,i)=>[n,i])],['hmirror','Mirror','s'],['vflip','Flip','s']],
+'cv-g2':[['led_intensity','Flash LED','r',0,255,'The white LED by the lens: lit while streaming and for a still'],['awb','Auto white balance','s'],['awb_gain','AWB gain','s'],['wb_mode','WB mode','o',WB.map((n,i)=>[n,i])],['aec','Auto exposure','s'],['aec2','AEC DSP','s','Exposure control in the sensor\'s DSP'],['ae_level','AE level','r',-2,2],['aec_value','Exposure','r',0,1200],['agc','Auto gain','s'],['agc_gain','Gain','r',0,30],['gainceiling','Gain ceiling','o',GC.map((n,i)=>[n,i])]],
+'cv-g3':[['bpc','Black pixels','s','Black pixel correction'],['wpc','White pixels','s','White pixel correction'],['raw_gma','Raw gamma','s'],['lenc','Lens correction','s'],['dcw','Downsize (DCW)','s','Downsize in the sensor for small resolutions'],['colorbar','Color bars','s','A test pattern instead of the picture']]};
+for(const g in CG)$(g).innerHTML=CG[g].map(([v,l,k,a,b,t])=>{const i=k=='r'?'<input type=range id=cv-c-'+v+' min='+a+' max='+(b??a)+'>':k=='s'?'<input type=checkbox class=sw id=cv-c-'+v+'>':'<select id=cv-c-'+v+'>'+a.map(o=>'<option value='+o[1]+'>'+o[0]+'</option>').join('')+'</select>';
+const tip=typeof b=='string'?b:t;return'<div class=f id=cv-f-'+v+'><label for=cv-c-'+v+'>'+(tip?'<span class=tipped title="'+tip+'">'+l+'</span>':l)+'</label>'+i+'<output id=cv-o-'+v+'></output></div>'}).join('');
+const cvDep=()=>{const t=(i,off)=>$('cv-f-'+i).classList.toggle('off',off);t('aec_value',$('cv-c-aec').checked);t('agc_gain',$('cv-c-agc').checked);t('gainceiling',!$('cv-c-agc').checked);t('wb_mode',!$('cv-c-awb').checked)};
+document.querySelectorAll('[id^=cv-c-]').forEach(e=>{const v=e.id.slice(5);e.addEventListener('change',()=>{const val=e.type=='checkbox'?(e.checked?1:0):e.value;fetch(B+'/control?var='+v+'&val='+val).then(r=>{if(!r.ok)fade('cv-m','the camera rejected '+v)}).catch(()=>fade('cv-m','camera not reachable'));cvDep()});
+if(e.type=='range')e.addEventListener('input',()=>txt('cv-o-'+v,e.value))});
+let cvOn=0,cvUrl='',cvLoaded=0;
+function cvLoad(say){$('cv-l1').href=B+'/capture';$('cv-l3').href=B+'/bmp';$('cv-l4').href=B+'/status';$('cv-l2').href=CS;
+fetch(B+'/status').then(r=>r.json()).then(c=>{cvLoaded=1;for(const v in c){const e=$('cv-c-'+v);if(!e)continue;if(e.type=='checkbox')e.checked=!!c[v];else e.value=c[v];if(e.type=='range')txt('cv-o-'+v,c[v])}$('cv-xclk').value=c.xclk;cvDep();ddsync();
+txt('cv-info',c.streaming?'streaming, '+c.fps+' fps':'');if(say)fade('cv-m','camera settings reloaded')}).catch(()=>fade('cv-m','camera not reachable'))}
+function cvStop(){if(!cvOn)return;$('cv-view').innerHTML='<span>stream stopped</span>';cvOn=0;txt('cv-strm','Start stream');txt('cv-info','')}
+$('cv-still').onclick=()=>{cvStop();fetch(B+'/capture?_='+Date.now()).then(r=>r.blob()).then(b=>{if(cvUrl)URL.revokeObjectURL(cvUrl);cvUrl=URL.createObjectURL(b);$('cv-view').innerHTML='<img alt="still" src="'+cvUrl+'">';$('cv-save').href=cvUrl;$('cv-save').hidden=false;txt('cv-info',(b.size/1024).toFixed(0)+' KB')}).catch(()=>fade('cv-m','no picture from the camera'))};
+$('cv-strm').onclick=()=>{if(cvOn)return cvStop();$('cv-view').innerHTML='<img alt="stream" src="'+CS+'">';cvOn=1;txt('cv-strm','Stop stream');$('cv-save').hidden=true;setTimeout(()=>cvOn&&cvLoad(),2500)};
+setInterval(()=>{if(cvOn)cvLoad()},5000);
+$('cv-sv').onclick=()=>fetch(B+'/api/camera/save',{method:'POST'}).then(r=>r.json()).then(j=>fade('cv-m',j.status=='ok'?'saved on the board':'save failed')).catch(()=>fade('cv-m','save failed'));
+$('cv-rl').onclick=()=>cvLoad(1);
+$('cv-xs').onclick=()=>fetch(B+'/xclk?xclk='+$('cv-xclk').value).then(r=>fade('cv-rm',r.ok?'xclk set':'rejected'));
+const cvRp=()=>{const[m,v]=$('cv-rmv').value.split('/').map(x=>parseInt(x.trim()));return{r:parseInt($('cv-rg').value),m:isNaN(m)?255:m,v}};
+$('cv-rget').onclick=()=>{const p=cvRp();if(isNaN(p.r))return fade('cv-rm','register?');fetch(B+'/greg?reg='+p.r+'&mask='+p.m).then(r=>r.text()).then(t=>fade('cv-rm','= '+t+' (0x'+(+t).toString(16)+')'))};
+$('cv-rset').onclick=()=>{const p=cvRp();if(isNaN(p.r)||isNaN(p.v))return fade('cv-rm','register and value?');fetch(B+'/reg?reg='+p.r+'&mask='+p.m+'&val='+p.v).then(r=>fade('cv-rm',r.ok?'written':'rejected'))};
 document.querySelectorAll('select').forEach(ddify);
 route();boot();
 </script></body></html>

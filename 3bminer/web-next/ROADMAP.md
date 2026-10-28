@@ -23,6 +23,6 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Draw on core 1 only; measure the effect on the engine first (SPI DMA / bus contention), refresh ~1 Hz.
 
 ## Camera board (ESP32-CAM)
-- Camera page in the web-next menu (today a separate /camera page in the 0.6 style).
+- Camera tab is in web-next (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). When web-next goes into the firmware: serve the page on /camera too (web.c) and drop main/www/camera.html (~5 KB gzip).
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
