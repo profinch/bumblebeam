@@ -4,7 +4,8 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 
 ## 0.6.1 (not released yet)
 - Hashrate history on the board: a sample a minute for 24 h (`GET /api/history`), averages for the last hour and day
-  in `/api/system/info` (`avg1hKhs`, `avg24hKhs`, `historyMinutes`), the software hash counter (`swHashes`).
+  in `/api/system/info` (`avg1hKhs`, `avg24hKhs`, `historyMinutes`), the software hash counter (`swHashes`), and an
+  all-time average across restarts (`avgAllKhs`, `allSeconds`; totals saved to NVS every 10 minutes).
 - Solo or shared pool from the job itself: `stratum.solo` is true when the coinbase pays the configured address
   (bech32, bech32m, P2PKH and P2SH addresses), no list of pool names.
 
