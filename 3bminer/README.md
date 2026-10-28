@@ -11,8 +11,8 @@ interrupts off; core 1 keeps Wi-Fi, the web server, the camera and a software ha
 
 | Board | Profile | What it does | Measured |
 |---|---|---|---|
-| ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~951 KH/s engine + ~24 KH/s software = **~975 KH/s**, 251 cycles/nonce |
-| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream (quality 10 / 4) 50 / 33 fps at 400x296, 25 / 25 at 640x480, 12.5 / 5.6 at 1280x720, 3.5 / 3.0 at 1600x1200 (the sensor's limit there); mining ~951 KH/s engine + ~24 software = **~975 KH/s**, ~930 while streaming; microSD for photos |
+| ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~951 KH/s engine + ~31 KH/s software = **~983 KH/s**, 251 cycles/nonce |
+| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream (quality 10 / 4) 50 / 33 fps at 400x296, 25 / 25 at 640x480, 12.5 / 5.6 at 1280x720, 3.5 / 3.0 at 1600x1200 (the sensor's limit there); mining ~951 KH/s engine + ~31 software = **~983 KH/s**, ~930 while streaming; microSD for photos |
 
 For scale: NerdMiner v2 does ~350 KH/s on the same chip, NMMiner (closed, paid license on boards
 other than its own) ~1.03 MH/s. Over 7.6 h side by side on one pool (fw 0.5.2 against NMMiner
@@ -118,8 +118,11 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
   measurable: the kernel is on core 0, the camera and the network on core 1.
 - The software hasher was nerdSHA256plus, 20 KB of unrolled code run from flash through the 32 KB two-way cache: it took
   8,179 cycles a hash in one build and 44,000 in the next (other hot code landed on the same cache lines), and 17,850 on
-  the ESP32-CAM, whose cache also serves PSRAM. A compact rolled SHA-256 with a midstate (~1 KB) takes ~10,200 cycles on
-  both boards in every build: ~24 KH/s instead of 5-29. Moving the unrolled one to IRAM would cost the engine far more (above).
+  the ESP32-CAM, whose cache also serves PSRAM. Ours (`sha256d_h7` in `main/sha256.c`, 9.4 KB, under half the cache): rounds
+  unrolled by 8 with the variables renamed instead of shifted, the job's constant part done once (midstate, rounds 0-2 of the
+  second block, schedule words 16-17, the padding words as literals), the second hash stopped after round 61 for word 7:
+  ~7,700-8,100 cycles on both boards in every build, ~31 KH/s. A fully unrolled one might save another 2-3 KH/s at 20 KB of
+  code, back where the cache decides. Moving code to IRAM would cost the engine far more (above).
 - The microSD slot runs in 1-bit SDMMC mode: in 4-bit mode its D1 is GPIO4, the flash LED.
 
 Changes per version: [CHANGELOG.md](CHANGELOG.md); which image ran on which board, when and with what
