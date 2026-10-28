@@ -62,7 +62,7 @@ footer{padding:10px 0 30px}.foot-copy .fp{white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.ask-bg,.ask{transition:none}}
 /* Swarm controls: scan on the left, a custom address on the right; on phones the custom one gets its own row, left-aligned */
 .swc{margin:0 0 6px;justify-content:space-between;align-items:flex-start}.swg{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.swg input{display:inline-block;width:150px;margin:0}.swr{margin-left:auto}
-/* a line kept free under each group for its message, so nothing jumps */.swm{min-height:18px;margin-top:6px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.swr .swm{text-align:right}
+/* a line kept free under each group for its message, so nothing jumps */.swm{transition:opacity .6s}.swm.gone{opacity:0}.swm{min-height:18px;margin-top:6px;font-size:11px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.swr .swm{text-align:right}
 .swhint{margin-top:16px!important}
 @media(max-width:640px){.swr{margin-left:0;width:100%}.swr .swm{text-align:left}}
 /* scrollbars as on the pool site: a thin accent bar, no track, no arrows - the page and every scrolling box */
@@ -276,8 +276,8 @@ async function swScan(){swScanned=1;const net=$('sw-net').value.trim().replace(/
 try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));   // older lists: plain addresses
 for(const ip in k){if(Date.now()-k[ip]>FORGET)continue;if(!SW.has(ip))SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});swPoll(ip)}swSave();swDraw()}catch(e){}
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
-const worker=async()=>{while(q.length){const ip=q.shift();txt('sw-prog','Network scanning... '+ip);await swProbe(ip)}};
-await Promise.all(Array.from({length:24},worker));txt('sw-scan','last scan '+clock(new Date()));txt('sw-prog','')}
+const worker=async()=>{while(q.length){const ip=q.shift();fade('sw-prog','network scanning... '+ip,1);await swProbe(ip)}};
+await Promise.all(Array.from({length:24},worker));txt('sw-scan','last scan '+clock(new Date()));fade('sw-prog',$('sw-prog').textContent)}   // the last line fades out after 5 s
 function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-hn',a.length==1?'1 miner':a.length+' miners');txt('sw-b',sp(bb.bestS));txt('sw-bn',bb.host||'');
 const ac=a.reduce((s,o)=>s+(o.acc||0),0),rj=a.reduce((s,o)=>s+(o.rej||0),0);htm('sw-s',ac+' <small>/ <span class=r>'+rj+'</span></small>');txt('sw-sr',ac+rj?(100*rj/(ac+rj)).toFixed(2)+'% rejected':'');
 const sk=swSort||'hr',sd=swSort?swDir:-1;const rows=[...SW.values()].sort((x,y)=>{const p=x[sk],q=y[sk];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*sd});
@@ -287,10 +287,12 @@ window.swForget=ip=>{SW.delete(ip);swSave();swDraw()};
 window.swRst=async ip=>{if(await ask('Restart a miner',['Restart the miner at ',{b:ip},'? It is back in about 10 seconds.'],{ok:'Restart',danger:true}))fetch('http://'+ip+'/api/system/restart',{method:'POST'})};
 $('sw-go').onclick=swScan;// a custom miner: an IPv4 address (an optional :port is fine), checked before it is asked
 const okIP=v=>{const m=v.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/);return!!m&&m.slice(1,5).every(x=>+x<=255)&&(!m[5]||+m[5]<=65535)};
-async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;if(!okIP(ip)){txt('sw-am','not an IP address, e.g. 192.168.1.232');return}
-if(SW.has(ip)&&!SW.get(ip).off){txt('sw-am','already added');return}
-txt('sw-am','asking '+ip+'…');txt('sw-am',await swPoll(ip)?'added':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
-$('sw-addb').onclick=swAdd;$('sw-add').onkeydown=e=>{if(e.key=='Enter')swAdd()};$('sw-add').oninput=()=>txt('sw-am','');
+// a message that stays 5 s, then fades out (the line keeps its room)
+const fade=(id,t,stay)=>{const e=$(id);clearTimeout(e._f);e.classList.remove('gone');e.textContent=t;if(!stay)e._f=setTimeout(()=>e.classList.add('gone'),5000)};
+async function swAdd(){const ip=$('sw-add').value.trim();if(!ip)return;if(!okIP(ip)){fade('sw-am','not an IP address, e.g. 192.168.1.232');return}
+if(SW.has(ip)&&!SW.get(ip).off){fade('sw-am','already added');return}
+fade('sw-am','asking '+ip+'…',1);fade('sw-am',await swPoll(ip)?'added '+ip+' miner':'no miner answers at '+ip);if(SW.get(ip)&&!SW.get(ip).off)$('sw-add').value=''}
+$('sw-addb').onclick=swAdd;$('sw-add').onkeydown=e=>{if(e.key=='Enter')swAdd()};$('sw-add').oninput=()=>fade('sw-am','',1);
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
 setInterval(()=>{if(view()=='swarm')for(const ip of SW.keys())swPoll(ip)},15000);
 // tooltips as on the pool site (tips.js): title -> data-tip, shown on hover, focus and tap
