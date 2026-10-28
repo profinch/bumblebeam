@@ -1,0 +1,4 @@
+time_utc,device,hash_khs_device,hash_khs_pool,accepted,rejected,best_session,uptime_s,free_heap,pool_best,rssi,engine_khs,sw_khs,fw
+2026-10-28 23:23:16,nmminer,1019.4,1230.8,0,0,0.0,35,41688,31.37,-68,,,v2.0.04
+2026-10-28 23:23:16,devkit,1002.0,756.7,8,0,0.01833,36,131924,0.03,-50,971.0,31.0,0.8.0
+2026-10-28 23:23:16,esp32cam,1001.0,1443.6,8,0,0.008425,35,3379204,0.02,-51,970.0,31.0,0.8.0
