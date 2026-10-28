@@ -24,7 +24,7 @@ h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margi
 .v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .v small,.sm{font-size:12px;color:var(--m);font-weight:400}
 .hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:34px}
-svg.sp{width:100%;height:70px;display:block;margin-top:12px}
+svg.sp{width:100%;height:70px;display:block;margin-top:12px}.spx{display:flex;justify-content:space-between;font:10px var(--mono);color:rgba(255,255,255,.35);margin-top:4px}
 .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}@media(max-width:900px){.g{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .g.t{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:900px){.g.t{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
@@ -82,7 +82,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div><div class=k><span class=tipped id=havk title="">Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
-<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
+<svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=1 stop-color="#fff"/></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg><div class=spx><span id=sp-l>24h ago</span><span>now</span></div></div>
 <div class=g>
 <div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
@@ -95,7 +95,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><div class=k><span class=tipped title="Fee rates mempool.space recommends right now, in satoshi per virtual byte of a transaction: to get into the next block, within about an hour, and the cheapest that still confirms">Fees (sat/vB)</span></div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
-<div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr><tr><td><span class=tipped title="The stratum error code the pool sent with the last reject: 20 other, 21 job not found (stale: the pool already moved to a new block), 22 duplicate share, 23 difficulty too low, 24 unauthorized worker, 25 not subscribed">error code</span><td id=rcode></table></div>
+<div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr><tr><td><span class=tipped title="The code the pool sent with the last reject, as it came. Stratum v1 has no formal standard; most pools follow the early convention: 20 other, 21 job not found (stale: the pool already moved on), 22 duplicate share, 23 difficulty too low, 24 unauthorized worker, 25 not subscribed. A pool may use its own codes, -1, or none at all (then -)">error code</span><td id=rcode></table></div>
 <div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
 </section>
 
@@ -184,8 +184,10 @@ addEventListener('hashchange',route);
 // ---- dashboard
 let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
 async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
-function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Math.max(...A)*1.01,mn=Math.min(...A)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
-let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
+// a real time axis: 'now' at the right edge, a fixed window (the board's 24 h a minute apart, or this page's last 10 min of 3 s readings
+// with older firmware), points where they belong in time, so a short history fills only the right part; the scale starts at zero
+function spark(){const hb=HH.length>=2,A=hb?HH:H,N=hb?1440:200,n=Math.min(A.length,N);if(n<2)return;const v=A.slice(-n),mx=Math.max(1,...v)*1.1,sx=300/(N-1),x0=300-(n-1)*sx,y=q=>70-q/mx*66-2;
+let d='';v.forEach((q,i)=>d+=(i?'L':'M')+(x0+i*sx).toFixed(1)+' '+y(q).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L'+x0.toFixed(1)+' 70Z');txt('sp-l',hb?'24h ago':'10 min ago')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
 htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');   // a time: 19.5B years, no space
 htm('odn','expected time to find a block<br>1 in '+fx(1/pday,1)+' per day');
