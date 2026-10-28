@@ -9,13 +9,17 @@
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "esp_netif_sntp.h"
+#include <sys/time.h>
 static const char *TAG = "wifi";
+volatile int64_t g_ntp_sync = 0;   // Unix time of the last NTP sync, 0 = never
+const char *const g_ntp_server = "pool.ntp.org";
+static void ntp_synced(struct timeval *tv) { g_ntp_sync = tv->tv_sec; ESP_LOGI(TAG, "clock set from %s", g_ntp_server); }
 static volatile bool s_conn = false; static char s_ip[16] = "0.0.0.0";
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) esp_wifi_connect();
     else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) { s_conn = false; ESP_LOGW(TAG, "disconnected, retry"); vTaskDelay(pdMS_TO_TICKS(1000)); esp_wifi_connect(); }
     else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) { ip_event_got_ip_t *e = data; snprintf(s_ip, sizeof s_ip, IPSTR, IP2STR(&e->ip_info.ip)); s_conn = true; ESP_LOGI(TAG, "got ip %s", s_ip);
-        static bool sntp = false; if (!sntp) { esp_sntp_config_t c = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org"); esp_netif_sntp_init(&c); sntp = true; } }   // the board's clock (UTC)
+        static bool sntp = false; if (!sntp) { esp_sntp_config_t c = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org"); c.sync_cb = ntp_synced; esp_netif_sntp_init(&c); sntp = true; } }   // the board's clock (UTC)
 }
 void wifi_start(void) {
     esp_netif_init(); esp_event_loop_create_default();

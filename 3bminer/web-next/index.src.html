@@ -169,6 +169,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=row><input type=file id=f-file accept=".bin" hidden><label for=f-file class=fpick>choose file</label><span class=sm id=f-name>no file chosen</span></div><div class=row><button class=btn id=f-up-b>Upload</button></div><div class=bar><i id=f-pr style="width:0"></i></div><div class="row msg" id=f-m></div></div>
 <div class=p><div class=k>Engine check</div><p class=hint>Runs 1M nonces of a fixed header on the SHA engine and checks every hit in software. Mining pauses for about two seconds.</p>
 <div class=row><button class=btn id=f-bench>Run check</button></div><div class="msg swm" id=f-bm style="white-space:normal;min-height:36px"></div></div>
+<div class=p><div class=k>Board clock</div><table class=kv><tr><td>time<td id=c-now>-<tr><td>date<td id=c-date>-<tr><td>time zone<td id=c-tz>-<tr><td><span class=tipped title="When the board last set its clock from the network time server (NTP); it asks again every hour">last synced</span><td id=c-sync>-<tr><td>source<td id=c-src>-</table></div>
 <div class=p><div class=k>Power</div><p class=hint>Restart keeps the settings; mining resumes in about 10 seconds.</p><div class=row><button class="btn x" id=f-rst>Restart miner</button></div></div></div>
 </section>
 
@@ -256,6 +257,7 @@ txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+'
 txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
 if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
+CK={t:d.identity.time||0,at:Date.now(),tz:d.identity.tz,sync:d.identity.ntpSync||0,src:d.identity.ntp};boardClock();
 H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){if(!document.body.classList.contains('boot')||Date.now()-T0>=5000)status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
 async function net(){const g=async(p,j=1)=>{try{const r=await fetch('https://mempool.space/api'+p);return j?r.json():r.text()}catch(e){return null}};
@@ -267,7 +269,7 @@ if(da){N.da=da;txt('dfn',(D?'network '+sp(D.miner.networkDiff)+' · ':'')+'next 
 function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'},main=cur();htm('px',C[main]+(p[main]||0).toLocaleString('en'));
 htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
 function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
-function clock(d){let h12=false;try{h12=localStorage.getItem('clock')=='12'}catch(e){}return d.toLocaleTimeString(h12?'en-US':'en-GB',{hour12:h12})}
+function clock(d,tz){let h12=false;try{h12=localStorage.getItem('clock')=='12'}catch(e){}const o={hour12:h12};if(tz)o.timeZone=tz;return d.toLocaleTimeString(h12?'en-US':'en-GB',o)}
 function avgSel(){try{return localStorage.getItem('avg')||'24h'}catch(e){return'24h'}}
 // time zones as POSIX TZ strings (what the board's libc takes), keyed by the browser's IANA names
 const TZ=[['UTC','UTC0'],['Europe/London','GMT0BST,M3.5.0/1,M10.5.0'],['Europe/Lisbon','WET0WEST,M3.5.0/1,M10.5.0'],['Europe/Berlin','CET-1CEST,M3.5.0,M10.5.0/3'],['Europe/Paris','CET-1CEST,M3.5.0,M10.5.0/3'],
@@ -283,6 +285,12 @@ if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'" data-r=offlin
 const macs=[...sel.options].map(x=>x.value).filter(Boolean);if(!macs.length)return;
 try{const v=(await(await fetch('https://pool.bumblebeam.org/api/3bminer/oui?mac='+macs.join(','))).json()).vendors||{};   // the board's makers, by the pool
 [...sel.options].forEach(x=>{const n=v[x.value];if(n)x.textContent=x.textContent.replace(x.value,x.value+', '+n)});ddsync()}catch(e){}}
+// the board's clock: its time as last reported, run on locally between reports, in the board's own time zone
+let CK=null;const tzName=p=>{const z=(typeof TZ!='undefined'?TZ:[]).find(z=>z[1]==p);return z?z[0]:null};
+function boardClock(){if(!CK||$('v-firmware').className.indexOf('on')<0&&CK.drawn)return;CK.drawn=1;if(!CK.t){txt('c-now','not set yet');txt('c-date','-');txt('c-sync','never');txt('c-src',CK.src||'-');txt('c-tz',CK.tz?(tzName(CK.tz)||CK.tz):'-');return}
+const now=new Date((CK.t+(Date.now()-CK.at)/1000)*1000),tz=tzName(CK.tz);txt('c-now',clock(now,tz||'UTC'));txt('c-date',now.toLocaleDateString('en-GB',{timeZone:tz||'UTC',year:'numeric',month:'short',day:'numeric',weekday:'short'}));
+txt('c-tz',tz?tz.replace('_',' '):(CK.tz||'UTC'));txt('c-sync',CK.sync?clock(new Date(CK.sync*1000),tz||'UTC')+' ('+ago(CK.sync*1000)+' ago)':'never');txt('c-src',CK.src||'-')}
+setInterval(boardClock,1000);
 // ---- settings
 let cfgLoaded=0;
 function loadCfg(say){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}if(say)fade('cf-m','settings reloaded from the board');else txt('cf-m','');apScan(c.bssid);ddsync()}).catch(()=>fade('cf-m','could not read the settings from the board'))}
