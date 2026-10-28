@@ -11,7 +11,7 @@
 #include "soc/periph_defs.h"
 #include <string.h>
 #include <math.h>
-#include "nerdsha.h"
+#include "sha256.h"
 #include "esp_heap_caps.h"
 static const char *TAG = "miner";
 miner_stats_t g_miner;
@@ -118,23 +118,30 @@ static void task(void *arg) {
         if ((g_miner.total_hashes & 0xFFFFF) < done) taskYIELD();   // let core-0 housekeeping run occasionally
     }
 }
-// core 1: software SHA256d (nerdSHA256plus) in idle time, own extranonce2 range
+// core 1: software sha256d in idle time, own extranonce2 range. A compact rolled SHA-256 (sha256.c, ~1 KB of code) with a
+// midstate per job: it stays in the flash cache whatever the layout of the image. The unrolled nerdSHA256plus (20 KB) did 8.2k
+// cycles a hash in one build and 44k in the next, when other code happened to share its cache lines; this one does ~10k always.
+// A hit is word 7 under the engine's mask for the pool difficulty, so its shares count like the engine's.
+typedef struct { uint32_t w[19], mid[8], b2[16], m2[16]; } swjob_t;
+static void sw_prep(swjob_t *j) {
+    memcpy(j->mid, SHA256_IV, 32); sha256_compress(j->mid, j->w);
+    uint32_t b2[16] = { j->w[16], j->w[17], j->w[18], 0, 0x80000000u, 0,0,0,0,0,0,0,0,0,0, 640 }; memcpy(j->b2, b2, sizeof b2);
+    memset(j->m2, 0, sizeof j->m2); j->m2[8] = 0x80000000u; j->m2[15] = 256;
+}
+static inline uint32_t sw_h7(swjob_t *j, uint32_t nonce_word) { uint32_t st[8]; j->b2[3] = nonce_word; memcpy(st, j->mid, 32); sha256_compress(st, j->b2); memcpy(j->m2, st, 32); return sha256_h7(j->m2); }
 static void swtask(void *arg) {
-    static job_t job; static session_t sess; uint32_t seq = 0; static uint32_t w[19]; static uint8_t hdr[80]; static uint32_t mid[8], bake[16];
+    static job_t job; static session_t sess; static swjob_t sj; uint32_t seq = 0;
     uint32_t en2 = 0, nonce = 0; bool have = false; int64_t win_t = esp_timer_get_time(); uint64_t win_h = 0;
     for (;;) {
         if (stratum_get_job(&job, &sess, &seq)) {
             en2 = 0x80000000u | ((uint32_t)(esp_timer_get_time() & 0xffff) << 8); nonce = 0;
-            job_build_words(&job, &sess, en2, w);
-            for (int i = 0; i < 19; i++) { hdr[4*i] = w[i] >> 24; hdr[4*i+1] = w[i] >> 16; hdr[4*i+2] = w[i] >> 8; hdr[4*i+3] = w[i]; }
-            nerd_mids(mid, hdr); nerd_sha256_bake(mid, hdr + 64, bake); have = true;
+            job_build_words(&job, &sess, en2, sj.w); sw_prep(&sj); have = true;
         }
         if (!have || !g_stratum.connected || !g_sw_enabled) { have = have && g_stratum.connected; if (!g_sw_enabled) g_miner.sw_hashrate = 0; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
+        uint32_t mask = hit_mask_for(g_stratum.pool_diff);
         for (int k = 0; k < 2048; k++, nonce++) {
-            hdr[76] = nonce >> 24; hdr[77] = nonce >> 16; hdr[78] = nonce >> 8; hdr[79] = nonce;
-            uint8_t dh[32];
-            if (nerd_sha256d_baked(mid, hdr + 64, bake, dh)) { candidate_t c = { .job_seq = seq, .en2 = en2, .nonce_word = nonce }; memcpy(c.w, w, sizeof w); stratum_submit_candidate(&c); }
-            if (nonce == 0xFFFFFFFFu) { en2++; nonce = 0; job_build_words(&job, &sess, en2, w); for (int i = 0; i < 19; i++) { hdr[4*i] = w[i] >> 24; hdr[4*i+1] = w[i] >> 16; hdr[4*i+2] = w[i] >> 8; hdr[4*i+3] = w[i]; } nerd_mids(mid, hdr); nerd_sha256_bake(mid, hdr + 64, bake); break; }
+            if (!(sw_h7(&sj, nonce) & mask)) { candidate_t c = { .job_seq = seq, .en2 = en2, .nonce_word = nonce }; memcpy(c.w, sj.w, sizeof sj.w); stratum_submit_candidate(&c); }
+            if (nonce == 0xFFFFFFFFu) { en2++; nonce = 0; job_build_words(&job, &sess, en2, sj.w); sw_prep(&sj); break; }
         }
         win_h += 2048; g_miner.sw_hashes += 2048;
         int64_t now = esp_timer_get_time();
@@ -142,14 +149,15 @@ static void swtask(void *arg) {
         taskYIELD();
     }
 }
-// cycles per software hash on the calling core (core 1 when called from httpd)
-uint32_t sw_bench_cycles(void) {
-    static uint8_t hdr[80]; static uint32_t mid[8], bake[16]; uint8_t dh[32];
-    for (int i = 0; i < 80; i++) hdr[i] = genesis[i];
-    nerd_mids(mid, hdr); nerd_sha256_bake(mid, hdr + 64, bake);
+// cycles per software hash on the calling core (core 1 when called from httpd); *ok: the digest word matches job_hash
+uint32_t sw_bench_cycles(int *ok) {
+    static swjob_t j; for (int i = 0; i < 19; i++) j.w[i] = ((uint32_t)genesis[4*i] << 24) | ((uint32_t)genesis[4*i+1] << 16) | ((uint32_t)genesis[4*i+2] << 8) | genesis[4*i+3];
+    sw_prep(&j); volatile uint32_t sink = 0;
     uint32_t c0 = esp_cpu_get_cycle_count();
-    for (uint32_t n = 0; n < 4096; n++) { hdr[79] = n; hdr[78] = n >> 8; nerd_sha256d_baked(mid, hdr + 64, bake, dh); }
-    return (esp_cpu_get_cycle_count() - c0) / 4096;
+    for (uint32_t n = 0; n < 4096; n++) sink ^= sw_h7(&j, n);
+    uint32_t c = (esp_cpu_get_cycle_count() - c0) / 4096;
+    uint32_t H[8]; job_hash(j.w, 0x1dac2b7cu, H); *ok = sw_h7(&j, 0x1dac2b7cu) == H[7] && H[7] == 0;   // the genesis nonce: word 7 is zero
+    return c;
 }
 void miner_start(void) {
     if (xTaskCreatePinnedToCore(task, "miner", 8192, NULL, 10, NULL, 0) != pdPASS) ESP_LOGE(TAG, "miner task not created (internal RAM %u free)", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));

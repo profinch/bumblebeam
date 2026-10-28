@@ -41,7 +41,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 17:29 | devkit | 0.6.1 (audit, web-next as the page), 894,752 B | OTA from 0.6.0; 981 KH/s, bench 251.7 cycles/nonce 0 bad in 1M, shares accepted, all pages without JS errors |
 | 2026-10-28 17:47 | ESP32-CAM | 0.6.1 (audit, web-next) | OTA from 0.6.0; 5 NVS writes during a VGA stream: stream kept running, no restart |
 | 2026-10-28 18:0x | ESP32-CAM | 0.6.1 builds | two OTA uploads with the camera running hung (camera stopped, image not written, no restart), the retries with the camera already stopped went through; since then a failed OTA restarts a camera board and OTA erases as it writes, later uploads with the camera running all passed |
-| 2026-10-28 18:20-18:33 | ESP32-CAM | 0.6.1, TCP send buffer 32 KB / 64 KB | OTA; stream UXGA q4 3.9 -> 6.3 fps, VGA q4 21 -> 42 fps; mining off measured no faster; 64 KB same as 32 KB |
+| 2026-10-28 18:20-18:33 | ESP32-CAM | 0.6.1, TCP send buffer 32 KB / 64 KB | OTA; stream 1280x720 q4 3.9 -> 6.3 fps, 400x296 q4 21 -> 42 fps (first noted as UXGA and VGA: framesize 13 and 8 are HD and CIF); mining off measured no faster; 64 KB same as 32 KB |
 | 2026-10-28 18:39-18:43 | ESP32-CAM | 0.6.1 with microSD | OTA; SanDisk 8 GB (SA08G) formatted FAT from the page in 5 s, photos written |
 | 2026-10-28 18:44-19:23 | devkit, ESP32-CAM | 0.6.1 final page (loader fix) | OTA; both mining, best ever kept across the updates |
 
