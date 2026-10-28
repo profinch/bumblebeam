@@ -1,5 +1,7 @@
 # 3BMiner changelog
 
+What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
+
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
   (`boards/<id>`, `tools/build.sh <id>`, `dist/3bminer-<board>-<version>.bin`); images name their board and OTA refuses
@@ -13,21 +15,21 @@
   next to the camera: ~981 KH/s idle, ~946 KH/s while streaming 640x480 at 24 fps (stratum stack in PSRAM, 8 KB
   mining stacks, internal RAM and its use in `/api/system/info` as `freeInternal`).
 
-## 0.5.6
+## 0.5.6 (2026-10-28)
 - The pool's logo and favicon byte for byte; network difficulty from nbits; CORS on config, update and restart.
 - Rejects sorted by the pool's error code (21 = job not found, i.e. stale).
 
-## 0.5.2
+## 0.5.2 (2026-10-27)
 - Kernel with START after 6 header words and the hit test of the previous nonce inside the engine wait: 252
   cycles/nonce, ~952 KH/s engine (+2.9%). Socket limit 16 (httpd ran out of sockets), interrupt watchdog on, the
   on-board bench bails out on broken timings, `/api/swbench`.
 
-## 0.4.0
+## 0.4.0 (2026-10-27)
 - Per-stage engine waits instead of one, tuned with `/api/bench` on the board: 260 cycles/nonce, ~925 KH/s (+4.5%).
 
-## 0.3.0
+## 0.3.0 (2026-10-27)
 - Exact hit mask (128x fewer candidates), 20 ms stratum poll, shares for previous non-clean jobs, reject reasons and
   the reset reason in the API.
 
-## 0.2.0
+## 0.2.0 (2026-10-27)
 - First release: asm kernel at 270 cycles/nonce (~885 KH/s), software hasher on core 1, stratum v1, NMMiner API, OTA.
