@@ -98,7 +98,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
 <div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr><tr><td><span class=tipped title="The code the pool sent with the last reject, as it came. Stratum v1 has no formal standard; most pools follow the early convention: 20 other, 21 job not found (stale: the pool already moved on), 22 duplicate share, 23 difficulty too low, 24 unauthorized worker, 25 not subscribed. A pool may use its own codes, -1, or none at all (then -)">error code</span><td id=rcode></table></div>
-<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Heap: the free RAM the firmware can still allocate (on a camera board it includes the PSRAM). Steady over hours means no memory leak">free heap</span><td id=hp></table></div></div>
 </section>
 
 <section class=view id=v-swarm>
