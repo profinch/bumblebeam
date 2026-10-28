@@ -46,6 +46,12 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
 /* phones: all four figures on one row as on a desktop, the hashrate smaller (after the base rules so they win) */
 @media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}.hero .big{font-size:17px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:0;white-space:nowrap}.hero .u{display:none}}
+/* confirmations (ask()): the operator dashboard's dialog, the tooltips' look instead of the browser's own */
+.ask-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,18,34,.55);opacity:0;transition:opacity .14s}.ask-bg.on{opacity:1}
+.ask{width:min(440px,100%);padding:18px 18px 16px 20px;font:12px/1.6 var(--mono);color:rgba(255,255,255,.9);background:linear-gradient(180deg,rgba(18,108,150,.98),rgba(10,90,128,.98));border:1px solid rgba(0,246,210,.32);border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45),inset 3px 0 0 rgba(0,246,210,.55);transform:translateY(6px);transition:transform .14s;overflow-wrap:anywhere;white-space:pre-line}
+.ask-bg.on .ask{transform:none}.ask.danger{border-color:rgba(242,95,91,.45);box-shadow:0 16px 40px rgba(0,0,0,.45),inset 3px 0 0 rgba(242,95,91,.7)}
+.ask h3{margin:0 0 8px;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--a)}.ask.danger h3{color:var(--r)}.ask b{color:#fff}.ask .row{justify-content:flex-end;margin-top:16px}
+@media(prefers-reduced-motion:reduce){.ask-bg,.ask{transition:none}}
 /* until the first answer: only the header and a waiting panel */
 body.boot .view,body.boot footer{display:none!important}#boot{display:none;text-align:center;padding:60px 16px}body.boot #boot{display:block}#boot .logo{width:56px;height:56px}#boot p{font:12px/1.6 var(--mono);color:var(--m);margin:16px auto 0;max-width:460px}
 </style></head><body class=boot><div class=w>
@@ -135,6 +141,16 @@ const RR=['?','power on','reset pin','software','crash','int watchdog','task wat
 // the pool's error as the firmware keeps it, e.g. [21,Job not found,]: only the message
 const rejMsg=r=>{if(!r)return'-';const p=String(r).replace(/^\[|\]$/g,'').split(',').map(x=>x.trim()).filter(x=>x&&!/^-?\d+$/.test(x)&&x!='null');return p[0]||r};
 const txt=(i,t)=>{const e=$(i);if(e)e.textContent=t},htm=(i,t)=>{const e=$(i);if(e)e.innerHTML=t};
+// a confirmation in the site's own look instead of window.confirm (the pool operator dashboard's ask()):
+// true on the button or Enter, false on Cancel, Esc or a click outside; text only, { b: text } for bold parts
+function ask(title,text,{ok='Confirm',danger=false}={}){return new Promise(res=>{const bg=document.createElement('div');bg.className='ask-bg';
+bg.innerHTML='<div class="ask'+(danger?' danger':'')+'" role=alertdialog aria-modal=true><h3></h3><div class=ask-d></div><div class=row><button class="btn gh" data-a=no>Cancel</button><button class="btn'+(danger?' x':'')+'" data-a=yes></button></div></div>';
+bg.querySelector('h3').textContent=title;const d=bg.querySelector('.ask-d');for(const p of Array.isArray(text)?text:[text]){if(p&&typeof p=='object'){const b=document.createElement('b');b.textContent=p.b;d.append(b)}else d.append(String(p))}
+const yes=bg.querySelector('[data-a=yes]'),no=bg.querySelector('[data-a=no]');yes.textContent=ok;const before=document.activeElement;
+const done=v=>{document.removeEventListener('keydown',key,true);bg.remove();if(before&&before.focus)before.focus();res(v)};
+const key=e=>{if(e.key=='Escape'){e.preventDefault();done(false)}else if(e.key=='Enter'&&document.activeElement!==no){e.preventDefault();done(true)}else if(e.key=='Tab'){e.preventDefault();(document.activeElement===yes?no:yes).focus()}};
+bg.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a)done(a.dataset.a=='yes');else if(e.target===bg)done(false)});
+document.addEventListener('keydown',key,true);document.body.appendChild(bg);requestAnimationFrame(()=>bg.classList.add('on'));yes.focus()})}
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
@@ -183,14 +199,14 @@ function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1
 $('cf-rl').onclick=loadCfg;
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
-$('cf').onsubmit=e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
+$('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
-if(!confirm('Save and restart the miner?'))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
+if(!await ask('Save the settings','The miner restarts with them and is back mining in about 10 seconds.',{ok:'Save & restart'}))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
 // ---- firmware
-$('f-up-b').onclick=()=>{const fl=$('f-file').files[0];if(!fl)return;if(!confirm('Install '+fl.name+' ('+(fl.size/1024|0)+' KB)?'))return;const x=new XMLHttpRequest();x.open('POST',B+'/update');
+$('f-up-b').onclick=async()=>{const fl=$('f-file').files[0];if(!fl)return;if(!await ask('Install firmware',['Write ',{b:fl.name},' ('+(fl.size/1024|0)+' KB) to the spare slot and restart into it? The installed version stays in the other slot.'],{ok:'Install'}))return;const x=new XMLHttpRequest();x.open('POST',B+'/update');
 x.upload.onprogress=e=>{$('f-pr').style.width=(100*e.loaded/e.total).toFixed(0)+'%';txt('f-m','uploading '+(100*e.loaded/e.total).toFixed(0)+'%')};
 x.onload=()=>txt('f-m',x.status==200?'installed, restarting…':'failed: '+x.responseText);x.onerror=()=>txt('f-m','upload failed');x.send(fl)};
-$('f-rst').onclick=()=>{if(confirm('Restart the miner?'))fetch(B+'/api/system/restart',{method:'POST'}).then(()=>txt('f-m','restarting…'))};
+$('f-rst').onclick=async()=>{if(await ask('Restart the miner','Settings stay as they are; mining resumes in about 10 seconds.',{ok:'Restart',danger:true}))fetch(B+'/api/system/restart',{method:'POST'}).then(()=>txt('f-m','restarting…'))};
 $('f-bench').onclick=()=>{txt('f-bm','running…');$('f-bench').disabled=1;fetch(B+'/api/bench?n=1048576').then(r=>r.json()).then(b=>{txt('f-tim',b.live.join('/')+' · kernel '+b.liveKernel);
 txt('f-bm',b.cycPerNonce.toFixed(1)+' cycles/nonce = '+(240000/b.cycPerNonce).toFixed(0)+' KH/s engine · '+b.hits+' hits, '+(b.bad?b.bad+' wrong':'all correct'))}).catch(()=>txt('f-bm','failed')).finally(()=>$('f-bench').disabled=0)};
 // ---- swarm
@@ -211,7 +227,7 @@ await Promise.all(Array.from({length:24},worker));txt('sw-scan','scan done · '+
 function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-b',sp(bb.bestS));txt('sw-s',a.reduce((s,o)=>s+(o.acc||0),0)+' / '+a.reduce((s,o)=>s+(o.rej||0),0));
 const rows=[...SW.values()].sort((x,y)=>{const p=x[swSort],q=y[swSort];return(typeof p=='string'?String(p).localeCompare(q):(p||0)-(q||0))*swDir});
 $('sw-tb').innerHTML=rows.map(o=>'<tr'+(o.ip==DEV||o.ip==location.hostname?' class=me':'')+(o.off?' style="opacity:.4"':'')+'><td>'+o.host+'<td><a href="http://'+o.ip+'/" target=_blank>'+o.ip+'</a><td>'+o.model+'<td class=n>'+hm(o.hr||0)+'<td class=n>'+o.acc+' / <span class=r>'+o.rej+'</span><td class=n>'+(o.bestS||'-')+'<td class=n>'+fx(o.pdiff||0,3)+'<td class=n>'+ut(o.up)+'<td class=n>'+(o.rssi??'-')+'<td class=n>'+(o.heap?(o.heap/1024|0)+'K':'-')+'<td>'+o.ver+'<td class=n>'+(o.off?'offline':Math.round((Date.now()-o.seen)/1000)+'s')+'<td><button class="btn gh" style="padding:3px 8px" onclick="swRst(\''+o.ip+'\')">restart</button>').join('')}
-window.swRst=ip=>{if(confirm('Restart '+ip+'?'))fetch('http://'+ip+'/api/system/restart',{method:'POST'})};
+window.swRst=async ip=>{if(await ask('Restart a miner',['Restart the miner at ',{b:ip},'? It is back in about 10 seconds.'],{ok:'Restart',danger:true}))fetch('http://'+ip+'/api/system/restart',{method:'POST'})};
 $('sw-go').onclick=swScan;$('sw-addb').onclick=()=>{const ip=$('sw-add').value.trim();if(ip)swPoll(ip)};
 $('sw-net').value=(/^\d+\.\d+\.\d+\.\d+$/.test(DEV.split(':')[0])?DEV.split(':')[0]:'192.168.1.1').replace(/\.\d+$/,'.0');
 setInterval(()=>{if(location.hash=='#/swarm')for(const ip of SW.keys())swPoll(ip)},15000);
