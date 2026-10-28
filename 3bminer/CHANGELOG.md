@@ -2,6 +2,12 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## 0.6.1 (not released yet)
+- Hashrate history on the board: a sample a minute for 24 h (`GET /api/history`), averages for the last hour and day
+  in `/api/system/info` (`avg1hKhs`, `avg24hKhs`, `historyMinutes`), the software hash counter (`swHashes`).
+- Solo or shared pool from the job itself: `stratum.solo` is true when the coinbase pays the configured address
+  (bech32, bech32m, P2PKH and P2SH addresses), no list of pool names.
+
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
   (`boards/<id>`, `tools/build.sh <id>`, `dist/3bminer-<board>-<version>.bin`); images name their board and OTA refuses

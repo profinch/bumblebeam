@@ -60,6 +60,7 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 |---|---|
 | `/` | dashboard; `/camera` on camera boards |
 | `/probe`, `/alive`, `/api/system/info`, `/api/system/restart`, `/api/swarm/find` | NMMiner-compatible; `info` adds the engine/software split, kernel cycles, reject reasons, reset reason, board id |
+| `GET /api/history` | the board's hashrate, a value a minute for the last 24 h; `info` has the 1 h and 24 h averages and `stratum.solo` (the coinbase pays the configured address) |
 | `GET/POST /api/config` | Wi-Fi (with an optional BSSID lock), pool, address, worker, start difficulty, `mining` on/off |
 | `POST /update` | raw image, written to the spare slot |
 | `/api/bench?k=&t=&n=` | engine check on the board: a fixed header, every hit re-checked in software (mining pauses for it) |

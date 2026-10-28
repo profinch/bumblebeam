@@ -1,5 +1,6 @@
 #include "stratum.h"
 #include "version.h"
+#include "addr.h"
 #include "config.h"
 #include "wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -22,6 +23,7 @@ stratum_stats_t g_stratum;
 static job_t s_job; static session_t s_sess; static SemaphoreHandle_t s_lock; static QueueHandle_t s_cands;
 static int s_sock = -1; static uint32_t s_id = 10; static char s_rx[12288]; static int s_rxlen = 0;
 static uint32_t s_pending_submit_ids[64]; static int s_npend = 0;
+static uint8_t s_prog[40]; static int s_plen = 0;   // the payout address as it appears in an output script
 // recent jobs still valid for submits: a non-clean notify keeps the older ones acceptable to the pool
 typedef struct { uint32_t seq; char job_id[64]; char ntime_hex[9]; } recent_job_t;
 #define NRECENT 4
@@ -52,6 +54,7 @@ static void handle_notify(cJSON *p) {
     j.clean = cJSON_IsTrue(cJSON_GetArrayItem(p, 8));
     { int ex = j.nbits >> 24; double mant = j.nbits & 0xffffff; if (mant > 0) g_stratum.net_diff = 65535.0 * ldexp(1.0, 208) / (mant * ldexp(1.0, 8 * (ex - 3))); }   // network difficulty from nbits
     if (j.coinb1_len < 0 || j.coinb2_len < 0) return;
+    g_stratum.solo = (addr_in(j.coinb1, j.coinb1_len, s_prog, s_plen) || addr_in(j.coinb2, j.coinb2_len, s_prog, s_plen)) ? 1 : 0;
     xSemaphoreTake(s_lock, portMAX_DELAY); j.seq = ++s_seqctr; memcpy(&s_job, &j, sizeof j);
     if (j.clean) s_nrecent = 0;
     memmove(&s_recent[1], &s_recent[0], sizeof(recent_job_t) * (NRECENT - 1)); if (s_nrecent < NRECENT) s_nrecent++;
@@ -150,7 +153,8 @@ static void task(void *arg) {
     }
 }
 void stratum_start(void) {
-    s_lock = xSemaphoreCreateMutex(); s_cands = xQueueCreate(32, sizeof(candidate_t)); g_stratum.pool_diff = 1.0;
+    s_lock = xSemaphoreCreateMutex(); s_cands = xQueueCreate(32, sizeof(candidate_t)); g_stratum.pool_diff = 1.0; g_stratum.solo = -1;
+    s_plen = addr_program(g_cfg.wallet, s_prog); if (!s_plen) ESP_LOGW(TAG, "payout address does not parse: solo detection off");
 #ifdef CONFIG_SPIRAM
     // PSRAM boards: the camera's DMA buffers leave little internal RAM, and this task never touches flash, so its stack can live in PSRAM
     xTaskCreatePinnedToCoreWithCaps(task, "stratum", 24576, NULL, 5, NULL, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

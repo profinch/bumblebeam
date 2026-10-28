@@ -9,14 +9,14 @@ a{color:var(--a);text-decoration:none}
 .w{max-width:1100px;margin:0 auto;padding:0 16px 24px}
 header{display:flex;align-items:center;flex-wrap:wrap;gap:0 18px;min-height:64px}
 .brand{display:flex;align-items:center;gap:11px;color:#fff;font-weight:700;font-size:19px;white-space:nowrap;min-width:0}
-.brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m);font-size:15px}
+.brand b{background:linear-gradient(135deg,#0b76ff,#39fff2);-webkit-background-clip:text;background-clip:text;color:transparent}.brand em{font-style:normal;font-weight:400;color:var(--m);font-size:.8em;margin-left:4px}
 {{LOGOCSS}}
 nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 nav a{color:var(--td);font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;padding:8px 11px;border-bottom:2px solid transparent;white-space:nowrap}
 nav a:hover{color:#fff}nav a.on{color:#fff;border-bottom-color:var(--a)}
 .pill{font:700 11px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
 .ok{color:var(--a);border-color:rgba(0,246,210,.5)}.bad{color:var(--r);border-color:rgba(242,95,91,.5)}
-@media(max-width:760px){#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0 0 14px;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}.brand em{font-size:13px}}
+@media(max-width:760px){header{gap:0 10px}.brand{gap:9px;font-size:18px}.brand em{font-size:.66em;margin-left:3px}#st{margin-left:auto}nav{order:3;flex:1 1 100%;margin:0 0 14px;justify-content:space-between}nav a{padding:8px 4px;font-size:12px}}
 h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 12px}
 .p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
 .k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
@@ -44,8 +44,8 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .tipped{text-decoration:underline dotted rgba(255,255,255,.35);text-underline-offset:3px;cursor:help}
 .bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
 footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
-/* phones: the hashrate on its own row, the three small figures on one row under it (after the base rules so they win) */
-@media(max-width:760px){.hero{display:grid;grid-template-columns:repeat(3,auto);justify-content:space-between;gap:10px 8px}.hero>div:first-child{grid-column:1/-1}.hero .big{font-size:36px}.hero>div:not(:first-child) .v{font-size:13px!important;margin-top:5px}.hero>div:not(:first-child) .k{font-size:9px;letter-spacing:.03em}}
+/* phones: all four figures on one row as on a desktop, the hashrate smaller (after the base rules so they win) */
+@media(max-width:760px){.hero{display:grid;grid-template-columns:auto auto auto auto;justify-content:space-between;align-items:end;gap:6px}.hero .big{font-size:22px;margin-top:6px}.hero .big small{font-size:10px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:6px}.hero .k{font-size:8px;letter-spacing:.02em;white-space:nowrap}.hero .u{display:none}}
 </style></head><body><div class=w>
 <header><span class=brand>{{LOGO}}<span><b>3B</b>Miner <em>BumbleBeam Ecosystem</em></span></span>
 <nav id=nav><a href="#/" data-v=dash>Dashboard</a><a href="#/swarm" data-v=swarm>Swarm</a><a href="#/settings" data-v=settings>Settings</a><a href="#/firmware" data-v=firmware>Firmware</a></nav>
@@ -53,7 +53,7 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k><span class=tipped title="All hashes the board has done divided by its uptime: the average since it started, the same in every browser">Avg since start</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped title="Averages the board keeps itself (a sample a minute): the last hour and the last 24 hours, or since it started if that is shorter">Avg 1 h / 24 h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine + Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
@@ -63,7 +63,7 @@ footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 
 <div class=p><div class=k>Pool / network diff</div><div class=v id=df>-</div><div class=sm id=dfn></div></div>
 <div class=p><div class=k>Uptime</div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
-<div class=p><div class=k id=odk>Block odds</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
+<div class=p><div class=k id=odk>Find block chance</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
 <div class=p><div class=k>Bitcoin</div><div class=v id=px>-</div><div class=sm id=pxn></div></div>
 <div class=p><div class=k>Block height</div><div class=v id=bh>-</div><div class=sm id=bhn></div></div>
 <div class=p><div class=k><span class=tipped title="Fee rates mempool.space recommends right now, in satoshi per virtual byte of a transaction: to get into the next block, within about an hour, and the cheapest that still confirms">Fees, sat/vB</span></div><div class=v id=fe>-</div><div class=sm id=fen></div></div></div>
@@ -135,16 +135,19 @@ function route(){const v=(location.hash.replace('#/','')||'dash');document.title
 if(v=='settings'&&!cfgLoaded)loadCfg();if(v=='swarm'&&!swScanned)swScan()}
 addEventListener('hashchange',route);
 // ---- dashboard
-function spark(){const n=H.length;if(n<2)return;const mx=Math.max(...H)*1.01,mn=Math.min(...H)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
-let d='';H.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
+let HH=[];   // the board's history, a value a minute (GET /api/history, fw 0.6.1+)
+async function hist(){try{const j=await(await fetch(B+'/api/history')).json();if(j&&j.khs)HH=j.khs;spark()}catch(e){}}
+function spark(){const A=HH.length>=2?HH:H,n=A.length;if(n<2)return;const mx=Math.max(...A)*1.01,mn=Math.min(...A)*.99,sx=300/(n-1),y=v=>70-(v-mn)/(mx-mn||1)*64-3;
+let d='';A.forEach((v,i)=>d+=(i?'L':'M')+(i*sx).toFixed(1)+' '+y(v).toFixed(1));$('sl').setAttribute('d',d);$('sa').setAttribute('d',d+'L300 70L0 70Z')}
 function odds(){if(!D)return;const k=D.miner.hashRate*1e9,nd=pd(D.miner.networkDiff)||N.diff;if(!nd||!k)return;const pday=k*86400/(nd*4294967296),yrs=1/(pday*365);
 htm('od',(yrs>1e9?(yrs/1e9).toFixed(1)+'B':yrs>1e6?(yrs/1e6).toFixed(1)+'M':yrs>1e3?(yrs/1e3).toFixed(1)+'K':yrs.toFixed(0))+' <small>years</small>');
 htm('odn','expected time to a block<br><span class=w1>1</span> in <span class=w1>'+fx(1/pday,1)+'</span> per day');
-// solo pools pay the finder the whole block; on a shared pool these are still the odds of this board's hashes, not of a payout
-const solo=/solo|public-pool|ckpool/i.test((D.stratum||{}).url||'');txt('odk',solo?'Block odds (solo)':'Block odds (own hashes)')}
+// the firmware sets stratum.solo when the job's coinbase pays the configured address: then a found block is all ours
+txt('odk',(D.stratum||{}).solo===true?'Find block chance (solo)':'Find block chance')}
 async function tick(){try{const d=await(await fetch(B+'/api/system/info')).json(),m=d.miner,s=d.stratum||{},k=m.hashRate*1e6;D=d;
 txt('st',s.connected?'mining':'no pool');$('st').className='pill '+(s.connected?'ok':'bad');
-htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds);txt('havg',m.uptimeSeconds>0?hm(hs/m.uptimeSeconds/1e3,0):'-');txt('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+' KH/s':'-');txt('kc',m.kernelCycles??'-');
+htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashRateSw*1e9*m.uptimeSeconds),since=m.uptimeSeconds>0?hs/m.uptimeSeconds/1e3:0;
+const a1=m.avg1hKhs>=0?m.avg1hKhs:since,a24=m.avg24hKhs>=0?m.avg24hKhs:since;htm('havg',since?a1.toFixed(0)+' / '+a24.toFixed(0)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' + '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 htm('bd',m.bestDiffSession);txt('bde','ever '+m.bestDiffEver);htm('df',m.poolDiff);txt('dfn','network '+m.networkDiff);
 htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
@@ -210,5 +213,5 @@ const hide=()=>{clearTimeout(tm);cur=null;t.classList.remove('on')};
 document.addEventListener('mouseover',e=>{const el=own(e.target);if(el===cur)return;clearTimeout(tm);if(!el)return hide();tx(el);tm=setTimeout(()=>show(el),cur?0:140)});
 document.addEventListener('mouseout',e=>{const el=own(e.target);if(el&&!(e.relatedTarget&&el.contains(e.relatedTarget)))hide()});
 document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cur)show(el);else if(!el)hide()},{passive:true});addEventListener('scroll',hide,{passive:true,capture:true})})();
-route();tick();setInterval(tick,3000);net();setInterval(net,120000);
+route();tick();setInterval(tick,3000);net();setInterval(net,120000);hist();setInterval(hist,60000);
 </script></body></html>
