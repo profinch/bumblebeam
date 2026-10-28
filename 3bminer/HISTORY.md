@@ -19,6 +19,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 0.5.4-0.5.6 | 2026-10-28 | 883,840-884,976 B | 251 | 981 KH/s | network difficulty, gzipped pool-style page, the pool's logo and favicon |
 | 0.6.0 | 2026-10-28 | devkit 886,384 B, esp32cam 1,036,976 B | 251 | devkit 981 KH/s; ESP32-CAM 981 idle, 946 streaming VGA | renamed 3BMiner, BumbleBeam repo, builds per board, ESP32-CAM; 5.4 h three-way run below |
 | 0.7.0 | 2026-10-28 | see the flash log | 251 | 951 + 31 = 983 KH/s on both boards | developed as 0.6.1: history, solo detection, NTP and time zone, web-next as the page, code audit, best ever in NVS, camera stream 32 KB TCP buffer, microSD, audit 2 (LAN-only access, health checks, background swarm search), own SHA-256d software hasher |
+| 0.8.0 | 2026-10-28 | devkit 883,472 B, esp32cam 1,091,952 B | 246-247 | 970 + 31 = ~1002 KH/s on both boards | engine waits 24/35/22/4/8, Scan network run by the board, Forget on the board, KH/s up to 10 MH/s |
 
 ## Boards
 

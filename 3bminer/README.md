@@ -125,5 +125,8 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
   code, back where the cache decides. Moving code to IRAM would cost the engine far more (above).
 - The microSD slot runs in 1-bit SDMMC mode: in 4-bit mode its D1 is GPIO4, the flash LED.
 
+Side-by-side runs against NMMiner: [bench/](bench/README.md) (`tools/compare.py`). `tools/serlog.py` logs a board's serial port on Windows,
+also through the ESP32-CAM-MB's CH340 (`py -3 tools/serlog.py COM7 3600 cam.log [noreset]`).
+
 Changes per version: [CHANGELOG.md](CHANGELOG.md); which image ran on which board, when and with what
 result: [HISTORY.md](HISTORY.md).
