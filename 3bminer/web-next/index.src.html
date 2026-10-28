@@ -78,6 +78,7 @@ select[hidden],input[hidden]{display:none!important}.dd{position:relative;margin
 .dd-btn:focus-visible{outline:none;border-color:rgba(0,246,210,.5)}.dd-btn:disabled{opacity:.45;cursor:default}
 .dd.open .dd-btn{border-color:rgba(0,246,210,.5);border-bottom-color:transparent;border-radius:6px 6px 0 0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%2300f6d2' stroke-width='1.5'/%3E%3C/svg%3E")}
 .dd-list{position:absolute;left:0;right:0;top:calc(100% - 1px);z-index:30;margin:0;padding:2px 0 6px;list-style:none;max-height:300px;overflow-y:auto;background:var(--f);border:1px solid rgba(0,246,210,.5);border-top:0;border-radius:0 0 6px 6px;box-shadow:0 12px 24px rgba(0,0,0,.35);clip-path:inset(0 -40px -40px -40px)}
+.dd-btn,.dd-list [role=option]{display:flex;align-items:center;gap:10px}.ddl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.ddr{flex:none;font-size:11px;color:var(--m)}.ddr.on,.dd-list .ddr{}
 .dd-list [role=option]{padding:7px 10px 7px 20px;font:13px var(--mono);text-transform:none;letter-spacing:0;color:var(--td);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dd-list [role=option].active{background:rgba(0,246,210,.12);color:#fff}.dd-list [role=option][aria-selected=true]{color:var(--a)}
 .dd-list::-webkit-scrollbar{width:4px}.dd-list::-webkit-scrollbar-thumb{background:rgba(0,246,210,.45);border-radius:2px}.dd-list::-webkit-scrollbar-track{background:transparent}
 /* until the first answer: only the header and a waiting panel */
@@ -150,7 +151,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><h2 style="margin-top:0">Wi-Fi</h2><div class=fg>
 <label>Network name<input name=ssid></label>
 <label>Password<input name=pass type=password placeholder="unchanged if empty"></label>
-<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first; the saved one is marked off when it is out of reach">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
+<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first; the saved one is marked offline when it is out of reach">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
 <label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
@@ -208,8 +209,9 @@ function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('
 function ddify(sel){const d=document.createElement('div');d.className='dd';d.innerHTML='<button type=button class=dd-btn aria-haspopup=listbox aria-expanded=false></button><ul class=dd-list role=listbox tabindex=-1 hidden></ul>';
 sel.hidden=true;sel.after(d);const btn=d.firstChild,list=d.lastChild;let items=[],act=-1;
 const mark=i=>{act=i;items.forEach((li,j)=>li.classList.toggle('active',j==i));if(items[i])items[i].scrollIntoView({block:'nearest'})};
-const sync=()=>{list.innerHTML=[...sel.options].map(o=>'<li role=option data-v="'+o.value.replace(/"/g,'&quot;')+'">'+o.textContent.replace(/</g,'&lt;')+'</li>').join('');items=[...list.children];
-items.forEach(li=>li.setAttribute('aria-selected',String(li.dataset.v==sel.value)));const o=sel.selectedOptions[0];btn.textContent=o?o.textContent:'';btn.disabled=sel.disabled};
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'),lab=o=>'<span class=ddl>'+esc(o.textContent)+'</span>'+(o.dataset.r?'<span class=ddr>'+esc(o.dataset.r)+'</span>':'');
+const sync=()=>{list.innerHTML=[...sel.options].map(o=>'<li role=option data-v="'+o.value.replace(/"/g,'&quot;')+'">'+lab(o)+'</li>').join('');items=[...list.children];
+items.forEach(li=>li.setAttribute('aria-selected',String(li.dataset.v==sel.value)));const o=sel.selectedOptions[0];btn.innerHTML=o?lab(o):'';btn.disabled=sel.disabled};
 const open=()=>{if(btn.disabled)return;list.hidden=false;d.classList.add('open');btn.setAttribute('aria-expanded','true');mark(Math.max(0,items.findIndex(li=>li.dataset.v==sel.value)))};
 const close=(f=1)=>{list.hidden=true;d.classList.remove('open');btn.setAttribute('aria-expanded','false');if(f)btn.focus()};
 const pick=i=>{const li=items[i];if(!li)return;sel.value=li.dataset.v;sync();close();sel.dispatchEvent(new Event('change',{bubbles:true}))};
@@ -276,8 +278,8 @@ $('tzsel').innerHTML=TZ.map(z=>'<option value="'+z[1]+'">'+z[0].replace('_',' ')
 // access points the board sees (GET /api/wifi/scan), strongest first; older firmware: only 'any' and the saved one
 async function apScan(saved){const sel=$('apsel'),keep=saved!=null?saved:sel.value;let aps=[];try{const j=await(await fetch(B+'/api/wifi/scan')).json();aps=j.aps||[]}catch(e){}
 const net=($('cf').elements.ssid.value||'').trim(),mine=aps.filter(a=>!net||a.ssid==net);
-let o='<option value="">any access point</option>'+mine.map(a=>'<option value="'+a.bssid+'">'+a.bssid+', '+(net?'':a.ssid+', ')+'ch '+a.ch+', '+a.rssi+' dBm</option>').join('');
-if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'">'+keep+', off</option>';sel.innerHTML=o;sel.value=keep||'';ddsync();
+let o='<option value="">any access point</option>'+mine.map(a=>'<option value="'+a.bssid+'" data-r=online>'+a.bssid+', '+(net?'':a.ssid+', ')+'ch '+a.ch+', '+a.rssi+' dBm</option>').join('');
+if(keep&&!mine.some(a=>a.bssid==keep))o+='<option value="'+keep+'" data-r=offline>'+keep+'</option>';sel.innerHTML=o;sel.value=keep||'';ddsync();
 const macs=[...sel.options].map(x=>x.value).filter(Boolean);if(!macs.length)return;
 try{const v=(await(await fetch('https://pool.bumblebeam.org/api/3bminer/oui?mac='+macs.join(','))).json()).vendors||{};   // the board's makers, by the pool
 [...sel.options].forEach(x=>{const n=v[x.value];if(n)x.textContent=x.textContent.replace(x.value,x.value+', '+n)});ddsync()}catch(e){}}
