@@ -122,13 +122,11 @@ static void task(void *arg) {
 // midstate per job: it stays in the flash cache whatever the layout of the image. The unrolled nerdSHA256plus (20 KB) did 8.2k
 // cycles a hash in one build and 44k in the next, when other code happened to share its cache lines; this one does ~10k always.
 // A hit is word 7 under the engine's mask for the pool difficulty, so its shares count like the engine's.
-typedef struct { uint32_t w[19], mid[8], b2[16], m2[16]; } swjob_t;
+typedef struct { uint32_t w[19], mid[8]; sha256d_pre_t pre; } swjob_t;
 static void sw_prep(swjob_t *j) {
-    memcpy(j->mid, SHA256_IV, 32); sha256_compress(j->mid, j->w);
-    uint32_t b2[16] = { j->w[16], j->w[17], j->w[18], 0, 0x80000000u, 0,0,0,0,0,0,0,0,0,0, 640 }; memcpy(j->b2, b2, sizeof b2);
-    memset(j->m2, 0, sizeof j->m2); j->m2[8] = 0x80000000u; j->m2[15] = 256;
+    memcpy(j->mid, SHA256_IV, 32); sha256_compress(j->mid, j->w); sha256d_prep(&j->pre, j->mid, j->w + 16);
 }
-static inline uint32_t sw_h7(swjob_t *j, uint32_t nonce_word) { uint32_t st[8]; j->b2[3] = nonce_word; memcpy(st, j->mid, 32); sha256_compress(st, j->b2); memcpy(j->m2, st, 32); return sha256_h7(j->m2); }
+static inline uint32_t sw_h7(swjob_t *j, uint32_t nonce_word) { return sha256d_h7(&j->pre, nonce_word); }
 static void swtask(void *arg) {
     static job_t job; static session_t sess; static swjob_t sj; uint32_t seq = 0;
     uint32_t en2 = 0, nonce = 0; bool have = false; int64_t win_t = esp_timer_get_time(); uint64_t win_h = 0;

@@ -55,9 +55,10 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   by `/alive` (NMMiner's format plus `lastScanAgo`); `POST /api/swarm/add` keeps a miner added by hand. The Swarm page
   takes the list from there, "last scan" is the latest of the board's pass and a browser scan, and opening the Swarm
   no longer scans the network.
-- The software hasher is a compact SHA-256 with a midstate instead of the unrolled nerdSHA256plus: ~24 KH/s on both
-  boards in every build (nerdSHA ran 5 to 29 KH/s depending on where the linker put other code, 9 on the ESP32-CAM);
-  its hits use the engine's pool-difficulty mask. nerdsha.c is gone, the image is 34 KB smaller.
+- The software hasher is our own SHA-256d instead of the unrolled nerdSHA256plus: rounds unrolled by 8 with renamed
+  variables, the job's constant part once, the second hash stopped at word 7; 9.4 KB of code, ~31 KH/s on both boards in
+  every build (nerdSHA ran 5 to 29 KH/s depending on where the linker put other code, 9 on the ESP32-CAM), ~983 KH/s in
+  all; its hits use the engine's pool-difficulty mask. nerdsha.c is gone.
 - The page is served with an ETag (the image's SHA-256) and `no-cache`: 304 when unchanged, a new firmware's page at once.
 - Fixed: Settings saved before the board's Wi-Fi scan answered stored an empty AP lock (with two APs of one name the
   camera then joined the other one and seemed gone); a save before the settings were read, or without a Wi-Fi name, is
