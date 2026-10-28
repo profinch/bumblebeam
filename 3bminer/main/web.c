@@ -74,7 +74,7 @@ static esp_err_t h_ok(httpd_req_t *r) { httpd_resp_set_type(r, "application/json
 static void restart_later(void *a) { vTaskDelay(pdMS_TO_TICKS(600)); esp_restart(); }
 static esp_err_t h_restart(httpd_req_t *r) { h_ok(r); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK; }
 static esp_err_t h_config_get(httpd_req_t *r) {
-    char b[400]; snprintf(b, sizeof b, "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"pool\":\"%s\",\"port\":%u,\"wallet\":\"%s\",\"worker\":\"%s\",\"suggest\":%g,\"mining\":%s}", g_cfg.ssid, g_cfg.bssid, g_cfg.pool, g_cfg.port, g_cfg.wallet, g_cfg.worker, g_cfg.suggest, g_cfg.mining ? "true" : "false");
+    char b[480]; snprintf(b, sizeof b, "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"pool\":\"%s\",\"port\":%u,\"wallet\":\"%s\",\"worker\":\"%s\",\"suggest\":%g,\"mining\":%s,\"tz\":\"%s\"}", g_cfg.ssid, g_cfg.bssid, g_cfg.pool, g_cfg.port, g_cfg.wallet, g_cfg.worker, g_cfg.suggest, g_cfg.mining ? "true" : "false", g_cfg.tz);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_config_post(httpd_req_t *r) {
@@ -82,7 +82,7 @@ static esp_err_t h_config_post(httpd_req_t *r) {
     cJSON *j = cJSON_Parse(buf); if (!j) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "bad json", -1); }
     cJSON *x;
     #define S(k, f) if ((x = cJSON_GetObjectItem(j, k)) && cJSON_IsString(x)) { strncpy(g_cfg.f, x->valuestring, sizeof g_cfg.f - 1); g_cfg.f[sizeof g_cfg.f - 1] = 0; }
-    S("ssid", ssid) S("pass", pass) S("bssid", bssid) S("pool", pool) S("wallet", wallet) S("worker", worker)
+    S("ssid", ssid) S("pass", pass) S("bssid", bssid) S("pool", pool) S("wallet", wallet) S("worker", worker) S("tz", tz)
     if ((x = cJSON_GetObjectItem(j, "port")) && cJSON_IsNumber(x)) g_cfg.port = x->valueint;
     if ((x = cJSON_GetObjectItem(j, "suggest")) && cJSON_IsNumber(x)) g_cfg.suggest = x->valuedouble;
     if ((x = cJSON_GetObjectItem(j, "mining")) && cJSON_IsBool(x)) g_cfg.mining = cJSON_IsTrue(x);
