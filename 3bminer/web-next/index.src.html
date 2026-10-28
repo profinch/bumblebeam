@@ -187,6 +187,8 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><div class=cvh><div class=k>View</div><span class=sm id=cv-info></span></div><div class=cvv id=cv-view><span>take a still or start the stream</span></div>
 <div class=row><button class=btn id=cv-still>Still</button><button class=btn id=cv-strm>Start stream</button><a class=btn id=cv-save download=capture.jpg href=# hidden>Save image</a></div></div>
 <div class=p><div class=k>Addresses</div><table class=kv><tr><td>still<td><a id=cv-l1 href=#>/capture</a><tr><td>bitmap<td><a id=cv-l3 href=#>/bmp</a><tr><td>stream<td><a id=cv-l2 href=#>:81/stream</a><tr><td>settings<td><a id=cv-l4 href=#>/status</a></table></div>
+<div class=p><div class=k><span class=tipped title="The microSD card in the board's slot, FAT. Photos go to the photos folder, named by the board's date and time">Memory card</span></div><table class=kv><tr><td>card<td id=sd-c>-<tr><td>free<td id=sd-f>-</table>
+<div class=row><button class=btn id=sd-snap disabled>Photo to card</button><button class=btn id=sd-fmt disabled>Format</button><span class="msg fd" id=sd-m></span></div></div>
 </div><div>
 <div class=p><div class=k>Picture</div><div id=cv-g1 class=cvg></div></div>
 <div class=p><div class=k>Light</div><div id=cv-g2 class=cvg></div></div>
@@ -440,7 +442,10 @@ const cvDep=()=>{const t=(i,off)=>$('cv-f-'+i).classList.toggle('off',off);t('ae
 document.querySelectorAll('[id^=cv-c-]').forEach(e=>{const v=e.id.slice(5);e.addEventListener('change',()=>{const val=e.type=='checkbox'?(e.checked?1:0):e.value;fetch(B+'/control?var='+v+'&val='+val).then(r=>{if(!r.ok)fade('cv-m','the camera rejected '+v)}).catch(()=>fade('cv-m','camera not reachable'));cvDep()});
 if(e.type=='range')e.addEventListener('input',()=>txt('cv-o-'+v,e.value))});
 let cvOn=0,cvUrl='',cvLoaded=0;
-function cvLoad(say){$('cv-l1').href=B+'/capture';$('cv-l3').href=B+'/bmp';$('cv-l4').href=B+'/status';$('cv-l2').href=CS;
+function sdLoad(){fetch(B+'/api/sd').then(r=>r.json()).then(s=>{const gb=m=>m>=1024?(m/1024).toFixed(1)+' GB':m+' MB';txt('sd-c',s.card?(s.name||'card')+', '+gb(s.sizeMB)+(s.mounted?'':' - '+s.error):(s.error||'no card'));txt('sd-f',s.mounted?gb(s.freeMB)+' of '+gb(s.totalMB):'-');$('sd-snap').disabled=!s.mounted;$('sd-fmt').disabled=!s.card}).catch(()=>txt('sd-c','not reachable'))}
+$('sd-snap').onclick=()=>{$('sd-snap').disabled=1;fetch(B+'/api/sd/snap',{method:'POST'}).then(r=>r.json()).then(j=>fade('sd-m',j.status=='ok'?'saved '+j.file+' ('+(j.bytes/1024|0)+' KB)':j.status)).catch(()=>fade('sd-m','not saved')).finally(()=>{$('sd-snap').disabled=0;sdLoad()})};
+$('sd-fmt').onclick=async()=>{if(!await ask('Format the memory card','Everything on the card is erased and a new FAT file system is made.',{ok:'Format',danger:true}))return;fade('sd-m','formatting…',1);fetch(B+'/api/sd/format',{method:'POST'}).then(r=>r.json()).then(j=>fade('sd-m',j.status=='ok'?'formatted':j.status)).catch(()=>fade('sd-m','format failed')).finally(sdLoad)};
+function cvLoad(say){sdLoad();$('cv-l1').href=B+'/capture';$('cv-l3').href=B+'/bmp';$('cv-l4').href=B+'/status';$('cv-l2').href=CS;
 fetch(B+'/status').then(r=>r.json()).then(c=>{cvLoaded=1;for(const v in c){const e=$('cv-c-'+v);if(!e)continue;if(e.type=='checkbox')e.checked=!!c[v];else e.value=c[v];if(e.type=='range')txt('cv-o-'+v,c[v])}$('cv-xclk').value=c.xclk;cvDep();ddsync();
 txt('cv-info',c.streaming?'streaming, '+c.fps+' fps':'');if(say)fade('cv-m','camera settings reloaded')}).catch(()=>fade('cv-m','camera not reachable'))}
 function cvStop(){if(!cvOn)return;$('cv-view').innerHTML='<span>stream stopped</span>';cvOn=0;txt('cv-strm','Start stream');txt('cv-info','')}

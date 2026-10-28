@@ -66,6 +66,7 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
 | `/api/bench?k=&t=&n=` | engine check on the board: a fixed header, every hit re-checked in software (mining pauses for it) |
 | `/capture`, `/bmp`, `/status`, `/control?var=&val=`, `/xclk`, `/reg`, `/greg`, `/pll`, `/resolution`, `:81/stream` | camera boards: the CameraWebServer API, same names and parameters |
 | `POST /api/camera/save` | keep the camera settings across restarts |
+| `GET /api/sd`, `POST /api/sd/format`, `POST /api/sd/snap` | camera boards: the microSD card (1-bit SDMMC, FAT), a photo to `photos/` |
 
 ## Layout
 

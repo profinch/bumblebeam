@@ -16,6 +16,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/stat.h>
+#include "esp_vfs_fat.h"
+#include "driver/sdmmc_host.h"
+#include "sdmmc_cmd.h"
 static const char *TAG = "camera";
 
 // AI-Thinker ESP32-CAM
@@ -41,6 +46,7 @@ static volatile bool s_ok = false;
 static int s_led = 0;                // flash intensity 0..255, lit while streaming and for a capture
 static volatile bool s_streaming = false;
 static volatile float s_fps = 0;
+static sdmmc_card_t *s_card; static esp_err_t s_sd_err = ESP_ERR_NOT_FOUND; static void sd_mount(bool fmt);   // microSD, below
 
 static void led_set(int duty) { ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty > FLASH_MAX ? FLASH_MAX : duty); ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); }
 static void led_init(void) {
@@ -144,6 +150,7 @@ void camera_start(void) {
     s->set_framesize(s, FRAMESIZE_QVGA);   // start small for a fast first stream, as CameraWebServer
     settings_load(s);
     s_ok = true;
+    if (!s_card) sd_mount(false);
     ESP_LOGI(TAG, "sensor PID 0x%04x ready, framesize %d", s->id.PID, s->status.framesize);
 }
 
@@ -259,14 +266,61 @@ void camera_stop(void) {
     for (int i = 0; i < 100 && s_streaming; i++) vTaskDelay(pdMS_TO_TICKS(20));
     led_set(0); esp_camera_deinit(); ESP_LOGI(TAG, "camera stopped");
 }
-int camera_http_handler_count(void) { return 10; }
+// microSD in the slot: SDMMC in 1-bit mode (CLK 14, CMD 15, D0 2) so GPIO4 stays the flash LED (it is D1 in 4-bit
+// mode). FAT; a card that does not mount is left alone until it is formatted from the page. Writes to the card do not
+// touch the board's flash, so they are safe with the camera running.
+#define SD_PATH "/sdcard"
+static void sd_mount(bool fmt) {   // fmt: a card without FAT gets one (the Format button)
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT(); host.flags = SDMMC_HOST_FLAG_1BIT; host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+    sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT(); slot.width = 1; slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+    esp_vfs_fat_sdmmc_mount_config_t mc = { .format_if_mount_failed = fmt, .max_files = 3, .allocation_unit_size = 32 * 1024 };
+    s_sd_err = esp_vfs_fat_sdmmc_mount(SD_PATH, &host, &slot, &mc, &s_card);
+    if (s_sd_err == ESP_OK) ESP_LOGI(TAG, "SD card %s, %llu MB", s_card->cid.name, (unsigned long long)s_card->csd.capacity * s_card->csd.sector_size >> 20);
+    else ESP_LOGW(TAG, "SD card: %s", esp_err_to_name(s_sd_err));
+}
+static esp_err_t json(httpd_req_t *r, const char *b) { httpd_resp_set_type(r, "application/json"); cors(r); return httpd_resp_send(r, b, -1); }
+static esp_err_t h_sd(httpd_req_t *r) {   // GET /api/sd: the card, its size and free space
+    char b[256];
+    if (!s_card && s_sd_err == ESP_FAIL) return json(r, "{\"card\":true,\"mounted\":false,\"error\":\"no FAT file system: format it\"}");   // the driver lets go of a card it cannot mount
+    if (!s_card) { snprintf(b, sizeof b, "{\"card\":false,\"error\":\"%s\"}", s_sd_err == ESP_ERR_TIMEOUT || s_sd_err == ESP_ERR_NOT_FOUND || s_sd_err == ESP_ERR_INVALID_RESPONSE ? "no card" : esp_err_to_name(s_sd_err)); return json(r, b); }
+    uint64_t tot = 0, fr = 0; bool fs = s_sd_err == ESP_OK && esp_vfs_fat_info(SD_PATH, &tot, &fr) == ESP_OK;
+    char nm[8]; int k = 0; for (const char *q = s_card->cid.name; *q && k < 7; q++) if (*q >= 32 && *q != '"' && *q != '\\') nm[k++] = *q; nm[k] = 0;
+    snprintf(b, sizeof b, "{\"card\":true,\"name\":\"%s\",\"sizeMB\":%llu,\"mounted\":%s,\"totalMB\":%llu,\"freeMB\":%llu,\"error\":%s%s%s}", nm,
+        (unsigned long long)s_card->csd.capacity * s_card->csd.sector_size >> 20, fs ? "true" : "false", (unsigned long long)(tot >> 20), (unsigned long long)(fr >> 20),
+        fs ? "" : "\"", fs ? "null" : "not FAT: format it", fs ? "" : "\"");
+    return json(r, b);
+}
+static esp_err_t h_sd_format(httpd_req_t *r) {   // POST /api/sd/format: a new FAT on the whole card
+    if (!web_post_allowed(r)) return ESP_OK;
+    esp_err_t e;
+    if (!s_card) { sd_mount(true); e = s_sd_err; if (!s_card) return json(r, "{\"status\":\"no card\"}"); }   // mounting with format makes the FAT
+    else { e = esp_vfs_fat_sdcard_format(SD_PATH, s_card); if (e == ESP_OK) s_sd_err = ESP_OK; }
+    ESP_LOGI(TAG, "SD format: %s", esp_err_to_name(e));
+    char b[96]; snprintf(b, sizeof b, "{\"status\":\"%s\"}", e == ESP_OK ? "ok" : esp_err_to_name(e)); return json(r, b);
+}
+static esp_err_t h_sd_snap(httpd_req_t *r) {   // POST /api/sd/snap: the next frame to the card as /photos/<date>_<time>.jpg
+    if (!web_post_allowed(r)) return ESP_OK;
+    if (!s_ok) return not_ready(r);
+    if (!s_card || s_sd_err != ESP_OK) return json(r, "{\"status\":\"no card\"}");
+    camera_fb_t *fb = esp_camera_fb_get(); if (fb && !s_streaming) { esp_camera_fb_return(fb); fb = esp_camera_fb_get(); }
+    if (!fb) return httpd_resp_send_500(r);
+    mkdir(SD_PATH "/photos", 0775);
+    char name[64]; time_t t = time(NULL); struct tm tm; localtime_r(&t, &tm);
+    char base[48]; if (t > 1700000000) strftime(base, sizeof base, SD_PATH "/photos/%Y-%m-%d_%H-%M-%S", &tm); else snprintf(base, sizeof base, SD_PATH "/photos/boot-%lld", (long long)(esp_timer_get_time() / 1000));
+    struct stat st; snprintf(name, sizeof name, "%s.jpg", base); for (int i = 2; i < 100 && stat(name, &st) == 0; i++) snprintf(name, sizeof name, "%s-%d.jpg", base, i);   // several in one second
+    FILE *f = fopen(name, "wb"); size_t w = 0, n = fb->len; if (f) { w = fwrite(fb->buf, 1, n, f); fclose(f); } esp_camera_fb_return(fb);
+    char b[128]; snprintf(b, sizeof b, "{\"status\":\"%s\",\"file\":\"%s\",\"bytes\":%u}", f && w == n ? "ok" : "write failed", name + sizeof SD_PATH, (unsigned)w);
+    return json(r, b);
+}
+int camera_http_handler_count(void) { return 13; }
 void camera_register_http(httpd_handle_t s) {
     const httpd_uri_t u[] = {
         { .uri = "/capture", .method = HTTP_GET, .handler = h_capture }, { .uri = "/bmp", .method = HTTP_GET, .handler = h_bmp },
         { .uri = "/status", .method = HTTP_GET, .handler = h_status }, { .uri = "/control", .method = HTTP_GET, .handler = h_control },
         { .uri = "/xclk", .method = HTTP_GET, .handler = h_xclk }, { .uri = "/reg", .method = HTTP_GET, .handler = h_reg },
         { .uri = "/greg", .method = HTTP_GET, .handler = h_greg }, { .uri = "/pll", .method = HTTP_GET, .handler = h_pll },
-        { .uri = "/resolution", .method = HTTP_GET, .handler = h_resolution }, { .uri = "/api/camera/save", .method = HTTP_POST, .handler = h_save } };
+        { .uri = "/resolution", .method = HTTP_GET, .handler = h_resolution }, { .uri = "/api/camera/save", .method = HTTP_POST, .handler = h_save },
+        { .uri = "/api/sd", .method = HTTP_GET, .handler = h_sd }, { .uri = "/api/sd/format", .method = HTTP_POST, .handler = h_sd_format }, { .uri = "/api/sd/snap", .method = HTTP_POST, .handler = h_sd_snap } };
     for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
     // the stream gets its own server (port 81, as CameraWebServer), pinned to core 1 like everything else
     httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.server_port = 81; c.ctrl_port = 32769; c.core_id = 1; c.max_open_sockets = 3; c.stack_size = 6144; c.lru_purge_enable = true;

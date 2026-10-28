@@ -32,6 +32,15 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   longer keeps its own copy of the settings in NVS (`CONFIG_ESP_WIFI_NVS_ENABLED=n`, they come from the settings at
   every start); IPv6 off; only kernels 0 and 3 are built (k8, k7, k5, k4 removed, 1.3 KB of IRAM); `/api/bench?k=`
   takes 0 or 3.
+- The best share ever (`bestDiffEver`) is kept in NVS: it survives restarts and firmware updates.
+- ESP32-CAM stream speed: the limit was the 5.7 KB TCP send buffer (~290 KB/s at any frame size); 32 KB, with Wi-Fi and
+  lwip buffers in PSRAM: UXGA quality 4 3.9 -> 6.3 fps, VGA quality 4 21 -> 42 fps, VGA quality 10 40 -> 49 fps,
+  internal RAM free 76 -> 104 KB. Mining on or off made no measurable difference (they share no core).
+- ESP32-CAM microSD (1-bit SDMMC, the flash LED keeps GPIO4): `GET /api/sd` (card, size, free), `POST /api/sd/format`,
+  `POST /api/sd/snap` (a photo to `photos/<date>_<time>.jpg`); a Memory card panel on the Camera tab.
+- A failed OTA restarts a camera board (the camera did not always come back in place); OTA erases as it writes.
+- Settings: Mining on/off; Wi-Fi fields in the order network name, password, device name, the AP lock on its own row.
+  Swarm: this board is listed from the first answer, the saved miners come back without a scan.
 
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board
