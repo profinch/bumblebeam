@@ -24,8 +24,8 @@ h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margi
 .v small,.sm{font-size:12px;color:var(--m);font-weight:400}
 .hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:40px}
 svg.sp{width:100%;height:70px;display:block;margin-top:12px}
-.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}
-.g.t{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+.g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}@media(max-width:900px){.g{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.g.t{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:900px){.g.t{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font:12px var(--mono)}td,th{padding:6px 4px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
 .kv{table-layout:fixed;margin-top:10px}.kv td{overflow:hidden;text-overflow:ellipsis}.kv td:first-child{color:var(--m);width:42%;padding-left:0}.kv td:last-child{text-align:right;padding-right:0}
 .sc{overflow-x:auto}th{color:var(--m);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}td.n,th.n{text-align:right}
@@ -44,8 +44,11 @@ input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;background
 .tipped{text-decoration:underline dotted rgba(255,255,255,.35);text-underline-offset:3px;cursor:help}
 .bb-tip{position:fixed;z-index:1000;top:0;left:0;max-width:min(340px,calc(100vw - 16px));overflow-wrap:anywhere;padding:8px 11px 8px 13px;font:11px/1.5 var(--mono);color:rgba(255,255,255,.88);letter-spacing:.01em;text-transform:none;text-align:left;white-space:normal;background:linear-gradient(180deg,rgba(18,108,150,.97),rgba(10,90,128,.97));border:1px solid rgba(0,246,210,.32);border-radius:7px;box-shadow:0 10px 28px rgba(0,0,0,.35),inset 3px 0 0 rgba(0,246,210,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .14s,transform .14s}.bb-tip.on{opacity:1;transform:none}
 footer{padding:10px 0 30px}.foot-copy{margin:4px 0 0;text-align:center;font:400 11px var(--mono);letter-spacing:.02em;color:rgba(255,255,255,.4)}.foot-copy a{color:var(--m);text-decoration:underline dotted rgba(255,255,255,.25);text-underline-offset:3px}.foot-copy a:hover{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
-/* phones: all four figures on one row as on a desktop, the hashrate smaller (after the base rules so they win) */
-@media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}.hero .big{font-size:17px;margin-top:6px}.hero>div:not(:first-child) .v{font-size:12px!important;margin-top:5px}.hero .k{font-size:8px;letter-spacing:0;white-space:nowrap}.hero .u{display:none}}
+/* below the desktop layout: still one row, the sizes grow with the width from a 360 px phone to 760 px, units back once there is room */
+@media(max-width:760px){.hero{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-end;gap:8px}.hero>div{flex:none}
+.hero .big{font-size:clamp(17px,4.4vw,30px);margin-top:6px}.hero>div:not(:first-child) .v{font-size:clamp(12px,2.4vw,16px)!important;margin-top:5px}
+.hero .k{font-size:clamp(8px,1.5vw,10px);letter-spacing:0;white-space:nowrap}.hero .u{display:none}}
+@media(min-width:560px) and (max-width:760px){.hero .u{display:inline}}
 /* confirmations (ask()): the operator dashboard's dialog, the tooltips' look instead of the browser's own */
 .ask-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,18,34,.55);opacity:0;transition:opacity .14s}.ask-bg.on{opacity:1}
 .ask{width:min(440px,100%);padding:18px 18px 16px 20px;font:12px/1.6 var(--mono);color:rgba(255,255,255,.9);background:linear-gradient(180deg,rgba(18,108,150,.98),rgba(10,90,128,.98));border:1px solid rgba(0,246,210,.32);border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45),inset 3px 0 0 rgba(0,246,210,.55);transform:translateY(6px);transition:transform .14s;overflow-wrap:anywhere;white-space:pre-line}
