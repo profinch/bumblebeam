@@ -11,6 +11,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - The board's clock from NTP (pool.ntp.org) once Wi-Fi is up, as `identity.time` (Unix seconds, 0 until set).
 - `/api/system/info` also gives the build time, ESP-IDF version and running slot (`identity.build`, `idf`, `slot`) and the live kernel and engine waits (`miner.kernel`, `miner.timing`).
 - `GET /api/wifi/scan`: the access points in reach (SSID, BSSID, RSSI, channel), for picking the AP lock.
+- Two time servers, pool.ntp.org and time.google.com as the fallback; `identity.ntp` names the one that answered.
 - The clock's last NTP sync and its server in `/api/system/info` (`identity.ntpSync`, `identity.ntp`, with `identity.tz`).
 - A time zone setting (`tz` in `/api/config`, a POSIX TZ string such as `GMT0BST,M3.5.0/1,M10.5.0`), applied to the board's clock.
 
