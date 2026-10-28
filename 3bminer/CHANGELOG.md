@@ -9,6 +9,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Solo or shared pool from the job itself: `stratum.solo` is true when the coinbase pays the configured address
   (bech32, bech32m, P2PKH and P2SH addresses), no list of pool names.
 - The board's clock from NTP (pool.ntp.org) once Wi-Fi is up, as `identity.time` (Unix seconds, 0 until set).
+- `GET /api/wifi/scan`: the access points in reach (SSID, BSSID, RSSI, channel), for picking the AP lock.
 - A time zone setting (`tz` in `/api/config`, a POSIX TZ string such as `GMT0BST,M3.5.0/1,M10.5.0`), applied to the board's clock.
 
 ## 0.6.0 (2026-10-28)
