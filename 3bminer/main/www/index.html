@@ -170,8 +170,8 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class=p><h2 style="margin-top:0">Wi-Fi</h2><div class=fg>
 <label>Network name<input name=ssid></label>
 <label>Password<input name=pass type=password placeholder="unchanged if empty"></label>
-<label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first; the saved one is marked offline when it is out of reach">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label>
-<label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
+<label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div>
+<div class="fg fg-next"><label><span class=tipped title="Several routers can share one network name. Picking one here makes the board join only that router (by its MAC address, the BSSID), e.g. the one closest to it. The list is what the board sees right now, strongest first; the saved one is marked offline when it is out of reach">Access point lock</span><select name=bssid id=apsel><option value="">any access point</option></select></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
 <label>Average on the dashboard<select id=avgsel><option value=1h>last hour<option value=24h>last 24 hours<option value=all>all time</select></label>
