@@ -81,7 +81,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div id=boot><div class=stage id=stage><canvas id=trail></canvas><svg class="logo flybee" id=flybee viewBox="1 4 28 21" aria-hidden="true"><defs><clipPath id="bc"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs><g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round"><path class="t1" d="M4.5 20h3.5"/><path class="t2" d="M3.5 23.5h2.5"/></g><ellipse class="wing wl" cx="14.5" cy="10.8" rx="3.6" ry="2.1" transform="rotate(-24 14.5 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/><rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/><g clip-path="url(#bc)" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g><circle class="eye" cx="22.6" cy="17" r=".95" fill="#39fff2"/></g></svg><div class=loading>Loading<svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg><svg viewBox="0 0 26 30"><path d="M13 1 25 8v14L13 29 1 22V8z"/></svg></div></div><p id=boot-m></p><p id=boot-h hidden>Is it powered and on the same network? Opened from a file, the page asks 192.168.88.228 unless the address is given as <code>?h=&lt;ip&gt;</code>.</p></div>
 <section class=view id=v-dash>
 <div class=p><div class=hero><div><div class=k>Hashrate</div><div class="v big" id=hr>-</div></div>
-<div><div class=k><span class=tipped id=havk title="">Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
+<div><div class=k><span class=tipped id=havk>Avg 24h</span></div><div class=v style="font-size:16px" id=havg>-</div></div>
 <div><div class=k><span class=tipped title="Engine: the ESP32 SHA-256 hardware on core 0. Software: nerdSHA256plus on core 1 in its idle time">Engine / Software</span></div><div class=v style="font-size:16px" id=hs>-</div></div>
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=1 stop-color="#fff"/></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg><div class=spx><span id=sp-l>5 min ago</span><span>now</span></div></div>
@@ -177,7 +177,7 @@ nopool:['no pool','warn','The miner answers but is not connected to the pool: th
 off:['mining off','idle','Mining is switched off in the settings; the board keeps doing its other work (a camera, for one)'],
 offline:['offline','bad','No answer from the miner: it is off, restarting or out of Wi-Fi reach. This page keeps asking every 3 seconds']};
 let realK='loading';
-function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('boot')&&k!='offline')k='loading';const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.removeAttribute('data-tip');e.title=v[2]}
+function status(k){if(k!='loading')realK=k;if(document.body.classList.contains('boot')&&k!='offline')k='loading';const v=ST[k],e=$('st');if(e.dataset.k==k)return;e.dataset.k=k;e.textContent=v[0];e.className='pill '+v[1];e.setAttribute('data-tip',v[2])}
 // ---- router
 const TT={dash:'Dashboard',swarm:'Swarm',settings:'Settings',firmware:'Firmware'};
 function route(){const v=(location.hash.replace('#/','')||'dash');document.title='3BMiner - '+(TT[v]||'Dashboard');document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id=='v-'+v));document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v==v));
@@ -202,7 +202,7 @@ htm('hr',hm(k));const hs=(m.totalHashes||0)+(m.swHashes!=null?m.swHashes:m.hashR
 const AV={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a sample a minute), or since it started if that is shorter'],
 '24h':['Avg 24h',m.avg24hKhs,'The board\'s average over the last 24 hours (a sample a minute), or since it started if that is shorter'],
 all:['Avg all time',m.avgAllKhs,'The board\'s average over all its running time, across restarts (saved every 10 minutes)']}[avgSel()]||[];
-const av=AV[1]>=0?AV[1]:since;txt('havk',AV[0]);$('havk').setAttribute(($('havk').hasAttribute('data-tip')?'data-tip':'title'),AV[2]);htm('havg',since?av.toFixed(1)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
+const av=AV[1]>=0?AV[1]:since;txt('havk',AV[0]);$('havk').setAttribute('data-tip',AV[2]);htm('havg',since?av.toFixed(1)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
 const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
 txt('bd',sp(m.bestDiffSession));txt('bde','ever '+sp(m.bestDiffEver));txt('df',sp(m.poolDiff));txt('dfn','network '+sp(m.networkDiff));
 htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'));
@@ -269,7 +269,10 @@ t.style.left=Math.round(Math.min(Math.max(8,r.left+r.width/2-w/2),vw-w-8))+'px';
 const hide=()=>{clearTimeout(tm);cur=null;t.classList.remove('on')};
 document.addEventListener('mouseover',e=>{const el=own(e.target);if(el===cur)return;clearTimeout(tm);if(!el)return hide();tx(el);tm=setTimeout(()=>show(el),cur?0:140)});
 document.addEventListener('mouseout',e=>{const el=own(e.target);if(el&&!(e.relatedTarget&&el.contains(e.relatedTarget)))hide()});
-document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cur)show(el);else if(!el)hide()},{passive:true});addEventListener('scroll',hide,{passive:true,capture:true})})();
+document.addEventListener('touchstart',e=>{const el=own(e.target);if(el&&el!==cur)show(el);else if(!el)hide()},{passive:true});addEventListener('scroll',hide,{passive:true,capture:true});
+// no browser tooltips at all: every title becomes a data-tip as soon as it appears (also in rows drawn later)
+const conv=r=>{if(r.nodeType!==1)return;if(r.hasAttribute('title'))tx(r);r.querySelectorAll('[title]').forEach(tx)};conv(document.body);
+new MutationObserver(ms=>{for(const m of ms){if(m.type=='attributes')conv(m.target);else m.addedNodes.forEach(conv)}}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['title']})})();
 // first paint only with data: wait for the miner, give mempool.space and the history 2.5 s more, then show everything at once
 let tries=0;
 const T0=Date.now();
