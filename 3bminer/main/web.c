@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 static const char *TAG = "web";
-#define FW_VERSION "0.5.5"
+#define FW_VERSION "0.5.6"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
@@ -92,14 +92,16 @@ static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
     char b[96]; snprintf(b, sizeof b, "{\"status\":\"ok\",\"bytes\":%d,\"partition\":\"%s\",\"note\":\"restarting\"}", total, part->label);
     httpd_resp_set_type(r, "application/json"); httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", "*"); httpd_resp_send(r, b, -1); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK;
 }
-extern const uint8_t www_gz_start[] asm("_binary_index_html_gz_start"), www_gz_end[] asm("_binary_index_html_gz_end");   // main/www, tools/build_www.py
+extern const uint8_t www_gz_start[] asm("_binary_index_html_gz_start"), www_gz_end[] asm("_binary_index_html_gz_end"),
+    fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end");   // main/www, tools/build_www.py
 static esp_err_t h_root(httpd_req_t *r) { httpd_resp_set_type(r, "text/html"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=300"); return httpd_resp_send(r, (const char *)www_gz_start, www_gz_end - www_gz_start); }
+static esp_err_t h_favicon(httpd_req_t *r) { httpd_resp_set_type(r, "image/svg+xml"); httpd_resp_set_hdr(r, "Content-Encoding", "gzip"); httpd_resp_set_hdr(r, "Cache-Control", "max-age=86400"); return httpd_resp_send(r, (const char *)fav_gz_start, fav_gz_end - fav_gz_start); }
 void web_start(void) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA); snprintf(s_host, sizeof s_host, "ESP32Miner-%02x%02x%02x", mac[3], mac[4], mac[5]);
-    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 14; c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
+    httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.core_id = 1; c.max_uri_handlers = 16; c.stack_size = 8192; c.lru_purge_enable = true; c.max_open_sockets = 5;   // 5 + 3 httpd internal + stratum stays well under LWIP_MAX_SOCKETS=16
     httpd_handle_t s; if (httpd_start(&s, &c) != ESP_OK) { ESP_LOGE(TAG, "httpd start failed"); return; }
     httpd_uri_t u[] = {
-        { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
+        { .uri = "/", .method = HTTP_GET, .handler = h_root }, { .uri = "/favicon.svg", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/favicon.ico", .method = HTTP_GET, .handler = h_favicon }, { .uri = "/probe", .method = HTTP_GET, .handler = h_probe }, { .uri = "/alive", .method = HTTP_GET, .handler = h_alive },
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
         { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
