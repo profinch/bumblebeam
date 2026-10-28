@@ -3,6 +3,7 @@
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
 ## 0.8.0 (not released yet)
+- Hashrates in KH/s up to 10 MH/s: a board's total read 1.00 MH/s next to its 971 / 32 KH/s parts (two decimals of 1.003).
 - Swarm: Scan network asks the board to scan the subnet (`POST /api/swarm/scan {"ip":"a.b.c.0"}`, `/alive` says
   `"scanning"`): 8 connects at a time, 0.8 s each, ~31 s for a /24, the found miners in its list. The browser scan missed
   miners: an aborted fetch leaves Chrome's connection attempt to an empty address alive until the OS gives up (~21 s), 254
