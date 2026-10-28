@@ -5,6 +5,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 ## 0.7.1 (not released yet)
 - Engine waits 24/35/22/4/8 instead of 25/36/23/6/8: 246.75 cycles a nonce instead of 251.77 (+2%, ~972 KH/s from the
   engine), as few engine errors over ~100M nonces each (2 against 4); 23 for the first wait gives 10-16 errors in 16M.
+  On the ESP32-CAM the same (5 against 11 errors in 64M); a running stream adds ~10-20 errors per 16M with either timing.
 - The web server's health check restarts after 5 misses in a row (2.5 minutes) instead of 4, and waits while a long request holds it (engine check, card format): back-to-back engine
   checks no longer read as a hung server and restart the board.
 
