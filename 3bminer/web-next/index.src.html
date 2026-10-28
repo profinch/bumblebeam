@@ -276,7 +276,7 @@ async function swScan(){swScanned=1;const net=$('sw-net').value.trim().replace(/
 try{let k=JSON.parse(localStorage.getItem(SK)||'{}');if(Array.isArray(k))k=Object.fromEntries(k.map(ip=>[ip,Date.now()]));   // older lists: plain addresses
 for(const ip in k){if(Date.now()-k[ip]>FORGET)continue;if(!SW.has(ip))SW.set(ip,{ip,host:ip,model:'-',ver:'-',off:1,seen:k[ip]});swPoll(ip)}swSave();swDraw()}catch(e){}
 const ips=[];for(let i=1;i<255;i++)ips.push(net+'.'+i);let q=ips.slice();
-const worker=async()=>{while(q.length){const ip=q.shift();txt('sw-prog','Network scanning '+ip);await swProbe(ip)}};
+const worker=async()=>{while(q.length){const ip=q.shift();txt('sw-prog','Network scanning... '+ip);await swProbe(ip)}};
 await Promise.all(Array.from({length:24},worker));txt('sw-scan','last scan '+clock(new Date()));txt('sw-prog','')}
 function swDraw(){const a=[...SW.values()].filter(o=>!o.off);txt('sw-n',a.length);htm('sw-h',hm(a.reduce((s,o)=>s+(o.hr||0),0)));const bb=a.reduce((m,o)=>o.best>m.best?o:m,{best:0});txt('sw-hn',a.length==1?'1 miner':a.length+' miners');txt('sw-b',sp(bb.bestS));txt('sw-bn',bb.host||'');
 const ac=a.reduce((s,o)=>s+(o.acc||0),0),rj=a.reduce((s,o)=>s+(o.rej||0),0);htm('sw-s',ac+' <small>/ <span class=r>'+rj+'</span></small>');txt('sw-sr',ac+rj?(100*rj/(ac+rj)).toFixed(2)+'% rejected':'');
