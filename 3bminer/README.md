@@ -12,7 +12,7 @@ interrupts off; core 1 keeps Wi-Fi, the web server, the camera and a software ha
 | Board | Profile | What it does | Measured |
 |---|---|---|---|
 | ESP32-WROOM-32 devkit (ESP32-D0WD-V3) | [`boards/devkit`](boards/devkit) | miner | ~952 KH/s engine + ~29 KH/s software = **~981 KH/s**, 252 cycles/nonce |
-| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream 50 fps at 320x240, 25 at 640x480, 10 at 1280x720, 3.6 at 1600x1200; mining **~981 KH/s** idle, ~946 KH/s while streaming 640x480 at 24 fps |
+| AI-Thinker ESP32-CAM + ESP32-CAM-MB (OV2640, 8 MB PSRAM of which the ESP32 maps 4) | [`boards/esp32cam`](boards/esp32cam) | camera (everything Espressif's CameraWebServer does) and, when switched on, the miner | stream (quality 10 / 4) 49 / 42 fps at 640x480, 25 / 13 at 1024x768, 12.5 / 6.3 at 1600x1200; mining ~951 KH/s engine + ~9 software = **~960 KH/s**, ~930 while streaming; microSD for photos |
 
 For scale: NerdMiner v2 does ~350 KH/s on the same chip, NMMiner (closed, paid license on boards
 other than its own) ~1.03 MH/s. Over 7.6 h side by side on one pool (fw 0.5.2 against NMMiner
@@ -108,6 +108,15 @@ the later errors: `py -3 tools/esptool_ch340fix.py --port COM7 --baud 115200 <es
   directly mapped memory. The mapped 4 MB hold two 384 KB frame buffers and the stratum stack with over
   3 MB left; himem would only pay for something like a pre-event video buffer.
 - The CH340 on the ESP32-CAM-MB: see Flash above; plain esptool and the Arduino IDE cannot talk to it.
+- The stream's speed was the TCP send buffer, not the sensor or the miner: lwip's default 5.7 KB in flight gives ~290
+  KB/s at a ~20 ms round trip, whatever the frame size. The camera profile uses 32 KB (64 KB measured the same) with
+  Wi-Fi and lwip buffers allowed in PSRAM, which also left more internal RAM free. Switching mining off changed nothing
+  measurable: the kernel is on core 0, the camera and the network on core 1.
+- The software hasher costs 2.2x the cycles on the ESP32-CAM (17,850 per hash against 8,179 on the devkit, camera idle):
+  its code runs from flash through the cache, which on a PSRAM board also serves PSRAM. Moving it to IRAM would cost
+  the engine far more (see above); QIO 80 MHz flash might win back part of the ~20 KH/s, but needs a USB flash of the
+  bootloader.
+- The microSD slot runs in 1-bit SDMMC mode: in 4-bit mode its D1 is GPIO4, the flash LED.
 
 Changes per version: [CHANGELOG.md](CHANGELOG.md); which image ran on which board, when and with what
 result: [HISTORY.md](HISTORY.md).
