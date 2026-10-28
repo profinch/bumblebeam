@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 static const char *TAG = "swarm";
-volatile bool g_ota_busy;
+volatile bool g_ota_busy; volatile int g_web_long;
 
 #define MAXM 32
 #define PASS_S (30 * 60)
