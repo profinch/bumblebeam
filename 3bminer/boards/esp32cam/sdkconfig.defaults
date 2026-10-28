@@ -16,3 +16,10 @@ CONFIG_OV3660_SUPPORT=y
 CONFIG_OV5640_SUPPORT=y
 # task stacks may be in PSRAM (the stratum task: no flash access)
 CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
+# the stream's throughput was the TCP send buffer: 5760 B in flight = ~290 KB/s at ~20 ms round trip, whatever the
+# frame size. 64 KB in flight (32 KB gave 6.3 fps at UXGA quality 4, still network-bound), Wi-Fi and lwip buffers allowed in PSRAM (internal RAM is what the camera leaves)
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65535
+CONFIG_LWIP_TCP_WND_DEFAULT=16384
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=16
+CONFIG_ESP_WIFI_TX_BA_WIN=16
