@@ -9,6 +9,7 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Solo or shared pool from the job itself: `stratum.solo` is true when the coinbase pays the configured address
   (bech32, bech32m, P2PKH and P2SH addresses), no list of pool names.
 - The board's clock from NTP (pool.ntp.org) once Wi-Fi is up, as `identity.time` (Unix seconds, 0 until set).
+- A time zone setting (`tz` in `/api/config`, a POSIX TZ string such as `GMT0BST,M3.5.0/1,M10.5.0`), applied to the board's clock.
 
 ## 0.6.0 (2026-10-28)
 - Renamed from esp32miner, moved into the BumbleBeam repository. One source tree, one version, a build per board

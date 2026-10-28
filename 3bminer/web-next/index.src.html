@@ -98,7 +98,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div class="g t">
 <div class=p><div class=k>Pool</div><table class=kv><tr><td>url<td id=pu><tr><td>worker<td id=wk><tr><td>jobs / sent<td id=jb><tr><td>last share<td id=ld><tr><td>shares per hour<td id=sph></table></div>
 <div class=p><div class=k>Rejects</div><table class=kv><tr><td>stale / dup<td id=r1><tr><td>low / other<td id=r2><tr><td><span class=tipped title="Candidates found by the miner that never reached the pool: queue full / job already gone">dropped</span><td id=cd><tr><td>last error<td id=lr><tr><td><span class=tipped title="The code the pool sent with the last reject, as it came. Stratum v1 has no formal standard; most pools follow the early convention: 20 other, 21 job not found (stale: the pool already moved on), 22 duplicate share, 23 difficulty too low, 24 unauthorized worker, 25 not subscribed. A pool may use its own codes, -1, or none at all (then -)">error code</span><td id=rcode></table></div>
-<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td><span class=tipped title="The board's own clock, set from pool.ntp.org once it is on Wi-Fi (firmware 0.6.1+), shown in this browser's time zone">board time</span><td id=bt><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
+<div class=p><div class=k>Device</div><table class=kv><tr><td>name<td id=hn><tr><td>firmware<td id=fw><tr><td>board<td id=bo><tr><td>wi-fi<td id=rs><tr><td><span class=tipped title="Free RAM the firmware can still allocate (heap). Steady over hours = no leak">free memory</span><td id=hp></table></div></div>
 </section>
 
 <section class=view id=v-swarm>
@@ -129,7 +129,7 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <label>Device name <span class=soon>next fw</span><input name=hostname disabled placeholder="3BMiner-xxxxxx"></label></div></div>
 <div class=p><h2 style="margin-top:0">Device</h2><div class=fg>
 <label>Status LED <span class=soon>next fw</span><select name=led disabled><option>blink on share<option>always off</select></label>
-<label>Time zone <span class=soon>next fw</span><select name=tz disabled><option>UTC</select></label>
+<label>Time zone<select name=tz id=tzsel></select><p class=hint>the board's clock (set from NTP): for display boards and time stamps</p></label>
 <label>Average on the dashboard<select id=avgsel><option value=1h>last hour<option value=24h>last 24 hours<option value=all>all time</select><p class=hint>kept in this browser</p></label>
 <label>Main currency<select id=curr><option value=USD>US dollar, $<option value=EUR>Euro, €<option value=GBP>Pound, £</select><p class=hint>shown large on the dashboard; kept in this browser</p></label></div></div>
 <div class=row style="margin:0 0 12px"><button class=btn>Save &amp; restart</button><button type=button class="btn gh" id=cf-rl>Reload</button><span class=msg id=cf-m></span></div>
@@ -210,7 +210,7 @@ htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-'))
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+u+'">'+(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+u.slice(i)+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
 txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);txt('bt',d.identity.time>0?new Date(d.identity.time*1000).toLocaleTimeString('en-GB'):'not set');txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('hn',d.identity.hostName);txt('fw',d.identity.fwVersion);txt('bo',d.identity.board||d.identity.hwModel);txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
 txt('f-ver',d.identity.fwVersion);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');txt('f-up',ut(m.uptimeSeconds));
 H.push(k);if(H.length>200)H.shift();spark();odds();return 1}catch(e){if(!document.body.classList.contains('boot')||Date.now()-T0>=5000)status('offline');return 0}}
 // network data from mempool.space, fetched by the browser (costs the board nothing)
@@ -224,13 +224,19 @@ function prices(){const p=N.px;if(!p)return;const C={USD:'$',EUR:'€',GBP:'£'}
 htm('pxn',Object.keys(C).filter(c=>c!=main).map(c=>C[c]+(p[c]||0).toLocaleString('en')).join('<br>'))}
 function cur(){try{return localStorage.getItem('currency')||'USD'}catch(e){return'USD'}}
 function avgSel(){try{return localStorage.getItem('avg')||'24h'}catch(e){return'24h'}}
+// time zones as POSIX TZ strings (what the board's libc takes), keyed by the browser's IANA names
+const TZ=[['UTC','UTC0'],['Europe/London','GMT0BST,M3.5.0/1,M10.5.0'],['Europe/Lisbon','WET0WEST,M3.5.0/1,M10.5.0'],['Europe/Berlin','CET-1CEST,M3.5.0,M10.5.0/3'],['Europe/Paris','CET-1CEST,M3.5.0,M10.5.0/3'],
+['Europe/Kyiv','EET-2EEST,M3.5.0/3,M10.5.0/4'],['Europe/Istanbul','<+03>-3'],['Europe/Moscow','MSK-3'],['Asia/Dubai','<+04>-4'],['Asia/Karachi','PKT-5'],['Asia/Kolkata','IST-5:30'],['Asia/Almaty','<+05>-5'],
+['Asia/Bangkok','<+07>-7'],['Asia/Shanghai','CST-8'],['Asia/Singapore','<+08>-8'],['Asia/Tokyo','JST-9'],['Australia/Sydney','AEST-10AEDT,M10.1.0,M4.1.0/3'],['Pacific/Auckland','NZST-12NZDT,M9.5.0,M4.1.0/3'],
+['America/Sao_Paulo','<-03>3'],['America/New_York','EST5EDT,M3.2.0,M11.1.0'],['America/Chicago','CST6CDT,M3.2.0,M11.1.0'],['America/Denver','MST7MDT,M3.2.0,M11.1.0'],['America/Los_Angeles','PST8PDT,M3.2.0,M11.1.0']];
+$('tzsel').innerHTML=TZ.map(z=>'<option value="'+z[1]+'">'+z[0].replace('_',' ')+'</option>').join('');
 // ---- settings
 let cfgLoaded=0;
-function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
+function loadCfg(){fetch(B+'/api/config').then(r=>r.json()).then(c=>{cfgLoaded=1;const f=$('cf').elements;for(const k in c){if(f[k]&&k!='pass')f[k].value=c[k]}f.url.value=c.pool+(c.port?':'+c.port:'');{const here=(Intl.DateTimeFormat().resolvedOptions().timeZone||''),z=TZ.find(z=>z[0]==here);$('tzsel').value=c.tz&&c.tz!='UTC0'?c.tz:(z?z[1]:'UTC0');if(!$('tzsel').value)$('tzsel').value='UTC0'}txt('cf-m','')}).catch(()=>txt('cf-m','could not read the settings'))}
 $('cf-rl').onclick=loadCfg;
 $('avgsel').value=avgSel();$('avgsel').onchange=e=>{try{localStorage.setItem('avg',e.target.value)}catch(x){}tick()};
 $('curr').value=cur();$('curr').onchange=e=>{try{localStorage.setItem('currency',e.target.value)}catch(x){}prices()};
-$('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid'])if(f[n].value!=='')o[n]=f[n].value.trim();
+$('cf').onsubmit=async e=>{e.preventDefault();const f=$('cf').elements,o={};for(const n of['wallet','worker','ssid','pass','bssid','tz'])if(f[n].value!=='')o[n]=f[n].value.trim();
 if(f.suggest.value!=='')o.suggest=+f.suggest.value;const m=f.url.value.trim().replace(/^stratum\+tcp:\/\//,'').match(/^([^:\/]+)(?::(\d+))?$/);if(!m){txt('cf-m','server must be host:port');return}o.pool=m[1];if(m[2])o.port=+m[2];
 if(!await ask('Save the settings','The miner restarts with them and is back mining in about 10 seconds.',{ok:'Save & restart'}))return;fetch(B+'/api/config',{method:'POST',body:JSON.stringify(o)}).then(r=>r.json()).then(j=>txt('cf-m',j.status=='ok'?'saved, restarting…':j.status)).catch(()=>txt('cf-m','save failed'))};
 // ---- firmware

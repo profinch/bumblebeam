@@ -9,12 +9,15 @@
 #include "camera.h"
 #include "version.h"
 #include "history.h"
+#include <stdlib.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 static const char *TAG = "main";
 void app_main(void) {
     esp_err_t e = nvs_flash_init(); if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) { nvs_flash_erase(); nvs_flash_init(); }
     config_load();
+    setenv("TZ", g_cfg.tz[0] ? g_cfg.tz : "UTC0", 1); tzset();   // the board's clock (NTP) in the chosen time zone
     ESP_LOGI(TAG, "3BMiner %s on %s: pool %s:%u wallet %s", FW_VERSION, CONFIG_BOARD_ID, g_cfg.pool, g_cfg.port, g_cfg.wallet);
     wifi_start(); web_start();
 #ifdef CONFIG_BOARD_HAS_CAMERA

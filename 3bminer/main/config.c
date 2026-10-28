@@ -21,6 +21,7 @@ void config_load(void) {
     gets_(ok ? h : 0, "pool", g_cfg.pool, sizeof g_cfg.pool, DEF_POOL);
     gets_(ok ? h : 0, "wallet", g_cfg.wallet, sizeof g_cfg.wallet, DEF_WALLET);
     gets_(ok ? h : 0, "worker", g_cfg.worker, sizeof g_cfg.worker, CONFIG_BOARD_DEFAULT_WORKER);
+    gets_(ok ? h : 0, "tz", g_cfg.tz, sizeof g_cfg.tz, "UTC0");
     uint16_t p = DEF_PORT; if (ok) nvs_get_u16(h, "port", &p); g_cfg.port = p;
     char sd[16]; gets_(ok ? h : 0, "suggest", sd, sizeof sd, "x"); g_cfg.suggest = (sd[0] == 'x') ? DEF_SUGGEST : atof(sd);
 #ifdef CONFIG_BOARD_MINING_DEFAULT
@@ -36,6 +37,6 @@ bool config_save(void) {
     nvs_handle_t h; if (nvs_open("miner", NVS_READWRITE, &h) != ESP_OK) return false;
     nvs_set_str(h, "ssid", g_cfg.ssid); nvs_set_str(h, "pass", g_cfg.pass); nvs_set_str(h, "bssid", g_cfg.bssid);
     nvs_set_str(h, "pool", g_cfg.pool); nvs_set_u16(h, "port", g_cfg.port); nvs_set_str(h, "wallet", g_cfg.wallet); nvs_set_str(h, "worker", g_cfg.worker);
-    char sd[16]; snprintf(sd, sizeof sd, "%g", g_cfg.suggest); nvs_set_str(h, "suggest", sd); nvs_set_u8(h, "mine", g_cfg.mining);
+    char sd[16]; snprintf(sd, sizeof sd, "%g", g_cfg.suggest); nvs_set_str(h, "suggest", sd); nvs_set_u8(h, "mine", g_cfg.mining); nvs_set_str(h, "tz", g_cfg.tz);
     bool ok = nvs_commit(h) == ESP_OK; nvs_close(h); return ok;
 }
