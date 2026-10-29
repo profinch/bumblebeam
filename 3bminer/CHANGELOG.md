@@ -2,7 +2,7 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
-## Unreleased
+## 0.9.0 (2026-10-29)
 - Pools that set a high difficulty (public-pool.io gives 1 whatever is suggested: a share every ~71 min at 1 MH/s):
   hashes are now checked down to difficulty 0.001 whatever the pool asks, so the best difficulty keeps moving (~1 candidate
   in 4 s, no measurable cost); only those reaching the pool's difficulty are submitted. Before, a board on such a pool
@@ -16,6 +16,8 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - Dashboard: the share wait is one bar, the time so far inside it on the left and the average on the right; "high"
   carries the explanation as a tip. After Save & restart, Restart or a firmware install the page waits for the miner to
   go away and answer again, then reloads itself (90 s at most).
+- tools/compare.py: a sample on every whole minute (481 over 8 h; it drifted to 461), several addresses per device (the
+  one that answered last first: NMMiner moves between the two networks), ckpool's per-user API (pool.nerdminers.org).
 
 ## 0.8.0 (2026-10-28)
 - Hashrates in KH/s up to 10 MH/s: a board's total read 1.00 MH/s next to its 971 / 32 KH/s parts (two decimals of 1.003).

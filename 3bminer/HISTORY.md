@@ -20,6 +20,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 0.6.0 | 2026-10-28 | devkit 886,384 B, esp32cam 1,036,976 B | 251 | devkit 981 KH/s; ESP32-CAM 981 idle, 946 streaming VGA | renamed 3BMiner, BumbleBeam repo, builds per board, ESP32-CAM; 5.4 h three-way run below |
 | 0.7.0 | 2026-10-28 | see the flash log | 251 | 951 + 31 = 983 KH/s on both boards | developed as 0.6.1: history, solo detection, NTP and time zone, web-next as the page, code audit, best ever in NVS, camera stream 32 KB TCP buffer, microSD, audit 2 (LAN-only access, health checks, background swarm search), own SHA-256d software hasher |
 | 0.8.0 | 2026-10-28 | devkit 883,472 B, esp32cam 1,091,952 B | 246-247 | 970 + 31 = ~1002 KH/s on both boards | engine waits 24/35/22/4/8, Scan network run by the board, Forget on the board, KH/s up to 10 MH/s |
+| 0.9.0 | 2026-10-29 | devkit 884,640 B, esp32cam 1,093,152 B | 246-248 | 971 + 32 = ~1003 KH/s on both boards | best difficulty on high-difficulty pools (candidates down to 0.001), share wait on the dashboard, connectedAgo/shareAgo, page reloads after a restart |
 
 ## Boards
 
@@ -50,6 +51,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 22:15-22:24 | devkit, ESP32-CAM | 0.7.1 (dev), engine waits 24/35/22/4/8 | OTA; devkit 1003 KH/s (971 + 32), 246 cycles/nonce |
 | 2026-10-28 23:14 | devkit, ESP32-CAM | 0.8.0 (dev; 0.7.1 renamed), board-side subnet scan | OTA; 192.168.1.0 scanned by the camera in 31 s, NMMiner found on the first pass |
 | 2026-10-29 07:53-07:57 | devkit, ESP32-CAM | 0.8.0 + unreleased (difficulty-0.001 candidates, share wait on the dashboard), on public-pool.io:21496 | OTA; pool difficulty 1, best difficulty moving (0.05-0.08 in 2 min), 246-248 cycles/nonce, 1003 KH/s |
+| 2026-10-29 09:00 | devkit, ESP32-CAM | 0.9.0 | OTA; then pool.nerdminers.org (ckpool) for the next run: it answers 3BMiner's subscribe with "Only allowed user agents may subscribe" and closes (a user-agent allow-list set by its operator; NMMiner got in), so the run went to solobtc.nmminer.com instead; workers now devkit / devcam / nmminer |
 
 ## Comparisons
 
