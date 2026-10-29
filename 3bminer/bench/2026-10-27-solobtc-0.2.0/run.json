@@ -1,0 +1,4 @@
+{
+ "pool": "solobtc.nmminer.com",
+ "note": "NMMiner nm-tv-154 against our firmware 0.2.0 on the devkit (then called esp32miner). NMMiner's API returned garbage hashrates (6e15 KH/s) in some samples: those are left out of its averages."
+}

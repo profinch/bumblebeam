@@ -11,6 +11,9 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Display layouts moved out of the web UI into `display.src.html` -> `display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
 
 ## Needs firmware
+- Stratum over TLS (`stratum+tls://`, `stratum+ssl://`): today plain TCP only, the settings refuse a TLS address. esp-tls with
+  mbedTLS in software (its hardware SHA stays off: the SHA engine is the miner's), certificate check against the IDF bundle;
+  measure the cost on the engine and the heap (a TLS session takes ~40 KB) before turning it on.
 - Fallback pool, pool password, device hostname, status LED (find-me blink on GPIO2). (Time zone: done in 0.7.0.)
 - /alive with an on-device subnet scan (as NMMiner) so Swarm works without a browser scan.
 - (Done in 0.7.0: hashrate history on the device, a value a minute for 24 h, `/api/history`.)
