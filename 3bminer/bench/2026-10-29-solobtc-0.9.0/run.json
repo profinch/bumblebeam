@@ -1,0 +1,4 @@
+{
+ "pool": "solobtc.nmminer.com",
+ "note": "NMMiner v2.0.04 against 3BMiner 0.9.0 on the devkit and the ESP32-CAM. The pool's vardiff gave our boards 0.0039 at times instead of 0.002: fewer, heavier shares, so compare the pool estimate, not the share counts."
+}

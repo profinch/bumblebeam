@@ -2,6 +2,36 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## 0.10.1 (2026-10-29)
+- Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;
+  its line is always kept and fades in and out, so nothing moves; on phones it sits right of the hashrate on two lines.
+  The side figures on desktop are centred on the hashrate block.
+- Dashboard tables (Pool, Rejects, Device): 10 px from the card's edges, each value runs up to its own label. Copy
+  buttons by the pool (copies the host) and the worker (copies the Bitcoin address), a green check for 2 s; the address
+  always shows as 5…5, a long worker name gives way. The pool's tip gives the full stratum+tcp:// address.
+- Settings: the pool address is written as the pool gives it, stratum+tcp://host:port; a stratum+tls:// address is
+  refused with a clear message (TLS is not supported yet). Access point lock: the maker first, in yellow, then the MAC;
+  online in teal, offline in grey.
+- Swarm: an offline miner's row leaves Board to Firmware empty, and its Miner cell when no name is known; IP addresses
+  underlined like the footer links.
+- Firmware: the restart message beside the Restart button; Supported boards: DOIT DevKit V1 type for the devkit, the
+  ESP32-CAM row from Ai-Thinker's spec (4 MB PSRAM, microSD up to 4 GB).
+- Footer: Bitcoin links to bitcoin.org. More terms in yellow in tips. Phones: a little room above the header.
+- Swarm: offline miners always at the end of the table, whatever it is sorted by; Seen keeps its time in a
+  3-character box, so "offline" stands at one place for 30s and 9h.
+- Swarm: Scan network shows the address the board is at again (`/alive` gives `scanAt` while it scans; the page asks
+  twice a second), as the browser scan did; offline miners always at the end of the table, whatever it is sorted by;
+  Seen keeps its time in a 3-character box, so "offline" stands at one place for 30s and 9h.
+- Phones: the swarm's small cards fit (their figures scale with the screen), the scan and custom-address messages
+  get the full width and two lines; settings fields never grow past the screen (a long access point name
+  is cut with …). Fields darken what is behind them instead of an opaque fill: over the page gradient an opaque
+  field read lighter than its card at the top of the window and darker at the bottom; disabled ones (next fw) dimmed
+  by their colours, not by opacity. The page gradient on its own fixed layer, as on the pool site.
+- Benchmarks: run folders named by start day, pool and firmware version (2026-10-29-solobtc-0.9.0); each has
+  run.json, summary.md (a table GitHub shows) and report.html in the dashboard's look with the hashrate over the run,
+  made by the new tools/benchreport.py (compare.py calls it); our miners shown by their board (3BMiner ESP32-WROOM-32, 3BMiner ESP32-CAM),
+  in the data nmminer, devkit and devcam.
+
 ## 0.10.0 (2026-10-29)
 - Hashrate by shares: the board works out its hashrate the way a pool does, from the accepted shares of the last hour
   (difficulty x 2^32 / seconds), on any pool and without the pool's API (`miner.shareKhs1h`, `shares1h`,

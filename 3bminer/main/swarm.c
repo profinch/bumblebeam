@@ -85,11 +85,12 @@ static bool may_run(void) { return wifi_connected() && !g_ota_busy && !camera_st
 // hosts with port 80 open on net (a /24, network order), 8 connects at a time with 0.8 s each (~26 s for 254 addresses);
 // then the miner test on the open ones only. A pass the page asks for (another subnet) runs the same way.
 #define PAR 8
-static volatile uint32_t s_req_net; static volatile bool s_scanning;
+static volatile uint32_t s_req_net, s_at; static volatile bool s_scanning;   // s_at: the address a pass is at, for the page
 static int pass(uint32_t net, uint32_t self) {
     int found = 0; bool ch = false; s_scanning = true;
     for (int h0 = 1; h0 < 255; h0 += PAR) {
         while (!may_run()) vTaskDelay(pdMS_TO_TICKS(2000));
+        s_at = net | htonl(h0);
         int fd[PAR]; uint32_t ip[PAR]; int k = 0; fd_set w; FD_ZERO(&w); int mx = -1;
         for (int h = h0; h < h0 + PAR && h < 255; h++) {
             uint32_t a = net | htonl(h); if (a == self) continue;
@@ -155,6 +156,9 @@ int swarm_alive_json(char *b, int cap, const char *self) {
         for (int i = 0; i < s_n && n < cap - 24; i++) { uint32_t ip = s_m[i].ip; n += snprintf(b + n, cap - n, ",\"" IPSTR "\"", IP2STR((esp_ip4_addr_t *)&ip)); }
         xSemaphoreGive(s_lock); }
     int64_t ago = s_last_pass < 0 ? -1 : now_s() - s_last_pass;
-    n += snprintf(b + n, cap - n, "],\"scanning\":%s,\"lastScanAgo\":%lld}", s_scanning ? "true" : "false", (long long)ago);   // seconds since the last pass, -1 = none yet
+    uint32_t at = s_at;
+    n += snprintf(b + n, cap - n, "],\"scanning\":%s,\"lastScanAgo\":%lld", s_scanning ? "true" : "false", (long long)ago);   // seconds since the last pass, -1 = none yet
+    if (s_scanning && at) n += snprintf(b + n, cap - n, ",\"scanAt\":\"" IPSTR "\"", IP2STR((esp_ip4_addr_t *)&at));   // where the pass is
+    n += snprintf(b + n, cap - n, "}");
     return n;
 }
