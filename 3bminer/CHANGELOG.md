@@ -13,6 +13,9 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   Shares says "waiting for the first share" (or "not connected to the pool", "the pool refused the worker") instead of
   a bare 0, and on such a pool the time since the last share against the average, with a bar; Best diff adds "a share
   needs N" while the best is below the pool's difficulty.
+- Dashboard: the share wait is one bar, the time so far inside it on the left and the average on the right; "too high"
+  carries the explanation as a tip. After Save & restart, Restart or a firmware install the page waits for the miner to
+  go away and answer again, then reloads itself (90 s at most).
 
 ## 0.8.0 (2026-10-28)
 - Hashrates in KH/s up to 10 MH/s: a board's total read 1.00 MH/s next to its 971 / 32 KH/s parts (two decimals of 1.003).
