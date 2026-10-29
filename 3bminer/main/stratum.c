@@ -90,7 +90,7 @@ static void handle_line(char *line) {
         else if (rid == 3) { /* suggest_difficulty */ }
         else {
             bool pend = false; for (int i = 0; i < s_npend; i++) if (s_pending_submit_ids[i] == (uint32_t)rid) { pend = true; s_pending_submit_ids[i] = s_pending_submit_ids[--s_npend]; break; }
-            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
+            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; g_stratum.share_us = esp_timer_get_time(); ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
                 char *e = err ? cJSON_PrintUnformatted(err) : NULL; snprintf((char *)g_stratum.last_reject, sizeof g_stratum.last_reject, "%s", e ? e : "?"); free(e);
                 // stratum error codes: 21 job not found (stale), 22 duplicate share, 23 low difficulty; fall back to the message text
                 cJSON *ec = cJSON_IsArray(err) ? cJSON_GetArrayItem(err, 0) : NULL; int code = cJSON_IsNumber(ec) ? ec->valueint : 0; const char *lr = (const char *)g_stratum.last_reject;
@@ -141,7 +141,7 @@ static void task(void *arg) {
         snprintf(line, sizeof line, "{\"id\":1,\"method\":\"mining.subscribe\",\"params\":[\"3BMiner/" FW_VERSION "\"]}\n"); send_line(line);
         snprintf(line, sizeof line, "{\"id\":2,\"method\":\"mining.authorize\",\"params\":[\"%s\",\"x\"]}\n", g_stratum.user); send_line(line);
         snprintf(line, sizeof line, "{\"id\":3,\"method\":\"mining.suggest_difficulty\",\"params\":[%g]}\n", g_cfg.suggest); send_line(line);
-        g_stratum.connected = true; s_rxlen = 0; s_npend = 0; int64_t last_rx = esp_timer_get_time();
+        g_stratum.connect_us = esp_timer_get_time(); g_stratum.connected = true; s_rxlen = 0; s_npend = 0; int64_t last_rx = esp_timer_get_time();
         for (;;) {
             int n = recv(s_sock, s_rx + s_rxlen, sizeof s_rx - 1 - s_rxlen, 0);
             if (n > 0) { s_rxlen += n; s_rx[s_rxlen] = 0; last_rx = esp_timer_get_time();

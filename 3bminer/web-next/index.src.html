@@ -22,7 +22,7 @@ h2{font:700 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;margi
 .p{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:12px;min-width:0}
 .k{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--m)}
 .v{font:700 22px var(--mono);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.v small,.sm{font-size:12px;color:var(--m);font-weight:400}
+.v small,.sm{font-size:12px;color:var(--m);font-weight:400}.v small.r{color:var(--r)}
 .hero{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}.hero .big{font-size:34px}
 svg.sp{width:100%;height:70px;display:block;margin-top:12px}
 .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}.g>.p{margin:0}@media(max-width:900px){.g{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -114,9 +114,9 @@ body.boot .view,body.boot footer{display:none!important}#boot{display:none;paddi
 <div><div class=k><span class=tipped title="CPU cycles (240 MHz) the engine kernel spends per nonce: 240,000 / cycles = engine KH/s. Lower is faster">Cycles / nonce</span></div><div class=v style="font-size:16px" id=kc>-</div></div></div>
 <svg class=sp viewBox="0 0 300 70" preserveAspectRatio=none><defs><linearGradient id=fg x1=0 y1=0 x2=0 y2=1><stop offset=0 stop-color="#00f6d2" stop-opacity=.35 /><stop offset=1 stop-color="#00f6d2" stop-opacity=0 /></linearGradient><linearGradient id=fade x1=0 y1=0 x2=1 y2=0><stop offset=0 stop-color="#fff" stop-opacity=0 /><stop offset=.12 stop-color="#fff"/><stop offset=.88 stop-color="#fff"/><stop offset=1 stop-color="#fff" stop-opacity=0 /></linearGradient><mask id=sm><rect width=300 height=70 fill="url(#fade)"/></mask></defs><g mask="url(#sm)"><path id=sa fill="url(#fg)"/><path id=sl fill=none stroke="#00f6d2" stroke-width=1.6 stroke-linejoin=round vector-effect=non-scaling-stroke /></g></svg></div>
 <div class=g>
-<div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div></div>
+<div class=p><div class=k>Shares</div><div class=v id=sh>-</div><div class=sm id=shr></div><div class=bar id=shb hidden title="Time since the last share (or since the pool connection, before the first one) against the average time a share takes at this pool difficulty. Shares come at random: running past the average is bad luck, not a fault"><i></i></div></div>
 <div class=p><div class=k>Best diff</div><div class=v id=bd>-</div><div class=sm id=bde></div></div>
-<div class=p><div class=k>Pool difficulty</div><div class=v id=df>-</div><div class=sm id=dfn title="Network: the Bitcoin network's difficulty from the pool's job. Next adjustment: the network re-sets its difficulty every 2016 blocks (about two weeks) so that a block takes 10 minutes on average; this is mempool.space's estimate of the next change from how fast blocks come now. Up means a block gets harder to find"></div></div>
+<div class=p><div class=k>Pool difficulty</div><div class=v id=df title="The difficulty a hash needs to count as a share at this pool. Red: so high that a share takes over 5 minutes on average at this hashrate (public-pool, for one, gives nothing below 1). It does not change the chance of finding a block, only how often shares, and the pool's statistics, come">-</div><div class=sm id=dfn title="Network: the Bitcoin network's difficulty from the pool's job. Next adjustment: the network re-sets its difficulty every 2016 blocks (about two weeks) so that a block takes 10 minutes on average; this is mempool.space's estimate of the next change from how fast blocks come now. Up means a block gets harder to find"></div></div>
 <div class=p><div class=k><span class=tipped title="How long the board has been running since its last start. Why the board last started. power on: switched on or plugged in. software: a firmware update, saved settings or the Restart button. reset pin: the reset button, or the USB adapter re-opening the port. crash: the firmware failed. int watchdog / task watchdog / watchdog: it hung and the watchdog restarted it. brownout: the supply voltage dipped. deep sleep: woke from sleep (not used here). Power on and software are normal; the rest mean something to look at">Uptime</span></div><div class=v id=up>-</div><div class=sm id=upr></div></div></div>
 <div class=g>
 <div class=p><div class=k id=odk>Block chance</div><div class=v id=od>-</div><div class=sm id=odn></div></div>
@@ -212,6 +212,10 @@ const pd=s=>{s=String(s||'').trim();const m={K:1e3,M:1e6,G:1e9,T:1e12,P:1e15}[s.
 const hm=k=>k>=1e7?(k/1e6).toFixed(2)+' GH/s':k>=1e4?(k/1e3).toFixed(2)+' MH/s':k.toFixed(1)+' KH/s';
 // 2.63K -> 2.63 K: a space before the K/M/G/T/P of a difficulty
 const sp=v=>String(v??'-').trim().replace(/(\d)([KMGTPB])$/,'$1 $2');
+// seconds as an interval: 4 s, 71 min, 2.5 h
+const dm=s=>s<90?Math.round(s)+' s':s<5400?Math.round(s/60)+' min':(s/3600).toFixed(1)+' h';
+const SLOW=300;   // seconds a share takes on average above which the pool difficulty shows red
+let EVERY=0;   // seconds a share takes on average at the pool's difficulty and the board's hashrate
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
 // a version as people read it: v0.7.0 (the firmware reports 0.7.0; NMMiner and AxeOS already put the v in)
 const vv=x=>x&&!/^v/i.test(x)?'v'+x:(x||'');
@@ -284,8 +288,11 @@ const AVS={'1h':['Avg 1h',m.avg1hKhs,'The board\'s average over the last hour (a
 '24h':['Avg 24h',m.avg24hKhs,'The board\'s average over the last 24 hours (a sample a minute), or since it started if that is shorter'],
 all:['Avg all time',m.avgAllKhs,'The board\'s average over all its running time, across restarts (saved every 10 minutes)']},AV=AVS[avgSel()]||AVS['24h'];
 const av=AV[1]>=0?AV[1]:since;txt('havk',AV[0]);$('havk').setAttribute('data-tip',AV[2]);htm('havg',since?av.toFixed(1)+'<span class=u> KH/s</span>':'-');htm('hs',m.hashRateEngine!=null?(m.hashRateEngine*1e6).toFixed(0)+' / '+(m.hashRateSw*1e6).toFixed(0)+'<span class=u> KH/s</span>':'-');txt('kc',m.kernelCycles??'-');
-const t=m.sAccepted+m.sRejected;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');txt('shr',t?(100*m.sRejected/t).toFixed(2)+'% rejected':'');
-txt('bd',sp(m.bestDiffSession));txt('bde','ever '+sp(m.bestDiffEver));txt('df',sp(m.poolDiff));dfn();
+const t=m.sAccepted+m.sRejected,hr=(m.hashRate||0)*1e9,slow=s.connected&&hr>0&&pd(m.poolDiff)*4294967296/hr>SLOW;EVERY=s.connected&&hr>0?pd(m.poolDiff)*4294967296/hr:0;htm('sh',m.sAccepted+' <small>/ <span class=r>'+m.sRejected+'</span></small>');
+const wait=s.shareAgo>=0&&s.shareAgo<=s.connectedAgo?s.shareAgo:s.connectedAgo;   // since the last share, or since the connection before the first one
+htm('shr',(t?(100*m.sRejected/t).toFixed(2)+'% rejected':!s.connected?'not connected to the pool':s.authorized===false?'<span class=r>the pool refused the worker</span>':'waiting for the first share')+(slow&&wait>=0?'<br>'+(s.shareAgo>=0&&s.shareAgo<=s.connectedAgo?'last '+dm(wait)+' ago':dm(wait)+' so far')+', ~'+dm(EVERY)+' on average':''));
+$('shb').hidden=!(slow&&wait>=0);$('shb').firstChild.style.width=Math.min(100,100*wait/EVERY)+'%';
+txt('bd',sp(m.bestDiffSession));htm('bde','ever '+he(sp(m.bestDiffEver))+(slow&&pd(m.bestDiffSession)<pd(m.poolDiff)?'<br>a share needs '+he(sp(m.poolDiff)):''));htm('df',he(sp(m.poolDiff))+(slow?' <small class=r>too high</small>':''));$('df').classList.toggle('r',slow);dfn();
 htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-')+(m.restartWhy?' ('+m.restartWhy+')':''));
 txt('pu',s.url||'-');const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+he(u)+'">'+he(a.length>16?a.slice(0,8)+'…'+a.slice(-6):a)+(i<0?'':'<span class=sm>'+he(u.slice(i))+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');

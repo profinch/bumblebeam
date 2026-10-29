@@ -2,6 +2,18 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## Unreleased
+- Pools that set a high difficulty (public-pool.io gives 1 whatever is suggested: a share every ~71 min at 1 MH/s):
+  hashes are now checked down to difficulty 0.001 whatever the pool asks, so the best difficulty keeps moving (~1 candidate
+  in 4 s, no measurable cost); only those reaching the pool's difficulty are submitted. Before, a board on such a pool
+  showed best 0 until its first share.
+- `/api/system/info` `stratum`: `connectedAgo` (seconds since the pool connection, -1 when not connected) and `shareAgo`
+  (seconds since the last accepted share, -1 = none yet).
+- Dashboard: Pool difficulty red with "too high" when a share takes over 5 minutes on average at the board's hashrate;
+  Shares says "waiting for the first share" (or "not connected to the pool", "the pool refused the worker") instead of
+  a bare 0, and on such a pool the time since the last share against the average, with a bar; Best diff adds "a share
+  needs N" while the best is below the pool's difficulty.
+
 ## 0.8.0 (2026-10-28)
 - Hashrates in KH/s up to 10 MH/s: a board's total read 1.00 MH/s next to its 971 / 32 KH/s parts (two decimals of 1.003).
 - Swarm: Scan network asks the board to scan the subnet (`POST /api/swarm/scan {"ip":"a.b.c.0"}`, `/alive` says
