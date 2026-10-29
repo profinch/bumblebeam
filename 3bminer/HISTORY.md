@@ -53,7 +53,7 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | 2026-10-28 23:14 | devkit, ESP32-CAM | 0.8.0 (dev; 0.7.1 renamed), board-side subnet scan | OTA; 192.168.1.0 scanned by the camera in 31 s, NMMiner found on the first pass |
 | 2026-10-29 07:53-07:57 | devkit, ESP32-CAM | 0.8.0 + unreleased (difficulty-0.001 candidates, share wait on the dashboard), on public-pool.io:21496 | OTA; pool difficulty 1, best difficulty moving (0.05-0.08 in 2 min), 246-248 cycles/nonce, 1003 KH/s |
 | 2026-10-29 09:00 | devkit, ESP32-CAM | 0.9.0 | OTA; then pool.nerdminers.org (ckpool) for the next run: it answers 3BMiner's subscribe with "Only allowed user agents may subscribe" and closes (a user-agent allow-list set by its operator; NMMiner got in), so the run went to solobtc.nmminer.com instead; workers now devkit / devcam / nmminer |
-| 2026-10-29 17:09-17:11 | devkit, ESP32-CAM | 0.10.0 | OTA after run9; uptimeEver 72,054 s (all-time), 248 cycles/nonce; then pool.solomining.de:3333 (public-pool fork): our boards in, NMMiner dropped at subscribe like on public-pool.io, so it went back to solobtc and run10 compares device figures only for it |
+| 2026-10-29 17:09-17:11 | devkit, ESP32-CAM | 0.10.0 | OTA after run9; uptimeEver 72,054 s (all-time), 248 cycles/nonce; then pool.solomining.de:3333 (public-pool fork): our boards in, NMMiner dropped at subscribe like on public-pool.io (it went back to solobtc); a run started like that was stopped |
 
 ## Comparisons
 
