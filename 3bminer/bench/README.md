@@ -10,5 +10,6 @@ shorter ones of 2026-10-27/28 are in HISTORY.md.
 |---|---|---|---|---|---|---|
 | [run1-v0.2.0](run1-v0.2.0) | 2026-10-27, 8 h | solobtc.nmminer.com | NMMiner nm-tv-154, esp32miner 0.2.0 | -* / 915 | 1041 / 876 | 0.94% / 1.38% |
 | [run3-v0.5.2](run3-v0.5.2) | 2026-10-27 23:57 - 10-28 07:37, 7.6 h | solobtc.nmminer.com | NMMiner v2.0.04, esp32miner 0.5.2 | 1036 / 982 | 999 / 1002 | 1.34% / 0.95% |
+| [run9-v0.9.0-solobtc](run9-v0.9.0-solobtc) | 2026-10-29 09:08 - 17:08, 8 h | solobtc.nmminer.com | NMMiner v2.0.04, 3BMiner 0.9.0 devkit, 3BMiner 0.9.0 ESP32-CAM | 1035 / 1003 / 1003 | 989 / 1021 / 1014 | 1.14% / 0.23% / 0.46% |
 
 \* NMMiner's API returned garbage hashrates in that run (6e15).
