@@ -49,3 +49,16 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - A board test script (`tools/boardtest.py <ip>`): every endpoint, CORS and the cross-site refusals, settings
   validation, an OTA image for another board refused, the engine check and the software hasher correct, the Swarm scan.
 - CI (GitHub Actions): both board builds, the host tests, terser on the page; the board script stays manual (needs boards).
+
+## New boards (ordered 2026-10-29) and temperature
+Ordered: Seeed XIAO ESP32-C6, ESP32-C3 SuperMini (two listings, one with an expansion board), CYD ESP32-2432S028R
+(classic ESP32, 2.8" 240x320 ILI9341), LILYGO T-Display-S3 (ESP32-S3, 1.9" 170x320 ST7789). When they arrive:
+- A board profile in `boards/` for each, built and flashed like the devkit; mining first, then the screen on the CYD and
+  the T-Display-S3 (see Display builds).
+- The S3, C3 and C6 have a different SHA peripheral from the classic ESP32 (no hwmine kernel as is) and the C3/C6 are
+  RISC-V: measure the engine there, the software hasher may be the main path.
+- Temperature: the S3, C3 and C6 have a supported on-chip sensor (ESP-IDF `driver/temperature_sensor.h`, the die's
+  temperature): read it and show it on the dashboard (`temps` in /api/system/info, null where there is none) and in
+  the swarm table. The classic ESP32 (devkit, ESP32-CAM, CYD) has no supported sensor: optionally try the old
+  undocumented reading on one test build (known to return 128 or noise on recent chips) and show it only if it looks
+  sane; otherwise an external DS18B20 on a free pin.
