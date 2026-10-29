@@ -17,3 +17,6 @@ void stratum_start(void);
 // miner side
 bool stratum_get_job(job_t *dst, session_t *s, uint32_t *seq);   // copies the current job if seq differs; returns true if copied
 void stratum_submit_candidate(const candidate_t *c);
+// hashrate from the accepted shares of the last hour (or since the start, if shorter): their difficulty x 2^32 / seconds,
+// what a pool estimates; *n = shares counted, *secs = the window
+double stratum_share_hps(uint32_t *n, uint32_t *secs);

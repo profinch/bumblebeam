@@ -45,6 +45,19 @@ static bool get_job(job_t *dst, session_t *s, uint32_t *seq) {
     xSemaphoreGive(s_lock); return r;
 }
 bool stratum_get_job(job_t *dst, session_t *s, uint32_t *seq) { return get_job(dst, s, seq); }
+// accepted shares per minute of uptime, the last 60 minutes: s_bmin[i] is the minute bucket i holds
+static double s_bdiff[60]; static uint32_t s_bn[60], s_bmin[60] = { [0 ... 59] = UINT32_MAX };
+static void share_count(double diff) {
+    uint32_t m = (uint32_t)(esp_timer_get_time() / 60000000), i = m % 60;
+    if (s_bmin[i] != m) { s_bmin[i] = m; s_bdiff[i] = 0; s_bn[i] = 0; }
+    s_bdiff[i] += diff; s_bn[i]++;
+}
+double stratum_share_hps(uint32_t *n, uint32_t *secs) {
+    int64_t now = esp_timer_get_time(); uint32_t m = (uint32_t)(now / 60000000); double d = 0; *n = 0;
+    for (int i = 0; i < 60; i++) if (s_bmin[i] != UINT32_MAX && s_bmin[i] + 59 >= m && s_bmin[i] <= m) { d += s_bdiff[i]; *n += s_bn[i]; }
+    int64_t from = (int64_t)(m >= 59 ? m - 59 : 0) * 60000000; *secs = (uint32_t)((now - from) / 1000000);
+    return *secs ? d * 4294967296.0 / *secs : 0;
+}
 void stratum_submit_candidate(const candidate_t *c) { if (xQueueSend(s_cands, c, 0) != pdTRUE) g_stratum.cand_dropped++; }
 
 static void handle_notify(cJSON *p) {
@@ -90,7 +103,7 @@ static void handle_line(char *line) {
         else if (rid == 3) { /* suggest_difficulty */ }
         else {
             bool pend = false; for (int i = 0; i < s_npend; i++) if (s_pending_submit_ids[i] == (uint32_t)rid) { pend = true; s_pending_submit_ids[i] = s_pending_submit_ids[--s_npend]; break; }
-            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; g_stratum.share_us = esp_timer_get_time(); ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
+            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; g_stratum.share_us = esp_timer_get_time(); share_count(g_stratum.pool_diff); ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
                 char *e = err ? cJSON_PrintUnformatted(err) : NULL; snprintf((char *)g_stratum.last_reject, sizeof g_stratum.last_reject, "%s", e ? e : "?"); free(e);
                 // stratum error codes: 21 job not found (stale), 22 duplicate share, 23 low difficulty; fall back to the message text
                 cJSON *ec = cJSON_IsArray(err) ? cJSON_GetArrayItem(err, 0) : NULL; int code = cJSON_IsNumber(ec) ? ec->valueint : 0; const char *lr = (const char *)g_stratum.last_reject;
