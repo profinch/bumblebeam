@@ -39,3 +39,13 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
     a login (no port forward, works behind NAT); the biggest change, on both sides.
 - A proper refusal: instead of the bare "cross-site request refused", a short page in the site's style saying the board is
   reachable from its own network only and how to get remote access (the chosen option above).
+## Tests (cover what can be covered; today the checks are manual: the boot self-test, /api/bench, /api/swbench, curl runs)
+- Host unit tests (plain C on the PC, or ESP-IDF's `linux` target with Unity) for the code that needs no hardware:
+  `job.c` (hex2bin strictness, the merkle root and header words against a known mainnet block), `sha256.c` (`sha256d_h7`
+  and `sha256_compress` against reference vectors and random headers), `addr.c` (bech32, bech32m, P2PKH, P2SH programs,
+  bad checksums), `stratum.c` parsing (notify, set_difficulty, set_extranonce, subscribe answers, malformed and hostile
+  messages from fixtures), `history.c` averages, the settings validation of `POST /api/config`, the OTA board marker scan.
+- The page's helpers in node (fx, pd, sp, hm, vv, rejMsg, rejCode, okIP, mapInfo for 3BMiner, NMMiner and AxeOS answers).
+- A board test script (`tools/boardtest.py <ip>`): every endpoint, CORS and the cross-site refusals, settings
+  validation, an OTA image for another board refused, the engine check and the software hasher correct, the Swarm scan.
+- CI (GitHub Actions): both board builds, the host tests, terser on the page; the board script stays manual (needs boards).
