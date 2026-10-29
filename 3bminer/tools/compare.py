@@ -20,10 +20,11 @@ def pdiff(s):
         s = str(s).strip(); m = {'K': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
         return float(s[:-1]) * m[s[-1]] if s and s[-1] in m else float(s)
     except Exception: return 0.0
-rows = []; t_end = time.time() + HOURS * 3600; n = 0
+rows = []; t0 = time.time(); n = 0   # a sample on every whole minute from the start, the last one HOURS after the first
 with open(OUT + 'samples.csv', 'w', newline='') as f:
     w = csv.writer(f); w.writerow(['time_utc', 'device', 'hash_khs_device', 'hash_khs_pool', 'accepted', 'rejected', 'best_session', 'uptime_s', 'free_heap', 'pool_best', 'rssi', 'engine_khs', 'sw_khs', 'fw'])
-    while time.time() < t_end:
+    while n <= round(HOURS * 60):
+        time.sleep(max(0, t0 + n * 60 - time.time()))
         ts = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'); pool = get(POOL, 15) or {}
         pw = {x.get('name'): x for x in pool.get('workers', [])}
         for dev, url in DEV.items():
@@ -33,7 +34,6 @@ with open(OUT + 'samples.csv', 'w', newline='') as f:
             w.writerow(row); rows.append(row)
         f.flush(); n += 1
         if n % 10 == 0: print(ts, 'samples', n, flush=True)
-        time.sleep(60)
 # ---- summary
 def summarize(dev):
     r = [x for x in rows if x[1] == dev]
@@ -43,7 +43,7 @@ def summarize(dev):
     # shares over the window: sum of positive deltas (handles counter resets on reboot)
     da = sum(max(0, b - a) for a, b in zip(acc, acc[1:])); dr = sum(max(0, b - a) for a, b in zip(rej, rej[1:]))
     best = max([x[6] for x in r] + [0]); pbest = max([float(x[9]) for x in r if x[9] != ''] + [0])
-    hours = len(r) / 60
+    hours = (len(r) - 1) / 60   # minutes between the first sample and the last
     return dict(dev=dev, samples=len(r), offline=offline, hours=hours, dev_khs=statistics.mean(hd) if hd else 0, dev_min=min(hd) if hd else 0, dev_max=max(hd) if hd else 0, pool_khs=statistics.mean(hp) if hp else 0, acc=da, rej=dr, shares_per_h=da / hours if hours else 0, best=best, pool_best=pbest, reboots=reboots)
 S = [summarize(d) for d in DEV]
 lines = [f"Comparison over {HOURS:.1f} h, {rows[0][0] if rows else ''} - {rows[-1][0] if rows else ''} UTC, pool {POOL.split('/')[2]}", '']
