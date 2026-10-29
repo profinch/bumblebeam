@@ -55,3 +55,4 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 | Run | Window (UTC) | Miners | Result |
 |---|---|---|---|
 | run7-v0.6.0-three-miners-partial | 2026-10-28 12:00-17:25, 5.4 h (stopped early for the 0.6.1 test) | NMMiner v2.0.04, devkit 0.6.0, ESP32-CAM 0.6.0 | device 1036 / 981.5 / 980.8 KH/s, pool 1029 / 1005 / 996 KH/s, accepted 2057 / 1966 / 1972, rejects 1.34% / 1.16% / 1.45%, no restarts; `Downloads\miner-compare\run7-v0.6.0-three-miners-partial` |
+| run8-v0.8.0-solobtc | 2026-10-28 23:23 - 10-29 07:22, 7.7 h | NMMiner v2.0.04, devkit 0.8.0, ESP32-CAM 0.8.0 | device 1036 / 1002.9 / 1002.6 KH/s (engine 970.9 + software 31.9 on both boards), pool 1037 / 992 / 1014 KH/s, rejects 1.06% / 1.03% / 1.00%, no restarts, heap flat; NMMiner off the network from 02:04 (2.7 h in), over its 2.7 h: pool 1054 / 956 / 1016, accepted 1121 / 1090 / 1133; `bench/run8-v0.8.0-solobtc` |

@@ -1,0 +1,29 @@
+Comparison over 8.0 h, 2026-10-28 23:23:16 - 2026-10-29 07:22:18 UTC, pool solobtc.nmminer.com
+
+metric                               nmminer          devkit        esp32cam
+----------------------------------------------------------------------------
+hashrate, device avg KH/s               1036            1003            1003
+hashrate, device min KH/s               1014             979             978
+hashrate, device max KH/s               1045            1003            1003
+hashrate, pool est. KH/s                1037           991.9            1014
+shares accepted                         1121            3351            3244
+shares rejected                           12              35              33
+accepted per hour                      145.9           436.1           422.2
+best diff (device)                     4.287           5.289            4.51
+best diff (pool)                       31.37            5.29            4.51
+reboots                                    0               0               0
+samples unreachable                      302               0               0
+samples                                  461             461             461
+
+ratio devkit/nmminer: device 0.968, pool 0.956, shares 2.989
+ratio esp32cam/nmminer: device 0.968, pool 0.978, shares 2.894
+
+Note: NMMiner dropped off the network at 02:04 UTC (2.7 h in) and did not come back for the rest of the run
+("No route to host" at the end; its pool estimate decays from there, its 31.37 pool best is from before the run).
+The NMMiner column above is therefore its first 2.7 h. Over that same window (23:23-02:03, 159 samples each):
+
+                     nmminer   devkit  esp32cam
+device avg KH/s       1036.3   1002.7    1002.5
+pool est. KH/s        1054.0    956.0    1016.4
+accepted                1121     1090      1133
+rejected                  12       10        15
