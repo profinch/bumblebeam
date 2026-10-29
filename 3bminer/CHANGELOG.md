@@ -2,7 +2,7 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
-## Unreleased
+## 0.10.0 (2026-10-29)
 - Hashrate by shares: the board works out its hashrate the way a pool does, from the accepted shares of the last hour
   (difficulty x 2^32 / seconds), on any pool and without the pool's API (`miner.shareKhs1h`, `shares1h`,
   `sharesWindow`). The dashboard shows it under the hashrate from 50 shares on, with its ± (1/√shares), yellow when it
