@@ -9,11 +9,11 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
   showed best 0 until its first share.
 - `/api/system/info` `stratum`: `connectedAgo` (seconds since the pool connection, -1 when not connected) and `shareAgo`
   (seconds since the last accepted share, -1 = none yet).
-- Dashboard: Pool difficulty red with "too high" when a share takes over 5 minutes on average at the board's hashrate;
+- Dashboard: Pool difficulty red with "high" when a share takes over 5 minutes on average at the board's hashrate;
   Shares says "waiting for the first share" (or "not connected to the pool", "the pool refused the worker") instead of
   a bare 0, and on such a pool the time since the last share against the average, with a bar; Best diff adds "a share
   needs N" while the best is below the pool's difficulty.
-- Dashboard: the share wait is one bar, the time so far inside it on the left and the average on the right; "too high"
+- Dashboard: the share wait is one bar, the time so far inside it on the left and the average on the right; "high"
   carries the explanation as a tip. After Save & restart, Restart or a firmware install the page waits for the miner to
   go away and answer again, then reloads itself (90 s at most).
 
