@@ -63,7 +63,11 @@ static void run_bench(void) {
     set_timing(g_timing);
     ESP_LOGI(TAG, "bench k=%u t=%u/%u/%u/%u/%u n=%u: %u.%03u cyc/nonce hits %u bad %u sum %08x", (unsigned)g_bench.k, (unsigned)g_bench.t[0], (unsigned)g_bench.t[1], (unsigned)g_bench.t[2], (unsigned)g_bench.t[3], (unsigned)g_bench.t[4], (unsigned)g_bench.n, (unsigned)(g_bench.cyc_per_kn / 1000), (unsigned)(g_bench.cyc_per_kn % 1000), (unsigned)hits, (unsigned)bad, (unsigned)sum);
 }
+// hashes are checked down to this difficulty even when the pool asks for more, so the best difficulty keeps moving on a
+// pool that sets 1 or higher (public-pool); stratum submits only those that reach the pool's (about 1 in 4 s at 1 MH/s)
+#define SEEN_DIFF 0.001
 static uint32_t hit_mask_for(double pool_diff) {
+    if (pool_diff > SEEN_DIFF) pool_diff = SEEN_DIFF;
     // a share needs >= 32 + floor(log2(diff)) leading zero bits of the hash number, whose top 32 bits are bswap(word7)
     int bits = 32 + (int)floor(log2(pool_diff > 0 ? pool_diff : 1e-9));
     if (bits >= 32) return 0xFFFFFFFFu;

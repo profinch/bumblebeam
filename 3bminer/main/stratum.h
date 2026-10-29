@@ -6,6 +6,7 @@ typedef struct { uint32_t job_seq; uint32_t en2; uint32_t nonce_word; uint32_t w
 typedef struct {
     volatile bool connected; volatile double pool_diff; volatile uint32_t accepted, rejected, submitted;
     volatile double best_session, best_ever, last_share_diff, net_diff; volatile uint32_t jobs; volatile int64_t last_job_us;
+    volatile int64_t connect_us, share_us;   // esp_timer time of the last connect and of the last accepted share (0 = none yet)
     char pool_desc[96]; char user[128];
     volatile int8_t solo;           // 1 = the coinbase pays the configured address (solo pool), 0 = it does not, -1 = no job yet
     volatile int8_t authorized;     // 1 = the pool took the user, 0 = refused it, -1 = no answer yet
