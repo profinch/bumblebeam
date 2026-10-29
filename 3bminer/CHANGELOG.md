@@ -2,6 +2,24 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## Unreleased
+- Hashrate by shares: the board works out its hashrate the way a pool does, from the accepted shares of the last hour
+  (difficulty x 2^32 / seconds), on any pool and without the pool's API (`miner.shareKhs1h`, `shares1h`,
+  `sharesWindow`). The dashboard shows it under the hashrate from 50 shares on, with its ± (1/√shares), yellow when it
+  is clearly below the board's own figure (lost work: rejected or stale shares, a wrong hash). Not averaged with the
+  board's figure: that one counts every hash, this one is a random estimate.
+- `uptimeEver` is the running time across restarts (the all-time seconds saved every 10 minutes), as NMMiner reports
+  it; it was the same as `uptimeSeconds`.
+- Swarm table: Best shows the session's best with the all-time best under it in grey, Uptime the current uptime with
+  the total running time under it (where the miner reports one, e.g. NMMiner's 367 days).
+- Lowest free heap since the start (`minFreeHeap`) as a grey second line in the swarm table's Heap column (NMMiner
+  reports it too).
+- Tips: on the Shares, Pool difficulty, Best difficulty (was Best diff), Block chance and Block height headers, on every
+  row of the Rejects card, and short ones on the swarm table's two-line values (since start / ever, free now / lowest).
+- Firmware page in two columns (Installed and Board clock; Update, Engine check and Power) and a Supported boards
+  table across it: the boards this firmware has run on, maker, what is on board, image name, hashrate; this one marked.
+- Dashboard on phones: the hashrate on its own line, Avg / Engine / Cycles in one row under it.
+
 ## 0.9.0 (2026-10-29)
 - Pools that set a high difficulty (public-pool.io gives 1 whatever is suggested: a share every ~71 min at 1 MH/s):
   hashes are now checked down to difficulty 0.001 whatever the pool asks, so the best difficulty keeps moving (~1 candidate
