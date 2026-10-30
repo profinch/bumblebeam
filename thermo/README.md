@@ -56,8 +56,12 @@ Two SQLite files, so the SSD is not written every 2 s:
 
 The disk file gets one transaction an hour (`flush_min`): the minutes and 10-minute blocks since the
 last flush, computed from `raw`. The dashboard fills the not-yet-flushed hour from `raw`, so nothing
-looks missing. A collector crash loses nothing (the flush runs again at start from RAM); a reboot or
-power loss loses up to the last hour of history. Charts take the min-max of each bucket as a band
+looks missing. A collector crash loses nothing (the flush runs again at start from RAM). For a
+power loss or a hard reset, when RAM is gone and the last minutes matter most, `blackbox.bin` (2 MB,
+fixed size) keeps the last hour of every sample on disk, one slot per minute: the current slot is
+rewritten and fdatasync'ed every 30 s (`blackbox_s`), and every sample while any warn/crit alert is
+on. At start it is read back into `raw`, so the history runs up to 30 s (2 s when hot) before the
+cut. Events and the hourly flush commit with `synchronous=FULL`. Charts take the min-max of each bucket as a band
 under the average line, so a 2-second spike survives any zoom.
 
 ## Events
@@ -70,7 +74,7 @@ GPU thermal/power-brake throttling. Optional Telegram for warn/crit.
 
 ## Config
 
-`/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`, `raw_hours`, `flush_min`,
+`/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`, `raw_hours`, `flush_min`, `blackbox_s`,
 `names` (NVMe serial -> name), `labels` (key -> label), `limits` (key glob ->
 `[warn_lo, crit_lo, warn_hi, crit_hi]`), `hide` (key globs), `telegram` (`{"token", "chat"}`).
 Sensor keys are on the dashboard under "Все датчики группы".

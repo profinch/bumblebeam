@@ -22,6 +22,7 @@ import re
 import signal
 import socket
 import sqlite3
+import struct
 import sys
 import threading
 import time
@@ -40,6 +41,8 @@ DEFAULTS = {
     'port': 9188,
     'raw_hours': 24,          # full-rate samples kept this long (in RAM)
     'flush_min': 60,          # minutes between writes of aggregates to disk
+    'blackbox': '/var/lib/thermo/blackbox.bin',   # last hour of samples on disk, for a power loss
+    'blackbox_s': 30,         # s between synced blackbox writes; every sample while an alert is on
     'm1_days': 120,           # 1-minute min/avg/max kept this long; 10-minute ones forever
     'fast_hz': 4,             # quantized temperatures are read this often and averaged per sample (0 = off)
     'superio': True,          # read the IT8689E directly (off: board temps from gigabyte_wmi)
@@ -536,7 +539,7 @@ class Store:
                 os.makedirs(os.path.dirname(f), exist_ok=True)
         self.db = sqlite3.connect(path, isolation_level=None)
         self.db.execute('PRAGMA journal_mode=WAL')
-        self.db.execute('PRAGMA synchronous=NORMAL')
+        self.db.execute('PRAGMA synchronous=FULL')       # rare commits (hourly, events): make them survive power loss
         self.db.execute('ATTACH ? AS h', (hot,))
         self.db.execute('PRAGMA h.journal_mode=WAL')
         self.db.execute('PRAGMA h.synchronous=OFF')
@@ -576,6 +579,74 @@ class Store:
         if v is None:
             v = self.db.execute('SELECT min(ts) / 60 * 60 FROM h.raw').fetchone()[0]
         return v if v is not None else int(time.time()) // 60 * 60
+
+
+class BlackBox:
+    """Fixed-size ring on disk: one slot per minute, the last 60 minutes of every sample. The current
+    slot is rewritten and fdatasync'ed every blackbox_s, so a power loss costs seconds, not the hour
+    of samples that lived only in RAM. Slot: minute u32, samples u16, sensors u16, sample offsets
+    (u8 s), then per sensor sid u16 + float32 per sample (NaN = no reading)."""
+
+    SLOT, SLOTS = 32768, 60
+
+    def __init__(self, path):
+        self.fd = None
+        if path:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            self.fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o640)
+            if os.fstat(self.fd).st_size < self.SLOT * self.SLOTS:
+                os.ftruncate(self.fd, self.SLOT * self.SLOTS)
+        self.minute, self.ts, self.vals = None, [], {}
+        self.last = 0
+
+    def add(self, ts, rows, urgent, every):
+        """rows: [(sid, v)] of one sample; writes the slot when due"""
+        if not self.fd:
+            return
+        minute = ts - ts % 60
+        if minute != self.minute:
+            if self.minute is not None:
+                self.write()                    # the finished minute, complete
+            self.minute, self.ts, self.vals = minute, [], {}
+        i = len(self.ts)
+        self.ts.append(ts - minute)
+        for sid, v in rows:
+            self.vals.setdefault(sid, [float('nan')] * i).append(v)
+        for a in self.vals.values():
+            if len(a) <= i:
+                a.append(float('nan'))
+        if urgent or ts - self.last >= every:
+            self.write()
+            self.last = ts
+
+    def write(self):
+        n = len(self.ts)
+        buf = bytearray(struct.pack(f'<IHH{n}B', self.minute, n, 0, *self.ts))
+        k = 0
+        for sid, a in self.vals.items():
+            rec = struct.pack(f'<H{n}f', sid, *a)
+            if len(buf) + len(rec) > self.SLOT:
+                break
+            buf += rec
+            k += 1
+        struct.pack_into('<H', buf, 6, k)
+        os.pwrite(self.fd, bytes(buf), (self.minute // 60 % self.SLOTS) * self.SLOT)
+        os.fdatasync(self.fd)
+
+    def read(self):
+        """[(ts, sid, v)] of every slot"""
+        out = []
+        for j in range(self.SLOTS if self.fd else 0):
+            b = os.pread(self.fd, self.SLOT, j * self.SLOT)
+            minute, n, k = struct.unpack_from('<IHH', b)
+            if not minute or 8 + n + k * (2 + 4 * n) > self.SLOT:
+                continue
+            offs, p = struct.unpack_from(f'<{n}B', b, 8), 8 + n
+            for _ in range(k):
+                sid, *vs = struct.unpack_from(f'<H{n}f', b, p)
+                p += 2 + 4 * n
+                out += [(minute + o, sid, v) for o, v in zip(offs, vs) if v == v]
+        return out
 
 
 class Alerts:
@@ -686,6 +757,7 @@ class Collector:
         self.nvml = None
         self.gpu_prev = {}
         self.m1_upto = self.store.m1_upto()
+        self.bb = BlackBox(conf['blackbox'])
         self.last_smart = 0
         self.nvmes = self.store.kv_get('nvmes', {})   # serial -> info; survives restarts to notice a missing drive
         for v in self.nvmes.values():
@@ -861,7 +933,7 @@ class Collector:
         minute = ts - ts % 60
         if minute - self.m1_upto >= self.conf['flush_min'] * 60:
             self.flush(minute)
-        now = {}
+        now, rows = {}, []
         db.execute('BEGIN')
         for key, v, m in readings:
             if v is None or v != v:
@@ -871,9 +943,11 @@ class Collector:
                 v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"шаг {m['res']:g}, среднее {self.conf['fast_hz']} опросов/с"]))
             sid = self.store.sid(key, m, ts)
             db.execute('INSERT OR REPLACE INTO h.raw VALUES(?,?,?)', (ts, sid, v))
+            rows.append((sid, v))
             self.alerts.check(ts, key, v, m)
             now[key] = dict(m, v=v, st=self.alerts.state.get(key, [0])[0])
         db.execute('COMMIT')
+        self.bb.add(ts, rows, bool(self.alerts.active), self.conf['blackbox_s'])
         self.write_now(ts, now, gpu)
 
     def flush(self, upto):
@@ -923,6 +997,12 @@ class Collector:
     def run(self):
         os.umask(0o007)
         self.setup()
+        rec = self.bb.read()                            # after a power loss RAM is empty: take the blackbox
+        if rec:
+            db = self.store.db
+            db.execute('BEGIN')
+            db.executemany('INSERT OR IGNORE INTO h.raw VALUES(?,?,?)', rec)
+            db.execute('COMMIT')
         self.flush(int(time.time()) // 60 * 60)        # catch up after a crash or a long stop
         signal.signal(signal.SIGTERM, lambda *a: setattr(self, 'stop', True))
         signal.signal(signal.SIGINT, lambda *a: setattr(self, 'stop', True))
@@ -944,6 +1024,8 @@ class Collector:
             nxt += iv
             if nxt < time.time():           # fell behind (suspend, stall): realign
                 nxt = (time.time() // iv + 1) * iv
+        if self.bb.minute is not None:
+            self.bb.write()
         self.flush(int(time.time()) // 60 * 60)
         self.alerts.event(int(time.time()), 'info', '', 'коллектор остановлен')
 
@@ -1098,7 +1180,7 @@ def main():
     elif a.mode == 'web':
         serve(conf)
     else:                                   # two samples to stdout, nothing stored
-        c = Collector(dict(conf, db=':memory:', hot=':memory:', now='', telegram=None))
+        c = Collector(dict(conf, db=':memory:', hot=':memory:', blackbox='', now='', telegram=None))
         c.setup()
         c.tick(int(time.time()), time.monotonic())
         time.sleep(conf['interval'])
