@@ -520,7 +520,7 @@ def hwmon_readings(st):
 class Store:
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS sensors(id INTEGER PRIMARY KEY, key TEXT UNIQUE, meta TEXT, first INTEGER);
-    CREATE TABLE IF NOT EXISTS raw(sid INTEGER, ts INTEGER, v REAL, PRIMARY KEY(sid, ts)) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS raw(ts INTEGER, sid INTEGER, v REAL, PRIMARY KEY(ts, sid)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS m1(sid INTEGER, ts INTEGER, mn REAL, av REAL, mx REAL, PRIMARY KEY(sid, ts)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS m10(sid INTEGER, ts INTEGER, mn REAL, av REAL, mx REAL, PRIMARY KEY(sid, ts)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, ts INTEGER, level TEXT, key TEXT, msg TEXT);
@@ -534,6 +534,14 @@ class Store:
         self.db = sqlite3.connect(path, isolation_level=None)
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=NORMAL')
+        # raw used to be keyed (sid, ts): every sample touched one B-tree leaf per sensor, ~11 GB/day of
+        # page writes. Keyed (ts, sid) a sample appends to the last leaf.
+        old = self.db.execute("SELECT sql FROM sqlite_master WHERE name='raw'").fetchone()
+        if old and 'PRIMARY KEY(sid, ts)' in old[0]:
+            self.db.executescript('BEGIN; ALTER TABLE raw RENAME TO raw_old;'
+                                  'CREATE TABLE raw(ts INTEGER, sid INTEGER, v REAL, PRIMARY KEY(ts, sid)) WITHOUT ROWID;'
+                                  'INSERT INTO raw SELECT ts, sid, v FROM raw_old ORDER BY ts, sid;'
+                                  'DROP TABLE raw_old; COMMIT; VACUUM;')
         self.db.executescript(self.SCHEMA)
         self.ids, self.metas = {}, {}
         for sid, key, meta in self.db.execute('SELECT id, key, meta FROM sensors'):
@@ -852,7 +860,7 @@ class Collector:
             if key in means:
                 v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"шаг {m['res']:g}, среднее {self.conf['fast_hz']} опросов/с"]))
             sid = self.store.sid(key, m, ts)
-            db.execute('INSERT OR REPLACE INTO raw VALUES(?,?,?)', (sid, ts, v))
+            db.execute('INSERT OR REPLACE INTO raw VALUES(?,?,?)', (ts, sid, v))
             a = self.acc.get(sid)
             if a:
                 a[0], a[1], a[2], a[3] = min(a[0], v), max(a[1], v), a[2] + v, a[3] + 1
