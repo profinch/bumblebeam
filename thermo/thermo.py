@@ -16,6 +16,7 @@ import ctypes
 import fcntl
 import fnmatch
 import glob
+import hmac
 import json
 import os
 import re
@@ -51,6 +52,9 @@ DEFAULTS = {
     'limits': {},             # key glob -> [warn_lo, crit_lo, warn_hi, crit_hi] (null = none)
     'hide': [],               # key globs left out of the dashboard (still recorded)
     'telegram': None,         # {"token": "...", "chat": "..."} -> warn/crit events are sent
+    'gpu_fan': None,          # {"curve": [[t, %], ...], "extra": {key glob: [[t, %], ...]}}: thermo drives the GPU fans
+    'fanctl': '/var/lib/thermo/fanctl.json',   # per-fan modes set from the dashboard
+    'control_token': None,    # the dashboard's fan control needs this token (none = read-only dashboard)
 }
 
 # Gigabyte AM4 boards with the IT8689E (lm-sensors configs from frankcrawford/it87)
@@ -88,6 +92,20 @@ def load_conf(path):
     except FileNotFoundError:
         pass
     return conf
+
+
+def sd_notify(msg):
+    """systemd watchdog ping (WatchdogSec in the unit); a no-op outside systemd"""
+    addr = os.environ.get('NOTIFY_SOCKET')
+    if not addr:
+        return
+    if addr[0] == '@':
+        addr = '\0' + addr[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sk:
+            sk.sendto(msg.encode(), addr)
+    except OSError:
+        pass
 
 
 def rd(path):
@@ -299,6 +317,10 @@ def pci_info(pci):
 
 # ---------------------------------------------------------------- NVML
 
+class FanRPM(ctypes.Structure):
+    _fields_ = [('version', ctypes.c_uint), ('fan', ctypes.c_uint), ('speed', ctypes.c_uint)]
+
+
 class FieldValue(ctypes.Structure):
     _fields_ = [('fieldId', ctypes.c_uint), ('scopeId', ctypes.c_uint), ('timestamp', ctypes.c_longlong),
                 ('latencyUsec', ctypes.c_longlong), ('valueType', ctypes.c_int), ('nvmlReturn', ctypes.c_int),
@@ -355,7 +377,10 @@ class NVML:
             for f in range(d['nfans']):
                 v = self.u('nvmlDeviceGetFanSpeed_v2', h, f)
                 if v is not None:
-                    out.append((f'{p}.fan{f}', float(v), M(f'Вентилятор {f + 1}', 'gpu', 'util', '%', 310 + f, prec=0)))
+                    out.append((f'{p}.fan{f}', float(v), M(f'Вентилятор {f + 1}, %', 'gpu', 'util', '%', 310 + f, prec=0)))
+                r = FanRPM(version=ctypes.sizeof(FanRPM) | 1 << 24, fan=f)
+                if hasattr(self.lib, 'nvmlDeviceGetFanSpeedRPM') and self.lib.nvmlDeviceGetFanSpeedRPM(h, ctypes.byref(r)) == 0:
+                    out.append((f'{p}.rpm{f}', float(r.speed), M(f'GPU вентилятор {f + 1}', 'gpu', 'fan', 'RPM', 312 + f, prec=0)))
             mw = self.u('nvmlDeviceGetPowerUsage', h)
             if mw is not None:
                 out.append((f'{p}.power', mw / 1000, M('GPU', 'gpu', 'power', 'W', 320, note=f"лимит {d['plimit']:.0f} W")))
@@ -374,6 +399,124 @@ class NVML:
             extra[p] = {'name': d['name'], 'reasons': reasons, 'reason_names': [n for b, n in GPU_REASONS.items() if reasons & b],
                         'pstate': f'P{ps.value}', 'th': th, 'plimit': d['plimit']}
         return out, extra
+
+
+class GpuFans:
+    """GPU fans over NVML, each fan in one of: 'auto' (the driver's own control, zero-RPM idle included),
+    'curve' (thermo's: the highest of the GPU curve and the 'extra' curves of other sensors; up at once,
+    down 1 % per sample past 'hyst' %) or a fixed %. Modes come from the dashboard (the fanctl file) or,
+    without one, 'curve' when gpu_fan is in the config. For every fan not on auto: no GPU temperature or
+    a failed sample -> 100 %; GPU within 3 °C of gpu_max -> 100 % until 10 °C under it. The driver gets
+    the fans back on any exit: here on a normal stop, ExecStopPost=thermo.py fans-auto after a crash or
+    kill, WatchdogSec for a hang."""
+
+    CURVE = [[50, 30], [65, 45], [75, 70], [83, 100]]
+
+    def __init__(self, nvml, conf):
+        self.nvml, self.conf, self.path = nvml, conf.get('gpu_fan') or {}, conf['fanctl']
+        self.default = 'curve' if conf.get('gpu_fan') else 'auto'
+        self.mtime = -1
+        self.modes, self.cur, self.hot, self.lim = {}, {}, {}, {}     # (gpu, fan) -> mode / % we set; gpu -> ...
+        self.changes, self.err = [], None
+        for d in nvml.devs:
+            a, b = ctypes.c_uint(), ctypes.c_uint()
+            ok = nvml.lib.nvmlDeviceGetMinMaxFanSpeed(d['h'], ctypes.byref(a), ctypes.byref(b)) == 0
+            self.lim[d['i']] = (a.value, b.value) if ok else (30, 100)
+        self.load()
+        self.changes = []
+
+    def load(self):
+        try:
+            m = os.stat(self.path).st_mtime_ns
+        except OSError:
+            m = None
+        if m == self.mtime:
+            return
+        self.mtime, doc = m, {}
+        if m is not None:
+            try:
+                with open(self.path) as f:
+                    doc = json.load(f)
+            except (OSError, ValueError):
+                return
+        for d in self.nvml.devs:
+            for f in range(d['nfans']):
+                v = doc.get(f"gpu{d['i']}", {}).get(str(f), self.default)
+                if not (v in ('auto', 'curve') or (type(v) is int and 0 <= v <= 100)):
+                    v = self.default
+                old = self.modes.get((d['i'], f))
+                if old != v:
+                    self.changes.append((d['i'], f, old, v))
+                self.modes[(d['i'], f)] = v
+
+    @staticmethod
+    def interp(curve, t):
+        pts = sorted(curve)
+        if t <= pts[0][0]:
+            return pts[0][1]
+        for (t0, p0), (t1, p1) in zip(pts, pts[1:]):
+            if t <= t1:
+                return p0 + (p1 - p0) * (t - t0) / (t1 - t0)
+        return pts[-1][1]
+
+    def target(self, i, t, vals):
+        best = (self.interp(self.conf.get('curve') or self.CURVE, t), f'GPU {t:.1f} °C')
+        for pat, curve in (self.conf.get('extra') or {}).items():
+            for k, v in vals.items():
+                if fnmatch.fnmatch(k, pat) and self.interp(curve, v) > best[0]:
+                    best = (self.interp(curve, v), f'{k} {v:.1f}')
+        return best
+
+    def set(self, d, f, pct):
+        lib, key = self.nvml.lib, (d['i'], f)
+        rc = lib.nvmlDeviceSetDefaultFanSpeed_v2(d['h'], f) if pct is None else lib.nvmlDeviceSetFanSpeed_v2(d['h'], f, pct)
+        if rc:
+            if self.err != (key, pct, rc):
+                print(f"gpu{d['i']} fan{f}: set {pct} -> nvml {rc}", flush=True)
+            self.err = (key, pct, rc)
+        elif pct is None:
+            self.cur.pop(key, None)
+        else:
+            self.cur[key] = pct
+
+    def apply(self, vals):
+        """vals: sensor key -> value of this sample; returns gpuN -> state for now.json"""
+        self.load()
+        out = {}
+        for d in self.nvml.devs:
+            i = d['i']
+            lo, hi = self.lim[i]
+            t = vals.get(f'gpu{i}.temp')
+            gmax = d['th'].get('gpu_max') or d['th'].get('slowdown') or 90
+            self.hot[i] = t is None or t >= gmax - 3 or (self.hot.get(i, False) and t > gmax - 10)
+            want_c, why = self.target(i, t, vals) if t is not None else (100, 'нет температуры GPU')
+            if self.hot[i] and t is not None:
+                why = f'GPU {t:.1f} °C, у предела {gmax} °C'
+            fans = []
+            for f in range(d['nfans']):
+                mode, cur = self.modes[(i, f)], self.cur.get((i, f))
+                if mode == 'auto':
+                    if cur is not None:
+                        self.set(d, f, None)
+                elif self.hot[i]:
+                    if cur != 100:
+                        self.set(d, f, 100)
+                else:
+                    want = max(lo, min(hi, round(want_c if mode == 'curve' else mode)))
+                    if mode == 'curve' and cur is not None and want < cur:
+                        want = cur if cur - want < self.conf.get('hyst', 3) else cur - 1
+                    if want != cur:
+                        self.set(d, f, want)
+                fans.append({'mode': mode, 'set': self.cur.get((i, f))})
+            out[f'gpu{i}'] = {'fans': fans, 'curve': round(max(lo, min(hi, want_c))), 'why': why,
+                              'hot': self.hot[i], 'min': lo, 'max': hi}
+        return out
+
+    def auto(self):
+        for d in self.nvml.devs:
+            for f in range(d['nfans']):
+                self.nvml.lib.nvmlDeviceSetDefaultFanSpeed_v2(d['h'], f)
+        self.cur = {}
 
 
 # ---------------------------------------------------------------- CPU, disks
@@ -755,6 +898,7 @@ class Collector:
         self.superio = None
         self.it87_driver = False
         self.nvml = None
+        self.fans = None
         self.gpu_prev = {}
         self.m1_upto = self.store.m1_upto()
         self.bb = BlackBox(conf['blackbox'])
@@ -802,6 +946,8 @@ class Collector:
             self.nvml = NVML()
         except Exception as e:
             print(f'nvml: off ({e})', flush=True)
+        if self.nvml:
+            self.fans = GpuFans(self.nvml, self.conf)
         if self.conf['fast_hz'] > 0:
             self.fast = FastTemps(self, self.conf['fast_hz'])
             self.fast.start()
@@ -948,6 +1094,14 @@ class Collector:
             now[key] = dict(m, v=v, st=self.alerts.state.get(key, [0])[0])
         db.execute('COMMIT')
         self.bb.add(ts, rows, bool(self.alerts.active), self.conf['blackbox_s'])
+        if self.fans:
+            for p, c in self.fans.apply({k: x['v'] for k, x in now.items()}).items():
+                gpu.setdefault(p, {})['fan_ctl'] = c
+            for i, f, old, new in self.fans.changes:
+                say = {'auto': 'авто (драйвер)', 'curve': 'кривая thermo'}
+                self.alerts.event(ts, 'info', f'gpu{i}.fan{f}', f"вентилятор GPU {f + 1}: {say.get(new, f'{new} %')}"
+                                  + (f" (было: {say.get(old, f'{old} %')})" if old is not None else ''))
+            self.fans.changes = []
         self.write_now(ts, now, gpu)
 
     def flush(self, upto):
@@ -980,6 +1134,7 @@ class Collector:
             nv[serial]['smart'] = {k: x for k, x in v.get('smart', {}).items() if k != 'sensors'}
         doc = {'ts': ts, 'host': self.host, 'board': self.board, 'cpu': self.cpu, 'interval': self.conf['interval'],
                'groups': GROUPS, 'sensors': sensors, 'alerts': self.alerts.active, 'nvme': nv, 'gpu': gpu,
+               'control': bool(self.conf.get('control_token')),
                'superio': (f'{self.superio.chip} @ {self.superio.base:#x}, отброшено {self.superio.dropped}'
                            if self.superio else ('драйвер it87' if self.it87_driver else 'нет')),
                'uptime': rdnum('/proc/uptime') and float((rd('/proc/uptime') or '0').split()[0])}
@@ -1017,13 +1172,18 @@ class Collector:
                 self.tick(ts, time.monotonic())
             except Exception as e:
                 print(f'tick: {e!r}', flush=True)
+                if self.fans:
+                    self.fans.apply({})                 # no readings: 100 %
                 try:
                     self.store.db.execute('ROLLBACK')
                 except sqlite3.Error:
                     pass
+            sd_notify('WATCHDOG=1')
             nxt += iv
             if nxt < time.time():           # fell behind (suspend, stall): realign
                 nxt = (time.time() // iv + 1) * iv
+        if self.fans:
+            self.fans.auto()
         if self.bb.minute is not None:
             self.bb.write()
         self.flush(int(time.time()) // 60 * 60)
@@ -1035,6 +1195,7 @@ class Collector:
 class Web(BaseHTTPRequestHandler):
     conf = None
     local = threading.local()
+    lock = threading.Lock()                 # fanctl read-modify-write
     STATIC = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
               '/style.css': ('style.css', 'text/css; charset=utf-8'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
     server_version = 'thermo'
@@ -1089,6 +1250,50 @@ class Web(BaseHTTPRequestHandler):
             self.send(503, {'error': str(e)})
         except (ValueError, KeyError) as e:
             self.send(400, {'error': str(e)})
+
+    def do_POST(self):
+        """/api/fan {gpu, fan: index | "all", mode: "auto" | "curve" | percent}, header X-Thermo-Token"""
+        try:
+            if urllib.parse.urlparse(self.path).path != '/api/fan':
+                return self.send(404, {'error': 'not found'})
+            tok = self.conf.get('control_token')
+            if not tok:
+                return self.send(403, {'error': 'управление выключено: нет control_token в /etc/thermo.conf'})
+            if not hmac.compare_digest(self.headers.get('X-Thermo-Token', '').encode(), str(tok).encode()):
+                return self.send(403, {'error': 'неверный токен'})
+            n = int(self.headers.get('Content-Length') or 0)
+            if not 0 < n <= 1024:
+                return self.send(400, {'error': 'body'})
+            req = json.loads(self.rfile.read(n))
+            with open(self.conf['now']) as f:
+                ctl = json.load(f).get('gpu', {}).get(req.get('gpu'), {}).get('fan_ctl')
+            if not ctl:
+                return self.send(400, {'error': 'нет такой видеокарты'})
+            mode = req.get('mode')
+            if not (mode in ('auto', 'curve') or (type(mode) is int and ctl['min'] <= mode <= ctl['max'])):
+                return self.send(400, {'error': f"режим: auto, curve или {ctl['min']}-{ctl['max']}"})
+            fans = range(len(ctl['fans'])) if req.get('fan') == 'all' else [req.get('fan')]
+            if not all(type(f) is int and 0 <= f < len(ctl['fans']) for f in fans):
+                return self.send(400, {'error': 'нет такого вентилятора'})
+            path = self.conf['fanctl']
+            with self.lock:
+                return self.send(200, self.fanctl_set(path, req['gpu'], fans, mode))
+        except (ValueError, KeyError, OSError) as e:
+            self.send(400, {'error': str(e)})
+
+    @staticmethod
+    def fanctl_set(path, gpu, fans, mode):
+        try:
+            with open(path) as f:
+                doc = json.load(f)
+        except (OSError, ValueError):
+            doc = {}
+        for f in fans:
+            doc.setdefault(gpu, {})[str(f)] = mode
+        with open(path + '.tmp', 'w') as f:
+            json.dump(doc, f)
+        os.replace(path + '.tmp', path)
+        return doc
 
     def source(self, rng):
         iv = self.conf['interval']
@@ -1171,7 +1376,7 @@ def serve(conf):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('mode', choices=['collect', 'web', 'once'])
+    ap.add_argument('mode', choices=['collect', 'web', 'once', 'fans-auto'])
     ap.add_argument('--conf', default=os.environ.get('THERMO_CONF', '/etc/thermo.conf'))
     a = ap.parse_args()
     conf = load_conf(a.conf)
@@ -1179,8 +1384,10 @@ def main():
         Collector(conf).run()
     elif a.mode == 'web':
         serve(conf)
+    elif a.mode == 'fans-auto':             # ExecStopPost: the driver's own fan control back after any exit
+        GpuFans(NVML(), conf).auto()
     else:                                   # two samples to stdout, nothing stored
-        c = Collector(dict(conf, db=':memory:', hot=':memory:', blackbox='', now='', telegram=None))
+        c = Collector(dict(conf, db=':memory:', hot=':memory:', blackbox='', now='', telegram=None, gpu_fan=None, fanctl=''))
         c.setup()
         c.tick(int(time.time()), time.monotonic())
         time.sleep(conf['interval'])

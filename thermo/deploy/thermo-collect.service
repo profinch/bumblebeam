@@ -5,8 +5,13 @@ After=local-fs.target nvidia-persistenced.service
 [Service]
 # root: /dev/port (Super I/O), NVMe admin ioctl, RAPL energy counters
 ExecStart=/usr/bin/python3 -I /opt/thermo/thermo.py collect
+# also after a crash or kill: the GPU fans go back to the driver's automatic control (no-op without gpu_fan)
+ExecStopPost=/usr/bin/python3 -I /opt/thermo/thermo.py fans-auto
 Group=thermo
 Restart=always
+# a hung collector (driver call stuck, ...) is killed after 30 s without a sample; ExecStopPost then runs
+WatchdogSec=30
+NotifyAccess=main
 RestartSec=5
 Nice=-5
 StateDirectory=thermo
