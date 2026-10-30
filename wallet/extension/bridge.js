@@ -10,7 +10,9 @@ const Bridge = (() => {
   const PROCESS_REMOTE = '0x6efe7df5';         // processRemoteMessage(uint64 msgId, uint256 relayerFee, uint256 amount, address receiver)
   const GROTH = 1e8;                           // BEAM and WBEAM both have 8 decimals
   const RELAY_GAS = 120000;                    // ETH_PIPE_PUSH_REMOTE_GAS_LIMIT of the relayer
-  const FEE_MARGIN = 1.5;                      // over the relayer's own minimum
+  // over the relayer's own minimum. The fee is fixed in the message for good and the minimum moves
+  // with gas and ETH/BEAM; under it the relayer waits, and nothing can top the fee up later
+  const FEE_MARGIN = 3;
   const ETH_RPCS = ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com'];
 
   let shader = null;

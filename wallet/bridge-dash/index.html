@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beam Bridge Status</title>
+<style>
+/* the Beam Explorer look of the pool site (pool/web/styles.css) */
+:root { --accent: #00f6d2; --red: #f25f5b; --yellow: #f4ce4a; --blue: #0bccf7; --border: rgba(255,255,255,.1); --surface: rgba(255,255,255,.04);
+  --dim: rgba(255,255,255,.6); --field: #193b55; --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; }
+* { box-sizing: border-box; }
+html { background: #042548; }
+body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%) fixed; color: #fff; font: 14px/1.5 var(--sans); }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+h1 { font-size: 22px; margin: 0; }
+h1 b { background: linear-gradient(135deg, #0b76ff, #39fff2); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.top { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: baseline; margin-bottom: 14px; }
+.dim { color: var(--dim); } .small { font-size: 12px; } .mono { font-family: var(--mono); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.kpi .v { font: 700 19px var(--mono); }
+.kpi .l { color: var(--dim); font-size: 12px; }
+.kpi.ok .v { color: var(--accent); } .kpi.warn .v { color: var(--yellow); } .kpi.bad .v { color: var(--red); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+input { width: 100%; max-width: 560px; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--field); color: #fff; font: 13px var(--mono); }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+th { text-align: left; color: var(--dim); font-weight: 500; font-size: 12px; padding: 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 7px 6px; border-bottom: 1px solid rgba(255,255,255,.05); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.r, th.r { text-align: right; }
+a { color: var(--blue); text-decoration: none; } a:hover { text-decoration: underline; }
+.pill { font-size: 11.5px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.done { background: rgba(0,246,210,.15); color: var(--accent); }
+.wait { background: rgba(244,206,74,.15); color: var(--yellow); }
+.late { background: rgba(242,95,91,.15); color: var(--red); }
+.err { color: var(--red); white-space: pre-wrap; }
+tr.hl td { background: rgba(0,246,210,.07); }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1><b>Beam ⇄ Ethereum</b> bridge status</h1>
+    <span class="dim small" id="updated">loading…</span>
+  </div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <label class="dim small" for="q">Highlight by Ethereum address, Beam bridge key or message #</label><br>
+    <input id="q" spellcheck="false" autocomplete="off" placeholder="0x… / 66-hex key / 677">
+  </div>
+
+  <div class="card">
+    <h2>BEAM → WBEAM</h2>
+    <div class="dim small">Beam side: the pipe's send calls (BEAM locked = amount + relayer fee). Ethereum side: the relayer's processRemoteMessage. The pipe numbers messages in the order of the locks, so each lock has its # and is checked against the release with that # (amount + fee must match). A lock with no release yet is in the relayer's queue.</div>
+    <div class="scroll"><table><thead><tr><th>#</th><th>Beam block</th><th class="r">BEAM locked</th><th class="r">WBEAM out</th><th class="r">Relayer fee</th><th>Receiver (Ethereum)</th><th>Released</th><th class="r">Took</th><th>Status</th></tr></thead><tbody id="out"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2>WBEAM → BEAM</h2>
+    <div class="dim small">Ethereum side: sendFunds to the pipe. Beam side: the relayer pushes the message (pipe call with its 0.02 fee), then the receiver takes it (Receive). Paired by the Beam key and the amount.</div>
+    <div class="scroll"><table><thead><tr><th>Sent on Ethereum</th><th class="r">BEAM</th><th class="r">Fee</th><th>Beam key</th><th>Pushed to Beam</th><th>Received</th><th>Status</th></tr></thead><tbody id="in"></tbody></table></div>
+  </div>
+
+  <p class="err" id="err"></p>
+  <p class="dim small">Data: <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">explorer.bumblebeam.org</a> (Beam pipe <span class="mono">e63bd26c…e835</span>), <a href="https://eth.blockscout.com/address/0x6063024646E8A1561970840a4b0e0f1082f5a670" target="_blank" rel="noopener">Blockscout</a> (Ethereum pipe 0x6063…a670), publicnode RPC. Beam block times come from the explorer (≈ while not loaded yet). Refreshes every minute.</p>
+</main>
+<script>
+'use strict';
+(() => {
+  const PIPE_CID = 'e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835';
+  const ETH_PIPE = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
+  const WBEAM = '0xE5AcBB03D73267c03349c76EaD672Ee4d941F499';
+  const RELAYER = '0x7e895ED2054681874450fb97730B3bA0Cf341220';
+  const API = 'https://explorer.bumblebeam.org/v1';
+  const RPC = 'https://ethereum-rpc.publicnode.com';
+  const SEL_RELEASE = '0x6efe7df5', SEL_SEND = '0x4d5dd2bc';   // processRemoteMessage, sendFunds
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const G = (s) => Math.round(parseFloat(s) * 1e8);              // decimal string -> groth
+  const fmt = (g, d = 2) => (g / 1e8).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const short = (s) => (s && s.length > 17 ? `${s.slice(0, 8)}…${s.slice(-6)}` : s || '—');
+  const when = (ms) => new Date(ms).toLocaleString();
+  const dur = (ms) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.round(m / 1440)} d`; };
+  const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${new URL(url).host}: HTTP ${r.status}`); return r.json(); };
+  const rpc = async (method, params) => (await (await fetch(RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })).json()).result;
+
+  // Beam pipe calls, de-duplicated (the explorer lists a call once per kernel side)
+  async function beamCalls() {
+    const d = await get(`${API}/contracts/${PIPE_CID}?calls=500`);
+    const seen = new Set(), out = [];
+    for (const c of d.calls) {
+      const sub = c.calls || [c];
+      const height = sub[0].Height;
+      for (const x of sub) {
+        if (typeof x.Method !== 'number') continue;
+        const funds = x.Funds && x.Funds[0] ? G(x.Funds[0].amount) : 0;
+        const key = x.Keys && x.Keys[0] ? x.Keys[0][0] : null;
+        const id = `${height}|${x.Method}|${funds}|${key}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({ height, method: x.Method, funds, key });
+      }
+    }
+    return { calls: out, locked: d.locked_funds && d.locked_funds[0] ? G(d.locked_funds[0].Amount) : null };
+  }
+
+  // Ethereum pipe transactions, decoded from their input
+  async function ethCalls(pages = 4) {
+    const out = [];
+    let q = '';
+    for (let i = 0; i < pages; i++) {
+      const d = await get(`https://eth.blockscout.com/api/v2/addresses/${ETH_PIPE}/transactions${q}`);
+      for (const t of d.items || []) {
+        const raw = t.raw_input || '';
+        const w = (k) => raw.slice(10 + 64 * k, 10 + 64 * (k + 1));
+        const base = { hash: t.hash, time: Date.parse(t.timestamp), ok: t.status === 'ok', from: t.from && t.from.hash };
+        if (raw.startsWith(SEL_RELEASE)) out.push({ ...base, kind: 'release', msgId: parseInt(w(0), 16), fee: parseInt(w(1), 16), amount: parseInt(w(2), 16), receiver: '0x' + w(3).slice(24) });
+        else if (raw.startsWith(SEL_SEND)) out.push({ ...base, kind: 'send', amount: parseInt(w(0), 16), fee: parseInt(w(1), 16), key: (w(4) + w(5)).slice(0, 66) });
+      }
+      if (!d.next_page_params) break;
+      q = '?' + new URLSearchParams(d.next_page_params);
+    }
+    return out;
+  }
+
+  // real block times from our explorer, cached: a block's time never changes
+  const times = new Map();
+  async function blockTimes(heights) {
+    const need = [...new Set(heights)].filter((h) => !times.has(h));
+    for (let i = 0; i < need.length; i += 8) {
+      await Promise.all(need.slice(i, i + 8).map(async (h) => {
+        try { const b = await get(`${API}/blocks/${h}`); times.set(h, b.timestamp * 1000); } catch {}
+      }));
+    }
+  }
+
+  let last = null;
+  async function load() {
+    try {
+      const [st, beam, eth, supplyHex, balHex] = await Promise.all([
+        get(`${API}/status`), beamCalls(), ethCalls(),
+        rpc('eth_call', [{ to: WBEAM, data: '0x18160ddd' }, 'latest']), rpc('eth_getBalance', [RELAYER, 'latest']),
+      ]);
+      const tipH = st.height, tipT = st.timestamp * 1000;
+      const beamTime = (h) => times.get(h) ?? tipT - (tipH - h) * 60000;   // estimate until the real time is in
+
+      // ---- BEAM -> WBEAM: the pipe numbers its messages in the order of the locks (method 4), so
+      // lock i is message base + i. The base is the one most releases agree on (same amount + fee);
+      // two locks in one block may be in either order, so a mismatch is tried against its neighbour.
+      const releases = eth.filter((e) => e.kind === 'release').sort((a, b) => a.msgId - b.msgId);
+      const relById = new Map(releases.map((r) => [r.msgId, r]));
+      const locks = beam.calls.filter((c) => c.method === 4).sort((a, b) => a.height - b.height);
+      const votes = new Map();
+      locks.forEach((l, i) => { for (const r of releases) if (r.amount + r.fee === l.funds) votes.set(r.msgId - i, (votes.get(r.msgId - i) || 0) + 1); });
+      const base = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const out = locks.map((l, i) => ({ lock: l, id: base != null ? base + i : null }));
+      for (let i = 0; i + 1 < out.length; i++) {
+        const a = out[i], b = out[i + 1], ra = relById.get(a.id), rb = relById.get(b.id);
+        if (a.lock.height === b.lock.height && ra && rb && ra.amount + ra.fee !== a.lock.funds && rb.amount + rb.fee === a.lock.funds) [a.id, b.id] = [b.id, a.id];
+      }
+      const minRel = releases.length ? releases[0].msgId : Infinity;
+      for (const o of out) {
+        const r = relById.get(o.id);
+        o.rel = r && r.amount + r.fee === o.lock.funds ? r : null;
+        o.mismatch = !!r && !o.rel;
+        o.known = o.id != null && o.id >= minRel;        // inside the window of releases we read
+      }
+      const lastRelId = releases.length ? releases[releases.length - 1].msgId : 0;
+      const pending = out.filter((o) => !o.rel && o.id > lastRelId);
+      await blockTimes(out.filter((o) => o.known || !o.rel).slice(-60).map((o) => o.lock.height));
+      out.reverse();
+
+      // ---- WBEAM -> BEAM: sendFunds paired with the relayer's push (method 5) and the receive (method 6)
+      const sends = eth.filter((e) => e.kind === 'send').sort((a, b) => a.time - b.time);
+      const recvs = beam.calls.filter((c) => c.method === 6);
+      const pushes = beam.calls.filter((c) => c.method === 5).sort((a, b) => a.height - b.height);
+      const usedR = new Set(), usedP = new Set();
+      const inn = sends.map((s) => {
+        const rv = recvs.find((c) => !usedR.has(c) && c.key === s.key && -c.funds === s.amount);
+        if (rv) usedR.add(rv);
+        // the push is the relayer's next 0.02 call after the send (a pipe call per message)
+        const pu = pushes.find((p) => !usedP.has(p) && beamTime(p.height) >= s.time - 120000);
+        if (pu) usedP.add(pu);
+        return { s, push: pu || null, recv: rv || null };
+      }).reverse();
+
+      last = { tipH, tipT, out, inn, pending, beamTime, releases, locked: beam.locked, supply: parseInt(supplyHex, 16), relayerEth: parseInt(balHex, 16) / 1e18 };
+      render();
+      $('updated').textContent = `updated ${new Date().toLocaleTimeString()} · Beam ${tipH}`;
+      $('err').textContent = '';
+    } catch (e) { $('err').textContent = `could not load: ${e.message} (retrying)`; setTimeout(load, 10000); }
+  }
+
+  function render() {
+    if (!last) return;
+    const { out, inn, pending, beamTime, releases, locked, supply, relayerEth } = last;
+    const now = Date.now();
+    const lastRel = releases[releases.length - 1];
+    const oldest = pending.length ? now - beamTime(pending[0].lock.height) : 0;
+    const took = out.filter((o) => o.rel).slice(0, 10).map((o) => o.rel.time - beamTime(o.lock.height)).sort((a, b) => a - b);
+    const median = took.length ? took[took.length >> 1] : null;
+    const peg = locked != null ? locked - supply : null;
+    const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+    $('kpis').innerHTML = [
+      kpi(pending.length ? `${pending.length} waiting` : 'none waiting', pending.length ? `BEAM → WBEAM in the relayer's queue, oldest ${dur(oldest)}` : 'BEAM → WBEAM queue', pending.length ? (oldest > 3 * 3600e3 ? 'bad' : oldest > 1.5 * 3600e3 ? 'warn' : '') : 'ok'),
+      kpi(lastRel ? dur(now - lastRel.time) + ' ago' : '—', lastRel ? `relayer's last release (#${lastRel.msgId}, ${when(lastRel.time)})` : 'relayer\'s last release'),
+      kpi(median != null ? dur(median) : '—', 'usual time to release (median of the last 10)'),
+      kpi(`${relayerEth.toFixed(4)} ETH`, `relayer gas balance (${short(RELAYER)})`, relayerEth < 0.01 ? 'bad' : relayerEth < 0.03 ? 'warn' : 'ok'),
+      kpi(locked != null ? fmt(locked, 0) : '—', 'BEAM locked in the Beam pipe'),
+      kpi(fmt(supply, 0), `WBEAM supply on Ethereum; locked − supply = ${peg != null ? fmt(peg, 2) : '—'} BEAM (in flight)`, peg != null && peg < 0 ? 'bad' : 'ok'),
+    ].join('');
+
+    const q = $('q').value.trim().toLowerCase().replace(/^#/, '');
+    const hit = (...xs) => q && xs.some((x) => x != null && String(x).toLowerCase() === q);
+    const pill = (cls, t) => `<span class="pill ${cls}">${t}</span>`;
+
+    $('out').innerHTML = out.filter((o) => o.known || !o.rel).slice(0, 60).map((o) => {
+      const t = beamTime(o.lock.height), r = o.rel;
+      const id = o.id;
+      const age = now - t;
+      const status = r ? (r.ok ? pill('done', 'released') : pill('late', 'failed on Ethereum'))
+        : o.mismatch ? pill('late', 'release differs from the lock')
+        : o.id > (last.releases.length ? last.releases[last.releases.length - 1].msgId : 0) ? pill(age > 3 * 3600e3 ? 'late' : 'wait', `waiting ${dur(age)}`)
+        : pill('wait', 'not in the releases read');
+      return `<tr class="${hit(id, r && r.receiver) ? 'hl' : ''}"><td>${id != null ? `#${id}` : '—'}</td>
+        <td><a href="https://explorer.bumblebeam.org/block/${o.lock.height}" target="_blank" rel="noopener">${o.lock.height}</a> <span class="dim small">${times.has(o.lock.height) ? '' : '≈'}${esc(when(t))}</span></td>
+        <td class="r">${fmt(o.lock.funds, 4)}</td><td class="r">${r ? fmt(r.amount, 4) : '—'}</td><td class="r">${r ? fmt(r.fee, 2) : '—'}</td>
+        <td class="mono">${r ? `<a href="https://etherscan.io/address/${esc(r.receiver)}" target="_blank" rel="noopener">${esc(short(r.receiver))}</a>` : '<span class="dim">known once released</span>'}</td>
+        <td>${r ? `<a href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener">${esc(when(r.time))}</a>` : '—'}</td>
+        <td class="r">${r ? dur(r.time - t) : ''}</td><td>${status}</td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="dim">nothing</td></tr>';
+
+    $('in').innerHTML = inn.slice(0, 40).map(({ s, push, recv }) => {
+      const status = !s.ok ? pill('late', 'failed on Ethereum') : recv ? pill('done', 'received') : push ? pill('wait', 'on Beam, waiting for Receive') : pill('wait', `waiting for the relayer ${dur(now - s.time)}`);
+      return `<tr class="${hit(s.key, s.from) ? 'hl' : ''}"><td><a href="https://etherscan.io/tx/${esc(s.hash)}" target="_blank" rel="noopener">${esc(when(s.time))}</a></td>
+        <td class="r">${fmt(s.amount, 4)}</td><td class="r">${fmt(s.fee, 2)}</td><td class="mono">${esc(short(s.key))}</td>
+        <td>${push ? `<a href="https://explorer.bumblebeam.org/block/${push.height}" target="_blank" rel="noopener">${push.height}</a>` : '—'}</td>
+        <td>${recv ? `<a href="https://explorer.bumblebeam.org/block/${recv.height}" target="_blank" rel="noopener">${recv.height}</a>` : '—'}</td><td>${status}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" class="dim">nothing</td></tr>';
+  }
+
+  try { $('q').value = localStorage.getItem('bb-bridge-q') || ''; } catch {}
+  $('q').oninput = () => { try { localStorage.setItem('bb-bridge-q', $('q').value); } catch {} render(); };
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>
