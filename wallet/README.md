@@ -15,7 +15,7 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
 
 | Part | What it is |
 |---|---|
-| [`extension/`](extension) | MV3 extension. Beam's wasm wallet (`vendor/`), the wallet tab (`wallet.html`), the bridge calls (`bridge.js`) |
+| [`extension/`](extension) | MV3 extension. The popup under the toolbar icon (`popup.html`, a view only), the wallet host (`offscreen.html`: Beam's wasm wallet from `vendor/` and the bridge calls in `bridge.js`), the service worker that starts the host (`background.js`) |
 | [`web/`](web) | The Ethereum side of WBEAM → BEAM: a page Rabby injects into, with hand-encoded `approve` + `sendFunds` |
 | [`../deploy/docker/containers/nginx/conf/wss.conf`](../deploy/docker/containers/nginx/conf/wss.conf) | `wss://wss.bumblebeam.org`: a WebSocket door to the pool's beam-node (`websocket_port=8200`) |
 
@@ -52,7 +52,7 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
 
 ## Run
 1. Chrome → `chrome://extensions` → Developer mode → **Load unpacked** → `wallet/extension`.
-2. Click the toolbar button: the wallet opens in its own window (no tabs, no address bar). It keeps its size and place, and only one copy runs at a time: two pages would fight over the same wallet.db.
+2. Click the toolbar icon: the wallet drops down under it, like Rabby. The wallet itself runs in an offscreen document for as long as the browser runs. Chrome closes the popup on the first click outside, so the wallet keeps syncing, receiving and importing a snapshot with the popup closed, and a new seed waits in it until the wallet is created. ⤢ opens the same view in a tab, for choosing a backup file (a file dialog can close the popup).
 3. For WBEAM → BEAM, serve the Ethereum page: `python3 -m http.server 8771 --bind 127.0.0.1 -d wallet/web`.
    Rabby does not inject into extension pages.
 

@@ -1,26 +1,33 @@
-// BumbleBeam Wallet: the toolbar button opens the wallet in a window of its own (no tabs, no address
-// bar), or focuses it if it is open. Not the action popup: Chrome closes that on the first click
-// outside, and the wallet (wasm-client: workers, WebSocket, IndexedDB) would stop with it.
-// The window keeps the size and place it was last given.
+// BumbleBeam Wallet: the service worker only starts the wallet host. The wallet runs in an offscreen
+// document (offscreen.html): wasm-client needs workers and IndexedDB, which a service worker lacks,
+// and the action popup cannot hold it either: Chrome closes the popup on the first click outside.
 'use strict';
 
-const WALLET = chrome.runtime.getURL('wallet.html');
-const DEFAULT_BOUNDS = { width: 520, height: 820 };
+const HOST = 'offscreen.html';
+let creating = null;
 
-chrome.action.onClicked.addListener(async () => {
-  // runtime.getContexts finds our own pages without the "tabs" permission
-  const [ctx] = await chrome.runtime.getContexts({ contextTypes: ['TAB'], documentUrls: [WALLET] });
-  if (ctx) {
-    await chrome.windows.update(ctx.windowId, { focused: true, drawAttention: true });
-    return;
-  }
-  const { bounds } = await chrome.storage.local.get('bounds');
-  const w = await chrome.windows.create({ url: WALLET, type: 'popup', focused: true, ...(bounds || DEFAULT_BOUNDS) });
-  await chrome.storage.session.set({ walletWindow: w.id });
+async function ensureHost() {
+  if (await chrome.offscreen.hasDocument()) return;
+  creating ??= chrome.offscreen.createDocument({
+    url: HOST,
+    reasons: ['WORKERS'],
+    justification: "Runs the Beam wallet (Beam's wasm-client and its worker threads) while the popup is closed.",
+  }).finally(() => { creating = null; });
+  await creating;
+}
+
+// ensureHost from the popup; get/set from the host, whose offscreen document has chrome.runtime only
+const OPS = {
+  ensureHost: () => ensureHost(),
+  get: (m) => chrome.storage.local.get(m.key).then((v) => v[m.key]),
+  set: (m) => chrome.storage.local.set({ [m.key]: m.value }),
+};
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || !Object.hasOwn(OPS, m?.op)) return;
+  OPS[m.op](m).then((result) => reply({ result }), (e) => reply({ error: String(e && e.message || e) }));
+  return true;
 });
 
-chrome.windows.onBoundsChanged.addListener(async (w) => {
-  const { walletWindow } = await chrome.storage.session.get('walletWindow');
-  if (w.id !== walletWindow || w.state !== 'normal') return;
-  await chrome.storage.local.set({ bounds: { left: w.left, top: w.top, width: w.width, height: w.height } });
-});
+// keep the wallet running across a service-worker restart and from browser start
+chrome.runtime.onStartup.addListener(ensureHost);
+chrome.runtime.onInstalled.addListener(ensureHost);
