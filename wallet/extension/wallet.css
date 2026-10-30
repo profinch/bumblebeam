@@ -10,6 +10,10 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }      /* display rules below must not show hidden parts */
 html, body { margin: 0; min-height: 100%; }
+html { background: #042548; }
+/* the action popup: Chrome sizes it to the body, at most 800 x 600 */
+html.popup body { width: 400px; min-height: 580px; }
+button.icon { padding: 4px 8px; font-size: 15px; line-height: 1; }
 body { background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%) fixed; color: var(--text); font: 15px/1.5 var(--sans); }
 header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
 .brand { display: flex; gap: 8px; align-items: center; font-size: 17px; }
@@ -69,9 +73,10 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 
 /* the wallet's own window is narrow (520 px by default): brand and node on one line, tabs below */
 @media (max-width: 720px) {
+  #expand { order: 2; }
   header { padding: 10px 14px; gap: 8px 12px; }
   .brand { order: 1; }
-  .sync { order: 2; }
+  .sync { order: 2; margin-left: auto; }
   nav { order: 3; width: 100%; }
   nav button { flex: 1; padding: 6px 4px; font-size: 13px; }
   main { padding: 12px 12px 40px; }
@@ -79,3 +84,22 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
   .card { padding: 14px; }
   .seed { columns: 2; }
 }
+
+/* the popup (400 px): brand, node and ⤢ on one line, the tabs below, denser cards and tables */
+html.popup header { flex-wrap: wrap; padding: 8px 10px 6px; gap: 6px 8px; }
+html.popup .brand { font-size: 15px; }
+html.popup .brand img { width: 22px; height: 22px; }
+html.popup .sync { order: 2; flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+html.popup #expand { order: 3; }
+html.popup nav { order: 4; width: 100%; }
+html.popup nav button { flex: 1; padding: 6px 2px; font-size: 12.5px; white-space: nowrap; }
+html.popup main { padding: 8px 10px 24px; }
+html.popup .card { padding: 12px; margin: 10px 0; }
+html.popup .kpis { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+html.popup .kpi { padding: 8px; }
+html.popup .kpi .v { font-size: 14px; word-break: break-all; }
+html.popup .kpi .l { font-size: 10.5px; }
+html.popup table { font-size: 12px; }
+html.popup td, html.popup th { padding: 5px 3px; }
+html.popup label { margin-top: 8px; }
+html.popup input, html.popup textarea { padding: 8px 10px; }

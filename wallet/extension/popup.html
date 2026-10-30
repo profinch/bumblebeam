@@ -12,16 +12,17 @@
   <div class="brand"><img src="icons/icon-32.png" alt=""><b>BumbleBeam</b> Wallet</div>
   <nav id="tabs" hidden>
     <button data-tab="wallet" class="on">Wallet</button>
-    <button data-tab="toeth">BEAM → WBEAM</button>
-    <button data-tab="frometh">WBEAM → BEAM</button>
+    <button data-tab="toeth" title="BEAM → WBEAM on Ethereum">To Ethereum</button>
+    <button data-tab="frometh" title="WBEAM on Ethereum → BEAM">From Ethereum</button>
     <button data-tab="settings">Settings</button>
   </nav>
   <div class="sync" id="sync"></div>
+  <button class="ghost icon" id="expand" title="Open in a tab">⤢</button>
 </header>
 
 <main>
   <!-- ---------- start ---------- -->
-  <section id="s-boot" class="screen"><p class="dim">Loading the Beam wallet engine…</p><p class="err" id="bootErr"></p></section>
+  <section id="s-boot" class="screen"><p class="dim">Starting the wallet…</p><p class="err" id="bootErr"></p></section>
 
   <section id="s-welcome" class="screen" hidden>
     <h1>BumbleBeam Wallet</h1>
@@ -35,7 +36,7 @@
 
   <section id="s-create" class="screen" hidden>
     <h1>Your seed phrase</h1>
-    <p class="dim">Write these 12 words down, in order. They are the only way to restore the wallet.</p>
+    <p class="dim">Write these 12 words down, in order. They are the only way to restore the wallet. Closing this popup keeps them: they stay in the wallet until it is created.</p>
     <ol class="seed" id="seedWords"></ol>
     <label>To check, type words <span id="checkIdx"></span></label>
     <input id="seedCheck" autocomplete="off" spellcheck="false" placeholder="three words, space-separated">
@@ -65,7 +66,7 @@
 
   <section id="s-import" class="screen" hidden>
     <h1>Open a backup file</h1>
-    <p class="dim">A wallet.db saved from Settings → Backup. It opens with the password it had when it was saved.</p>
+    <p class="dim">A wallet.db saved from Settings → Backup. It opens with the password it had when it was saved. Choosing a file can close the popup: open the wallet in a tab for this (⤢ above).</p>
     <input type="file" id="iFile" accept=".db,application/octet-stream">
     <label>Password of that wallet</label><input type="password" id="iPass">
     <div class="row"><button class="ghost back">Back</button><button id="doImport">Open</button></div>
@@ -88,7 +89,7 @@
     </div>
     <div class="card">
       <h2>Receive BEAM</h2>
-      <p class="dim">A <b>regular</b> address needs this tab open until the transfer completes. An <b>offline</b> address takes payments while the wallet is closed.</p>
+      <p class="dim">A <b>regular</b> address needs the wallet running (unlocked, browser open) until the transfer completes; it runs in the background, the popup may be closed. An <b>offline</b> address takes payments even while it is locked.</p>
       <div class="row"><button id="mkRegular">Regular address</button><button id="mkOffline" class="ghost">Offline address</button></div>
       <div id="addrBox" hidden><div id="qr"></div><div class="mono box" id="addr"></div><button class="ghost small" id="copyAddr">Copy</button></div>
       <p class="err" id="addrErr"></p>
@@ -170,9 +171,6 @@
 </dialog>
 
 <script src="vendor/qrcode.min.js"></script>
-<script src="vendor/wasm-client.js"></script>
-<script src="beam.js"></script>
-<script src="bridge.js"></script>
-<script src="wallet.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>

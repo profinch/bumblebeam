@@ -4,10 +4,30 @@
   "short_name": "BB Wallet",
   "version": "0.1.0",
   "description": "A Beam wallet. Its bridge moves BEAM to Ethereum as WBEAM and back, through the official Beam bridge.",
-  "action": { "default_title": "BumbleBeam Wallet" },
-  "background": { "service_worker": "background.js" },
-  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
-  "permissions": ["storage", "unlimitedStorage"],
+  "action": {
+    "default_title": "BumbleBeam Wallet",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "offscreen"
+  ],
   "host_permissions": [
     "https://mobile-restore.beam.mw/*",
     "https://api.coingecko.com/*",
@@ -19,6 +39,10 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
-  "cross_origin_embedder_policy": { "value": "require-corp" },
-  "cross_origin_opener_policy": { "value": "same-origin" }
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
+  }
 }
