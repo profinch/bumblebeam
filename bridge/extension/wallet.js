@@ -4,9 +4,9 @@
 'use strict';
 
 (() => {
-  // our pool node's WebSocket door (deploy/docker wallet-node.conf). The official web wallet's
+  // our pool node's WebSocket door (deploy/docker wss.conf). The official web wallet's
   // web-wallet.beam.mw:8200 is still on the pre-HF6 chain ("incompatible with HF 6", stuck at 3928666).
-  const DEFAULT_NODE = 'wallet-node.bumblebeam.org:443';
+  const DEFAULT_NODE = 'wss.bumblebeam.org:443';
   const RECOVERY_URL = 'https://mobile-restore.beam.mw/mainnet/mainnet_recovery.bin';
   const ETH_PAGE = 'http://127.0.0.1:8771/';                  // bridge/web, served locally: Rabby does not inject into extension pages
   const G = Bridge.GROTH;
