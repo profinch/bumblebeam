@@ -12,3 +12,4 @@ pool/server/pool.toml
 /tools/coinbase/bb-finalizer
 /tools/coinbase/bb-coinbase
 /deploy/docker/containers/nginx/conf/private/
+__pycache__/

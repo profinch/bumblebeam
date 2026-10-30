@@ -10,9 +10,16 @@ const Bridge = (() => {
   const PROCESS_REMOTE = '0x6efe7df5';         // processRemoteMessage(uint64 msgId, uint256 relayerFee, uint256 amount, address receiver)
   const GROTH = 1e8;                           // BEAM and WBEAM both have 8 decimals
   const RELAY_GAS = 120000;                    // ETH_PIPE_PUSH_REMOTE_GAS_LIMIT of the relayer
-  // over the relayer's own minimum. The fee is fixed in the message for good and the minimum moves
-  // with gas and ETH/BEAM; under it the relayer waits, and nothing can top the fee up later
-  const FEE_MARGIN = 3;
+  // The fee is fixed in the message for good; the relayer's minimum moves with gas and ETH/BEAM, and
+  // under it the relayer waits (it retries every ~30 min). Paying more does not make it faster: over
+  // 99 releases (Sep-Oct 2026) the 3.5-15 BEAM fees went in 48-62 min like the rest, median 63 min;
+  // the slow ones (5-11 h) came in groups, whatever their fee. So the choice is how much gas rise to
+  // cover while the message waits its hour.
+  const FEE_OPTIONS = {
+    cheap: 1.15,   // over today's minimum: waits if gas rises at all
+    normal: 1.5,
+    safe: 2.5,
+  };
   const ETH_RPCS = ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com'];
 
   let shader = null;
@@ -63,17 +70,51 @@ const Bridge = (() => {
   }
 
   // The relayer's own minimum (beam-bridge-ethrelay utils/eth_fee.js + eth_gas.js): 120000 gas at
-  // maxFeePerGas = 2 * baseFee + median tip (0.01..3 gwei), priced in BEAM. A lower fee is not
-  // lost: the message waits until gas is cheap enough.
+  // maxFeePerGas = 2 * baseFee + median tip (0.01..3 gwei), priced in BEAM.
+  const minAt = (base, tip, r) => (RELAY_GAS * (2 * base + tip) * r.eth) / 1e18 / r.beam;
+  // the base fee a fee covers: the relayer takes it while base <= this (gwei-wei: wei)
+  const coversBase = (feeBeam, tip, r) => ((feeBeam * r.beam / r.eth) * 1e18 / RELAY_GAS - tip) / 2;
+
+  // the last 24 h of base fees (7 x 1024 blocks, one sample in 8), cached 10 min
+  let hist = null;
+  async function baseFees24h() {
+    if (hist && Date.now() - hist.at < 600000) return hist.fees;
+    const fees = [];
+    let newest = 'latest';
+    for (let i = 0; i < 7; i++) {
+      const h = await eth('eth_feeHistory', ['0x400', newest, []]);
+      const b = h.baseFeePerGas.slice(0, -1).map((x) => parseInt(x, 16));
+      for (let k = 0; k < b.length; k += 8) fees.push(b[k]);
+      newest = '0x' + (parseInt(h.oldestBlock, 16) - 1).toString(16);
+    }
+    hist = { at: Date.now(), fees };
+    return fees;
+  }
+
   async function relayerFee() {
     const h = await eth('eth_feeHistory', ['0xa', 'latest', [50]]);
     const base = parseInt(h.baseFeePerGas[h.baseFeePerGas.length - 1], 16);
-    const tips = (h.reward || []).map((r) => parseInt(r[0], 16)).sort((a, b) => a - b);
+    const tips = (h.reward || []).map((x) => parseInt(x[0], 16)).sort((a, b) => a - b);
     const tip = Math.min(Math.max(tips.length ? tips[tips.length >> 1] : 1e7, 1e7), 3e9);
-    const gwei = (2 * base + tip) / 1e9;
     const r = await rates();
-    const min = (RELAY_GAS * gwei * r.eth) / 1e9 / r.beam;
-    return { min, fee: Math.ceil(min * FEE_MARGIN * 100) / 100, gwei, ethUsd: r.eth, beamUsd: r.beam, src: r.src };
+    const min = minAt(base, tip, r);
+    const day = (await baseFees24h().catch(() => [])).slice().sort((a, b) => a - b);
+    const q = (p) => (day.length ? day[Math.min(day.length - 1, Math.floor(p * day.length))] : base);
+    // share of the last 24 h in which a fee would have been enough
+    const share = (fee) => (day.length ? day.filter((b) => b <= coversBase(fee, tip, r)).length / day.length : null);
+    const option = (k) => {
+      const fee = Math.ceil(min * FEE_OPTIONS[k] * 100) / 100;
+      return { key: k, fee, upTo: coversBase(fee, tip, r) / 1e9, share: share(fee), usd: fee * r.beam };
+    };
+    const level = base <= q(0.25) ? 'cheap' : base >= q(0.75) ? 'expensive' : 'usual';
+    return {
+      min, fee: option('normal').fee, gwei: (2 * base + tip) / 1e9, base: base / 1e9, tip: tip / 1e9,
+      day: { p10: q(0.1) / 1e9, p50: q(0.5) / 1e9, p90: q(0.9) / 1e9, n: day.length }, level,
+      options: Object.keys(FEE_OPTIONS).map(option),
+      // for a fee typed by hand: the popup recomputes these from the same numbers
+      rate: { eth: r.eth, beam: r.beam }, dayBase: day.length ? day.filter((_, i) => i % 4 === 0) : [],
+      ethUsd: r.eth, beamUsd: r.beam, src: r.src,
+    };
   }
 
   const toGroth = (x) => {

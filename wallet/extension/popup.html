@@ -113,8 +113,11 @@
       <h2>BEAM → WBEAM on Ethereum</h2>
       <label>Ethereum address (Rabby)</label><input id="eRcv" placeholder="0x…" autocomplete="off" spellcheck="false">
       <label>WBEAM to receive</label><div class="inline"><input id="eAmt" inputmode="decimal" placeholder="0"><button class="ghost" id="eMax">All</button></div>
-      <label>Relayer fee, BEAM</label><input id="eFee" inputmode="decimal">
-      <p class="dim small" id="eFeeInfo">pricing the relayer fee…</p>
+      <label>Relayer fee, BEAM</label>
+      <div class="gas" id="eGas">pricing the relayer fee…</div>
+      <div class="feeopts" id="eOpts"></div>
+      <input id="eFee" inputmode="decimal">
+      <p class="dim small" id="eFeeInfo"></p>
       <div class="row"><button id="eSend">Send to Ethereum</button></div>
       <p class="err" id="eErr"></p><p class="ok" id="eOk"></p>
     </div>

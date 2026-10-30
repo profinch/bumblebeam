@@ -47,8 +47,18 @@ a sensor sitting still on one step gives nothing finer than that step.
 
 ## Storage
 
-`raw` every sample for 48 h, `m1` (min/avg/max per minute) for 120 days, `m10` forever. Charts take
-the min-max of each bucket as a band under the average line, so a 2-second spike survives any zoom.
+Two SQLite files, so the SSD is not written every 2 s:
+
+| File | Where | What |
+|---|---|---|
+| `/run/thermo/hot.db` | RAM (tmpfs), ~50 MB | `raw`: every sample for 24 h |
+| `/var/lib/thermo/thermo.db` | disk | `m1` (min/avg/max per minute) for 120 days, `m10` forever, events, sensor list |
+
+The disk file gets one transaction an hour (`flush_min`): the minutes and 10-minute blocks since the
+last flush, computed from `raw`. The dashboard fills the not-yet-flushed hour from `raw`, so nothing
+looks missing. A collector crash loses nothing (the flush runs again at start from RAM); a reboot or
+power loss loses up to the last hour of history. Charts take the min-max of each bucket as a band
+under the average line, so a 2-second spike survives any zoom.
 
 ## Events
 
@@ -60,7 +70,7 @@ GPU thermal/power-brake throttling. Optional Telegram for warn/crit.
 
 ## Config
 
-`/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`,
+`/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`, `raw_hours`, `flush_min`,
 `names` (NVMe serial -> name), `labels` (key -> label), `limits` (key glob ->
 `[warn_lo, crit_lo, warn_hi, crit_hi]`), `hide` (key globs), `telegram` (`{"token", "chat"}`).
 Sensor keys are on the dashboard under "Все датчики группы".

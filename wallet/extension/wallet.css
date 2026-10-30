@@ -103,3 +103,13 @@ html.popup table { font-size: 12px; }
 html.popup td, html.popup th { padding: 5px 3px; }
 html.popup label { margin-top: 8px; }
 html.popup input, html.popup textarea { padding: 8px 10px; }
+
+/* relayer fee: the gas now and the three choices */
+.gas { font-size: 12.5px; margin-bottom: 8px; }
+.gas b.cheap { color: var(--accent); } .gas b.usual { color: var(--blue); } .gas b.expensive { color: var(--red); }
+.feeopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.feeopts button { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 8px 6px; text-align: left; font-weight: 500; }
+.feeopts button.on { border-color: var(--accent); background: rgba(0, 246, 210, 0.08); }
+.feeopts .t { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+.feeopts .f { font: 700 14px var(--mono); }
+.feeopts .s { font-size: 11px; color: var(--dim); }
