@@ -33,11 +33,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULTS = {
     'interval': 2,            # s between samples
     'smart_every': 10,        # s between NVMe SMART log reads
-    'db': '/var/lib/thermo/thermo.db',
+    'db': '/var/lib/thermo/thermo.db',   # on disk: minute and 10-minute aggregates, events, sensor list
+    'hot': '/run/thermo/hot.db',         # in RAM (tmpfs): every sample, so the SSD is not written every 2 s
     'now': '/run/thermo/now.json',
     'listen': '0.0.0.0',
     'port': 9188,
-    'raw_hours': 48,          # full-rate samples kept this long
+    'raw_hours': 24,          # full-rate samples kept this long (in RAM)
+    'flush_min': 60,          # minutes between writes of aggregates to disk
     'm1_days': 120,           # 1-minute min/avg/max kept this long; 10-minute ones forever
     'fast_hz': 4,             # quantized temperatures are read this often and averaged per sample (0 = off)
     'superio': True,          # read the IT8689E directly (off: board temps from gigabyte_wmi)
@@ -520,7 +522,7 @@ def hwmon_readings(st):
 class Store:
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS sensors(id INTEGER PRIMARY KEY, key TEXT UNIQUE, meta TEXT, first INTEGER);
-    CREATE TABLE IF NOT EXISTS raw(ts INTEGER, sid INTEGER, v REAL, PRIMARY KEY(ts, sid)) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS h.raw(ts INTEGER, sid INTEGER, v REAL, PRIMARY KEY(ts, sid)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS m1(sid INTEGER, ts INTEGER, mn REAL, av REAL, mx REAL, PRIMARY KEY(sid, ts)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS m10(sid INTEGER, ts INTEGER, mn REAL, av REAL, mx REAL, PRIMARY KEY(sid, ts)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, ts INTEGER, level TEXT, key TEXT, msg TEXT);
@@ -528,21 +530,23 @@ class Store:
     CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
     """
 
-    def __init__(self, path):
-        if path != ':memory:':
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+    def __init__(self, path, hot):
+        for f in (path, hot):
+            if f != ':memory:':
+                os.makedirs(os.path.dirname(f), exist_ok=True)
         self.db = sqlite3.connect(path, isolation_level=None)
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=NORMAL')
-        # raw used to be keyed (sid, ts): every sample touched one B-tree leaf per sensor, ~11 GB/day of
-        # page writes. Keyed (ts, sid) a sample appends to the last leaf.
-        old = self.db.execute("SELECT sql FROM sqlite_master WHERE name='raw'").fetchone()
-        if old and 'PRIMARY KEY(sid, ts)' in old[0]:
-            self.db.executescript('BEGIN; ALTER TABLE raw RENAME TO raw_old;'
-                                  'CREATE TABLE raw(ts INTEGER, sid INTEGER, v REAL, PRIMARY KEY(ts, sid)) WITHOUT ROWID;'
-                                  'INSERT INTO raw SELECT ts, sid, v FROM raw_old ORDER BY ts, sid;'
-                                  'DROP TABLE raw_old; COMMIT; VACUUM;')
+        self.db.execute('ATTACH ? AS h', (hot,))
+        self.db.execute('PRAGMA h.journal_mode=WAL')
+        self.db.execute('PRAGMA h.synchronous=OFF')
         self.db.executescript(self.SCHEMA)
+        # raw used to live on disk: every 2 s sample was ~20 KB of page writes, 1-11 GB/day
+        old = self.db.execute("SELECT sql FROM main.sqlite_master WHERE name='raw'").fetchone()
+        if old:
+            cols = 'ts, sid, v' if 'PRIMARY KEY(ts, sid)' in old[0] else 'sid, ts, v'
+            self.db.executescript(f'BEGIN; INSERT OR IGNORE INTO h.raw SELECT ts, sid, v FROM (SELECT {cols} FROM main.raw);'
+                                  'DROP TABLE main.raw; COMMIT; VACUUM main;')
         self.ids, self.metas = {}, {}
         for sid, key, meta in self.db.execute('SELECT id, key, meta FROM sensors'):
             self.ids[key], self.metas[key] = sid, meta
@@ -563,6 +567,15 @@ class Store:
 
     def kv_set(self, k, v):
         self.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)', (k, json.dumps(v)))
+
+    def m1_upto(self):
+        """aggregates on disk are complete up to this minute"""
+        v = self.kv_get('m1_upto')
+        if v is None:                               # databases from before m1_upto
+            v = self.db.execute('SELECT max(ts) + 60 FROM m1').fetchone()[0]
+        if v is None:
+            v = self.db.execute('SELECT min(ts) / 60 * 60 FROM h.raw').fetchone()[0]
+        return v if v is not None else int(time.time()) // 60 * 60
 
 
 class Alerts:
@@ -665,15 +678,14 @@ class FastTemps(threading.Thread):
 class Collector:
     def __init__(self, conf):
         self.conf = conf
-        self.store = Store(conf['db'])
+        self.store = Store(conf['db'], conf['hot'])
         self.rates = Rates()
         self.alerts = Alerts(self.store, self.telegram)
         self.superio = None
         self.it87_driver = False
         self.nvml = None
         self.gpu_prev = {}
-        self.acc = {}                   # sid -> [mn, mx, sum, n] for the current minute
-        self.acc_min = None
+        self.m1_upto = self.store.m1_upto()
         self.last_smart = 0
         self.nvmes = self.store.kv_get('nvmes', {})   # serial -> info; survives restarts to notice a missing drive
         for v in self.nvmes.values():
@@ -791,7 +803,6 @@ class Collector:
                 hw = f'nvme.{serial}.s{i}'
                 if k and hw not in self.store.ids:
                     out.append((f'nvme.{serial}.smart_s{i}', k - 273.15, M(f"{v['name']} Sensor {i}", 'storage', 'temp', '°C', 200 + 10 * v['n'] + i)))
-        self.store.kv_set('nvmes', {k: {x: y for x, y in v.items() if x != 'present'} for k, v in self.nvmes.items()})
         return out
 
     def gpu_events(self, ts, extra):
@@ -848,9 +859,8 @@ class Collector:
 
         db = self.store.db
         minute = ts - ts % 60
-        if self.acc_min is not None and minute != self.acc_min:
-            self.flush_minute()
-        self.acc_min = minute
+        if minute - self.m1_upto >= self.conf['flush_min'] * 60:
+            self.flush(minute)
         now = {}
         db.execute('BEGIN')
         for key, v, m in readings:
@@ -860,32 +870,33 @@ class Collector:
             if key in means:
                 v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"шаг {m['res']:g}, среднее {self.conf['fast_hz']} опросов/с"]))
             sid = self.store.sid(key, m, ts)
-            db.execute('INSERT OR REPLACE INTO raw VALUES(?,?,?)', (ts, sid, v))
-            a = self.acc.get(sid)
-            if a:
-                a[0], a[1], a[2], a[3] = min(a[0], v), max(a[1], v), a[2] + v, a[3] + 1
-            else:
-                self.acc[sid] = [v, v, v, 1]
+            db.execute('INSERT OR REPLACE INTO h.raw VALUES(?,?,?)', (ts, sid, v))
             self.alerts.check(ts, key, v, m)
             now[key] = dict(m, v=v, st=self.alerts.state.get(key, [0])[0])
         db.execute('COMMIT')
         self.write_now(ts, now, gpu)
 
-    def flush_minute(self):
-        db, m = self.store.db, self.acc_min
+    def flush(self, upto):
+        """one disk transaction per flush_min: m1/m10 from the samples in RAM since the last flush;
+        also run at start, so a crash loses nothing unless RAM is lost too (reboot: up to flush_min)"""
+        db, frm = self.store.db, self.m1_upto
+        if upto <= frm:
+            return
+        a, b = frm // 600 * 600, upto // 600 * 600
         db.execute('BEGIN')
-        db.executemany('INSERT OR REPLACE INTO m1 VALUES(?,?,?,?,?)',
-                       [(sid, m, a[0], a[2] / a[3], a[1]) for sid, a in self.acc.items()])
-        if (m + 60) % 600 == 0:
-            b = m + 60 - 600
-            db.execute('INSERT OR REPLACE INTO m10 SELECT sid, ?, min(mn), avg(av), max(mx) FROM m1 '
-                       'WHERE ts >= ? AND ts < ? GROUP BY sid', (b, b, b + 600))
-        if m % 3600 == 0:
-            db.execute('DELETE FROM raw WHERE ts < ?', (m - self.conf['raw_hours'] * 3600,))
-            db.execute('DELETE FROM m1 WHERE ts < ?', (m - self.conf['m1_days'] * 86400,))
-            db.execute('DELETE FROM events WHERE ts < ?', (m - 365 * 86400,))
+        db.execute('INSERT OR REPLACE INTO m1 SELECT sid, ts / 60 * 60 m, min(v), avg(v), max(v) FROM h.raw '
+                   'WHERE ts >= ? AND ts < ? GROUP BY sid, m', (frm, upto))
+        if b > a:
+            db.execute('INSERT OR REPLACE INTO m10 SELECT sid, ts / 600 * 600 m, min(v), avg(v), max(v) FROM h.raw '
+                       'WHERE ts >= ? AND ts < ? GROUP BY sid, m', (a, b))
+        if upto // 86400 != frm // 86400:
+            db.execute('DELETE FROM m1 WHERE ts < ?', (upto - self.conf['m1_days'] * 86400,))
+            db.execute('DELETE FROM events WHERE ts < ?', (upto - 365 * 86400,))
+        self.store.kv_set('nvmes', {k: {x: y for x, y in v.items() if x != 'present'} for k, v in self.nvmes.items()})
+        self.store.kv_set('m1_upto', upto)
+        db.execute('DELETE FROM h.raw WHERE ts < ?', (upto - self.conf['raw_hours'] * 3600,))
         db.execute('COMMIT')
-        self.acc = {}
+        self.m1_upto = upto
 
     def write_now(self, ts, sensors, gpu):
         nv = {}
@@ -912,6 +923,7 @@ class Collector:
     def run(self):
         os.umask(0o007)
         self.setup()
+        self.flush(int(time.time()) // 60 * 60)        # catch up after a crash or a long stop
         signal.signal(signal.SIGTERM, lambda *a: setattr(self, 'stop', True))
         signal.signal(signal.SIGINT, lambda *a: setattr(self, 'stop', True))
         iv = self.conf['interval']
@@ -932,8 +944,7 @@ class Collector:
             nxt += iv
             if nxt < time.time():           # fell behind (suspend, stall): realign
                 nxt = (time.time() // iv + 1) * iv
-        if self.acc:
-            self.flush_minute()
+        self.flush(int(time.time()) // 60 * 60)
         self.alerts.event(int(time.time()), 'info', '', 'коллектор остановлен')
 
 
@@ -953,6 +964,7 @@ class Web(BaseHTTPRequestHandler):
         d = getattr(self.local, 'db', None)
         if d is None:
             d = self.local.db = sqlite3.connect(f"file:{self.conf['db']}?mode=ro", uri=True, check_same_thread=False)
+            d.execute('ATTACH ? AS h', (f"file:{self.conf['hot']}?mode=ro",))
         return d
 
     def send(self, code, body, ctype='application/json', cache='no-store'):
@@ -1016,13 +1028,8 @@ class Web(BaseHTTPRequestHandler):
         byid = {sid: k for k, (sid, _) in sens.items()}
         out = {k: {} for k in sens}
         if byid:
-            ph = ','.join('?' * len(byid))
-            if tab == 'raw':
-                sql = f'SELECT sid, ts/{step}*{step} b, min(v), avg(v), max(v) FROM raw WHERE sid IN ({ph}) AND ts >= ? GROUP BY sid, b'
-            else:
-                sql = f'SELECT sid, ts/{step}*{step} b, min(mn), avg(av), max(mx) FROM {tab} WHERE sid IN ({ph}) AND ts >= ? GROUP BY sid, b'
-            for sid, b, mn, av, mx in self.db().execute(sql, (*byid, t0)):
-                out[byid[sid]][b] = (mn, av, mx)
+            for (sid, b), v in self.agg(tab, list(byid), t0, step).items():
+                out[byid[sid]][b] = v
         ts = list(range(t0, now + 1, step))
         res = {}
         for k, pts in out.items():
@@ -1043,16 +1050,33 @@ class Web(BaseHTTPRequestHandler):
         byid = {sid: k for k, (sid, _) in sens.items()}
         now = int(time.time())
         res = {}
-        if rng <= 3 * 3600:
-            q = 'SELECT sid, min(v), avg(v), max(v) FROM raw WHERE ts >= ? GROUP BY sid'
-            rows = self.db().execute(q, (now - rng,))
-        else:
-            tab = 'm1' if rng <= 14 * 86400 else 'm10'
-            rows = self.db().execute(f'SELECT sid, min(mn), avg(av), max(mx) FROM {tab} WHERE ts >= ? GROUP BY sid', (now - rng,))
-        for sid, mn, av, mx in rows:
-            if sid in byid:
-                res[byid[sid]] = [mn, av, mx]
+        tab = 'raw' if rng <= self.conf['raw_hours'] * 3600 else 'm1' if rng <= 14 * 86400 else 'm10'
+        for (sid, _), v in self.agg(tab, list(byid), now - rng).items():
+            res[byid[sid]] = v[:3]
         return {'range': rng, 'stats': res}
+
+    def agg(self, tab, sids, t0, step=0):
+        """(sid, bucket) -> [min, avg, max, samples]; aggregates not yet flushed to disk come from raw"""
+        if not sids:
+            return {}
+        iv, db = self.conf['interval'], self.db()
+        ph, bk = ','.join('?' * len(sids)), f'ts / {step} * {step}' if step else '0'
+        parts = []
+        if tab != 'raw':
+            base = 60 if tab == 'm1' else 600
+            r = db.execute("SELECT v FROM kv WHERE k='m1_upto'").fetchone()
+            cut = json.loads(r[0]) // base * base if r else 0
+            parts.append((f'SELECT sid, {bk}, min(mn), avg(av), max(mx), count(*) * {base // iv} FROM {tab} '
+                          f'WHERE sid IN ({ph}) AND ts >= ? AND ts < ? GROUP BY 1, 2', (*sids, t0, cut)))
+            t0 = max(t0, cut)
+        parts.append((f'SELECT sid, {bk}, min(v), avg(v), max(v), count(*) FROM h.raw '
+                      f'WHERE ts >= ? AND sid IN ({ph}) GROUP BY 1, 2', (t0, *sids)))
+        out = {}
+        for sql, args in parts:
+            for sid, b, mn, av, mx, n in db.execute(sql, args):
+                o = out.get((sid, b))
+                out[(sid, b)] = [min(o[0], mn), (o[1] * o[3] + av * n) / (o[3] + n), max(o[2], mx), o[3] + n] if o else [mn, av, mx, n]
+        return out
 
 
 def serve(conf):
@@ -1074,7 +1098,7 @@ def main():
     elif a.mode == 'web':
         serve(conf)
     else:                                   # two samples to stdout, nothing stored
-        c = Collector(dict(conf, db=':memory:', now='', telegram=None))
+        c = Collector(dict(conf, db=':memory:', hot=':memory:', now='', telegram=None))
         c.setup()
         c.tick(int(time.time()), time.monotonic())
         time.sleep(conf['interval'])

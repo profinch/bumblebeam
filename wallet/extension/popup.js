@@ -250,14 +250,40 @@
 
   // ---------- BEAM -> WBEAM ----------
   let feeData = null;
+  // The relayer takes a message once 120000 gas x (2 base fee + tip) x ETH/BEAM is at most its fee.
+  // Each choice shows the base fee it covers and how much of the last 24 h it would have been enough.
+  const covers = (feeBeam) => feeData ? ((feeBeam * feeData.rate.beam / feeData.rate.eth) * 1e18 / 120000 - feeData.tip * 1e9) / 2 / 1e9 : null;
+  const shareOf = (gwei) => feeData && feeData.dayBase.length ? feeData.dayBase.filter((b) => b / 1e9 <= gwei).length / feeData.dayBase.length : null;
+  const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+  const NAMES = { cheap: 'Cheap', normal: 'Normal', safe: 'Safe' };
+
+  function feeInfo() {
+    const f = parseFloat(String($('eFee').value).replace(',', '.'));
+    document.querySelectorAll('#eOpts button').forEach((b) => b.classList.toggle('on', Math.abs(+b.dataset.fee - f) < 0.005));
+    if (!feeData || !(f > 0)) { $('eFeeInfo').textContent = ''; return; }
+    const up = covers(f);
+    $('eFeeInfo').textContent = f < feeData.min
+      ? `Below the relayer's minimum now (${feeData.min.toFixed(2)} BEAM): it would wait until the base fee drops to ${up > 0 ? up.toFixed(3) : '—'} gwei (${pct(shareOf(up))} of the last 24 h).`
+      : `Enough while the base fee is at most ${up.toFixed(3)} gwei: ${pct(shareOf(up))} of the last 24 h. ≈ $${(f * feeData.rate.beam).toFixed(2)}. Paying more does not speed it up (the relayer takes ~1 h either way), it only covers gas rising meanwhile. The fee is fixed for good: under the minimum the relayer waits; nothing can top it up.`;
+  }
+
   async function fee() {
     try {
       feeData = await host('relayerFee');
+      const d = feeData.day;
+      const word = { cheap: 'cheap', usual: 'usual', expensive: 'expensive' }[feeData.level];
+      $('eGas').innerHTML = `Gas now <b class="${esc(feeData.level)}">${feeData.base.toFixed(3)} gwei, ${word}</b> · last 24 h: median ${d.p50.toFixed(2)}, 9 of 10 under ${d.p90.toFixed(2)} gwei · minimum now <b>${feeData.min.toFixed(2)} BEAM</b> ($${(feeData.min * feeData.rate.beam).toFixed(2)})`;
+      $('eOpts').innerHTML = feeData.options.map((o) => `<button data-fee="${o.fee}"><div class="t">${NAMES[o.key]}</div><div class="f">${o.fee.toFixed(2)}</div><div class="s">gas ≤ ${o.upTo.toFixed(2)} · ${pct(o.share)} of 24 h</div></button>`).join('');
       if (!$('eFee').dataset.touched) $('eFee').value = feeData.fee;
-      $('eFeeInfo').textContent = `The relayer's minimum is ${feeData.min.toFixed(2)} BEAM (gas ${feeData.gwei.toFixed(3)} gwei, ETH $${Math.round(feeData.ethUsd)}, BEAM $${feeData.beamUsd}, ${feeData.src}); suggested ×3. The fee is fixed in the message for good: if gas or ETH/BEAM later push the minimum above it, the relayer waits until they come back; nothing can top it up.`;
-    } catch (e) { $('eFeeInfo').textContent = `could not price the relayer fee: ${e.message}`; }
+      feeInfo();
+    } catch (e) { $('eGas').textContent = `could not price the relayer fee: ${e.message}`; }
   }
-  $('eFee').oninput = () => { $('eFee').dataset.touched = 1; };
+  $('eOpts').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    $('eFee').value = b.dataset.fee; $('eFee').dataset.touched = 1; feeInfo();
+  };
+  $('eFee').oninput = () => { $('eFee').dataset.touched = 1; feeInfo(); };
   $('eMax').onclick = () => {
     const f = parseFloat($('eFee').value) || 0;
     $('eAmt').value = Math.max(0, Math.floor((avail / GROTH - f - 0.02) * 1e4) / 1e4);
@@ -271,12 +297,18 @@
       if (!isEthAddress(rcv)) throw new Error('the Ethereum address must be 0x and 40 hex characters');
       const a = toGroth($('eAmt').value), f = toGroth($('eFee').value);
       const fd = feeData || await host('relayerFee');
-      if (f < Math.round(fd.min * GROTH)) throw new Error(`the fee is below the relayer's minimum (${fd.min.toFixed(2)} BEAM): the transfer would wait for cheaper gas`);
+      if (f < Math.round(fd.min * GROTH)) {
+        const up = covers(f / GROTH);
+        const ok = await confirmBox('Fee under the minimum', [['Relayer minimum now', `${fd.min.toFixed(2)} BEAM`], ['This fee', `${amt(f, 8)} BEAM`],
+          ['Released once the base fee is', `≤ ${up > 0 ? up.toFixed(3) : '—'} gwei (${pct(shareOf(up))} of the last 24 h)`]],
+          'The relayer keeps the message and takes it when gas gets that cheap. If it never does, the BEAM stay locked: nothing can raise the fee later.');
+        if (!ok) return;
+      }
       if (a + f + 2e6 > avail) throw new Error(`not enough: ${amt(avail, 8)} BEAM available, needed amount + fee + ~0.02`);
       const txid = await host('sendToEth', {
         title: 'Send to Ethereum',
         rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`],
-          ['Fee headroom', `×${(f / GROTH / fd.min).toFixed(1)} the minimum now: stuck if gas × ETH/BEAM grows ${Math.max(0, Math.round((f / GROTH / fd.min - 1) * 100))}%`],
+          ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? 0).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); now ×${(f / GROTH / fd.min).toFixed(1)} the minimum`],
           ['Ethereum address', rcv]],
         note: 'The official bridge pipe on Beam, released by its relayer on Ethereum. It cannot be undone.',
       }, a, rcv, f);
