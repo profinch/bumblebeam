@@ -45,6 +45,10 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
   (`mobile-restore.beam.mw/mainnet/mainnet_recovery.bin`, ~320 MB, refreshed daily). It is what the mobile
   wallet's "automatic restore" and the web wallet use. So no node with the wallet's owner key is needed,
   and a new wallet does not sync ~4 M headers (about an hour in a browser).
+- **The snapshot is Beam's, not ours, for now.** A node can write one (`recovery_auto_path`,
+  `recovery_auto_period` in `beam-node`), but it does so synchronously in its main loop. On the pool's
+  beam-node, stratum would stall for the minutes it takes; explorer-node has no such option. Our own
+  snapshot would need a small fast_sync node of its own, syncing from beam-node.
 - **Backup:** Settings → Backup saves `wallet.db`, encrypted by Beam with the wallet password. Opening it
   is instant and keeps the history.
 - The seed and keys never leave the extension. Pages need cross-origin isolation for the wasm threads
