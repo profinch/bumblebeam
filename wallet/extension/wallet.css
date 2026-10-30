@@ -1,4 +1,4 @@
-/* BumbleBeam Bridge: the Beam Explorer look of the pool site (pool/web/styles.css). */
+/* BumbleBeam Wallet: the Beam Explorer look of the pool site (pool/web/styles.css). */
 :root {
   --red: #f25f5b; --yellow: #f4ce4a; --accent: #00f6d2; --blue: #0bccf7;
   --gradient-beam: linear-gradient(135deg, #0b76ff 0%, #39fff2 100%);
@@ -8,6 +8,7 @@
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }      /* display rules below must not show hidden parts */
 html, body { margin: 0; min-height: 100%; }
 body { background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%) fixed; color: var(--text); font: 15px/1.5 var(--sans); }
 header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
@@ -65,3 +66,16 @@ dialog { background: #0a3557; color: var(--text); border: 1px solid var(--border
 dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 .sum div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
 .sum span:last-child { font-family: var(--mono); text-align: right; word-break: break-all; }
+
+/* the wallet's own window is narrow (520 px by default): brand and node on one line, tabs below */
+@media (max-width: 720px) {
+  header { padding: 10px 14px; gap: 8px 12px; }
+  .brand { order: 1; }
+  .sync { order: 2; }
+  nav { order: 3; width: 100%; }
+  nav button { flex: 1; padding: 6px 4px; font-size: 13px; }
+  main { padding: 12px 12px 40px; }
+  h1 { font-size: 19px; }
+  .card { padding: 14px; }
+  .seed { columns: 2; }
+}

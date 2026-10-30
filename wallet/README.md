@@ -1,8 +1,9 @@
-# BumbleBeam Bridge
+# BumbleBeam Wallet
 
-A Chrome extension that is a Beam wallet with a UI for the **official** Beam ↔ Ethereum bridge:
-BEAM → WBEAM and WBEAM → BEAM. The contracts, the relayer and the WBEAM token are the official ones
-(BeamMW `beam-bridge-reverse-app`, `-ethapp`, `-ethrelay`). Only the UI and the wallet host are ours.
+A Beam wallet as a Chrome extension, in a window of its own: receive and send BEAM, and a bridge to
+Ethereum (BEAM → WBEAM and WBEAM → BEAM). The bridge is the **official** one: its contracts, relayer
+and WBEAM token are BeamMW's (`beam-bridge-reverse-app`, `-ethapp`, `-ethrelay`). The wallet's UI and its
+node door (wss.bumblebeam.org) are ours.
 
 Why the extension exists (2026-10-30):
 - The official Beam Web Wallet is a Manifest V2 extension, and Chrome no longer runs those.
@@ -50,9 +51,9 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
   (manifest COEP/COOP).
 
 ## Run
-1. Chrome → `chrome://extensions` → Developer mode → **Load unpacked** → `bridge/extension`.
-2. Click the toolbar button: the wallet tab opens.
-3. For WBEAM → BEAM, serve the Ethereum page: `python3 -m http.server 8771 --bind 127.0.0.1 -d bridge/web`.
+1. Chrome → `chrome://extensions` → Developer mode → **Load unpacked** → `wallet/extension`.
+2. Click the toolbar button: the wallet opens in its own window (no tabs, no address bar). It keeps its size and place, and only one copy runs at a time: two pages would fight over the same wallet.db.
+3. For WBEAM → BEAM, serve the Ethereum page: `python3 -m http.server 8771 --bind 127.0.0.1 -d wallet/web`.
    Rabby does not inject into extension pages.
 
 ## Tested

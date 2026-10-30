@@ -51,7 +51,7 @@ const Beam = (() => {
   // until that handler approves.
   let app = null, appNext = 1, consent = null;
   const appPending = new Map();
-  const APP_NAME = 'BumbleBeam Bridge';
+  const APP_NAME = 'BumbleBeam Wallet';
 
   function onAppMessage(json) {
     let msg;
