@@ -1,0 +1,19 @@
+[Unit]
+Description=thermo: dashboard and JSON API (read-only)
+After=thermo-collect.service
+
+[Service]
+ExecStart=/usr/bin/python3 -I /opt/thermo/thermo.py web
+User=thermo
+Group=thermo
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/thermo
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+[Install]
+WantedBy=multi-user.target

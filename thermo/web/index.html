@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermo · ultp</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0b76ff"/><stop offset="1" stop-color="#39fff2"/></linearGradient></defs>
+        <path class="hex" d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#lg)"/>
+        <rect x="13.6" y="6.5" width="4.8" height="14" rx="2.4" fill="#042548"/>
+        <circle cx="16" cy="21.5" r="4.4" fill="#042548"/>
+        <rect class="merc" x="15" y="11" width="2" height="9" rx="1" fill="#f4ce4a"/>
+        <circle cx="16" cy="21.5" r="2.7" fill="#f4ce4a"/>
+        <path d="M19.6 9.5h2M19.6 12.5h1.4M19.6 15.5h2" stroke="#fff" stroke-width="1.1" stroke-linecap="round" stroke-opacity=".8"/>
+      </svg>
+      <span><em id="host">ultp</em> <b>Thermo</b></span>
+    </a>
+    <div class="hw" id="hw"></div>
+    <div class="live" id="live"><span class="dot off"></span><span>подключение…</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="page-head">
+    <h1 class="page-title">Сейчас</h1>
+    <div class="actions">
+      <div class="seg range" id="range" role="group" aria-label="Период"></div>
+    </div>
+  </div>
+
+  <div id="alerts"></div>
+  <div class="tiles" id="tiles"></div>
+  <div id="groups"></div>
+
+  <section class="panel" id="nvme-panel">
+    <div class="panel-head"><h2 class="panel-title">NVMe: здоровье и троттлинг</h2>
+      <div class="panel-meta">SMART через admin ioctl, раз в 10 с</div></div>
+    <div class="table-wrap"><table id="nvme"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">События</h2>
+      <div class="panel-meta"><span id="ev-count"></span></div></div>
+    <div class="table-wrap"><table id="events"></table></div>
+    <div class="more"><button class="btn ghost small" id="ev-more" hidden>Показать ещё</button></div>
+  </section>
+</main>
+
+<footer class="foot"><div class="foot-row">
+  <span id="src"></span>
+  <span>Thermo · <a href="/api/now">api/now</a> · <a href="/api/events">api/events</a></span>
+</div></footer>
+<div class="tip" id="tip" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

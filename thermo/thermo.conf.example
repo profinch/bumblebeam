@@ -1,0 +1,11 @@
+{
+  "interval": 2,
+  "port": 9188,
+  "names": {},
+  "labels": {},
+  "limits": {
+    "cpu.tctl": [null, null, 85, 90]
+  },
+  "hide": ["other.acpitz*"],
+  "telegram": null
+}
