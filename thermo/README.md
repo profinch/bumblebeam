@@ -72,11 +72,30 @@ gpu_max-10 / gpu_max from NVML, VRM 90/105, CPU fan < 300 RPM, ATX rails ±5/10 
 Plus: NVMe throttle counters going up, AER errors, link changes, a drive vanishing or coming back,
 GPU thermal/power-brake throttling. Optional Telegram for warn/crit.
 
+## GPU fans
+
+Off by default. With `gpu_fan` in the config the collector drives the GPU fans over NVML: the highest of
+the GPU curve and any `extra` curves (other sensors by key glob, e.g. an NVMe under the card), up at
+once, down 1 % per sample past a 3 % hysteresis, clamped to the card's range (30-100 % on the 3090; the
+card's own zero-RPM idle is only there in automatic mode). Fail-safe: no GPU temperature or a failed
+sample -> 100 %; a normal stop hands the fans back to the driver; `ExecStopPost=thermo.py fans-auto` does
+the same after a crash or kill, and `WatchdogSec=30` turns a hung collector into a kill.
+
+```json
+"gpu_fan": {"curve": [[50, 30], [65, 45], [75, 70], [83, 100]]}
+```
+
+The dashboard's GPU panel sets each fan (or both) to `auto`, `curve` or a fixed %: the web writes
+`/var/lib/thermo/fanctl.json`, the collector applies it on the next sample and logs an event. Writing
+needs `control_token` in `/etc/thermo.conf` (sent as `X-Thermo-Token`, kept in the browser's
+localStorage); without it the panel is read-only. The modes survive restarts; the built-in curve is
+used when `gpu_fan` has none. RPM per fan is recorded as `gpuN.rpmF`.
+
 ## Config
 
 `/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`, `raw_hours`, `flush_min`, `blackbox_s`,
 `names` (NVMe serial -> name), `labels` (key -> label), `limits` (key glob ->
-`[warn_lo, crit_lo, warn_hi, crit_hi]`), `hide` (key globs), `telegram` (`{"token", "chat"}`).
+`[warn_lo, crit_lo, warn_hi, crit_hi]`), `hide` (key globs), `telegram` (`{"token", "chat"}`), `gpu_fan`, `control_token`.
 Sensor keys are on the dashboard under "Все датчики группы".
 
 ## Install
@@ -85,4 +104,4 @@ Sensor keys are on the dashboard under "Все датчики группы".
 sudo ./deploy/install.sh      # user thermo, /opt/thermo, two systemd units, enables and starts them
 ```
 
-API: `/api/now`, `/api/series?group=cpu&range=3600`, `/api/stats?range=86400`, `/api/events?limit=200`.
+API: `POST /api/fan` (`{gpu, fan: index | "all", mode}`, token), `/api/now`, `/api/series?group=cpu&range=3600`, `/api/stats?range=86400`, `/api/events?limit=200`.

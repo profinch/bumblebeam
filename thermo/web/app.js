@@ -111,7 +111,7 @@ function groupMeta(g) {
   const v = (k, p, u) => S[k] ? `<b>${fmt(S[k].v, p)}</b> ${u}` : '';
   if (g === 'cpu') return [v('cpu.pkg_w', 0, 'Вт'), v('cpu.util', 0, '%'), v('cpu.mhz_max', 0, 'МГц макс'), v('cpu.load1', 2, 'load')].filter(Boolean).join(' · ');
   if (g === 'gpu') return Object.entries(now.gpu || {}).map(([, x]) =>
-    `${x.pstate} <span class="badges">${x.reason_names.map(r => `<span class="badge ${/thermal|slowdown|brake/i.test(r) ? 'crit' : r === 'power cap' ? 'warn' : 'info'}">${esc(r)}</span>`).join('')}</span>`).join(' ');
+    `${x.pstate || ''} <span class="badges">${(x.reason_names || []).map(r => `<span class="badge ${/thermal|slowdown|brake/i.test(r) ? 'crit' : r === 'power cap' ? 'warn' : 'info'}">${esc(r)}</span>`).join('')}</span>`).join(' ');
   if (g === 'board') return `Super I/O ${esc(now.superio)}`;
   return '';
 }
@@ -125,6 +125,7 @@ function buildGroups() {
     const kinds = KINDS.filter(([kd]) => visibleSensors().some(([, s]) => s.grp === g && s.kind === kd));
     return `<section class="panel" id="g-${g}">
       <div class="panel-head"><h2 class="panel-title">${esc(groupTitle(g, name))}</h2><div class="panel-meta" data-meta="${g}"></div></div>
+      ${g === 'gpu' ? '<div class="fanctl" data-fanctl></div>' : ''}
       <div class="charts">${kinds.map(([kd, t]) => `<div class="chart-box" data-g="${g}" data-k="${kd}">
         <h3 class="chart-title">${t}</h3><svg class="chart"></svg><div class="legend"></div></div>`).join('')}</div>
       <details class="more-table" ${store.get('open-' + g, false) ? 'open' : ''} data-g="${g}"><summary>Все датчики группы</summary>
@@ -132,6 +133,7 @@ function buildGroups() {
     </section>`;
   }).join('');
   for (const d of document.querySelectorAll('details.more-table')) d.addEventListener('toggle', () => store.set('open-' + d.dataset.g, d.open));
+  fanSig = '';
   return true;
 }
 
@@ -326,6 +328,108 @@ document.addEventListener('click', e => {
   drawChart(b.closest('.chart-box'));
 });
 
+// ---------------------------------------------------------------- GPU fan control
+
+// The collector applies the modes; the web only writes them (POST /api/fan, token from /etc/thermo.conf).
+const FMODES = [['auto', 'Авто'], ['curve', 'Кривая'], ['manual', 'Вручную']];
+let fanSig = '', fanMsg = '', fanMsgT = 0;
+const fanToken = () => store.get('fan-token', '');
+const fanIdx = (c, f) => f === 'all' ? c.fans.map((_, i) => i) : [+f];
+
+function renderFanCtl() {
+  const el = $('[data-fanctl]');
+  if (!el) return;
+  const gs = Object.entries(now.gpu || {}).filter(([, x]) => x.fan_ctl);
+  const can = now.control && fanToken();
+  const sig = gs.map(([p, x]) => p + x.fan_ctl.fans.length).join() + now.control + !!fanToken();
+  if (sig !== fanSig) {
+    fanSig = sig;
+    el.innerHTML = gs.map(([p, x]) => `<div class="fc" data-gpu="${p}">
+      <div class="fc-head"><h3 class="chart-title">Вентиляторы: управление</h3><span class="fc-why"></span></div>
+      ${[['all', 'Оба'], ...x.fan_ctl.fans.map((_, f) => [f, `Вентилятор ${f + 1}`])].map(([f, lab]) => `<div class="fc-row" data-fan="${f}">
+        <span class="fc-lab">${lab}</span><span class="fc-now"></span>
+        <div class="seg" role="group" aria-label="${lab}: режим">${FMODES.map(([m, l]) => `<button type="button" data-m="${m}" ${can ? '' : 'disabled'}>${l}</button>`).join('')}</div>
+        <span class="fc-man"><input type="range" min="${x.fan_ctl.min}" max="${x.fan_ctl.max}" step="5" aria-label="${lab}: обороты" ${can ? '' : 'disabled'}><output></output></span>
+      </div>`).join('')}
+      <div class="fc-auth">${!now.control ? '<span class="dim">Только просмотр: для управления задайте <code>control_token</code> в /etc/thermo.conf</span>'
+        : fanToken() ? '<button type="button" class="btn ghost small" data-act="logout">Забыть токен</button>'
+        : '<form data-act="login"><input type="password" placeholder="токен управления" autocomplete="current-password" required><button class="btn small">Войти</button></form>'}
+        <span class="fc-msg"></span></div>
+    </div>`).join('');
+  }
+  for (const [p, x] of gs) {
+    const box = $(`.fc[data-gpu="${p}"]`, el), c = x.fan_ctl, S = now.sensors;
+    $('.fc-why', box).innerHTML = c.hot ? `<span class="badge crit">▲ у предела: 100 %</span> <span class="dim">${esc(c.why)}</span>`
+      : `<span class="dim">кривая сейчас</span> <b>${c.curve} %</b> <span class="dim">· ${esc(c.why)}</span>`;
+    for (const row of box.querySelectorAll('.fc-row')) {
+      const idx = fanIdx(c, row.dataset.fan);
+      const modes = [...new Set(idx.map(i => c.fans[i].mode))];
+      const m = modes.length > 1 ? null : modes[0];
+      const kind = m === null ? null : typeof m === 'number' ? 'manual' : m;
+      for (const b of row.querySelectorAll('button')) b.classList.toggle('on', b.dataset.m === kind);
+      const r = $('input', row);
+      if (typeof m === 'number' && document.activeElement !== r) r.value = m;
+      $('.fc-man', row).hidden = kind !== 'manual';
+      $('output', row).textContent = r.value + ' %';
+      $('.fc-now', row).innerHTML = row.dataset.fan === 'all' ? (m === null ? '<span class="dim">разные режимы</span>' : '')
+        : `<b>${fmt(S[`${p}.rpm${idx[0]}`]?.v, 0)}</b> об/мин · ${fmt(S[`${p}.fan${idx[0]}`]?.v, 0)} %`
+          + (c.fans[idx[0]].set !== null ? ` <span class="dim">· задано ${c.fans[idx[0]].set} %</span>` : '');
+    }
+    const msg = $('.fc-msg', box);
+    msg.textContent = Date.now() < fanMsgT ? fanMsg.replace(/^!/, '') : '';
+    msg.className = 'fc-msg ' + (fanMsg.startsWith('!') ? 'crit' : 'dim');
+  }
+}
+
+async function fanSet(gpu, fan, mode) {
+  try {
+    const r = await fetch('/api/fan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Thermo-Token': fanToken() },
+      body: JSON.stringify({ gpu, fan, mode }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (r.status === 403) store.set('fan-token', '');
+      throw new Error(j.error || r.status);
+    }
+    fanMsg = 'принято, применится на следующем замере';
+  } catch (err) { fanMsg = '!' + err.message; }
+  fanMsgT = Date.now() + 6000;
+  renderFanCtl();
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.fc-row button');
+  if (b) {
+    const row = b.closest('.fc-row'), gpu = b.closest('.fc').dataset.gpu, fan = row.dataset.fan === 'all' ? 'all' : +row.dataset.fan;
+    let mode = b.dataset.m;
+    if (mode === 'manual') {
+      const c = now.gpu[gpu].fan_ctl, cur = c.fans[fanIdx(c, row.dataset.fan)[0]];
+      const r = $('input', row);
+      if (typeof cur.mode !== 'number') r.value = Math.round((cur.set ?? c.curve) / 5) * 5;
+      mode = +r.value;
+    }
+    fanSet(gpu, fan, mode);
+  }
+  if (e.target.closest('[data-act="logout"]')) { store.set('fan-token', ''); renderFanCtl(); }
+});
+document.addEventListener('input', e => {
+  const r = e.target.closest('.fc-row input[type=range]');
+  if (r) $('output', r.parentNode).textContent = r.value + ' %';
+});
+document.addEventListener('change', e => {
+  const r = e.target.closest('.fc-row input[type=range]');
+  if (!r) return;
+  const row = r.closest('.fc-row');
+  fanSet(r.closest('.fc').dataset.gpu, row.dataset.fan === 'all' ? 'all' : +row.dataset.fan, +r.value);
+  r.blur();
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-act="login"]');
+  if (!f) return;
+  e.preventDefault();
+  store.set('fan-token', $('input', f).value.trim());
+  renderFanCtl();
+});
+
 // ---------------------------------------------------------------- NVMe, events
 
 function renderNvme() {
@@ -396,7 +500,7 @@ async function loadNow() {
   if (now.ts !== seenTs) { seenTs = now.ts; seenAt = Date.now(); }
   if (firstNow) { firstNow = false; renderHead(); }
   const rebuilt = buildGroups();
-  renderLive(); renderAlerts(); renderTiles(); renderGroupMeta(); renderNvme(); renderTables();
+  renderLive(); renderAlerts(); renderTiles(); renderGroupMeta(); renderFanCtl(); renderNvme(); renderTables();
   if (rebuilt) { drawCharts(); loadSeries(); }
   else for (const box of document.querySelectorAll('.chart-box')) {   // keep legend values live between series loads
     for (const b of box.querySelectorAll('.legend button')) {
