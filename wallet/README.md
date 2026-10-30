@@ -16,6 +16,7 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
 | Part | What it is |
 |---|---|
 | [`extension/`](extension) | MV3 extension. The popup under the toolbar icon (`popup.html`, a view only), the wallet host (`offscreen.html`: Beam's wasm wallet from `vendor/` and the bridge calls in `bridge.js`), the service worker that starts the host (`background.js`) |
+| [`bridge-dash/`](bridge-dash) | Bridge status page, one static file: the relayer's queue and health (last release, gas balance, usual delay), locked BEAM against WBEAM supply, every message both ways with its Beam block and Ethereum release |
 | [`web/`](web) | The Ethereum side of WBEAM → BEAM: a page Rabby injects into, with hand-encoded `approve` + `sendFunds` |
 | [`../deploy/docker/containers/nginx/conf/wss.conf`](../deploy/docker/containers/nginx/conf/wss.conf) | `wss://wss.bumblebeam.org`: a WebSocket door to the pool's beam-node (`websocket_port=8200`) |
 

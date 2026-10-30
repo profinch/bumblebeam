@@ -254,7 +254,7 @@
     try {
       feeData = await host('relayerFee');
       if (!$('eFee').dataset.touched) $('eFee').value = feeData.fee;
-      $('eFeeInfo').textContent = `The relayer's minimum is ${feeData.min.toFixed(2)} BEAM (gas ${feeData.gwei.toFixed(3)} gwei, ETH $${Math.round(feeData.ethUsd)}, BEAM $${feeData.beamUsd}, ${feeData.src}); suggested ×1.5. If gas rises above it, the transfer waits, it is not lost.`;
+      $('eFeeInfo').textContent = `The relayer's minimum is ${feeData.min.toFixed(2)} BEAM (gas ${feeData.gwei.toFixed(3)} gwei, ETH $${Math.round(feeData.ethUsd)}, BEAM $${feeData.beamUsd}, ${feeData.src}); suggested ×3. The fee is fixed in the message for good: if gas or ETH/BEAM later push the minimum above it, the relayer waits until they come back; nothing can top it up.`;
     } catch (e) { $('eFeeInfo').textContent = `could not price the relayer fee: ${e.message}`; }
   }
   $('eFee').oninput = () => { $('eFee').dataset.touched = 1; };
@@ -275,7 +275,9 @@
       if (a + f + 2e6 > avail) throw new Error(`not enough: ${amt(avail, 8)} BEAM available, needed amount + fee + ~0.02`);
       const txid = await host('sendToEth', {
         title: 'Send to Ethereum',
-        rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`], ['Ethereum address', rcv]],
+        rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`],
+          ['Fee headroom', `×${(f / GROTH / fd.min).toFixed(1)} the minimum now: stuck if gas × ETH/BEAM grows ${Math.max(0, Math.round((f / GROTH / fd.min - 1) * 100))}%`],
+          ['Ethereum address', rcv]],
         note: 'The official bridge pipe on Beam, released by its relayer on Ethereum. It cannot be undone.',
       }, a, rcv, f);
       $('eOk').textContent = `sent, Beam transaction ${txid}. It shows up below once a block confirms it.`;
