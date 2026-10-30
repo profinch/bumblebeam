@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WBEAM → BEAM</title>
+<style>
+:root { --accent: #00f6d2; --red: #f25f5b; --blue: #0bccf7; --border: rgba(255,255,255,.1); --surface: rgba(255,255,255,.04); --dim: rgba(255,255,255,.6); --field: #193b55;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%) fixed; color: #fff; font: 15px/1.5 var(--sans); }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h1 b { background: linear-gradient(135deg, #0b76ff, #39fff2); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dim { color: var(--dim); } .small { font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 14px 0; }
+label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 4px; }
+input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--field); color: #fff; font: inherit; }
+button { padding: 10px 16px; border-radius: 8px; border: 0; background: var(--accent); color: #042548; font: 600 14px var(--sans); cursor: pointer; margin-top: 14px; }
+button:disabled { opacity: .5; cursor: default; }
+.mono { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+.err { color: var(--red); white-space: pre-wrap; } .ok { color: var(--accent); word-break: break-all; }
+a { color: var(--blue); }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1><b>WBEAM → BEAM</b></h1>
+  <p class="dim">The Ethereum side of the official Beam bridge. Rabby signs; the BEAM arrive in the BumbleBeam Bridge extension, where you press Receive.</p>
+
+  <div class="card">
+    <button id="connect" style="margin-top:0">Connect Rabby</button>
+    <div id="acct" hidden>
+      <div class="kv"><span class="dim">Account</span><span class="mono" id="addr"></span></div>
+      <div class="kv"><span class="dim">WBEAM balance</span><span class="mono" id="bal">—</span></div>
+      <div class="kv"><span class="dim">Approved for the bridge</span><span class="mono" id="allow">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Beam bridge key (from the extension: WBEAM → BEAM, step 1)</label>
+    <input id="key" class="mono" placeholder="66 hex characters" spellcheck="false" autocomplete="off">
+    <label>BEAM to receive</label>
+    <input id="amt" inputmode="decimal" placeholder="0">
+    <label>Relayer fee, WBEAM</label>
+    <input id="fee" inputmode="decimal" value="0.02">
+    <p class="dim small">This direction has no minimum fee in the relayer; recent transfers paid 0.02 WBEAM. The pipe takes amount + fee.</p>
+    <button id="send" disabled>Approve and send</button>
+    <p class="err" id="err"></p>
+    <p class="ok" id="ok"></p>
+  </div>
+
+  <p class="dim small">Pipe <a href="https://etherscan.io/address/0x6063024646E8A1561970840a4b0e0f1082f5a670" target="_blank" rel="noopener">0x6063…a670</a>, WBEAM <a href="https://etherscan.io/token/0xE5AcBB03D73267c03349c76EaD672Ee4d941F499" target="_blank" rel="noopener">0xE5Ac…F499</a> (8 decimals).</p>
+</main>
+<script>
+'use strict';
+(() => {
+  // Official bridge, Ethereum side (beam-bridge-reverse-ethapp constants). Calls are encoded by hand:
+  // approve/allowance/balanceOf are standard ERC-20; sendFunds(uint256,uint256,bytes) is 0x4d5dd2bc,
+  // checked against real calls on the pipe.
+  const PIPE = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
+  const WBEAM = '0xE5AcBB03D73267c03349c76EaD672Ee4d941F499';
+  const G = 10n ** 8n;
+  const $ = (id) => document.getElementById(id);
+  const eth = window.ethereum;
+  let account = null;
+
+  const word = (n) => BigInt(n).toString(16).padStart(64, '0');
+  const addrWord = (a) => a.slice(2).toLowerCase().padStart(64, '0');
+  const toUnits = (s) => {
+    const [i, f = ''] = String(s).trim().replace(',', '.').split('.');
+    if (!/^\d+$/.test(i || '0') || !/^\d*$/.test(f) || f.length > 8) throw new Error('amounts have at most 8 decimals');
+    return BigInt(i || '0') * G + BigInt((f + '00000000').slice(0, 8));
+  };
+  const fmt = (u) => `${u / G}.${(u % G).toString().padStart(8, '0')}`.replace(/\.?0+$/, '');
+
+  const call = async (to, data) => BigInt(await eth.request({ method: 'eth_call', params: [{ to, data }, 'latest'] }));
+  const balance = () => call(WBEAM, '0x70a08231' + addrWord(account));
+  const allowance = () => call(WBEAM, '0xdd62ed3e' + addrWord(account) + addrWord(PIPE));
+
+  async function waitReceipt(hash) {
+    for (;;) {
+      const r = await eth.request({ method: 'eth_getTransactionReceipt', params: [hash] });
+      if (r) { if (r.status !== '0x1') throw new Error(`transaction ${hash} failed`); return r; }
+      await new Promise((res) => setTimeout(res, 4000));
+    }
+  }
+  const sendTx = (to, data) => eth.request({ method: 'eth_sendTransaction', params: [{ from: account, to, data }] });
+
+  async function refresh() {
+    $('bal').textContent = `${fmt(await balance())} WBEAM`;
+    $('allow').textContent = `${fmt(await allowance())} WBEAM`;
+  }
+
+  $('connect').onclick = async () => {
+    $('err').textContent = '';
+    try {
+      if (!eth) throw new Error('no Ethereum wallet in this page: is Rabby enabled for it?');
+      [account] = await eth.request({ method: 'eth_requestAccounts' });
+      if ((await eth.request({ method: 'eth_chainId' })) !== '0x1') {
+        await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+      }
+      $('addr').textContent = account; $('acct').hidden = false; $('send').disabled = false;
+      await refresh();
+    } catch (e) { $('err').textContent = e.message; }
+  };
+
+  $('send').onclick = async () => {
+    $('err').textContent = $('ok').textContent = '';
+    $('send').disabled = true;
+    try {
+      const key = $('key').value.trim().replace(/^0x/, '').toLowerCase();
+      if (!/^[0-9a-f]{66}$/.test(key)) throw new Error('the Beam bridge key is 33 bytes: 66 hex characters');
+      const value = toUnits($('amt').value), fee = toUnits($('fee').value);
+      if (value <= 0n) throw new Error('the amount must be above zero');
+      const total = value + fee;
+      if ((await balance()) < total) throw new Error(`not enough WBEAM: ${fmt(total)} needed`);
+      if (!confirm(`Send ${fmt(value)} BEAM to Beam key ${key.slice(0, 8)}…${key.slice(-8)}\nrelayer fee ${fmt(fee)} WBEAM, ${fmt(total)} WBEAM in all?`)) return;
+
+      if ((await allowance()) < total) {
+        $('ok').textContent = 'approve WBEAM in Rabby…';
+        await waitReceipt(await sendTx(WBEAM, '0x095ea7b3' + addrWord(PIPE) + word(total)));
+      }
+      $('ok').textContent = 'send in Rabby…';
+      const data = '0x4d5dd2bc' + word(value) + word(fee) + word(0x60) + word(33) + key.padEnd(128, '0');
+      const hash = await sendTx(PIPE, data);
+      if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('the wallet returned no transaction hash');
+      $('ok').innerHTML = `sent: <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noopener">${hash}</a>. Waiting for the block…`;
+      await waitReceipt(hash);
+      $('ok').innerHTML = `confirmed: <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noopener">${hash}</a>. The relayer pushes it to Beam; then press Receive in the extension.`;
+      await refresh();
+    } catch (e) { $('err').textContent = e.message; }
+    finally { $('send').disabled = !account; }
+  };
+
+  // the extension opens this page with #key=<bridge key>
+  const m = location.hash.match(/key=([0-9a-fA-F]{66})/);
+  if (m) $('key').value = m[1];
+})();
+</script>
+</body>
+</html>

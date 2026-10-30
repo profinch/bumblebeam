@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BumbleBeam Bridge</title>
+<link rel="icon" href="icons/icon-32.png">
+<link rel="stylesheet" href="wallet.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img src="icons/icon-32.png" alt=""><b>BumbleBeam</b> Bridge</div>
+  <nav id="tabs" hidden>
+    <button data-tab="wallet" class="on">Wallet</button>
+    <button data-tab="toeth">BEAM → WBEAM</button>
+    <button data-tab="frometh">WBEAM → BEAM</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <div class="sync" id="sync"></div>
+</header>
+
+<main>
+  <!-- ---------- start ---------- -->
+  <section id="s-boot" class="screen"><p class="dim">Loading the Beam wallet engine…</p><p class="err" id="bootErr"></p></section>
+
+  <section id="s-welcome" class="screen" hidden>
+    <h1>A Beam wallet for the bridge</h1>
+    <p class="dim">The seed and keys stay in this extension. Beam's own wasm wallet signs; the bridge is the official one.</p>
+    <div class="choices">
+      <button id="goCreate">Create a new wallet</button>
+      <button id="goRestore" class="ghost">Restore from a seed phrase</button>
+      <button id="goImport" class="ghost">Open a backup file</button>
+    </div>
+  </section>
+
+  <section id="s-create" class="screen" hidden>
+    <h1>Your seed phrase</h1>
+    <p class="dim">Write these 12 words down, in order. They are the only way to restore the wallet.</p>
+    <ol class="seed" id="seedWords"></ol>
+    <label>To check, type words <span id="checkIdx"></span></label>
+    <input id="seedCheck" autocomplete="off" spellcheck="false" placeholder="three words, space-separated">
+    <div class="pw">
+      <label>Wallet password</label><input type="password" id="cPass" autocomplete="new-password">
+      <label>Repeat password</label><input type="password" id="cPass2" autocomplete="new-password">
+    </div>
+    <div class="row"><button class="ghost back">Back</button><button id="doCreate">Create the wallet</button></div>
+    <p class="dim small">The wallet starts from Beam's published snapshot (~320 MB) instead of syncing millions of headers.</p>
+    <div class="progress" id="cProg" hidden><div><i id="cBar"></i></div><span id="cText"></span></div>
+    <p class="err" id="createErr"></p>
+  </section>
+
+  <section id="s-restore" class="screen" hidden>
+    <h1>Restore from a seed phrase</h1>
+    <p class="dim">The wallet downloads Beam's recovery snapshot (~320 MB, the mobile wallet's "automatic restore") and finds its coins in it. No node with your owner key is needed.</p>
+    <label>12 words</label>
+    <textarea id="rSeed" rows="3" autocomplete="off" spellcheck="false"></textarea>
+    <div class="pw">
+      <label>New password for this wallet</label><input type="password" id="rPass" autocomplete="new-password">
+      <label>Repeat password</label><input type="password" id="rPass2" autocomplete="new-password">
+    </div>
+    <div class="row"><button class="ghost back">Back</button><button id="doRestore">Restore</button></div>
+    <div class="progress" id="rProg" hidden><div><i id="rBar"></i></div><span id="rText"></span></div>
+    <p class="err" id="restoreErr"></p>
+  </section>
+
+  <section id="s-import" class="screen" hidden>
+    <h1>Open a backup file</h1>
+    <p class="dim">A wallet.db saved from Settings → Backup. It opens with the password it had when it was saved.</p>
+    <input type="file" id="iFile" accept=".db,application/octet-stream">
+    <label>Password of that wallet</label><input type="password" id="iPass">
+    <div class="row"><button class="ghost back">Back</button><button id="doImport">Open</button></div>
+    <p class="err" id="importErr"></p>
+  </section>
+
+  <section id="s-unlock" class="screen" hidden>
+    <h1>Unlock</h1>
+    <label>Wallet password</label><input type="password" id="uPass" autocomplete="current-password">
+    <div class="row"><button id="doUnlock">Unlock</button></div>
+    <p class="err" id="unlockErr"></p>
+  </section>
+
+  <!-- ---------- wallet ---------- -->
+  <section id="t-wallet" class="screen tab" hidden>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="avail">—</div><div class="l">available, BEAM</div></div>
+      <div class="kpi"><div class="v" id="pend">—</div><div class="l">incoming / outgoing / maturing</div></div>
+      <div class="kpi"><div class="v" id="height">—</div><div class="l">Beam height</div></div>
+    </div>
+    <div class="card">
+      <h2>Receive BEAM</h2>
+      <p class="dim">A <b>regular</b> address needs this tab open until the transfer completes. An <b>offline</b> address takes payments while the wallet is closed.</p>
+      <div class="row"><button id="mkRegular">Regular address</button><button id="mkOffline" class="ghost">Offline address</button></div>
+      <div id="addrBox" hidden><div id="qr"></div><div class="mono box" id="addr"></div><button class="ghost small" id="copyAddr">Copy</button></div>
+      <p class="err" id="addrErr"></p>
+    </div>
+    <div class="card">
+      <h2>Send BEAM</h2>
+      <label>To address</label><input id="sAddr" autocomplete="off" spellcheck="false">
+      <label>Amount, BEAM</label><input id="sAmt" inputmode="decimal">
+      <div class="row"><button id="doSend">Send</button></div>
+      <p class="err" id="sendErr"></p><p class="ok" id="sendOk"></p>
+    </div>
+    <div class="card">
+      <h2>Transactions</h2>
+      <div class="scroll"><table><thead><tr><th>When</th><th>What</th><th class="r">BEAM</th><th>Status</th></tr></thead><tbody id="txs"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ---------- BEAM -> WBEAM ---------- -->
+  <section id="t-toeth" class="screen tab" hidden>
+    <div class="card">
+      <h2>BEAM → WBEAM on Ethereum</h2>
+      <label>Ethereum address (Rabby)</label><input id="eRcv" placeholder="0x…" autocomplete="off" spellcheck="false">
+      <label>WBEAM to receive</label><div class="inline"><input id="eAmt" inputmode="decimal" placeholder="0"><button class="ghost" id="eMax">All</button></div>
+      <label>Relayer fee, BEAM</label><input id="eFee" inputmode="decimal">
+      <p class="dim small" id="eFeeInfo">pricing the relayer fee…</p>
+      <div class="row"><button id="eSend">Send to Ethereum</button></div>
+      <p class="err" id="eErr"></p><p class="ok" id="eOk"></p>
+    </div>
+    <div class="card">
+      <h2>Transfers to this address</h2>
+      <p class="dim small">The bridge's last 40 messages on the Beam side and the relayer's releases on Ethereum. The relayer usually releases within an hour of the Beam confirmation.</p>
+      <div class="scroll"><table><thead><tr><th>#</th><th class="r">WBEAM</th><th class="r">Fee</th><th>Status</th><th>Ethereum</th></tr></thead><tbody id="eMsgs"><tr><td colspan="5" class="dim">enter an Ethereum address above</td></tr></tbody></table></div>
+      <p class="err" id="eMsgErr"></p>
+    </div>
+  </section>
+
+  <!-- ---------- WBEAM -> BEAM ---------- -->
+  <section id="t-frometh" class="screen tab" hidden>
+    <div class="card">
+      <h2>WBEAM → BEAM</h2>
+      <ol class="steps">
+        <li>Copy this wallet's bridge key: the Ethereum side sends to it.
+          <div class="mono box" id="bKey">—</div><button class="ghost small" id="copyKey">Copy</button></li>
+        <li>Open the <a id="ethPage" target="_blank" rel="noopener"><b>Ethereum page</b></a> (<span class="mono">bridge/web</span> on 127.0.0.1:8771, where Rabby works; the link carries the key), approve WBEAM and send. Rabby signs two transactions: approve and sendFunds.</li>
+        <li>When the relayer has pushed the message to Beam, it shows up below: press <b>Receive</b>.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h2>Arrived from Ethereum</h2>
+      <div class="scroll"><table><thead><tr><th>#</th><th class="r">BEAM</th><th></th></tr></thead><tbody id="inMsgs"><tr><td colspan="3" class="dim">nothing yet</td></tr></tbody></table></div>
+      <p class="err" id="inErr"></p><p class="ok" id="inOk"></p>
+    </div>
+  </section>
+
+  <!-- ---------- settings ---------- -->
+  <section id="t-settings" class="screen tab" hidden>
+    <div class="card">
+      <h2>Node</h2>
+      <p class="dim small">WebSocket (wss) address of a Beam node, host:port.</p>
+      <div class="inline"><input id="node" spellcheck="false"><button class="ghost" id="saveNode">Save and restart</button></div>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="dim small">Saves wallet.db: keys, addresses and history, encrypted with the wallet password. Opening it later is instant, unlike a seed restore.</p>
+      <div class="row"><button id="doBackup">Save backup file</button></div>
+    </div>
+    <div class="card">
+      <h2>Wallet</h2>
+      <div class="row"><button class="ghost" id="doLock">Lock</button><button class="ghost danger" id="doDelete">Delete this wallet</button></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="confirm">
+  <h3 id="cTitle">Confirm</h3>
+  <div class="sum" id="cBody"></div>
+  <p class="dim small" id="cNote"></p>
+  <div class="row end"><button class="ghost" id="cNo">Cancel</button><button id="cYes">Confirm</button></div>
+</dialog>
+
+<script src="vendor/qrcode.min.js"></script>
+<script src="vendor/wasm-client.js"></script>
+<script src="beam.js"></script>
+<script src="bridge.js"></script>
+<script src="wallet.js"></script>
+</body>
+</html>
