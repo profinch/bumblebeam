@@ -19,7 +19,7 @@ thermo.py once      two samples to stdout, nothing stored (sudo, for checking a 
 | CPU package power | RAPL `intel-rapl:0` energy counter | the `core` domain is skipped: on AMD it counts one core |
 | CPU load, clocks | `/proc/stat`, `/proc/loadavg`, cpufreq | |
 | Board temps, fans, voltages | **IT8689E read directly** over `/dev/port` | the in-kernel `it87` does not know the chip; see below |
-| NVMe temps | hwmon `nvme` | Composite + every implemented sensor |
+| NVMe temps | hwmon `nvme` | Composite + every implemented sensor; whole kelvins, so values end in .85 |
 | NVMe health | admin ioctl: SMART log, Identify, HCTM feature | TMT1/TMT2 throttle transitions and seconds, minutes above WCTEMP/CCTEMP, critical warning, wear |
 | NVMe on the bus | `/sys/class/nvme`, PCIe link, AER counters | a known drive leaving the bus is a `crit` event |
 | NVMe I/O | `/proc/diskstats` | read/write MB/s, to read temperature against load |
@@ -35,6 +35,15 @@ Super I/O config space once at start, then each sample reads temp1-6, fan1-6 (16
 vendor register shows a foreign access; the count is on the dashboard. Labels follow the lm-sensors
 configs for Gigabyte AM4 boards (frankcrawford/it87). If the out-of-tree `it87` driver is ever loaded,
 the collector uses its hwmon device instead and keeps the same sensor keys.
+
+## Stepped sensors
+
+Every temperature source is quantized: NVMe 1 K, IT8689E and GPU 1 °C, k10temp 0.125 °C. A
+separate thread reads them `fast_hz` (4) times a second and each 2 s sample stores the mean: while
+the true value sits between two steps the sensor flickers, and the share of reads on the upper step
+is the fraction. The dashboard adds a centred moving average (raw / 30 s / 2 min) on top, with the
+raw min-max band underneath. This recovers tenths, sometimes hundredths, for values that move;
+a sensor sitting still on one step gives nothing finer than that step.
 
 ## Storage
 

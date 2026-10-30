@@ -58,7 +58,7 @@ a:hover { text-decoration: underline; }
 main { flex: 1 0 auto; width: 100%; max-width: var(--page-width); margin: 0 auto; padding: 8px var(--page-padding-x) 40px; }
 .page-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 22px 0 16px; min-height: 34px; }
 .page-title { font: 700 13px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; margin: 0; }
-.page-head .actions { margin-left: auto; display: flex; gap: 8px; }
+.page-head .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .panel { background: rgba(255, 255, 255, .04); border: 1px solid var(--border-dim); border-radius: 8px; padding: 16px; margin-bottom: 16px; min-width: 0; }
 .panel-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 12px; min-height: 24px; }
 .panel-title { font: 700 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; margin: 0; }

@@ -39,6 +39,7 @@ DEFAULTS = {
     'port': 9188,
     'raw_hours': 48,          # full-rate samples kept this long
     'm1_days': 120,           # 1-minute min/avg/max kept this long; 10-minute ones forever
+    'fast_hz': 4,             # quantized temperatures are read this often and averaged per sample (0 = off)
     'superio': True,          # read the IT8689E directly (off: board temps from gigabyte_wmi)
     'names': {},              # NVMe serial -> short name
     'labels': {},             # sensor key -> label
@@ -104,9 +105,10 @@ def natkey(s):
     return [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', s)]
 
 
-def M(label, grp, kind, unit, ord, lim=(None, None, None, None), note='', hidden=False, prec=1):
+def M(label, grp, kind, unit, ord, lim=(None, None, None, None), note='', hidden=False, prec=1, res=None):
+    """res: the sensor's own step; a stepped temperature is averaged over fast reads, so it gets 2 decimals"""
     return {'label': label, 'grp': grp, 'kind': kind, 'unit': unit, 'ord': ord, 'lim': list(lim),
-            'note': note, 'hidden': hidden, 'prec': prec}
+            'note': note, 'hidden': hidden, 'prec': 2 if res else prec, 'res': res}
 
 
 # ---------------------------------------------------------------- Super I/O (IT8689E)
@@ -137,6 +139,7 @@ class SuperIO:
             os.close(self.fd)
             raise RuntimeError(f'no supported Super I/O at 0x2e (id {cid:#06x})')
         self.dropped = 0
+        self.lock = threading.Lock()        # the collector tick and the fast reader share the address port
 
     def _out(self, port, v):
         os.pwrite(self.fd, bytes([v]), port)
@@ -155,15 +158,30 @@ class SuperIO:
     def _clean(self):
         return not (self.r(0x06) & 0xe0) and self.r(0x58) == 0x90
 
-    def sample(self):
-        if not self._clean():
-            self.dropped += 1
-            return None
+    def _temps(self):
         temps = []
         for i in range(6):
             v = self.r(0x29 + i)
             v = v - 256 if v > 127 else v
             temps.append(None if v in (-128, 127) else float(v))
+        return temps
+
+    def temps(self):
+        with self.lock:
+            if not self._clean():
+                return None
+            t = self._temps()
+            return t if self._clean() else None
+
+    def sample(self):
+        with self.lock:
+            return self._sample()
+
+    def _sample(self):
+        if not self._clean():
+            self.dropped += 1
+            return None
+        temps = self._temps()
         main, ext = self.r(0x13), self.r(0x0c)
         on = [main & 0x10, main & 0x20, main & 0x40, ext & 0x10, ext & 0x20, ext & 0x04]
         fans = []
@@ -188,7 +206,7 @@ def board_readings(temps, fans, vin, scaled_internal=False):
     out = []
     for i, t in enumerate(temps, 1):
         if t is not None:
-            out.append((f'board.temp{i}', t, M(BOARD_TEMP[i], 'board', 'temp', '°C', 400 + i, hidden=i == 4,
+            out.append((f'board.temp{i}', t, M(BOARD_TEMP[i], 'board', 'temp', '°C', 400 + i, hidden=i == 4, res=1,
                                                note='не подключён (по конфигу Gigabyte)' if i == 4 else '')))
     for i, f in enumerate(fans, 1):
         if f is not None:
@@ -325,7 +343,7 @@ class NVML:
             note = ' · '.join(f'{k} {v}' for k, v in th.items())
             t = self.u('nvmlDeviceGetTemperature', h, 0)
             if t is not None:
-                out.append((f'{p}.temp', float(t), M('GPU', 'gpu', 'temp', '°C', 300, (None, None, gmax - 10, gmax) if gmax else (None,) * 4, note)))
+                out.append((f'{p}.temp', float(t), M('GPU', 'gpu', 'temp', '°C', 300, (None, None, gmax - 10, gmax) if gmax else (None,) * 4, note, res=1)))
             fv = FieldValue(fieldId=82)              # NVML_FI_DEV_MEMORY_TEMP; GDDR6X junction is not exposed on GeForce
             if self.lib.nvmlDeviceGetFieldValues(h, 1, ctypes.byref(fv)) == 0 and fv.nvmlReturn == 0 and 0 < fv.value < 150:
                 out.append((f'{p}.memtemp', float(fv.value), M('GPU память', 'gpu', 'temp', '°C', 301)))
@@ -438,8 +456,9 @@ def hwmon_readings(st):
                 lab = rd(p.replace('_input', '_label')) or os.path.basename(p)
                 v = rdnum(p, 1000)
                 if v is not None:
-                    out.append((f'cpu.{lab.lower()}', v, M(lab, 'cpu', 'temp', '°C', 100 + len(out),
+                    out.append((f'cpu.{lab.lower()}', v, M(lab, 'cpu', 'temp', '°C', 100 + len(out), res=0.125,
                                                            note='Tctl = Tdie на 5900X' if lab == 'Tctl' else '')))
+                    st.fast_paths[f'cpu.{lab.lower()}'] = p
         elif name == 'nvme' and dev in st.nvme_by_ctrl:
             serial = st.nvme_by_ctrl[dev]
             nv = st.nvmes[serial]
@@ -457,7 +476,8 @@ def hwmon_readings(st):
                         note = ' · '.join(f'{k} {x - 273:.0f}' for k, x in (('TMT1', nv.get('tmt1')), ('TMT2', nv.get('tmt2'))) if x)
                         note = ' · '.join(filter(None, [note, f'WCTEMP {wc:.0f}', cc and f'CCTEMP {cc:.0f}']))
                 key = f'nvme.{serial}.' + ('comp' if n == 1 else f's{n - 1}')
-                out.append((key, v, M(f"{nv['name']} {lab}", 'storage', 'temp', '°C', 200 + 10 * nv['n'] + n, lim, note)))
+                out.append((key, v, M(f"{nv['name']} {lab}", 'storage', 'temp', '°C', 200 + 10 * nv['n'] + n, lim, note, res=1)))
+                st.fast_paths[key] = p
         elif name == 'gigabyte_wmi':
             if st.superio is None:
                 out += board_readings([rdnum(p, 1000) for p in temps], [], [])
@@ -590,6 +610,50 @@ class Alerts:
             self.notify(level, msg)
 
 
+class FastTemps(threading.Thread):
+    """The temperatures come in steps (NVMe 1 K, IT8689E and GPU 1 °C, k10temp 0.125 °C). They are read
+    fast_hz times a second and each sample stores the mean: while the true value sits between two steps
+    the sensor flickers, and the share of reads on the upper step is the fraction. Fine for a value that
+    moves slower than a sample; it cannot add digits a sensor sitting still on one step does not show."""
+
+    def __init__(self, col, hz):
+        super().__init__(daemon=True, name='fast-temps')
+        self.col, self.dt = col, 1 / hz
+        self.acc, self.lock = {}, threading.Lock()
+
+    def take(self):
+        with self.lock:
+            acc, self.acc = self.acc, {}
+        return {k: round(s / n, 3) for k, (s, n) in acc.items()}
+
+    def run(self):
+        c = self.col
+        nxt = time.monotonic()
+        while not c.stop:
+            vals = {}
+            for key, p in list(c.fast_paths.items()):
+                v = rdnum(p, 1000)
+                if v is not None:
+                    vals[key] = v
+            if c.superio and not c.it87_driver:
+                t = c.superio.temps()
+                for i, v in enumerate(t or [], 1):
+                    if v is not None:
+                        vals[f'board.temp{i}'] = v
+            if c.nvml:
+                for d in c.nvml.devs:
+                    v = c.nvml.u('nvmlDeviceGetTemperature', d['h'], 0)
+                    if v is not None:
+                        vals[f"gpu{d['i']}.temp"] = float(v)
+            with self.lock:
+                for k, v in vals.items():
+                    a = self.acc.setdefault(k, [0.0, 0])
+                    a[0] += v
+                    a[1] += 1
+            nxt += self.dt
+            time.sleep(max(0.0, nxt - time.monotonic()))
+
+
 class Collector:
     def __init__(self, conf):
         self.conf = conf
@@ -613,6 +677,8 @@ class Collector:
         self.cpu = cpu_model()
         self.tg_last = 0
         self.stop = False
+        self.fast = None
+        self.fast_paths = {}                # hwmon temperature files the fast reader averages
 
     def telegram(self, level, msg):
         tg = self.conf.get('telegram')
@@ -644,6 +710,9 @@ class Collector:
             self.nvml = NVML()
         except Exception as e:
             print(f'nvml: off ({e})', flush=True)
+        if self.conf['fast_hz'] > 0:
+            self.fast = FastTemps(self, self.conf['fast_hz'])
+            self.fast.start()
 
     def scan_nvme(self, ts):
         """which known drives are on the bus, their PCIe link and AER counters; events on change"""
@@ -744,6 +813,7 @@ class Collector:
         return m
 
     def tick(self, ts, t):
+        means = self.fast.take() if self.fast else {}
         readings = []
         if self.superio and not self.it87_driver:
             s = self.superio.sample()
@@ -779,6 +849,8 @@ class Collector:
             if v is None or v != v:
                 continue
             m = self.apply_conf(key, m)
+            if key in means:
+                v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"шаг {m['res']:g}, среднее {self.conf['fast_hz']} опросов/с"]))
             sid = self.store.sid(key, m, ts)
             db.execute('INSERT OR REPLACE INTO raw VALUES(?,?,?)', (sid, ts, v))
             a = self.acc.get(sid)
