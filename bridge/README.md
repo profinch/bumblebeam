@@ -16,7 +16,7 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
 |---|---|
 | [`extension/`](extension) | MV3 extension. Beam's wasm wallet (`vendor/`), the wallet tab (`wallet.html`), the bridge calls (`bridge.js`) |
 | [`web/`](web) | The Ethereum side of WBEAM → BEAM: a page Rabby injects into, with hand-encoded `approve` + `sendFunds` |
-| [`../deploy/docker/containers/nginx/conf/wallet-node.conf`](../deploy/docker/containers/nginx/conf/wallet-node.conf) | `wss://wallet-node.bumblebeam.org`: a WebSocket door to the pool's beam-node (`websocket_port=8200`) |
+| [`../deploy/docker/containers/nginx/conf/wss.conf`](../deploy/docker/containers/nginx/conf/wss.conf) | `wss://wss.bumblebeam.org`: a WebSocket door to the pool's beam-node (`websocket_port=8200`) |
 
 ## The two directions
 **BEAM → WBEAM.**
