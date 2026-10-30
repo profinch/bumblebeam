@@ -16,3 +16,7 @@ file_log_level=info
 #miner_key=<beam-wallet export_miner_key --subkey=1>
 #owner_key=<beam-wallet export_owner_key>
 #pass=<wallet password>
+# WebSocket door for browser wallets (bridge/ extension): the node's own WebSocket-to-TCP proxy,
+# plain on 8200, published on 127.0.0.1 only; nginx (wallet-node.conf) adds TLS
+websocket_port=8200
+websocket_use_tls=0

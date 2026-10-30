@@ -18,6 +18,7 @@ services:
     working_dir: /data
     ports:
       - "10000:10000"                     # p2p, the node is a full peer
+      - "127.0.0.1:8200:8200"             # WebSocket for browser wallets, behind nginx (wallet-node.conf)
     volumes:
       - /data/bumblebeam/node:/data
     ulimits:

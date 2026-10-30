@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "BumbleBeam Bridge",
+  "short_name": "BB Bridge",
+  "version": "0.1.0",
+  "description": "A Beam wallet with a UI for the official Beam <-> Ethereum bridge: BEAM to WBEAM and back.",
+  "action": { "default_title": "BumbleBeam Bridge" },
+  "background": { "service_worker": "background.js" },
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": [
+    "https://mobile-restore.beam.mw/*",
+    "https://api.coingecko.com/*",
+    "https://explorer-api.beam.mw/*",
+    "https://eth.blockscout.com/*",
+    "https://ethereum-rpc.publicnode.com/*",
+    "https://eth.llamarpc.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "cross_origin_embedder_policy": { "value": "require-corp" },
+  "cross_origin_opener_policy": { "value": "same-origin" }
+}
