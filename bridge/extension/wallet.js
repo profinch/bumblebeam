@@ -48,6 +48,25 @@
     });
   }
 
+  // The wallet asks for consent on every contract transaction with what it computed itself:
+  // the amounts it moves and the fee. The bridge context (address, relayer fee) goes on top.
+  let consentCtx = null;
+  Beam.onConsent((info, amounts) => {
+    const ctx = consentCtx || { title: 'Contract transaction', rows: [], note: 'Not started by this page: reject it unless you know what it is.' };
+    const rows = [...ctx.rows];
+    for (const a of Array.isArray(amounts) ? amounts : []) {
+      const asset = Number(a.assetID ?? a.asset_id ?? 0);
+      rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${amt(Number(a.amount), 8)} ${asset ? `asset ${asset}` : 'BEAM'}`]);
+    }
+    if (info && info.fee != null) rows.push(['Beam network fee', `${amt(Number(info.fee), 8)} BEAM`]);
+    if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
+    return confirmBox(ctx.title, rows, ctx.note);
+  });
+  async function withConsent(ctx, fn) {
+    consentCtx = ctx;
+    try { return await fn(); } finally { consentCtx = null; }
+  }
+
   const passwordPair = (a, b) => {
     const p = $(a).value;
     if (p.length < 8) throw new Error('use a password of 8 characters or more');
@@ -222,11 +241,11 @@
       const fd = feeData || await Bridge.relayerFee();
       if (f < Math.round(fd.min * G)) throw new Error(`the fee is below the relayer's minimum (${fd.min.toFixed(2)} BEAM): the transfer would wait for cheaper gas`);
       if (a + f + 2e6 > avail) throw new Error(`not enough: ${amt(avail, 8)} BEAM available, needed amount + fee + ~0.02`);
-      const ok = await confirmBox('Send to Ethereum', [
-        ['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`], ['Charged', `${amt(a + f, 8)} BEAM + network fee`], ['Ethereum address', rcv],
-      ], 'The official bridge pipe on Beam, released by its relayer on Ethereum. It cannot be undone.');
-      if (!ok) return;
-      const txid = await Bridge.sendToEth(a, rcv, f);
+      const txid = await withConsent({
+        title: 'Send to Ethereum',
+        rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`], ['Ethereum address', rcv]],
+        note: 'The official bridge pipe on Beam, released by its relayer on Ethereum. It cannot be undone.',
+      }, () => Bridge.sendToEth(a, rcv, f));
       $('eOk').textContent = `sent, Beam transaction ${txid}. It shows up below once a block confirms it.`;
       txs(); setTimeout(outgoing, 90000);
     } catch (e) { fail('eErr')(e); }
@@ -272,7 +291,11 @@
     $('inErr').textContent = $('inOk').textContent = '';
     e.target.disabled = true;
     try {
-      const txid = await Bridge.receive(id);
+      const txid = await withConsent({
+        title: 'Receive from Ethereum',
+        rows: [['Bridge message', `#${id}`]],
+        note: 'Takes the BEAM the relayer brought over for this wallet.',
+      }, () => Bridge.receive(id));
       $('inOk').textContent = `receiving message #${id}, Beam transaction ${txid}`;
       txs();
     } catch (err) { fail('inErr')(err); e.target.disabled = false; }

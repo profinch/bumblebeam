@@ -29,7 +29,7 @@ The relayer itself is alive: message 675 was released on 2026-10-30.
 3. Status comes from the pipe's `local_msg`, joined with the relayer's calls decoded from Blockscout.
 
 **WBEAM → BEAM.**
-1. The wallet's bridge key is `get_pk` on the pipe, 33 bytes.
+1. The wallet's bridge key is `get_pk` on the pipe (`pubkey`, 33 bytes).
 2. On `web/`, Rabby signs `approve(pipe, amount + fee)` and `sendFunds(amount, fee, key)` (`0x4d5dd2bc`).
    The selector is checked against real calls on the pipe.
 3. The relayer pushes the message to Beam. It shows up in `view_incoming`, and **Receive** (`action=receive`)

@@ -19,12 +19,13 @@ const Bridge = (() => {
     return shader;
   }
 
-  // runs the app shader; a call that makes a transaction returns its txid, a view its output
+  // runs the app shader (through the wallet's app API); a call that makes a transaction returns its
+  // txid once the consent handler approved it, a view returns its output
   async function invoke(args, tx = false) {
-    const res = await Beam.call('invoke_contract', { contract: await contract(), args: `${args},cid=${PIPE_CID}`, create_tx: false });
+    const res = await Beam.appCall('invoke_contract', { contract: await contract(), args: `${args},cid=${PIPE_CID}`, create_tx: false });
     if (tx) {
       if (!res.raw_data) throw new Error(`the contract made no transaction: ${res.output || ''}`);
-      return (await Beam.call('process_invoke_data', { data: res.raw_data })).txid;
+      return (await Beam.appCall('process_invoke_data', { data: res.raw_data })).txid;
     }
     const out = JSON.parse(res.output || '{}');
     if (out.error) throw new Error(`contract: ${out.error}`);
@@ -124,7 +125,7 @@ const Bridge = (() => {
 
   // ---------- WBEAM -> BEAM ----------
   // The key the Ethereum side sends to (33 bytes): derived from the pipe's cid by this wallet.
-  const beamKey = async () => (await invoke('role=user,action=get_pk')).pk;
+  const beamKey = async () => (await invoke('role=user,action=get_pk')).pubkey;
   // messages the relayer has pushed to the Beam pipe for this wallet and that are not received yet
   const incoming = async () => (await invoke('role=manager,action=view_incoming,startFrom=0')).incoming || [];
   const receive = (msgId) => invoke(`role=user,action=receive,msgId=${msgId}`, true);
