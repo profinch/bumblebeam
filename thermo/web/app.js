@@ -15,7 +15,9 @@ const KINDS = [['temp', 'Температуры'], ['fan', 'Вентилятор
 const UNIT = { '°C': '°C', RPM: 'об/мин', W: 'Вт', 'MB/s': 'МБ/с', MHz: 'МГц', V: 'В', '%': '%', '': '' };
 const LEVEL = { ok: 'норма', info: 'инфо', warn: 'внимание', crit: 'критично' };
 
+const SMOOTH = [['сырые', 0], ['30 с', 30], ['2 мин', 120]];
 let range = store.get('range', 3600);
+let smooth = store.get('smooth', 30);
 let hidden = new Set(store.get('hidden', []));
 let now = null, stats24 = {}, statsR = {}, series = {}, evLimit = 50;
 let built = '';
@@ -84,7 +86,7 @@ function renderTiles() {
       const scale = top ? top : 100;
       bar = `<div class="bar"><i style="width:${Math.min(100, Math.max(0, s.v / scale * 100))}%"></i>${wh && ch ? `<u style="left:${wh / ch * 100}%"></u>` : ''}</div>`;
     }
-    const sub = [st ? `24ч макс ${fmt(st[2], s.prec)}` : '', top ? `предел ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `мин ${s.lim[1]}` : '']
+    const sub = [st ? `24ч макс ${fmt(st[2], Math.min(1, s.prec))}` : '', top ? `предел ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `мин ${s.lim[1]}` : '']
       .filter(Boolean).join(' · ');
     const grp = (now.groups.find(g => g[0] === s.grp) || [, s.grp])[1];
     return `<div class="tile ${lv === 'ok' ? '' : lv}" title="${esc(s.note || '')}">
@@ -144,7 +146,7 @@ function renderTables() {
     const g = t.dataset.table;
     const rows = Object.entries(now.sensors).filter(([, s]) => s.grp === g).sort((a, b) => a[1].ord - b[1].ord);
     t.innerHTML = `<thead><tr><th>Датчик</th><th class="num">Сейчас</th><th class="num">Мин ${rangeLabel()}</th><th class="num">Средн</th>
-      <th class="num">Макс</th><th>Пороги</th><th>Ключ</th><th>Заметка</th></tr></thead><tbody>${rows.map(([k, s]) => {
+      <th class="num">Макс</th><th class="num">Шаг</th><th>Пороги</th><th>Ключ</th><th>Заметка</th></tr></thead><tbody>${rows.map(([k, s]) => {
       const st = statsR[k] || [];
       const lv = levelOf(s);
       const [wl, cl, wh, ch] = s.lim;
@@ -152,7 +154,7 @@ function renderTables() {
       return `<tr><td>${esc(s.label)}${s.hidden ? ' <span class="dim">(скрыт)</span>' : ''}</td>
         <td class="num ${lv === 'ok' ? '' : lv}">${fmt(s.v, s.prec)} ${unit(s.unit)}</td>
         <td class="num">${fmt(st[0], s.prec)}</td><td class="num">${fmt(st[1], s.prec)}</td><td class="num">${fmt(st[2], s.prec)}</td>
-        <td class="dim">${th || '—'}</td><td class="dim">${esc(k)}</td><td class="dim">${esc(s.note || '')}</td></tr>`;
+        <td class="num dim">${s.res ? s.res : '—'}</td><td class="dim">${th || '—'}</td><td class="dim">${esc(k)}</td><td class="dim">${esc(s.note || '')}</td></tr>`;
     }).join('')}</tbody>`;
   }
 }
@@ -175,6 +177,21 @@ function chartKeys(g, kind) {
     .sort((a, b) => a[1].ord - b[1].ord).map(([k]) => k).slice(0, PALETTE.length);
 }
 
+// centred moving average over `w` seconds: a stepped sensor flickering between two values reads as
+// the level between them; the band under the line keeps the raw min..max
+function smoothed(a, step, w) {
+  const h = Math.floor(w / step / 2);
+  if (h < 1) return a;
+  const out = new Array(a.length).fill(null);
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === null) continue;
+    let sum = 0, c = 0;
+    for (let j = Math.max(0, i - h); j <= Math.min(a.length - 1, i + h); j++) if (a[j] !== null) { sum += a[j]; c++; }
+    out[i] = sum / c;
+  }
+  return out;
+}
+
 function drawChart(box) {
   const g = box.dataset.g, kind = box.dataset.k, data = series[g];
   const svg = $('svg', box), legend = $('.legend', box);
@@ -195,6 +212,8 @@ function drawChart(box) {
     return;
   }
   const t = data.t, n = t.length;
+  const A = Object.fromEntries(on.map(k => [k, kind === 'temp' && smooth ? smoothed(data.s[k].a, data.step, smooth) : data.s[k].a]));
+  const isSm = kind === 'temp' && smooth && Math.floor(smooth / data.step / 2) >= 1;
   let lo = Infinity, hi = -Infinity;
   for (const k of on) for (let i = 0; i < n; i++) {
     const a = data.s[k].n[i], b = data.s[k].x[i];
@@ -219,6 +238,7 @@ function drawChart(box) {
     }
   }
   for (const x of thr) hi = Math.max(hi, x.v);
+  if (kind === 'temp' && hi - lo < 4) { const mid = (hi + lo) / 2; lo = mid - 2; hi = mid + 2; }   // one sensor step is not a cliff
   const pad = (hi - lo) * 0.06 || 1;
   if (kind === 'temp') lo = Math.floor(lo - pad);
   hi += pad;
@@ -255,11 +275,11 @@ function drawChart(box) {
     flush();
   }
   for (const k of on) {
-    const s = data.s[k];
+    const a = A[k];
     let d = '', pen = false;
     for (let i = 0; i < n; i++) {
-      if (s.a[i] === null) { pen = false; continue; }
-      d += `${pen ? 'L' : 'M'}${X(i).toFixed(1)},${Y(s.a[i]).toFixed(1)}`;
+      if (a[i] === null) { pen = false; continue; }
+      d += `${pen ? 'L' : 'M'}${X(i).toFixed(1)},${Y(a[i]).toFixed(1)}`;
       pen = true;
     }
     h += `<path d="${d}" fill="none" stroke="${color[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -275,14 +295,16 @@ function drawChart(box) {
     const x = (e.clientX - r.left) * W / r.width;
     const i = Math.max(0, Math.min(n - 1, Math.round((x - L) / pw * (n - 1))));
     cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('visibility', 'visible');
-    dots.innerHTML = on.filter(k => data.s[k].a[i] !== null).map(k => `<circle cx="${X(i)}" cy="${Y(data.s[k].a[i])}" r="4" fill="${color[k]}" stroke="#042548" stroke-width="2"/>`).join('');
+    dots.innerHTML = on.filter(k => A[k][i] !== null).map(k => `<circle cx="${X(i)}" cy="${Y(A[k][i])}" r="4" fill="${color[k]}" stroke="#042548" stroke-width="2"/>`).join('');
     const rows = on.map(k => {
       const s = data.s[k], m = S[k];
-      if (s.a[i] === null) return '';
+      if (A[k][i] === null) return '';
       const mm = s.n[i] !== s.x[i] ? `<span class="mm">${fmt(s.n[i], m.prec)}…${fmt(s.x[i], m.prec)}</span>` : '<span></span>';
-      return `<div class="r"><i style="background:${color[k]}"></i><span>${esc(m.label)} ${mm}</span><b>${fmt(s.a[i], m.prec)} ${unit(m.unit)}</b></div>`;
+      return `<div class="r"><i style="background:${color[k]}"></i><span>${esc(m.label)} ${mm}</span><b>${fmt(A[k][i], m.prec)} ${unit(m.unit)}</b></div>`;
     }).join('');
-    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${data.step > now.interval ? ` · шаг ${data.step >= 60 ? data.step / 60 + ' мин' : data.step + ' с'}, средн (мин…макс)` : ''}</div>${rows}`;
+    const how = [data.step > now.interval && `шаг ${data.step >= 60 ? data.step / 60 + ' мин' : data.step + ' с'}`,
+      isSm && `сглаж. ${smooth >= 60 ? smooth / 60 + ' мин' : smooth + ' с'}`].filter(Boolean).join(', ');
+    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${how ? ` · ${how}; мелко: мин…макс` : ''}</div>${rows}`;
     tip.hidden = false;
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = Math.min(window.innerWidth - tw - 8, e.clientX + 14) + 'px';
@@ -345,7 +367,16 @@ $('#ev-more').onclick = () => { evLimit += 200; loadEvents(); };
 
 function renderRange() {
   $('#range').innerHTML = RANGES.map(([l, s]) => `<button type="button" data-r="${s}" class="${s === range ? 'on' : ''}">${l}</button>`).join('');
+  $('#smooth').innerHTML = SMOOTH.map(([l, s]) => `<button type="button" data-s="${s}" class="${s === smooth ? 'on' : ''}">${l}</button>`).join('');
 }
+$('#smooth').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  smooth = +b.dataset.s;
+  store.set('smooth', smooth);
+  renderRange();
+  drawCharts();
+});
 $('#range').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
