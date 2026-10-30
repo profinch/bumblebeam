@@ -45,14 +45,66 @@ const Beam = (() => {
   // words are space-separated in the UI and for GeneratePhrase/IsValidPhrase, ';' for CreateWallet
   const words = (phrase) => phrase.trim().toLowerCase().split(/[\s;,]+/).filter(Boolean);
 
-  function start(pass, node) {
+  // Contracts run only through an app API (the wallet API answers invoke_contract with "Feature is
+  // not supported"), as for the official DApps. A transaction an app asks for comes back to the
+  // consent handler with the wallet's own view of it (what it spends, the fee); nothing is signed
+  // until that handler approves.
+  let app = null, appNext = 1, consent = null;
+  const appPending = new Map();
+  const APP_NAME = 'BumbleBeam Bridge';
+
+  function onAppMessage(json) {
+    let msg;
+    try { msg = JSON.parse(json); } catch { return; }
+    const p = msg.id != null && appPending.get(msg.id);
+    if (!p) return;
+    appPending.delete(msg.id);
+    if (msg.error) p.reject(new Error(msg.error.message || JSON.stringify(msg.error)));
+    else p.resolve(msg.result);
+  }
+
+  function appApi() {
+    if (app) return app;
+    app = new Promise((resolve, reject) => {
+      const appid = WC.GenerateAppID(APP_NAME, location.origin);
+      client.createAppAPI('current', '', appid, APP_NAME, (err, api) => {
+        if (err) { app = null; return reject(new Error(String(err))); }
+        api.setHandler(onAppMessage);
+        resolve(api);
+      });
+    });
+    return app;
+  }
+
+  async function appCall(method, params) {
+    if (!client) throw new Error('wallet is not running');
+    const api = await appApi();
+    const id = appNext++;
+    return new Promise((resolve, reject) => {
+      appPending.set(id, { resolve, reject });
+      api.callWalletApi(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+    });
+  }
+
+  // beforeStart: what has to be set on the client before startWallet (the snapshot import)
+  function start(pass, node, beforeStart) {
     client = new WC(DB, pass, node);
     client.subscribe(onMessage);
+    client.setApproveContractInfoHandler(async (req, info, amounts, cb) => {
+      let ok = false;
+      try { ok = !!consent && (await consent(JSON.parse(info || '{}'), JSON.parse(amounts || '[]'))); } catch {}
+      if (ok) cb.contractInfoApproved(req); else cb.contractInfoRejected(req);
+    });
+    // the bridge never sends plain transfers through the app API: refuse any that come
+    client.setApproveSendHandler((req, info, cb) => cb.sendRejected(req));
+    if (beforeStart) beforeStart();
     client.startWallet();
+    app = null;
   }
 
   function stop() {
     if (!client) return Promise.resolve();
+    app = null;
     return new Promise((resolve) => client.stopWallet(() => { client = null; resolve(); }));
   }
 
@@ -81,6 +133,9 @@ const Beam = (() => {
   return {
     load,
     call,
+    appCall,
+    // consent(info, amounts) -> Promise<boolean>: the one place a contract transaction is approved
+    onConsent: (fn) => { consent = fn; },
     on: (fn) => listeners.add(fn),
     running: () => !!client && client.isRunning(),
     hasWallet: () => WC.IsInitialized(DB),
@@ -97,15 +152,12 @@ const Beam = (() => {
       if (WC.IsInitialized(DB)) WC.DeleteWallet(DB);
       WC.CreateWallet(words(phrase).join(';'), DB, pass);
       M.FS.writeFile(RECOVERY, data);
-      client = new WC(DB, pass, node);
-      client.subscribe(onMessage);
       await new Promise((resolve, reject) => {
-        client.importRecoveryFromFile(RECOVERY, (err, done, total) => {
+        start(pass, node, () => client.importRecoveryFromFile(RECOVERY, (err, done, total) => {
           if (err) return reject(err);
           onProgress('import', done, total);
           if (total && done === total) resolve();
-        });
-        client.startWallet();
+        }));
       });
       try { M.FS.unlink(RECOVERY); } catch {}
     },
