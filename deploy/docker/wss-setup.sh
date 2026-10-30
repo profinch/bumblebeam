@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-time: wss.bumblebeam.org, bumblebeam's WebSocket name; its root is the door to beam-node for
-# browser wallets (bridge/). Run it yourself on the server:
+# browser wallets (wallet/). Run it yourself on the server:
 #   ssh -t bumblebeam 'sudo bash /data/docker/wss-setup.sh'
 # (copy it there first: scp deploy/docker/wss-setup.sh deploy/docker/containers/nginx/conf/wss.conf bumblebeam:/tmp/)
 #
@@ -22,7 +22,7 @@ read -rp "go? [y/N] " a; [ "$a" = y ] || exit 1
 
 cp -p "$CFG" "$CFG.bak-$TS"
 grep -q '^websocket_port=' "$CFG" || printf '%s\n' \
-  '# WebSocket door for browser wallets (bumblebeam bridge/): plain on 8200, 127.0.0.1 only, nginx adds TLS' \
+  '# WebSocket door for browser wallets (bumblebeam wallet/): plain on 8200, 127.0.0.1 only, nginx adds TLS' \
   'websocket_port=8200' 'websocket_use_tls=0' >> "$CFG"
 
 cp -p compose-bumblebeam.yaml "compose-bumblebeam.yaml.bak-$TS"
@@ -48,7 +48,7 @@ if cf(f'/zones/{zone}/dns_records?name={name}')['result']:
     print('DNS record exists, left as is')
 else:
     r = cf(f'/zones/{zone}/dns_records', {'type': 'A', 'name': name, 'content': ip, 'proxied': True, 'ttl': 1,
-           'comment': 'bumblebeam WebSockets: / = beam-node for browser wallets (bridge/)'}, 'POST')
+           'comment': 'bumblebeam WebSockets: / = beam-node for browser wallets (wallet/)'}, 'POST')
     print('DNS created' if r.get('success') else r)
 EOF
 

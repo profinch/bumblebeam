@@ -1,4 +1,4 @@
-// BumbleBeam Bridge: the wallet tab. Screens for creating, restoring and unlocking the wallet, then
+// BumbleBeam Wallet: the wallet page. Screens for creating, restoring and unlocking the wallet, then
 // tabs for the wallet, both bridge directions and settings. Every string from the wallet, the
 // contract or the network goes through esc() before it is put into HTML.
 'use strict';
@@ -8,7 +8,7 @@
   // web-wallet.beam.mw:8200 is still on the pre-HF6 chain ("incompatible with HF 6", stuck at 3928666).
   const DEFAULT_NODE = 'wss.bumblebeam.org:443';
   const RECOVERY_URL = 'https://mobile-restore.beam.mw/mainnet/mainnet_recovery.bin';
-  const ETH_PAGE = 'http://127.0.0.1:8771/';                  // bridge/web, served locally: Rabby does not inject into extension pages
+  const ETH_PAGE = 'http://127.0.0.1:8771/';                  // wallet/web, served locally: Rabby does not inject into extension pages
   const G = Bridge.GROTH;
 
   const $ = (id) => document.getElementById(id);
@@ -313,7 +313,7 @@
     const bytes = await Beam.exportDb(pass, node);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
-    a.download = `beam-bridge-wallet-${new Date().toISOString().slice(0, 10)}.db`;
+    a.download = `bumblebeam-wallet-${new Date().toISOString().slice(0, 10)}.db`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     started(pass);
@@ -337,6 +337,11 @@
   (async () => {
     try {
       if (!self.crossOriginIsolated) throw new Error('the page is not cross-origin isolated: the wasm wallet needs SharedArrayBuffer');
+      // one running wallet per browser: two pages on the same wallet.db would fight over it.
+      // The lock is held for the page's life (the promise never resolves).
+      const mine = await new Promise((res) => navigator.locks.request('bumblebeam-wallet', { ifAvailable: true },
+        (lock) => { res(!!lock); return lock ? new Promise(() => {}) : undefined; }));
+      if (!mine) throw new Error('The wallet is already open in another window. Close this one and use that.');
       node = (await store.get('node')) || DEFAULT_NODE;
       $('node').value = node;
       $('eRcv').value = (await store.get('ethAddress')) || '';

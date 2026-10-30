@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BumbleBeam Bridge</title>
+<title>BumbleBeam Wallet</title>
 <link rel="icon" href="icons/icon-32.png">
 <link rel="stylesheet" href="wallet.css">
 </head>
 <body>
 <header>
-  <div class="brand"><img src="icons/icon-32.png" alt=""><b>BumbleBeam</b> Bridge</div>
+  <div class="brand"><img src="icons/icon-32.png" alt=""><b>BumbleBeam</b> Wallet</div>
   <nav id="tabs" hidden>
     <button data-tab="wallet" class="on">Wallet</button>
     <button data-tab="toeth">BEAM → WBEAM</button>
@@ -24,8 +24,8 @@
   <section id="s-boot" class="screen"><p class="dim">Loading the Beam wallet engine…</p><p class="err" id="bootErr"></p></section>
 
   <section id="s-welcome" class="screen" hidden>
-    <h1>A Beam wallet for the bridge</h1>
-    <p class="dim">The seed and keys stay in this extension. Beam's own wasm wallet signs; the bridge is the official one.</p>
+    <h1>BumbleBeam Wallet</h1>
+    <p class="dim">A Beam wallet whose seed and keys stay in this extension; Beam's own wasm wallet signs. Its bridge takes BEAM to Ethereum as WBEAM and back, through the official Beam bridge.</p>
     <div class="choices">
       <button id="goCreate">Create a new wallet</button>
       <button id="goRestore" class="ghost">Restore from a seed phrase</button>
@@ -132,7 +132,7 @@
       <ol class="steps">
         <li>Copy this wallet's bridge key: the Ethereum side sends to it.
           <div class="mono box" id="bKey">—</div><button class="ghost small" id="copyKey">Copy</button></li>
-        <li>Open the <a id="ethPage" target="_blank" rel="noopener"><b>Ethereum page</b></a> (<span class="mono">bridge/web</span> on 127.0.0.1:8771, where Rabby works; the link carries the key), approve WBEAM and send. Rabby signs two transactions: approve and sendFunds.</li>
+        <li>Open the <a id="ethPage" target="_blank" rel="noopener"><b>Ethereum page</b></a> (<span class="mono">wallet/web</span> on 127.0.0.1:8771, where Rabby works; the link carries the key), approve WBEAM and send. Rabby signs two transactions: approve and sendFunds.</li>
         <li>When the relayer has pushed the message to Beam, it shows up below: press <b>Receive</b>.</li>
       </ol>
     </div>
