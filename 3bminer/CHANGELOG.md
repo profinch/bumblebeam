@@ -2,6 +2,10 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
+## 0.10.2 (unreleased)
+- API: the firmware version is given as NMMiner gives its own, with a "v" (fwVersion in /api/system/info, ver in
+  /probe: v0.10.2), so NMMiner's Swarm page shows ours the same way. The stratum user agent stays 3BMiner/0.10.2.
+
 ## 0.10.1 (2026-10-29)
 - Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;
   its line is always kept and fades in and out, so nothing moves; on phones it sits right of the hashrate on two lines.
