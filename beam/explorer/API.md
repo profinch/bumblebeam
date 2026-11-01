@@ -1,0 +1,108 @@
+# BumbleBeam Explorer API
+
+Read-only data on the Beam (BEAM) blockchain from BumbleBeam's own archival and explorer nodes,
+for bots, scripts and agents. No key, no sign-up. Base URL: `https://explorer.bumblebeam.org`.
+
+There are three ways in:
+
+| | what | for |
+|---|---|---|
+| `/v1/…` | plain JSON, documented below; OpenAPI at [`/v1/openapi.json`](https://explorer.bumblebeam.org/v1/openapi.json) | bots and scripts |
+| `/mcp` | an MCP server (Streamable HTTP) with tools for the chain | AI agents |
+| `/api/…` | Beam's own explorer-node API, passed through unchanged | anything built for explorer-node |
+
+Beam is private by design: there are no addresses, balances or transfer amounts on the chain.
+What is public, and what this API serves: blocks, kernels (one per transaction, with its fee),
+outputs and inputs as commitments, confidential assets, contracts with their state and calls, the
+DEX, BANS names, and BEAM's supply.
+
+## Conventions
+
+- **Amounts** are decimal strings in whole units, scaled by the asset's own precision (`decimals`,
+  from its `NTH_RATIO` metadata; 8 when there is none, as for BEAM). `"2142.53352186"`, never
+  groth. A few assets have a non-decimal ratio; their `decimals` is `null` and amounts are divided
+  by `nth_ratio`.
+- **Times** come twice: `time` (ISO 8601, UTC) and `timestamp` (unix seconds). Times of past
+  heights without their own block (registration and expiry of names) are interpolated between real
+  block times; future heights assume a block a minute.
+- **IDs** (hashes, kernels, contracts, keys) are lowercase hex.
+- **Errors**: `400` bad parameter, `404` not found, `502` the node did not answer, as
+  `{"error": "…"}`. **Limits**: GET only (and POST on `/mcp`), 20 requests a second per IP with
+  bursts of 40. CORS is open.
+
+## `/v1` endpoints
+
+| endpoint | returns |
+|---|---|
+| `GET /v1` | this list, versions and links |
+| `GET /v1/status` | tip `height`, `hash`, `time`, `peers`, shielded output counts |
+| `GET /v1/supply` | BEAM `issued` so far by the emission schedule, `max_supply` 262,800,000 |
+| `GET /v1/search?q=` | what `q` is: `block` (a height), `kernel`, `contract`, `asset` (`#7`, `asset 7`, `beam`), `assets` (name or ticker), `name` (BANS), `contracts` (kind), or `none` |
+| `GET /v1/blocks?limit=20&before=` | block headers, newest first: `height`, `hash`, `time`, `difficulty`, `transactions`, `outputs`, `inputs`, `shielded_outputs`, `shielded_inputs`, `contract_calls`, `fees_beam`, `mined_by` (`{pool, name}` of the pool that found it, for the latest 500 blocks, else `null`); page with `before=next_before` |
+| `GET /v1/blocks/{height}` | one block: header, `reward_beam`, `fees_beam`, `kernels` (with decoded contract calls in `data`), `outputs` (coinbase value, maturity, `spent_height`), `inputs` (`created_height`) |
+| `GET /v1/kernels/{id}` | a kernel and the block it is in |
+| `GET /v1/assets?q=` | assets: `asset_id`, `name`, `ticker`, `unit`, `decimals`, `nth_ratio`, `supply`, `owner_key`, `deposit_beam`, `lock_height`, `short_description`, links; `q` filters by name, ticker, `#id` or owner key (6+ characters) |
+| `GET /v1/assets/{id}` | one asset with `long_description`, `metadata`, `history`, `distribution` (which contracts hold it) and its `dex_pools`; `0` is BEAM with `issued` and `locked_in_contracts` |
+| `GET /v1/dex/pools?asset=&tier=&all=` | DEX pools: `asset1`, `asset2` (IDs and names), `volatility`, `fee`, `reserve1`, `reserve2`, `lp_token`, `lp_supply`, `rate_1_2`, `rate_2_1`; empty pools only with `all=1` |
+| `GET /v1/names?q=&status=&for_sale=` | BANS names: `owner_key`, `status`, `registered_height` and `_time`, `expires_height` and `_time`, `sell_price`; `status` is `active`, `on_hold` or `expired` |
+| `GET /v1/names/{name}` | one name |
+| `GET /v1/contracts?q=&kind=` | contracts: `kind` (when Beam's parser knows it, else `null`), `shader`, `deployed_height`, `locked_funds`, `owned_assets` |
+| `GET /v1/contracts/{id}?calls=20` | one contract: decoded `state`, `locked_funds`, `owned_assets`, `versions`, recent `calls` (a call with sub-calls is `{"calls": […]}`), `calls_next_before` |
+| `GET /v1/peers` | the node's peers as `ip` and `port` |
+| `GET /v1/network` | the network and every Beam mining pool: `height`, `difficulty`, `avg_block_seconds`, `blocks_24h`, `hashrate` (Sol/s, now), `chain_hashrate_24h`, `price_usd` (on-chain oracle), `others` (what no listed pool claims), and `pools` with `hashrate`, `miners`, `workers`, `blocks_24h`, `fee_percent`, `scheme`, `last_block_time` |
+| `GET /v1/network/blocks?limit=50&before=&pool=` | the latest blocks (up to 500) with `mined_by`: each pool's own API checked against our node's hash at that height (orphans never credited), BumbleBeam's from its own database; `null` when no listed pool claims a block |
+
+```sh
+curl -s https://explorer.bumblebeam.org/v1/status
+curl -s 'https://explorer.bumblebeam.org/v1/dex/pools?asset=nph'
+curl -s 'https://explorer.bumblebeam.org/v1/names?status=active&for_sale=1'
+```
+
+```python
+import requests
+blocks = requests.get("https://explorer.bumblebeam.org/v1/blocks", params={"limit": 50}).json()["blocks"]
+```
+
+## MCP for agents
+
+`https://explorer.bumblebeam.org/mcp` speaks MCP over Streamable HTTP (stateless, JSON responses,
+protocol 2025-06-18 back to 2024-11-05). All tools are read-only:
+
+| tool | what it answers |
+|---|---|
+| `explorer_status` | chain tip, peers, shielded counts |
+| `explorer_search` | what a height, kernel, contract, asset or name is |
+| `explorer_latest_blocks` | block headers, newest first, with paging, each with the pool that found it |
+| `explorer_mining_pools` | the network and every Beam mining pool: hashrate, miners, workers, blocks in 24h, fee, BEAM/USD |
+| `explorer_block` | one block with kernels, outputs, inputs |
+| `explorer_kernel` | a transaction kernel and its block |
+| `explorer_supply` | BEAM issued and maximum supply |
+| `explorer_assets` | assets with decimals, supply, descriptions |
+| `explorer_asset` | one asset, its history, holders and pools |
+| `explorer_dex_pools` | DEX pools, reserves and rates |
+| `explorer_names` | BANS names with status and dates |
+| `explorer_contracts` | deployed contracts |
+| `explorer_contract` | one contract's state and calls |
+
+```sh
+claude mcp add --transport http bumblebeam-explorer https://explorer.bumblebeam.org/mcp
+```
+
+Mining on BumbleBeam has its own MCP server, `https://pool.bumblebeam.org/mcp`, described in
+[`beam/pool/API.md`](../pool/API.md).
+
+Other clients take the same URL as a remote (HTTP) MCP server. Skills that teach an agent the API
+without MCP are in [`skills/`](../../skills).
+
+## `/api` — explorer-node, unchanged
+
+`/api/status`, `/api/block?height=` or `?kernel=`, `/api/blocks?height=&n=`,
+`/api/hdrs?hMax=&nMax=`, `/api/assets`, `/api/asset?id=`, `/api/contracts`, `/api/contract?id=`,
+`/api/peers`: Beam's own explorer-node answers, as typed documents (`{type, value}` cells, tables
+with a header row, amounts in the smallest units). Its quirks: there is no lookup by block hash, a
+missing or invalid argument answers with the tip block, `hdrs` takes `hMax` and `nMax` (not
+`height` and `n`), and contract call histories leave the `Emission` column out of their header.
+`/v1` deals with all of that.
+
+The pool has its own API at `https://pool.bumblebeam.org/api/…`, documented in
+[`beam/pool/API.md`](../pool/API.md).

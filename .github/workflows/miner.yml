@@ -1,14 +1,14 @@
 name: miner
 # BumbleBeam Miner: the console miner for Linux, Windows and macOS, built and tested here. A tag
-# miner-vX.Y.Z publishes the release, its notes taken from miner/CHANGELOG.md; the Mac app's .dmg
-# files (miner/mac/build.sh, which needs the Metal toolchain and MXBM) are added to the same release.
+# miner-vX.Y.Z publishes the release, its notes taken from beam/miner/CHANGELOG.md; the Mac app's .dmg
+# files (beam/miner/mac/build.sh, which needs the Metal toolchain and MXBM) are added to the same release.
 on:
   push:
     branches: [main]
-    paths: ['miner/**', 'oracle/**', '.github/workflows/miner.yml']
+    paths: ['beam/miner/**', 'beam/oracle/**', '.github/workflows/miner.yml']
     tags: ['miner-v*']
   pull_request:
-    paths: ['miner/**', 'oracle/**']
+    paths: ['beam/miner/**', 'beam/oracle/**']
 permissions:
   contents: write
 jobs:
@@ -44,9 +44,9 @@ jobs:
       - name: Version
         shell: bash
         run: |
-          v=$(sed -nE 's/^version = "(.*)"/\1/p' miner/Cargo.toml | head -1)
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' beam/miner/Cargo.toml | head -1)
           if [[ "$GITHUB_REF" == refs/tags/miner-v* ]]; then
-            [ "${GITHUB_REF_NAME#miner-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but miner/Cargo.toml says $v"; exit 1; }
+            [ "${GITHUB_REF_NAME#miner-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but beam/miner/Cargo.toml says $v"; exit 1; }
           else
             v="$v-dev"
           fi
@@ -63,8 +63,8 @@ jobs:
         run: |
           mkdir -p dist
           bin=bumblebeam-miner; [ "${{ runner.os }}" = Windows ] && bin=bumblebeam-miner.exe
-          cp miner/target/${{ matrix.target }}/release/$bin dist/
-          cp miner/README.md dist/README.md; cp miner/CHANGELOG.md dist/CHANGELOG.md; cp LICENSE dist/LICENSE
+          cp beam/miner/target/${{ matrix.target }}/release/$bin dist/
+          cp beam/miner/README.md dist/README.md; cp beam/miner/CHANGELOG.md dist/CHANGELOG.md; cp LICENSE dist/LICENSE
           a=bumblebeam-miner-$VER-${{ matrix.name }}
           echo "ARCHIVE=$a" >> "$GITHUB_ENV"
           cd dist && if [ "${{ runner.os }}" = Windows ]; then 7z a ../$a.zip .; else tar czf ../$a.tar.gz .; fi
@@ -85,7 +85,7 @@ jobs:
             echo "- Mac app (macOS 12+): \`BumbleBeam-Miner-$VER-macOS-AppleSilicon.dmg\` (M1 and later) or \`-macOS-Intel.dmg\`; open it and drag the app to Applications. Not notarized yet: the first time, right-click the app and choose Open."
             echo
             echo "## Changes"
-            awk -v v="$VER" '$0 ~ "^## " v " " {f=1; next} f && /^## / {exit} f' miner/CHANGELOG.md
+            awk -v v="$VER" '$0 ~ "^## " v " " {f=1; next} f && /^## / {exit} f' beam/miner/CHANGELOG.md
           } > notes.md
       - name: Release
         if: startsWith(github.ref, 'refs/tags/miner-v')

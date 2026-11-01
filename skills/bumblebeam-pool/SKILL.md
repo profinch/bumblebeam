@@ -65,4 +65,4 @@ User `<offline Beam address>.<worker>`; an offline (permanent) address is needed
 arrive while the wallet is closed. Miners: MXBM (open source, GPU), lolMiner, GMiner,
 bumblebeam-miner (CPU). Example: `lolMiner --algo BEAM-III --pool stratum.bumblebeam.org:3443 --user <address>.rig1 --tls on`.
 
-Full reference: https://github.com/profinch/bumblebeam/blob/main/pool/API.md
+Full reference: https://github.com/profinch/bumblebeam/blob/main/beam/pool/API.md

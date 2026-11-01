@@ -23,4 +23,4 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Benchmark
         if: matrix.sanitize == 'OFF'
-        run: ./build/oracle/bb-pow bench vectors/mainnet_headers.json 1
+        run: ./build/oracle/bb-pow bench beam/vectors/mainnet_headers.json 1

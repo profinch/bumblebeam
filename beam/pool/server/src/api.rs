@@ -1,0 +1,719 @@
+//! HTTP API (beam/pool/API.md). The web UI is served by pool-web (nginx), not here.
+
+use crate::emission::miner_reward_groth;
+use crate::network::NetCache;
+use crate::pow;
+use crate::state::{now, Shared};
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tower_http::cors::CorsLayer;
+use tracing::{error, info, warn};
+
+#[derive(Clone)]
+pub struct Api {
+    pub shared: Arc<Shared>,
+    pub net: Arc<NetCache>,
+    /// the stratum half: in this process (`run all`) or the stratum process's control interface (`run app`)
+    pub stratum: Arc<crate::ctl::Stratum>,
+}
+
+struct ApiError(anyhow::Error);
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        error!("api: {:#}", self.0);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "internal error" }))).into_response()
+    }
+}
+impl<E: Into<anyhow::Error>> From<E> for ApiError {
+    fn from(e: E) -> Self {
+        ApiError(e.into())
+    }
+}
+type R = Result<Json<Value>, ApiError>;
+
+pub fn router(api: Api) -> Router {
+    Router::new()
+        .route("/api/stats", get(stats))
+        .route("/api/blocks", get(blocks))
+        .route("/api/blocks/heights", get(block_heights))
+        .route("/api/blocks/:height", get(block_round))
+        .route("/api/miners", get(miners))
+        .route("/api/miners/:address", get(miner))
+        .route("/api/payments", get(payments))
+        .route("/api/network", get(network))
+        .route("/api/network/blocks", get(network_blocks))
+        .route("/api/health", get(health))
+        .route("/api/coinbase", get(coinbase_info))
+        .route("/api/coinbase/pairs", axum::routing::post(coinbase_upload))
+        .route("/api/miningboard", get(miningboard))
+        .route("/api/benchmarks", get(benchmarks).post(benchmark_report))
+        // 3BMiner (bitcoin/3bminer/): helpers its web UI on a miner cannot get from a browser itself
+        .route("/api/3bminer/oui", get(crate::threeb::oui_many))
+        .route("/api/3bminer/oui/:mac", get(crate::threeb::oui_one))
+        .layer(middleware::from_fn(micro_cache))
+        .layer(CorsLayer::permissive())
+        // the operator's API is added after the CORS layer: no other site may call it from a browser
+        .merge(admin_router(api.clone()))
+        // the pages are pool-web's (nginx sends only /api/ here): anything else is a JSON 404, so a typo in a
+        // route no longer answers 200 with index.html
+        .fallback(|| async { (StatusCode::NOT_FOUND, Json(json!({ "error": "no such endpoint" }))) })
+        .with_state(api)
+}
+
+/// The public read-only routes every visitor's page polls (each /api/stats is ~10 queries): their 200 answers are
+/// kept in memory 10-30 s per URL and sent with a matching Cache-Control, so a crowd costs one set of queries
+/// per period, not one per tab. Per-miner pages, admin and health are not cached.
+static MICRO: std::sync::LazyLock<std::sync::Mutex<HashMap<String, (std::time::Instant, axum::body::Bytes)>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+async fn micro_cache(req: Request, next: Next) -> Response {
+    let ttl = match (req.method() == axum::http::Method::GET, req.uri().path()) {
+        (true, "/api/stats" | "/api/miningboard" | "/api/blocks") => 10,
+        (true, "/api/blocks/heights" | "/api/miners" | "/api/payments" | "/api/benchmarks") => 30,
+        _ => 0,
+    };
+    if ttl == 0 {
+        return next.run(req).await;
+    }
+    // the path and only the parameters these routes read: anything else neither bypasses the cache nor grows it
+    let key = {
+        let mut q: Vec<(String, String)> = req.uri().query().map(|q| url_pairs(q)).unwrap_or_default().into_iter().filter_map(|(k, v)| cache_param(&k, &v).map(|v| (k, v))).collect();
+        q.sort();
+        // a parameter given twice: which one the route reads is not ours to guess, so such a request is not cached
+        if q.windows(2).any(|w| w[0].0 == w[1].0) {
+            return next.run(req).await;
+        }
+        format!("{}?{}", req.uri().path(), q.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("&"))
+    };
+    let hit = MICRO.lock().unwrap().get(&key).filter(|(at, _)| at.elapsed().as_secs() < ttl).map(|(_, b)| b.clone());
+    let body = match hit {
+        Some(b) => b,
+        None => {
+            let res = next.run(req).await;
+            if res.status() != StatusCode::OK {
+                return res;
+            }
+            let Ok(b) = axum::body::to_bytes(res.into_body(), 16 << 20).await else {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "response too large" }))).into_response();
+            };
+            // bounded by entries and bytes; the plain routes everyone polls (no parameters) always get in, so a flood of
+            // distinct parameters cannot push /api/stats out of the cache
+            let mut m = MICRO.lock().unwrap();
+            let full = |m: &HashMap<String, (std::time::Instant, axum::body::Bytes)>| m.len() >= 2000 || m.values().map(|(_, b)| b.len()).sum::<usize>() >= 64 << 20;
+            if full(&m) {
+                m.retain(|_, (at, _)| at.elapsed().as_secs() < 30);
+            }
+            if key.ends_with('?') || !full(&m) {
+                m.insert(key, (std::time::Instant::now(), b.clone()));
+            }
+            b
+        }
+    };
+    let mut res = Response::new(axum::body::Body::from(body));
+    res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_str(&format!("public, max-age={ttl}")).unwrap());
+    res
+}
+
+/// A cached route's parameter as the route reads it: unknown values become what the route would use anyway, so junk
+/// in a parameter neither bypasses the cache nor grows it. None leaves the parameter out of the key.
+fn cache_param(k: &str, v: &str) -> Option<String> {
+    match k {
+        "range" => Some(match v { "7d" | "30d" => v, _ => "24h" }.to_string()),
+        "mode" => matches!(v, "pplns" | "solo").then(|| v.to_string()),
+        "limit" => v.parse::<u32>().ok().map(|n| n.min(1000).to_string()),
+        "before" => v.parse::<i64>().ok().map(|n| n.to_string()),
+        "miner" => Some(v.chars().take(600).collect()),
+        _ => None,
+    }
+}
+
+fn url_pairs(q: &str) -> Vec<(String, String)> {
+    q.split('&').filter(|p| !p.is_empty()).map(|p| { let (k, v) = p.split_once('=').unwrap_or((p, "")); (k.to_string(), v.to_string()) }).collect()
+}
+
+fn range(q: &HashMap<String, String>) -> crate::db::ChartRange {
+    crate::db::ChartRange::parse(q.get("range").map(String::as_str))
+}
+
+/// `mode=pplns|solo` narrows charts and lists to one mode; anything else means both.
+fn mode(q: &HashMap<String, String>) -> Option<&'static str> {
+    match q.get("mode").map(String::as_str) {
+        Some("pplns") => Some("pplns"),
+        Some("solo") => Some("solo"),
+        _ => None,
+    }
+}
+
+fn limit(q: &HashMap<String, String>, default: i64, max: i64) -> i64 {
+    q.get("limit").and_then(|v| v.parse().ok()).unwrap_or(default).clamp(1, max)
+}
+
+async fn stats(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let s = &api.shared;
+    let t = now();
+    let (hashrate, miners, workers) = s.db.pool_now(t).await?;
+    let b = s.db.block_summary(t).await?;
+    let round = s.db.round_shares("pplns", b.last_pplns_ts.unwrap_or(0), None).await?;
+    let job = s.node_view();
+    let height = job.as_ref().map(|j| j.height.saturating_sub(1));
+    let difficulty = job.as_ref().map(|j| pow::difficulty_to_double(j.net_packed));
+    let net = api.net.data.read().await.clone();
+    let cfg = &s.cfg.pool;
+    let workers_now = api.stratum.workers().await;
+    // the last blocks the chain kept, as the miningpoolstats report other Beam pools publish (pool-info.php?miningpoolstats)
+    let recent: Vec<Value> = s.db.blocks(20, None, cfg.maturity as i64, s.tip_height().map(|h| h as i64), None).await?
+        .iter()
+        .filter(|b| b["orphan"] != true)
+        .map(|b| json!({ "blockNumber": b["height"], "timestampMilliSeconds": b["timestamp"].as_i64().map(|ts| ts * 1000),
+                         "status": if b["status"] == "confirmed" { "[Available]" } else { "[Maturing]" } }))
+        .collect();
+    Ok(Json(json!({
+        "hashrate": hashrate, "minersTotal": miners, "workersTotal": workers,
+        "stats": { "lastBlockFound": b.last_ts, "roundShares": round },
+        // open-ethereum-pool's totals over all blocks (beam/pool/API.md)
+        "now": t * 1000, "candidatesTotal": 0, "immatureTotal": b.pending, "maturedTotal": b.confirmed,
+        // the miningpoolstats report: `hashrate` above is its field too; its `name` (the coin's) is left out, ours is the pool's.
+        // These are the only min payout (in BEAM), scheme, 24 h block count and pending count: config has no copies.
+        "coin": "BEAM", "feePercent": cfg.fee_percent, "minPay": cfg.min_payout_groth as f64 / 1e8, "feeType": "PPLNS",
+        "timestampMilliSeconds": t * 1000, "miners": miners, "workers": workers, "blockHeight": height,
+        "blocksFound24H": b.blocks24h, "lastBlocksFound": recent,
+        "nodes": [{ "name": "beam-node", "height": height.map(|h| h.to_string()), "difficulty": difficulty.map(|d| format!("{d:.1}")),
+                    "networkhashps": net["hashrate"].as_f64().map(|v| format!("{v:.0}")), "lastBeat": job.as_ref().map(|j| j.job_at.to_string()),
+                    "connected": job.is_some() }],
+        "name": cfg.name,
+        "config": { "fee": cfg.fee_percent, "soloFee": cfg.solo_fee_percent, "finderBonus": cfg.finder_bonus_percent,
+                    "pplnsWindow": cfg.pplns_window, "blockReward": height.map(|h| miner_reward_groth(h + 1)), "maturity": cfg.maturity,
+                    "payoutInterval": cfg.payout_interval_secs, "stratumHost": cfg.public_host, "nodeAddr": cfg.public_node,
+                    "minerPaysTxFee": cfg.miner_pays_tx_fee, "txFee": { "regular": s.cfg.wallet_api.tx_fee_groth, "shielded": s.cfg.wallet_api.shielded_fee_groth },
+                    "blockFeesTo": "pool", "coinbase": s.cfg.coinbase.enabled,
+                    "ports": { "pplns": s.cfg.stratum.pplns_port, "solo": s.cfg.stratum.solo_port,
+                               "pplnsTls": s.cfg.stratum.pplns_tls_port, "soloTls": s.cfg.stratum.solo_tls_port } },
+        "charts": { "hashrate": s.db.pool_chart(t, range(&q), mode(&q).unwrap_or("pool")).await?,
+                    "peak": s.db.pool_chart_peak(t, range(&q), mode(&q).unwrap_or("pool")).await? },
+        "modes": s.db.mode_stats(t).await?,
+        "effort24h": b.effort24h,
+        "connectedWorkers": workers_now,
+    })))
+}
+
+async fn blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let s = &api.shared;
+    let before = q.get("before").and_then(|v| v.parse().ok());
+    let tip = s.tip_height().map(|h| h as i64);
+    // `miner=<address>`: only the blocks that miner found (none for an address never seen)
+    let miner = match q.get("miner") {
+        Some(a) => match clean_address(a) {
+            Some(a) => match s.db.miner_lookup(&a).await? {
+                Some(id) => Some(id),
+                None => return Ok(Json(json!({ "blocks": [], "matured": [], "immature": [], "candidates": [],
+                                               "maturedTotal": 0, "immatureTotal": 0, "candidatesTotal": 0 }))),
+            },
+            None => return Ok(Json(json!({ "error": "not a Beam address" }))),
+        },
+        None => None,
+    };
+    let list = s.db.blocks(limit(&q, 50, 500), before, s.cfg.pool.maturity as i64, tip, miner).await?;
+    // The same blocks split the open-ethereum-pool way, which the Beam Explorer's `open-eth`
+    // adapter reads to attribute blocks to pools. Orphans are in neither.
+    let by_status = |want: &[&str]| -> Vec<Value> {
+        list.iter().filter(|b| want.contains(&b["status"].as_str().unwrap_or(""))).cloned().collect()
+    };
+    let matured = by_status(&["confirmed"]);
+    let immature = by_status(&["pending", "unverified"]);
+    // and their totals over all blocks (that miner's with `miner`), not this page
+    let (pending, confirmed) = s.db.block_totals(miner).await?;
+    Ok(Json(json!({ "blocks": list, "matured": matured, "immature": immature, "candidates": [],
+                    "maturedTotal": confirmed, "immatureTotal": pending, "candidatesTotal": 0 })))
+}
+
+/// Every block the pool found and the chain kept, newest first: `[height, mode, status]`, with
+/// no other fields, so a client can mark all of our blocks in one small request.
+async fn block_heights(State(api): State<Api>) -> R {
+    let list = api.shared.db.block_heights().await?;
+    let rows: Vec<Value> = list.iter().map(|(h, m, st)| json!([h, m, st])).collect();
+    Ok(Json(json!({ "count": rows.len(), "blocks": rows })))
+}
+
+/// One block and how its reward was split (beam/pool/API.md, "Rounds"). `address=<a>` marks that
+/// miner's rows; addresses are never listed.
+async fn block_round(State(api): State<Api>, Path(height): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
+    let Ok(height) = height.parse::<i64>() else {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "not a block height" }))).into_response();
+    };
+    let s = &api.shared;
+    let me = match q.get("address").and_then(|a| clean_address(a)) {
+        Some(a) => match s.db.miner_lookup(&a).await {
+            Ok(id) => id,
+            Err(e) => return ApiError(e).into_response(),
+        },
+        None => None,
+    };
+    match s.db.round(height, me).await {
+        Ok(Some(v)) => Json(v).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "the pool did not find a block at this height" }))).into_response(),
+        Err(e) => ApiError(e).into_response(),
+    }
+}
+
+async fn miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    Ok(Json(json!({ "miners": api.shared.db.top_miners(limit(&q, 50, 500), now(), mode(&q)).await? })))
+}
+
+/// A miner address as typed: whitespace dropped, a coinbase account ("cb:" + hex) lowercased;
+/// None if it cannot be an address.
+fn clean_address(address: &str) -> Option<String> {
+    let address: String = address.chars().filter(|c| !c.is_whitespace()).collect();
+    let address = if address.to_ascii_lowercase().starts_with("cb:") { address.to_ascii_lowercase() } else { address };
+    (address.len() <= 600 && address.chars().all(|c| c.is_ascii_alphanumeric() || c == ':')).then_some(address)
+}
+
+async fn miner(State(api): State<Api>, Path(address): Path<String>, Query(q): Query<HashMap<String, String>>) -> R {
+    let Some(address) = clean_address(&address) else {
+        return Ok(Json(json!({ "error": "not a Beam address" })));
+    };
+    let s = &api.shared;
+    let found = s.db.miner_blocks(&address, now(), 10, s.cfg.pool.maturity as i64, s.tip_height().map(|h| h as i64)).await?;
+    let mut v = match s.db.miner(&address, now(), range(&q), mode(&q)).await? {
+        Some(v) => v,
+        None => json!({ "address": address, "hashrate": 0, "hashrate24h": 0, "balance": 0, "immature": 0, "paid": 0,
+                        "lastShare": null, "workers": [], "charts": { "hashrate": [] }, "payments": [] }),
+    };
+    for k in ["blocksFound", "blocks24h", "lastBlockAt", "blocks"] {
+        v[k] = found[k].clone();
+    }
+    // payouts the wallet keeps failing (a regular address whose wallet is offline): how many in a row, why, and
+    // when the next try is (payouts back off 2 h * 2^(n-1), at most a day: crate::db::miners_due)
+    if let Some(id) = s.db.miner_lookup(&address).await? {
+        let (n, last, reason) = s.db.payout_failures(id).await?;
+        if n > 0 {
+            let next = last.map(|t| t + (7200i64.saturating_mul(2i64.saturating_pow((n - 1).clamp(0, 30) as u32))).min(86400));
+            v["payoutFailures"] = json!({ "count": n, "lastAt": last, "reason": reason, "nextTryAt": next });
+        }
+    }
+    // ?worker=<name>&since=<unix seconds>: that worker's blocks since then (the Mac app's session count)
+    if let (Some(w), Some(since)) = (q.get("worker"), q.get("since").and_then(|v| v.parse::<i64>().ok())) {
+        if w.len() <= 64 {
+            v["blocksSince"] = json!(s.db.worker_blocks_since(&address, w, since).await?);
+        }
+    }
+    Ok(Json(v))
+}
+
+async fn benchmarks(State(api): State<Api>) -> R {
+    Ok(Json(json!({ "benchmarks": api.shared.db.benchmarks(now()).await? })))
+}
+
+/// A speed report from the Mac app (its "Share average speed" switch, off by default). Checked
+/// field by field; one report per address per 10 minutes; the address itself is not stored.
+async fn benchmark_report(State(api): State<Api>, headers: HeaderMap, body: axum::body::Bytes) -> Response {
+    let bad = |msg: &str| (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+    if body.len() > 4096 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({ "error": "report over 4 KB" }))).into_response();
+    }
+    let Ok(v) = serde_json::from_slice::<Value>(&body) else { return bad("body is not JSON") };
+    let text = |k: &str| {
+        v[k].as_str()
+            .filter(|s| !s.is_empty() && s.len() <= 64 && s.chars().all(|c| c.is_ascii_graphic() || c == ' '))
+            .map(str::to_string)
+    };
+    let num = |k: &str, lo: f64, hi: f64| v[k].as_f64().filter(|x| x.is_finite() && *x >= lo && *x <= hi);
+    let (Some(app), Some(os), Some(arch), Some(model), Some(chip)) = (text("app"), text("os"), text("arch"), text("model"), text("chip")) else {
+        return bad("app, os, arch, model and chip are short printable strings");
+    };
+    let Some(device) = text("device").filter(|d| d == "gpu" || d == "cpu") else { return bad("device is gpu or cpu") };
+    let (Some(power), Some(sol_s), Some(minutes)) = (num("power", 1.0, 100.0), num("solPerSec", 0.0, 1000.0), num("minutes", 1.0, 100_000.0)) else {
+        return bad("power 1..100, solPerSec 0..1000 and minutes 1.. are required");
+    };
+    if !v["gpuWatts"].is_null() && num("gpuWatts", 0.0, 1000.0).is_none() {
+        return bad("gpuWatts is 0..1000 when given");
+    }
+    let ip = client_ip(&headers);
+    {
+        static SEEN: std::sync::OnceLock<std::sync::Mutex<HashMap<String, i64>>> = std::sync::OnceLock::new();
+        let mut seen = SEEN.get_or_init(Default::default).lock().unwrap();
+        let t = now();
+        seen.retain(|_, at| t - *at < 600);
+        if seen.contains_key(&ip) {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "one report per 10 minutes" }))).into_response();
+        }
+        seen.insert(ip, t);
+    }
+    let b = crate::db::Benchmark {
+        app, os, arch, model, chip, device,
+        gpu_cores: num("gpuCores", 1.0, 1024.0).map(|x| x as i32),
+        cpu_threads: num("cpuThreads", 1.0, 4096.0).map(|x| x as i32),
+        power: power.round() as i32,
+        sol_s,
+        gpu_watts: num("gpuWatts", 0.0, 1000.0),
+        minutes,
+    };
+    match api.shared.db.add_benchmark(now(), &b).await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            error!("benchmark report: {e:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "internal error" }))).into_response()
+        }
+    }
+}
+
+async fn payments(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    Ok(Json(json!({ "payments": api.shared.db.payments(limit(&q, 50, 500)).await? })))
+}
+
+async fn network(State(api): State<Api>) -> R {
+    Ok(Json(api.net.data.read().await.clone()))
+}
+
+/// The latest blocks of the chain from our node, newest first, each with the pool that found it
+/// when one is known (beam/pool/API.md, "Network blocks"). `before=<height>` pages, `pool=<id>` filters.
+async fn network_blocks(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let n = limit(&q, 50, crate::network::RECENT_BLOCKS as i64) as usize;
+    let before: Option<u64> = q.get("before").and_then(|v| v.parse().ok());
+    let pool = q.get("pool").map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty());
+    let all = api.net.blocks.read().await;
+    let list: Vec<Value> = all.iter()
+        .filter(|b| before.is_none_or(|h| b["height"].as_u64().is_some_and(|x| x < h)))
+        .filter(|b| pool.as_deref().is_none_or(|p| b["pool"].as_str() == Some(p)))
+        .take(n).cloned().collect();
+    Ok(Json(json!({ "count": list.len(), "blocks": list })))
+}
+
+/// The pool in MiningBoard's `miningboard-pool-v1` shape (miningboard.com/pools/submit.md).
+/// Beam's hashrate is in Sol/s, which is what MiningBoard compares against for Beam.
+async fn miningboard(State(api): State<Api>) -> R {
+    let s = &api.shared;
+    let t = now();
+    let iso = |ts: i64| chrono::DateTime::from_timestamp(ts, 0).map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+    let (hashrate, miners, workers) = s.db.pool_now(t).await?;
+    let (blocks24h, _) = s.db.blocks_24h(t).await?;
+    let job = s.node_view();
+    let height = job.as_ref().map(|j| j.height.saturating_sub(1));
+    let net = api.net.data.read().await.clone();
+    let (cfg, st) = (&s.cfg.pool, &s.cfg.stratum);
+    let beam = |groth: u64| groth as f64 / 1e8;
+    let stratum: Vec<Value> = [(st.pplns_port, false, "PPLNS"), (st.pplns_tls_port, true, "PPLNS"), (st.solo_port, false, "SOLO"), (st.solo_tls_port, true, "SOLO")]
+        .into_iter()
+        .filter(|(port, ..)| *port != 0)
+        .map(|(port, tls, mode)| json!({ "url": format!("stratum+{}://{}:{port}", if tls { "ssl" } else { "tcp" }, cfg.public_host), "tls": tls, "mode": mode }))
+        .collect();
+    Ok(Json(json!({
+        "spec": "miningboard-pool-v1", "coin": "BEAM", "algorithm": "BeamHash III", "updated_at": iso(t),
+        "pool": { "hashrate": hashrate, "miners": miners, "workers": workers, "blocks_24h": blocks24h,
+                  "last_block_at": s.db.last_block_ts(None, None).await?.and_then(iso), "fee_percent": cfg.fee_percent,
+                  "payout_scheme": "PPLNS", "min_payout": beam(cfg.min_payout_groth) },
+        "network": height.map(|h| json!({ "hashrate": net["hashrate"].as_f64(), "height": h,
+                                          "difficulty": job.as_ref().map(|j| pow::difficulty_to_double(j.net_packed)),
+                                          "block_reward": beam(miner_reward_groth(h + 1)), "block_time": 60 })),
+        "stratum": stratum,
+    })))
+}
+
+async fn coinbase_info(State(api): State<Api>) -> R {
+    if !api.shared.cfg.coinbase.enabled {
+        return Ok(Json(json!({ "enabled": false })));
+    }
+    match api.stratum.coinbase_info().await {
+        Ok(v) => Ok(Json(v)),
+        Err(e) => Err(ApiError(e.context("the stratum process (coinbase) does not answer"))),
+    }
+}
+
+async fn coinbase_upload(State(api): State<Api>, body: axum::body::Bytes) -> Response {
+    if body.len() > 2 << 20 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({ "error": "upload over 2 MB" }))).into_response();
+    }
+    let v: Value = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "body is not JSON" }))).into_response(),
+    };
+    if !api.shared.cfg.coinbase.enabled {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "this pool does not pay in the coinbase" }))).into_response();
+    }
+    // the finalizer link is the stratum half's (in this process with `run all`, else over the control interface)
+    let (code, res) = api.stratum.coinbase_upload(&v).await;
+    if code >= 500 {
+        error!("coinbase upload: {}", res["error"]);
+    }
+    (StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(res)).into_response()
+}
+
+async fn health(State(api): State<Api>) -> Response {
+    // ok = this process answers, it has a node template under 2 min old, and (app-only) the stratum process answers
+    let s = &api.shared;
+    let job = s.node_view();
+    // a template can be minutes old on a slow block; ten minutes without a new one is a stuck node
+    let age = job.as_ref().map(|j| now() - j.job_at);
+    let workers = api.stratum.workers().await;
+    let ok = age.is_some_and(|a| a < 600) && workers.is_some();
+    let body = json!({ "ok": ok, "role": s.role.as_str(), "node": job.is_some(), "jobAgeSecs": age, "uptime": s.started.elapsed().as_secs(),
+                       "workers": workers, "stratum": if workers.is_some() { "up" } else { "down" } });
+    (if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(body)).into_response()
+}
+
+// ---- the operator's dashboard (beam/pool/web/dash.html, at /dash) ----
+
+fn admin_router(api: Api) -> Router<Api> {
+    Router::new()
+        .route("/api/admin/attention", get(admin_attention))
+        .route("/api/admin/connections", get(admin_connections))
+        .route("/api/admin/wallet", get(admin_wallet))
+        .route("/api/admin/connections/:id/kick", post(admin_kick))
+        .route("/api/admin/miners", get(admin_miners))
+        .route("/api/admin/miners/:id", get(admin_miner))
+        .route("/api/admin/miners/:id/merge", post(admin_merge))
+        .route("/api/admin/miners/:id/hold", post(admin_hold))
+        .route("/api/admin/address", get(admin_address))
+        .route("/api/admin/blocks/:height", post(admin_block))
+        .route("/api/admin/payments/:tx_id", post(admin_payment))
+        .route("/api/admin/payouts", post(admin_pay_now))
+        .route("/api/admin/payouts/freeze", post(admin_freeze))
+        .layer(middleware::from_fn_with_state(api, admin_auth))
+}
+
+fn client_ip(h: &HeaderMap) -> String {
+    h.get("x-real-ip").and_then(|v| v.to_str().ok()).unwrap_or("-").to_string()
+}
+
+/// `Authorization: Bearer <admin.token>`, compared in constant time. Without a token configured the
+/// routes do not exist; a wrong token is logged with the client's address.
+async fn admin_auth(State(api): State<Api>, req: Request, next: Next) -> Response {
+    let cfg = &api.shared.cfg;
+    if !cfg.admin_enabled() {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "the operator's dashboard is off (admin.token)" }))).into_response();
+    }
+    let given = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+    let want = cfg.admin.token.as_bytes();
+    let ok = given.len() == want.len() && given.bytes().zip(want).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0;
+    if !ok {
+        warn!(ip = %client_ip(req.headers()), path = %req.uri().path(), "admin: wrong token");
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "wrong token" }))).into_response();
+    }
+    let mut res = next.run(req).await;
+    res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    res
+}
+
+/// An operator action's outcome: 200 with a message, or 409 with why it was refused.
+fn outcome(r: anyhow::Result<String>) -> Response {
+    match r {
+        Ok(msg) => Json(json!({ "ok": true, "message": msg })).into_response(),
+        Err(e) => (StatusCode::CONFLICT, Json(json!({ "ok": false, "error": format!("{e:#}") }))).into_response(),
+    }
+}
+
+#[derive(serde::Deserialize, Default)]
+struct ActionBody {
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    to: String,
+    #[serde(default)]
+    miner: Option<i64>,
+    #[serde(default)]
+    freeze: bool,
+    #[serde(default)]
+    hold: bool,
+    #[serde(default)]
+    note: String,
+}
+
+async fn admin_attention(State(api): State<Api>) -> R {
+    let s = &api.shared;
+    let mut a = crate::admin::attention(&s.db).await?;
+    // the loop looks every minute, so a run starts up to a minute after this
+    let next = s.next_payout.load(std::sync::atomic::Ordering::Relaxed);
+    a["nextPayout"] = if next > 0 { json!(next) } else { Value::Null };
+    a["payoutInterval"] = json!(s.cfg.pool.payout_interval_secs);
+    let frozen = s.payouts_frozen_left.load(std::sync::atomic::Ordering::Relaxed);
+    a["payoutsFrozen"] = json!(frozen >= 0);
+    a["frozenLeft"] = if frozen >= 0 { json!(frozen) } else { Value::Null };
+    a["now"] = json!(now());
+    Ok(Json(a))
+}
+
+/// The wallet's own figures next to the pool's books; a wallet that does not answer is reported,
+/// the books are shown anyway.
+async fn admin_wallet(State(api): State<Api>) -> R {
+    let s = &api.shared;
+    let mut a = crate::admin::wallet_books(&s.db).await?;
+    a["wallet"] = if s.cfg.wallet_enabled() {
+        let w = crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone());
+        match w.status().await {
+            Ok(st) => json!({ "available": st["available"], "maturing": st["maturing"], "sending": st["sending"], "receiving": st["receiving"],
+                              "height": st["current_height"], "inSync": st["is_in_sync"] }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    } else {
+        json!({ "error": "no wallet configured" })
+    };
+    Ok(Json(a))
+}
+
+async fn admin_connections(State(api): State<Api>) -> R {
+    let v = api.stratum.snapshot().await?;
+    Ok(Json(json!({ "now": now(), "live": v["live"], "recent": v["recent"] })))
+}
+
+async fn admin_kick(State(api): State<Api>, h: HeaderMap, Path(id): Path<u64>) -> Response {
+    let ok = match api.stratum.kick(id).await {
+        Ok(ok) => ok,
+        Err(e) => return ApiError(e).into_response(),
+    };
+    info!(ip = %client_ip(&h), id, ok, "admin: kick");
+    outcome(if ok { Ok(format!("connection {id} ended")) } else { Err(anyhow::anyhow!("no connection {id}")) })
+}
+
+async fn admin_miners(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let search: String = q.get("q").map(|s| s.trim().to_string()).unwrap_or_default();
+    let mut list = crate::admin::miners(&api.shared.db, &search, limit(&q, 100, 1000)).await?;
+    let counts = api.stratum.counts().await; // one call for the page, not one per row
+    for m in list.iter_mut() {
+        m["connections"] = json!(counts.get(&m["id"].as_i64().unwrap_or(0)).copied().unwrap_or(0));
+    }
+    Ok(Json(json!({ "miners": list })))
+}
+
+async fn admin_miner(State(api): State<Api>, Path(id): Path<i64>) -> Response {
+    match crate::admin::miner(&api.shared.db, id).await {
+        Ok(Some(mut m)) => {
+            m["connections"] = json!(api.stratum.live(Some(id)).await.unwrap_or_default());
+            Json(m).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "no such miner" }))).into_response(),
+        Err(e) => ApiError(e).into_response(),
+    }
+}
+
+async fn admin_merge(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let s = &api.shared;
+    let to: String = b.to.chars().filter(|c| !c.is_whitespace()).collect();
+    match s.db.client().await {
+        Ok(c) => match c.query_opt("SELECT 1 FROM miners WHERE address=$1", &[&to]).await {
+            Ok(Some(_)) => {}
+            Ok(None) => return outcome(Err(anyhow::anyhow!("not a miner of this pool: log in once with this address (any miner, or the rental profile), then move to it"))),
+            Err(e) => return ApiError(e.into()).into_response(),
+        },
+        Err(e) => return ApiError(e).into_response(),
+    }
+    // end the miner's connections first: their next shares would recreate the old account; when the stratum
+    // half cannot be reached, or a connection is still open after 5 s, the merge does not run
+    let kicked = match api.stratum.kick_miner_wait(id).await {
+        Ok((kicked, 0)) => kicked,
+        Ok((_, left)) => return outcome(Err(anyhow::anyhow!("{left} connection(s) of this miner are still open; merge not done, try again"))),
+        Err(e) => return outcome(Err(anyhow::anyhow!("the stratum process does not answer ({e}); merge not done"))),
+    };
+    let mut r = crate::admin::merge(&s.db, id, &b.to).await;
+    if r.is_ok() {
+        // a rig that logged in again while the merge ran got the old id: end it once more, then move what it wrote
+        let again = api.stratum.kick_miner_wait(id).await;
+        match crate::admin::merge_sweep(&s.db, id, &to).await {
+            Ok(_) if matches!(again, Ok((_, 0))) => {}
+            Ok(_) => error!(from = id, ?again, "merge: the second kick did not end every connection; shares under the old id may follow"),
+            Err(e) => error!(from = id, "merge: sweep of late shares failed: {e:#}"),
+        }
+        if let Ok((k, _)) = again { if k > 0 { r = r.map(|m| format!("{m}; {k} connection(s) that logged in during the merge ended too")); } }
+    }
+    info!(ip = %client_ip(&h), from = id, to = %crate::state::Short(&b.to), kicked, ok = r.is_ok(), "admin: merge");
+    outcome(r.map(|m| if kicked > 0 { format!("{m}; {kicked} connection(s) ended (they will log in again with whatever address they use)") } else { m }))
+}
+
+/// `{"hold": true, "note": "…"}` holds one miner's payouts, `{"hold": false}` releases them.
+async fn admin_hold(State(api): State<Api>, h: HeaderMap, Path(id): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::admin::hold(&api.shared.db, id, b.hold, &b.note).await;
+    info!(ip = %client_ip(&h), id, hold = b.hold, ok = r.is_ok(), "admin: hold payouts");
+    outcome(r)
+}
+
+async fn admin_block(State(api): State<Api>, h: HeaderMap, Path(height): Path<i64>, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::admin::block(&api.shared.db, height, &b.action, b.force).await;
+    info!(ip = %client_ip(&h), height, action = %b.action, force = b.force, ok = r.is_ok(), "admin: block");
+    outcome(r)
+}
+
+async fn admin_payment(State(api): State<Api>, h: HeaderMap, Path(tx_id): Path<String>, Json(b): Json<ActionBody>) -> Response {
+    let s = &api.shared;
+    let wallet = s.cfg.wallet_enabled().then(|| crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone()));
+    let r = crate::admin::payment(&s.db, wallet.as_ref(), &tx_id, &b.action, b.force).await;
+    info!(ip = %client_ip(&h), %tx_id, action = %b.action, force = b.force, ok = r.is_ok(), "admin: payment");
+    outcome(r)
+}
+
+/// A payout run now, by the payout loop itself (so it never overlaps a scheduled one): every miner
+/// at the threshold, or `miner` alone whatever its balance against the threshold.
+async fn admin_pay_now(State(api): State<Api>, h: HeaderMap, Json(b): Json<ActionBody>) -> Response {
+    if let Some(id) = b.miner {
+        match api.shared.db.client().await {
+            Ok(c) => match c.query_opt("SELECT 1 FROM miners WHERE id=$1 AND payouts_held_at IS NOT NULL", &[&id]).await {
+                Ok(Some(_)) => return outcome(Err(anyhow::anyhow!("payouts to this miner are held: release them first"))),
+                Ok(None) => {}
+                Err(e) => return ApiError(e.into()).into_response(),
+            },
+            Err(e) => return ApiError(e).into_response(),
+        }
+    }
+    let (reply, rx) = tokio::sync::oneshot::channel();
+    let r = if api.shared.payout_tx.try_send(crate::payouts::PayNow { only: b.miner, reply }).is_err() {
+        Err(anyhow::anyhow!("payouts are off (no wallet_api) or a run is already queued"))
+    } else {
+        match tokio::time::timeout(std::time::Duration::from_secs(150), rx).await {
+            Ok(Ok(Ok(notes))) => Ok(notes),
+            Ok(Ok(Err(e))) => Err(anyhow::anyhow!(e)),
+            Ok(Err(_)) => Err(anyhow::anyhow!("the payout loop is not running")),
+            Err(_) => Err(anyhow::anyhow!("still running after 150 s: see the pool's log and the Payments list")),
+        }
+    };
+    info!(ip = %client_ip(&h), miner = ?b.miner, ok = r.is_ok(), "admin: pay now");
+    outcome(r)
+}
+
+/// `{"freeze": true}` stops the scheduled payout countdown where it is, `false` resumes it.
+async fn admin_freeze(State(api): State<Api>, h: HeaderMap, Json(b): Json<ActionBody>) -> Response {
+    let r = crate::payouts::set_frozen(&api.shared, b.freeze).await;
+    info!(ip = %client_ip(&h), freeze = b.freeze, ok = r.is_ok(), "admin: freeze payouts");
+    outcome(r)
+}
+
+/// `?a=<address>`: whether it is a miner of this pool (its id and unpaid balance) and what the
+/// wallet says of it, before the operator moves anything there.
+async fn admin_address(State(api): State<Api>, Query(q): Query<HashMap<String, String>>) -> R {
+    let s = &api.shared;
+    let a: String = q.get("a").map(|v| v.chars().filter(|c| !c.is_whitespace()).collect()).unwrap_or_default();
+    let c = s.db.client().await?;
+    let known = c.query_opt("SELECT id, balance FROM miners WHERE address=$1", &[&a]).await?;
+    let shape = crate::stratum::address_type(&a);
+    let wallet = if shape.is_some() && shape != Some("coinbase") && s.cfg.wallet_enabled() {
+        let w = crate::wallet::Wallet::new(&s.cfg.wallet_api.url, &s.cfg.wallet_api.acl_key, s.http.clone());
+        match w.validate_address(&a).await {
+            Ok(v) => json!({ "valid": v["is_valid"].as_bool() == Some(true), "type": v["type"] }),
+            Err(e) => json!({ "error": e.to_string() }),
+        }
+    } else {
+        Value::Null
+    };
+    Ok(Json(json!({ "address": a, "shape": shape, "minerId": known.as_ref().map(|r| r.get::<_, i64>(0)),
+                    "balance": known.as_ref().map(|r| r.get::<_, i64>(1)), "wallet": wallet })))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn query_pairs() {
+        assert_eq!(super::url_pairs("range=24h&x=1&&mode="), vec![("range".into(), "24h".into()), ("x".into(), "1".into()), ("mode".into(), "".into())]);
+        assert!(super::url_pairs("").is_empty());
+        assert_eq!(super::cache_param("range", "<script>"), Some("24h".into()));
+        assert_eq!(super::cache_param("mode", "x"), None);
+        assert_eq!(super::cache_param("limit", "99999"), Some("1000".into()));
+        assert_eq!(super::cache_param("limit", "abc"), None);
+        assert_eq!(super::cache_param("utm_source", "x"), None);
+    }
+}

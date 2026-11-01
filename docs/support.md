@@ -27,7 +27,7 @@ support ─HTTPS─► api.telegram.org (@BumbleBeam_bot) ◄──┘
 ```
 
 - **A service of its own**, container `support` in `compose-bumblebeam.yaml`, not code in `bumblebeam-pool`.
-  Parsing mail and attachments must never restart or slow the stratum or the app (`docs/pool-split.md`: releases
+  Parsing mail and attachments must never restart or slow the stratum or the app (`beam/pool/docs/pool-split.md`: releases
   should not touch the miners). Node, like `explorer-api`, but with dependencies, pinned: `imapflow` (IMAP + IDLE),
   `mailparser` (MIME), `nodemailer` (SMTP), `pg`, `sanitize-html`. Writing MIME and IMAP by hand is not worth it.
 - **Routing:** the host nginx (host network) sends `pool.bumblebeam.org/api/support/` to the service on

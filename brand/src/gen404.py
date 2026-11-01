@@ -1,4 +1,4 @@
-# Generates pool/web/404.svg: "4 [empty honeycomb cell] 4" with the logo's bee peeking into the cell.
+# Generates beam/pool/web/404.svg: "4 [empty honeycomb cell] 4" with the logo's bee peeking into the cell.
 import math, sys
 R = 30                      # hexagon radius (pointy top, like the logo)
 W = math.sqrt(3) * R        # horizontal distance between neighbours
@@ -71,6 +71,6 @@ svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 250" role="im
 {bee(243, 178, -40, False, "-1.4s")}
 </svg>
 '''
-# python3 brand/src/gen404.py pool/web/404.svg
+# python3 brand/src/gen404.py beam/pool/web/404.svg
 open(sys.argv[1], "w").write(svg)
 print(len(svg))

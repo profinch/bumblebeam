@@ -1,11 +1,11 @@
 name: desktop
-# BumbleBeam Miner for Windows and Linux (miner/desktop, Tauri): MXBM built with our patches
-# (miner/mxbm-patches) for CUDA and OpenCL, the console miner, the bb-power helper, then the
+# BumbleBeam Miner for Windows and Linux (beam/miner/desktop, Tauri): MXBM built with our patches
+# (beam/miner/mxbm-patches) for CUDA and OpenCL, the console miner, the bb-power helper, then the
 # installers. A tag miner-vX.Y.Z adds them to that version's release.
 on:
   push:
     branches: [main]
-    paths: ['miner/desktop/**', 'miner/mxbm-patches/**', 'miner/src/**', '.github/workflows/desktop.yml']
+    paths: ['beam/miner/desktop/**', 'beam/miner/mxbm-patches/**', 'beam/miner/src/**', '.github/workflows/desktop.yml']
     tags: ['miner-v*']
   workflow_dispatch:
 permissions:
@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: mxbm-build/mxbm${{ matrix.name == 'windows' && '.exe' || '' }}
-          key: mxbm-v1-${{ matrix.name }}-${{ env.MXBM_BASE }}-${{ hashFiles('miner/mxbm-patches/*.patch') }}
+          key: mxbm-v1-${{ matrix.name }}-${{ env.MXBM_BASE }}-${{ hashFiles('beam/miner/mxbm-patches/*.patch') }}
       - if: steps.cache.outputs.cache-hit != 'true'
         uses: Jimver/cuda-toolkit@v0.2.24
         with:
@@ -60,7 +60,7 @@ jobs:
         run: |
           git clone -q "$MXBM_REPO" mxbm-src
           cd mxbm-src && git checkout -q "$MXBM_BASE"
-          git -c user.name=ci -c user.email=ci@localhost am -q ../miner/mxbm-patches/*.patch
+          git -c user.name=ci -c user.email=ci@localhost am -q ../beam/miner/mxbm-patches/*.patch
           git log --oneline -1
       - name: Build (Linux)
         if: matrix.name == 'linux' && steps.cache.outputs.cache-hit != 'true'
@@ -106,11 +106,11 @@ jobs:
       - name: Version
         shell: bash
         run: |
-          v=$(sed -nE 's/^version = "(.*)"/\1/p' miner/Cargo.toml | head -1)
-          for f in miner/desktop/src-tauri/Cargo.toml miner/desktop/bb-power/Cargo.toml; do
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' beam/miner/Cargo.toml | head -1)
+          for f in beam/miner/desktop/src-tauri/Cargo.toml beam/miner/desktop/bb-power/Cargo.toml; do
             [ "$(sed -nE 's/^version = "(.*)"/\1/p' $f | head -1)" = "$v" ] || { echo "$f is not at $v"; exit 1; }
           done
-          grep -q "\"version\": \"$v\"" miner/desktop/src-tauri/tauri.conf.json || { echo "tauri.conf.json is not at $v"; exit 1; }
+          grep -q "\"version\": \"$v\"" beam/miner/desktop/src-tauri/tauri.conf.json || { echo "tauri.conf.json is not at $v"; exit 1; }
           if [[ "$GITHUB_REF" == refs/tags/miner-v* ]]; then
             [ "${GITHUB_REF_NAME#miner-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but the miner is $v"; exit 1; }
           fi
@@ -126,18 +126,18 @@ jobs:
         shell: bash
         run: |
           (cd miner && cargo build --release --target ${{ matrix.target }})
-          (cd miner/desktop/bb-power && cargo build --release --target ${{ matrix.target }})
-          B=miner/desktop/src-tauri/binaries
+          (cd beam/miner/desktop/bb-power && cargo build --release --target ${{ matrix.target }})
+          B=beam/miner/desktop/src-tauri/binaries
           cp mxbm-bin/mxbm${{ matrix.exe }} $B/mxbm-${{ matrix.target }}${{ matrix.exe }}
-          cp miner/target/${{ matrix.target }}/release/bumblebeam-miner${{ matrix.exe }} $B/bumblebeam-miner-${{ matrix.target }}${{ matrix.exe }}
-          cp miner/desktop/bb-power/target/${{ matrix.target }}/release/bb-power${{ matrix.exe }} $B/bb-power-${{ matrix.target }}${{ matrix.exe }}
+          cp beam/miner/target/${{ matrix.target }}/release/bumblebeam-miner${{ matrix.exe }} $B/bumblebeam-miner-${{ matrix.target }}${{ matrix.exe }}
+          cp beam/miner/desktop/bb-power/target/${{ matrix.target }}/release/bb-power${{ matrix.exe }} $B/bb-power-${{ matrix.target }}${{ matrix.exe }}
           chmod +x $B/* || true
           ls -la $B
       - name: Unit tests
-        working-directory: miner/desktop/src-tauri
+        working-directory: beam/miner/desktop/src-tauri
         run: cargo test --release
       - name: Build the installers
-        working-directory: miner/desktop
+        working-directory: beam/miner/desktop
         env:
           # linuxdeploy is itself an AppImage: run it unpacked (no FUSE on the runner), and leave
           # the bundled binaries as they are (its old strip fails on newer ELF sections)
@@ -148,14 +148,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          R=miner/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
+          R=beam/miner/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
           if [ "${{ matrix.name }}" = windows ]; then
             cp "$(ls $R/nsis/*.exe | head -1)" "dist/BumbleBeam-Miner-$VER-Windows-x64-setup.exe"
             # portable: the app with its programs next to it, nothing to install (settings and
             # logs still in %APPDATA%, the WebView2 runtime of Windows 10/11)
             P="BumbleBeam-Miner-$VER-Windows-x64-portable"
-            T=miner/desktop/src-tauri/target/${{ matrix.target }}/release
-            B=miner/desktop/src-tauri/binaries
+            T=beam/miner/desktop/src-tauri/target/${{ matrix.target }}/release
+            B=beam/miner/desktop/src-tauri/binaries
             mkdir -p "$P"
             cp $T/bumblebeam-miner-desktop.exe "$P/BumbleBeam Miner.exe"
             for n in mxbm bumblebeam-miner bb-power; do cp $B/$n-${{ matrix.target }}.exe "$P/$n.exe"; done

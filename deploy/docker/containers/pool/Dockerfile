@@ -6,7 +6,9 @@ ARG BUMBLEBEAM_REF=main
 RUN apt-get update && apt-get install -y --no-install-recommends git g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
-WORKDIR /src/pool/server
+# refs from before the beam/ layout (2026-11-01) are moved into it, so a rollback still builds
+RUN [ -d /src/beam ] || { mkdir /src/beam; for d in oracle vectors pool explorer; do [ ! -e /src/$d ] || mv /src/$d /src/beam/; done; [ ! -e /src/api ] || mv /src/api /src/beam/explorer/api; }
+WORKDIR /src/beam/pool/server
 # Cargo.lock is committed: the same ref builds the same binary
 RUN cargo build --release --locked
 
@@ -14,9 +16,9 @@ FROM debian:13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 beam && useradd -u 10001 -g beam -d /etc/bumblebeam -s /usr/sbin/nologin beam
-COPY --from=build /src/pool/server/target/release/bumblebeam-pool /usr/local/bin/
+COPY --from=build /src/beam/pool/server/target/release/bumblebeam-pool /usr/local/bin/
 USER beam
 WORKDIR /etc/bumblebeam
 ENV RUST_LOG=info,tokio_postgres=warn
-# the role comes from compose's command: none = both halves, `run stratum` / `run app` = one half (docs/pool-split.md)
+# the role comes from compose's command: none = both halves, `run stratum` / `run app` = one half (beam/pool/docs/pool-split.md)
 ENTRYPOINT ["bumblebeam-pool", "/etc/bumblebeam/pool.toml"]

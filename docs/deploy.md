@@ -10,7 +10,7 @@ One Linux server runs everything: a Beam node, the pool's wallet behind `wallet-
 and `bumblebeam-pool`. Tested on Linux Mint 22 / Ubuntu 24.04 with Beam 7.5.14493. The layout
 below uses `/opt/bumblebeam` for the repository and binary, `/etc/bumblebeam` for configuration
 and secrets, `/var/lib/beam` for the node and wallet, and a system user `beam`; any other layout
-works, adjust the paths in the units under [`pool/deploy`](../pool/deploy).
+works, adjust the paths in the units under [`beam/pool/deploy`](../beam/pool/deploy).
 
 The same stack also runs in Docker: see [Docker](#docker) at the end. It is what runs
 pool.bumblebeam.org.
@@ -66,9 +66,9 @@ head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 32 | sudo -u beam 
 sudo chmod 600 stratum.key stratum.api.keys
 ```
 
-Copy [`pool/deploy/beam-node.cfg`](../pool/deploy/beam-node.cfg) to `/var/lib/beam/node/`, fill
+Copy [`beam/pool/deploy/beam-node.cfg`](../beam/pool/deploy/beam-node.cfg) to `/var/lib/beam/node/`, fill
 in `miner_key`, `owner_key` and `pass` (the wallet password), `chmod 600`, install
-[`beam-node.service`](../pool/deploy/beam-node.service) and start it. Notes:
+[`beam-node.service`](../beam/pool/deploy/beam-node.service) and start it. Notes:
 
 - `fast_sync=1` downloads headers, then block bodies in packs, then builds the UTXO set:
   about 2.5 hours and 8 GB for mainnet in late 2026. Without it the node fetches every block
@@ -81,7 +81,7 @@ in `miner_key`, `owner_key` and `pass` (the wallet password), `chmod 600`, insta
 
 ## 5. wallet-api
 
-Install [`beam-wallet-api.service`](../pool/deploy/beam-wallet-api.service). It listens on
+Install [`beam-wallet-api.service`](../beam/pool/deploy/beam-wallet-api.service). It listens on
 127.0.0.1:10001 over HTTP; anyone who can reach that port can call `tx_send`, so keep it on
 loopback and consider `--use_acl` (put the key in `wallet_api.acl_key`). If the wallet shows
 `is_in_sync: false` after a node resync, restart the service.
@@ -102,20 +102,20 @@ In `pool.toml`: `node.api_key` is the line from `stratum.api.keys`; `wallet_api.
 `database.url_file` `/etc/bumblebeam/database.url`; `block_check_urls` your own explorer-node first
 if you run one; `[admin] token` from `openssl rand -hex 24` if you want the operator's dashboard.
 Keep `maturity` at 240 or more and `min_payout_groth` well above the shielded network fee
-(0.01 BEAM). Install [`bumblebeam-pool.service`](../pool/deploy/bumblebeam-pool.service) and start
+(0.01 BEAM). Install [`bumblebeam-pool.service`](../beam/pool/deploy/bumblebeam-pool.service) and start
 it.
 
 The unit runs the pool as one process (no subcommand, which is `run all`): stratum, API, admin and
 payouts together. A pool release then restarts the stratum ports too and every miner reconnects.
 To release the API without touching the miners, run it as two processes, `run stratum` and
-`run app` ([`docs/pool-split.md`](pool-split.md)), as the [Docker](#docker) stack does: two units
+`run app` ([`beam/pool/docs/pool-split.md`](../beam/pool/docs/pool-split.md)), as the [Docker](#docker) stack does: two units
 with the same config, `[admin] token` set (both refuse to start without it) and `[control]`
 pointing the app at the stratum process.
 
 Check: `curl -s localhost:8080/api/health` shows `"ok": true` once the node is synced and a
 template arrived (until then it answers 503 with `"node": false`); `journalctl -u bumblebeam-pool -f`
 shows logins and jobs. Port 8080 is the API only: the pool serves no pages, so the web UI
-([`pool/web`](../pool/web)) comes from nginx (section 8). The database schema is created and
+([`beam/pool/web`](../beam/pool/web)) comes from nginx (section 8). The database schema is created and
 migrated on start. Each half holds a PostgreSQL advisory lock of its own, so a second pool process
 of the same kind refuses to start against the database.
 
@@ -131,18 +131,18 @@ It pays 0.001 BEAM three times to a fresh address of the wallet itself and prove
 refuses a second `tx_send` with the same transaction id. Only with that proof does the pool resend
 interrupted payments automatically; without it they wait for an operator in `review`.
 
-Then run the tests against a throwaway database (`cargo test`, `pool/server/tools/e2e.sh` and
-`tools/e2e_split.sh`, see [`pool/server/README.md`](../pool/server/README.md)) and a real miner
+Then run the tests against a throwaway database (`cargo test`, `beam/pool/server/tools/e2e.sh` and
+`tools/e2e_split.sh`, see [`beam/pool/server/README.md`](../beam/pool/server/README.md)) and a real miner
 against the TLS port: MXBM, lolMiner and GMiner all default to TLS for Beam.
 
 ## 7b. Coinbase payouts (optional)
 
 Miners can be paid in the blocks themselves, with outputs they made and signed, so the pool never
-holds their money ([`tools/coinbase/`](../tools/coinbase/README.md)). It needs the patched node, a
+holds their money ([`beam/research/coinbase/`](../beam/research/coinbase/README.md)). It needs the patched node, a
 **mining wallet of its own** for the pool's share, and `bb-finalizer` next to the node.
 
 ```sh
-# 1. the node: BeamMW/beam with tools/coinbase/beam-node-foreign-coinbase.patch applied (41 lines, see the README)
+# 1. the node: BeamMW/beam with beam/research/coinbase/beam-node-foreign-coinbase.patch applied (41 lines, see the README)
 # 2. a mining wallet: a fresh beam-wallet, its seed in /etc/bumblebeam/mining-wallet.seed (mode 600, owner beam);
 #    its owner key and miner key (export_owner_key, export_miner_key --subkey=1) go into beam-node.cfg
 #    as owner_key / miner_key, with mine_online=1, mine_online_foreign=1, mine_online_reserve=65536
@@ -211,7 +211,7 @@ bumblebeam.org runs one: **ru.bumblebeam.org** (185.133.42.180, Novosibirsk).
 
 - `admin list` shows blocks the checks could not settle and payments waiting for a decision;
   `admin block <height> confirm|orphan`, `admin payment <txid> sent|refund` resolve them (see
-  [`pool/server/README.md`](../pool/server/README.md)).
+  [`beam/pool/server/README.md`](../beam/pool/server/README.md)).
 - Back up `wallet.db` and `wallet.pass` (the money) and `pg_dump bumblebeam` (balances and
   history). The node database is disposable.
 - Update: `git pull`, `cargo build --release`, `install`, `systemctl restart bumblebeam-pool`.
@@ -237,9 +237,9 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
   containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-stratum and pool-app)
-  containers/pool-web/                builds the pool UI (pool/web) at POOL_WEB_REF (else BUMBLEBEAM_REF), nginx
-  containers/explorer-api/            builds the API and MCP server (api/server.js) at BUMBLEBEAM_REF, Node
-  containers/explorer-web/            builds the explorer UI (explorer/web) at BUMBLEBEAM_REF, nginx
+  containers/pool-web/                builds the pool UI (beam/pool/web) at POOL_WEB_REF (else BUMBLEBEAM_REF), nginx
+  containers/explorer-api/            builds the API and MCP server (beam/explorer/api/server.js) at BUMBLEBEAM_REF, Node
+  containers/explorer-web/            builds the explorer UI (beam/explorer/web) at BUMBLEBEAM_REF, nginx
   containers/nginx/, containers/certbot/
   beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
   pool-tls-sync.sh                    copies the wildcard certificate for stratum TLS (D7)
@@ -426,7 +426,7 @@ the running node, use `up -d --no-deps <service>`.
   `sudo journalctl CONTAINER_NAME=bumblebeam-pool-stratum --since "2 hours ago"` (miners, the node, found blocks; `-app` for the API and payouts). Each miner connection
   leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
   shares, and why it ended); addresses are shortened in logs.
-- Pool update (docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
+- Pool update (beam/pool/docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
   blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from one image tagged with `POOL_REF`. Set
   `POOL_REF=<commit>` in `.env`, `build pool-stratum` (it builds the image both containers run), then
   - a change only to the app half (`api`, `admin`, `payouts`, `accounting::confirm_loop`, `network`, `db` queries

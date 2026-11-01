@@ -59,4 +59,4 @@ curl -s 'https://explorer.bumblebeam.org/v1/dex/pools?asset=0' | jq '.pools[:5]'
   that it is unknown which chain it is on.
 - Limits: 20 requests a second per IP (bursts of 40). Page with `before`, do not loop fast.
 
-Full reference: https://github.com/profinch/bumblebeam/blob/main/explorer/API.md
+Full reference: https://github.com/profinch/bumblebeam/blob/main/beam/explorer/API.md

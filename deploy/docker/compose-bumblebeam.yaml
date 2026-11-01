@@ -168,7 +168,7 @@ services:
     networks:
       - bumblebeam
 
-  # The pool in two processes from one image (docs/pool-split.md): pool-stratum holds the miners' connections
+  # The pool in two processes from one image (beam/pool/docs/pool-split.md): pool-stratum holds the miners' connections
   # and changes rarely; pool-app (API, admin, payouts, maturity) takes most releases without dropping a miner.
   # Both read the same pool.toml; the app reaches the stratum process's control interface on pool-stratum:8081.
   # The host's journal keeps their logs across rebuilds: journalctl CONTAINER_NAME=bumblebeam-pool-stratum (or -app).

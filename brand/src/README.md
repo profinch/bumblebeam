@@ -10,7 +10,7 @@
     ffmpeg -stream_loop 1 -framerate 25 -i banner/f%03d.png -c:v libx264 -pix_fmt yuv420p -crf 18 -movflags +faststart -an banner-1500x500.mp4
     ffmpeg -framerate 25 -i banner/f%03d.png -vf "fps=20,split[a][b];[a]palettegen=max_colors=192:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" -loop 0 banner-1500x500.gif
 
-The static banner is frame 25 (banner/f025.png). Both loop in 4.4 s: 10 wing beats of 0.44 s and 3 trail blinks of 1.47 s, as pool/web/favicon.svg moves (0.44 s, 1.5 s).
+The static banner is frame 25 (banner/f025.png). Both loop in 4.4 s: 10 wing beats of 0.44 s and 3 trail blinks of 1.47 s, as beam/pool/web/favicon.svg moves (0.44 s, 1.5 s).
 
 Other banner sizes (the static frame 25, the logo+text block centred, elements scaled by k):
 

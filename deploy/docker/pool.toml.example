@@ -59,7 +59,7 @@ token = "CHANGE_ME"                       # required: pool-stratum and pool-app 
                                           # (openssl rand -hex 24): the operator's dashboard at /dash and the control interface
 
 [control]
-# only when the pool runs as two processes (`run stratum` + `run app`, docs/pool-split.md): the stratum process's
+# only when the pool runs as two processes (`run stratum` + `run app`, beam/pool/docs/pool-split.md): the stratum process's
 # interface for the app process (live connections, kicks, the coinbase finalizer); internal only, the admin token
 # authenticates it (a Bearer), so `run stratum` and `run app` both need [admin] token
 bind = "0.0.0.0:8081"

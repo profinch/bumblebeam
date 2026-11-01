@@ -8,4 +8,4 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 enable_testing()
-add_subdirectory(oracle)
+add_subdirectory(beam/oracle oracle)   # binaries stay in build/oracle/

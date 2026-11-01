@@ -14,7 +14,7 @@ def tri(t, period):
 
 
 def bee(t, T):
-    """the favicon's logo (32x32 units) at time t, moving as pool/web/favicon.svg does: the wings -32..-16 / 16..32 deg
+    """the favicon's logo (32x32 units) at time t, moving as beam/pool/web/favicon.svg does: the wings -32..-16 / 16..32 deg
     and back in 0.44 s, the trail's two lines .25..85 opacity in opposite phase over 1.5 s, both linear, no hover.
     The periods are rounded to divide the loop T (seamless): the nearest whole number of beats and blinks."""
     wp = T / max(1, round(T / 0.44))

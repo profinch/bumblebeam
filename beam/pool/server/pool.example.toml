@@ -1,0 +1,86 @@
+# BumbleBeam pool configuration. Copy to pool.toml and edit.
+
+[node]
+stratum_addr = "127.0.0.1:8101"          # beam-node --stratum_port
+api_key = "CHANGE_ME"                     # one line of the node's stratum.api.keys
+tls = true                                # beam-node --stratum_use_tls (default on)
+standby = []                              # more nodes, tried when the first is down
+sync_lag_blocks = 5                       # jobs further below the network height are not given to miners
+
+[wallet_api]
+url = ""                                  # "http://127.0.0.1:10001/api/wallet"; empty = payouts off
+acl_key = ""                              # wallet-api --use_acl key, if ACL is on
+tx_fee_groth = 1000                       # fallback fee for regular addresses; the wallet is asked first (calc_change)
+shielded_fee_groth = 1000100              # fallback for offline/max-privacy/public-offline: Beam's shielded minimum, 0.010001 BEAM
+
+[stratum]
+bind = "0.0.0.0"
+pplns_port = 3333
+solo_port = 3334
+pplns_tls_port = 3443                     # lolMiner and GMiner default to TLS for Beam; 0 disables
+solo_tls_port = 3444
+tls_cert = "/etc/bumblebeam/tls/pool.crt"   # self-signed is fine: miners do not verify; re-read when the files change
+tls_key = "/etc/bumblebeam/tls/pool.key"    # (checked every 10 min, no restart); a key that does not match is refused
+nonce_prefix_bytes = 3
+proxy_protocol_from = []                  # relays that send a PROXY v1 header with the miner's address, e.g. ["185.133.42.180"]
+
+[pool]
+name = "BumbleBeam"
+fee_percent = 0.5
+solo_fee_percent = 0.5
+finder_bonus_percent = 1.0                # PPLNS: share of the block (after the fee) to the rig that found it, on top of its share; 0 disables
+min_payout_groth = 100000000              # 1 BEAM; the shielded network fee alone is 0.01 BEAM, so keep this well above it
+miner_pays_tx_fee = true                  # the network fee comes out of the payout
+payout_interval_secs = 7200
+pplns_window = 2.0                        # x network difficulty
+maturity = 240
+verify_blocks_with_wallet = true          # coinbase must be in the wallet before credits are paid
+block_check_urls = []                     # cross-check of the block hash by height, tried in order; e.g.
+                                          # ["http://127.0.0.1:8888/block?height=", "https://explorer.0xmx.net/api/block?height="]
+                                          # your own explorer-node first, a public one as a fallback; it never confirms alone
+# explorer_urls = ["http://127.0.0.1:8888", "https://explorer.0xmx.net/api"]
+                                          # explorer-node API roots for the site's network numbers and BEAM/USD (median of
+                                          # the on-chain Oracle2), tried in order; defaults to the public explorer
+public_host = "pool.example.com"
+public_node = ""                          # host:port of the node's p2p port for wallets, shown in the UI; empty hides it
+
+[coinbase]
+# Coinbase payouts (tools/coinbase): miners who log in with a "cb:<key>" account are paid in the blocks
+# themselves, with outputs they made and signed. Needs the patched beam-node (--mine_online=1
+# --mine_online_foreign=1 --mine_online_reserve=65536, owner_key of a mining wallet of its own) and
+# bb-finalizer running next to it with that wallet's seed. With this on, blocks are confirmed by our
+# node's chain as the finalizer reports it, not by the wallet's UTXOs.
+enabled = false
+link_bind = "127.0.0.1:3480"              # bb-finalizer connects here; keep it on loopback
+ladder_shift = 20                         # pair values: 2^20 groth (0.0105 BEAM) times powers of two
+ladder_steps = 12                         # ... up to 2^31 groth (21.5 BEAM)
+max_coinbase_bytes = 65536                # block space for the miners' pairs (249 bytes each)
+stock_max_per_account = 512
+max_pairs_per_upload = 256
+kernel_validity_blocks = 43200            # Beam: a kernel lives 1440*30 blocks after its minimum height
+expiry_margin_blocks = 100                # a pair this close to expiry is not offered any more
+
+[vardiff]
+start = 64.0
+min = 8.0
+max = 4000000.0
+target_secs = 10.0
+nicehash_min = 2048.0                     # NiceHash's proxy refuses a BeamV3 pool below 2048; applied when its login says agent "NiceHash..."
+
+[http]
+bind = "0.0.0.0:8080"
+
+[admin]
+token = ""                                # 24+ random chars (openssl rand -hex 24): the operator's dashboard at /admin and the
+                                          # control interface below; empty turns the dashboard off, but `run stratum` and
+                                          # `run app` refuse to start without it (only `run all` runs without a token)
+
+[control]
+# only when the pool runs as two processes (`run stratum` + `run app`, beam/pool/docs/pool-split.md): the stratum process's
+# interface for the app process (live connections, kicks, the coinbase finalizer); internal only, the admin token
+# authenticates it (a Bearer), so `run stratum` and `run app` both need [admin] token
+bind = "127.0.0.1:8081"
+url = "http://127.0.0.1:8081"
+
+[database]
+url_file = "/etc/bumblebeam/database.url"   # a file holding postgres://user:pass@host/db, or set url = "..." here

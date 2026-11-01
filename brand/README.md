@@ -1,6 +1,6 @@
 # BumbleBeam brand
 
-The logo is `pool/web/favicon.svg` (animated); these are its static and social-media versions.
+The logo is `beam/pool/web/favicon.svg` (animated); these are its static and social-media versions.
 
 | File | What | For |
 |---|---|---|
