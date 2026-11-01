@@ -5,7 +5,7 @@ pools, explorers, wallets, DEX, miners, games and tools. Everything here is publ
 
 | Direction | What is in it | Sites |
 |---|---|---|
-| [`beam/`](beam) | The pool (stratum + app, PPLNS and solo), the BeamHash III oracle and its test vectors, the explorer with its JSON API and MCP server, BumbleBeam Wallet (Chrome extension with the BEAM ⇄ WBEAM bridge), the CPU miner and the desktop apps, research (coinbase payouts, header dumps). Next: a DEX terminal | [pool](https://pool.bumblebeam.org) · [explorer](https://explorer.bumblebeam.org) |
+| [`beam/`](beam) | The pool (stratum + app, PPLNS and solo), the BeamHash III oracle and its test vectors, the explorer with its JSON API and MCP server, BumbleBeam Wallet (Chrome extension with the BEAM ⇄ WBEAM bridge), the CPU miner and the desktop apps, research (coinbase payouts, header dumps). Next: a DEX terminal | [pool](https://pool.bumblebeam.org)<br>[explorer](https://explorer.bumblebeam.org) |
 | [`bitcoin/`](bitcoin) | [3BMiner](bitcoin/3bminer): open ESP32 firmware that mines Bitcoin solo on the chip's SHA-256 engine. Next: a puzzle search | puzzle (planned) |
 | [`rig/`](rig) | [thermo](rig/thermo): every temperature, fan and voltage of a mining box, GPU fan curves, alerts | |
 | [`hive/`](hive) | Planned, shared by all directions: accounts, a ledger of what each miner put in, payouts, a lottery and a game | |
