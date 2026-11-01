@@ -1,10 +1,8 @@
 /build/
-/build-*/
 /dist/
-/managed_components/
-/sdkconfig
-/sdkconfig.old
-/main/secrets.h
-/web-next/index.html
-/web-next/display.html
+/web/out/
+/firmware/managed_components/
+/firmware/sdkconfig
+/firmware/sdkconfig.old
+/firmware/main/secrets.h
 __pycache__/

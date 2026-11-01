@@ -1,6 +1,6 @@
 # Web UI / firmware roadmap (from 2026-10-28)
 
-Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.html (local only, not flashed yet).
+The page: web/index.html -> `web/build.py [<dir>]` -> web/out/ and firmware/main/www/index.html.
 
 ## Done in the preview (browser side, no firmware change)
 - Menu like the BumbleBeam pool header: Dashboard / Swarm / Settings / Firmware; the status pill sits on the right on phones.
@@ -8,7 +8,7 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - Swarm: the browser scans the subnet (/probe, then /api/system/info), understands NMMiner and AxeOS (Bitaxe/NerdQaxe) answers, sortable table, totals, restart, remembers addresses in localStorage.
 - Settings: Payout / Pool / Wi-Fi / Device; host:port parsing; fields the firmware lacks are marked "next fw".
 - Firmware: version, kernel, upload with a progress bar, engine check (/api/bench), restart.
-- Display layouts moved out of the web UI into `display.src.html` -> `display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
+- Display layouts moved out of the web UI into `web/display.html` -> `web/out/display.html`, a review page only: Miner / Network / Clock screens for 240x240, 320x170, 320x240 drawn from a live miner (`?h=<ip>`). The firmware never serves it; it is the spec for TFT builds.
 
 ## Needs firmware
 - Stratum over TLS (`stratum+tls://`, `stratum+ssl://`): today plain TCP only, the settings refuse a TLS address. esp-tls with
@@ -19,14 +19,14 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 - (Done in 0.7.0: hashrate history on the device, a value a minute for 24 h, `/api/history`.)
 - Logs page: ring buffer of recent log lines at /api/logs.
 - Block height from the coinbase (BIP34) so it shows without internet access from the browser.
-- Serve favicon/page with ETag (the page is ~24 KB gzip since web-next).
+- Serve favicon/page with ETag (the page is ~24 KB gzip ).
 
 ## Display builds (later)
 - Boards: NMMiner 1.54" 240x240 ST7789, LILYGO T-Display S3 (ESP32-S3: its SHA engine can take a midstate - a separate kernel, likely much faster), ESP32-2432S028 "CYD" 2.8" 320x240 (classic ESP32).
 - Draw on core 1 only; measure the effect on the engine first (SPI DMA / bus contention), refresh ~1 Hz.
 
 ## Camera board (ESP32-CAM)
-- Camera tab is in web-next (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). Since 0.7.0 web-next is the firmware's page, /camera included; main/www/camera.html is gone.
+- Camera tab is in the page (all of camera.html: view, still, stream, every sensor control, save, XCLK and registers). Since 0.7.0 the page is the firmware's page, /camera included; firmware/main/www/camera.html is gone.
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
 - microSD: video recording (MJPEG AVI, by schedule or on motion), a file list with download and delete on the Camera tab.
@@ -56,7 +56,7 @@ Preview of the next UI: web-next/index.src.html -> `build.py <dir>` -> index.htm
 ## New boards (ordered 2026-10-29) and temperature
 Ordered: Seeed XIAO ESP32-C6, ESP32-C3 SuperMini (two listings, one with an expansion board), CYD ESP32-2432S028R
 (classic ESP32, 2.8" 240x320 ILI9341), LILYGO T-Display-S3 (ESP32-S3, 1.9" 170x320 ST7789). When they arrive:
-- A board profile in `boards/` for each, built and flashed like the devkit; mining first, then the screen on the CYD and
+- A board profile in `firmware/boards/` for each, built and flashed like the devkit; mining first, then the screen on the CYD and
   the T-Display-S3 (see Display builds).
 - The S3, C3 and C6 have a different SHA peripheral from the classic ESP32 (no hwmine kernel as is) and the C3/C6 are
   RISC-V: measure the engine there, the software hasher may be the main path.
