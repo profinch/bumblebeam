@@ -6,3 +6,4 @@
 /firmware/sdkconfig.old
 /firmware/main/secrets.h
 __pycache__/
+/tests/vectors.h

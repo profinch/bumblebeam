@@ -10,13 +10,19 @@ typedef struct {
     char pool_desc[96]; char user[128];
     volatile int8_t solo;           // 1 = the coinbase pays the configured address (solo pool), 0 = it does not, -1 = no job yet
     volatile int8_t authorized;     // 1 = the pool took the user, 0 = refused it, -1 = no answer yet
-    volatile uint32_t cand_dropped, stale_dropped, old_job_submits, rej_stale, rej_dup, rej_lowdiff, rej_other; char last_reject[96];
+    volatile uint32_t cand_dropped, stale_dropped, old_job_submits, rej_stale, rej_dup, rej_lowdiff, rej_other, submit_lost; char last_reject[96];
 } stratum_stats_t;
 extern stratum_stats_t g_stratum;
 void stratum_start(void);
 // miner side
 bool stratum_get_job(job_t *dst, session_t *s, uint32_t *seq);   // copies the current job if seq differs; returns true if copied
 void stratum_submit_candidate(const candidate_t *c);
+bool stratum_job_live(uint32_t seq);    // false once the job is withdrawn (a clean notify that did not parse, new extranonces)
+// pool difficulty and best difficulties: doubles, so only through these (another core could read half of one)
+void stratum_set_pool_diff(double d);
+double stratum_pool_diff(void);
+void stratum_best(double d);
+double stratum_best_ever(void);
 // hashrate from the accepted shares of the last hour (or since the start, if shorter): their difficulty x 2^32 / seconds,
 // what a pool estimates; *n = shares counted, *secs = the window
 double stratum_share_hps(uint32_t *n, uint32_t *secs);

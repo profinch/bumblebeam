@@ -2,16 +2,72 @@
 
 What changed per version. Which image ran where and what it measured: [HISTORY.md](HISTORY.md).
 
-## 0.10.2 (unreleased)
-- API: the firmware version is given as NMMiner gives its own, with a "v" (fwVersion in /api/system/info, ver in
-  /probe: v0.10.2), so NMMiner's Swarm page shows ours the same way. The stratum user agent stays 3BMiner/0.10.2.
-- Page: versions are shown as the device gives them; the page no longer puts a "v" in front of one that has none.
-- Security: the "page from the LAN" check read only the first two numbers of the Origin's host, so a site named like
-  10.1.evil.com passed it and could read the settings, change the wallet or pool, restart the board or upload firmware
-  from a browser on the LAN. An address now has to be a whole IPv4 address (four numbers, nothing after).
-- Security, DNS rebinding: a site that points its own name at the board counted as the board's own page. Every handler
-  (the board's, the camera's and the stream on :81) now answers only when Host is an IP address or a LAN-only name
-  (bare name, .local, .lan, .home.arpa, .internal); any other name gets 421.
+## 1.0.0 (unreleased)
+A full audit (2026-11-01) went through the firmware, the page and the build; this is what came out of it, with the
+changes planned for 0.10.2. Major version: the settings move to a new format, images carry no Wi-Fi defaults, OTA and
+the bootloader change, and the source tree is laid out anew.
+
+Layout
+- `firmware/` (the ESP-IDF project: main/, boards/, sdkconfig.defaults, partitions), `web/` (was web-next/: index.html,
+  display.html, build.py -> web/out/), `tests/`, `docs/`, ROADMAP.md at the top; builds in build/<board>/.
+
+Security
+- The "page from the LAN" check read only the first two numbers of the Origin's host, so a site named like 10.1.evil.com
+  passed it. An address now has to be a whole IPv4 address.
+- A header too long for its buffer counted as missing: an Origin of 80+ characters passed every POST (any site could upload
+  firmware or change the wallet), a host cut at 63 characters read as a bare LAN name. Too long now means refused, a cut
+  host is refused, an IPv6 Origin (`http://[...]`) is refused.
+- DNS rebinding: a site that points its own name at the board counted as the board's own page. Every handler (the board's,
+  the camera's, the stream on :81) answers only when Host is an IP address or a LAN-only name (bare name, .local, .lan,
+  .home.arpa, .internal); anything else, or a Host too long to check, gets 421.
+- GETs that do something (Wi-Fi scan, software hasher check, a still that lights the flash, as the engine check and camera
+  controls already did) refuse
+  other sites; a browser without Sec-Fetch-Site is judged by its Referer.
+- JSON nested deeper than a few levels is refused before parsing, from the page (/api/config) and from the pool: cJSON
+  recurses per level and a line of a thousand '[' overflowed the stack (a boot loop when the pool sends it).
+- OTA takes only 3BMiner images for this board (an image without the marker was accepted: any ESP32 app, then USB only);
+  an upload has 3 minutes (a client trickling bytes held the server for good); the camera is freed only after the stream
+  has let go of its frame (else the upload is refused), no more use-after-free.
+- The bootloader rolls back an image that never gets its web server up (CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE; main.c
+  marks a working image valid). Needs this bootloader once over USB.
+- Images no longer carry Wi-Fi or payout defaults (secrets.h is gone; the old dist/ images have the Wi-Fi password in them).
+- Swarm add/scan take LAN addresses only (no scans of internet addresses). A request body is read for at most 10 s.
+- Camera: framesize is range-checked (a large value read past the driver's table and crashed the board), quality and
+  gain ceiling too.
+
+Wi-Fi and settings
+- Set-up network: with no Wi-Fi saved, or 2 minutes without its network, the board opens 3BMiner-xxxxxx (password
+  `3bminer-setup`, page at http://192.168.4.1/) and keeps trying its own; no more restart loops that only USB could end.
+- Settings are checked before they are taken: empty Wi-Fi name, a password under 8 characters, a malformed BSSID, an empty
+  pool and a Bitcoin address with a wrong checksum or length (bech32/bech32m/base58check) are refused.
+- Settings are stored as one NVS blob: a power cut or a full NVS leaves the old settings or the new ones, never a mix (each
+  key used to be written on its own). Settings saved by 0.x keep working: they are read from the old keys until the next save.
+
+Mining
+- A hash that is a whole block is always submitted: before, a clean notify arriving between the find and the submit (or
+  a template refresh sent as clean) threw it away as stale. Shares for a job replaced by a clean notify on the same
+  previous block still go out.
+- A block hash below the pool's difficulty counts too (pool difficulty above the network's: testnet, regtest).
+- Engine and software hasher split extranonce2 by its lowest bit: with a 1-byte extranonce2 they hashed the same headers
+  and every software share came back a duplicate. Starting points come from the hardware RNG.
+- The engine now also hashes nonce 0xFFFFFFFF.
+- A notify that does not parse (bad hex, too long, a job id with quotes) is refused with the reason, and when it was
+  clean the miners stop instead of hashing a previous block; new extranonces (set_extranonce) pause them until the next job.
+- A send that fails ends the connection (a half-sent line broke every later one); lost submits are counted (`submitLost`).
+- Solo detection reads the coinbase's outputs: solo when 95%+ of the reward goes to the configured address (it used to
+  find the address bytes anywhere in the coinbase, an OP_RETURN would do).
+- Pool difficulty, best difficulties and the hash counters are read without tearing across cores.
+
+Page
+- Versions shown as the device gives them (no "v" of its own); the firmware gives its own as v1.0.0, like NMMiner.
+- XSS: another device's numbers (Swarm totals) and mempool.space prices went into the page as markup; every number from
+  outside is made a number now. Swarm row buttons carry the address as data, not inside script text.
+- Only the maker part (first 3 bytes) of nearby access points' addresses goes to the pool for the vendor lookup.
+- Firmware upload: the file is checked in the browser first (a 3BMiner image for this board), 5 minutes timeout.
+- Settings: port range checked, the board's error text shown as it comes. Out-of-order answers no longer overwrite newer ones.
+
+API
+- `/api/system/info`: `identity.setupAp` (the set-up network is open), `stratum.submitLost`; `fwVersion` / `/probe` `ver` with a "v".
 
 ## 0.10.1 (2026-10-29)
 - Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;

@@ -50,11 +50,15 @@ void app_main(void) {
     const esp_partition_t *run = esp_ota_get_running_partition(); ESP_LOGI(TAG, "running from %s", run ? run->label : "?");
     // health, every 30 s: this loop itself under the task watchdog (2 min), Wi-Fi back within 5 min, the web server answering.
     // A board that loses one of them restarts and says why, instead of mining on unreachable until someone pulls the plug.
-    esp_task_wdt_add(NULL); int64_t wifi_ok = esp_timer_get_time(); int web_miss = 0;
+    esp_task_wdt_add(NULL); int64_t wifi_ok = esp_timer_get_time(); int web_miss = 0; bool valid = false;
     for (;;) { vTaskDelay(pdMS_TO_TICKS(30000)); esp_task_wdt_reset(); history_save();
         int64_t now = esp_timer_get_time();
-        if (wifi_connected()) wifi_ok = now; else if (now - wifi_ok > 300LL * 1000000) restart_because("wifi down 5 min");
-        if (wifi_connected() && !g_ota_busy && !g_web_long) { if (web_alive()) web_miss = 0; else if (++web_miss >= 5) restart_because("web server not answering"); }
+        // with the set-up network open the board waits for its own (and for whoever is setting it up), no restarts
+        if (wifi_connected() || wifi_ap_active()) wifi_ok = now; else if (now - wifi_ok > 300LL * 1000000) restart_because("wifi down 5 min");
+        if (!g_ota_busy && !g_web_long) { if (web_alive()) web_miss = 0; else if (++web_miss >= 5) restart_because("web server not answering"); }
         else web_miss = 0;   // a long request holds the server: no verdict
+        // a new image is kept once its page answers (the bootloader goes back to the previous one if it never gets here); the
+        // web server is what an update needs to undo itself
+        if (!valid && web_miss == 0 && web_alive()) { valid = true; esp_ota_img_states_t st; if (esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) { esp_ota_mark_app_valid_cancel_rollback(); ESP_LOGI(TAG, "this image marked valid"); } }
         ESP_LOGI(TAG, "hashrate %.1f KH/s (engine) + %.1f KH/s (sw core1), shares %u/%u, best %.4g, jobs %u, kernel %u cyc/nonce, heap %u", g_miner.hashrate / 1e3, g_miner.sw_hashrate / 1e3, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, g_stratum.best_session, (unsigned)g_stratum.jobs, (unsigned)g_miner.kernel_cycles, (unsigned)esp_get_free_heap_size()); }
 }

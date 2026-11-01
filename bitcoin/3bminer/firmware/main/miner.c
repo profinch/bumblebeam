@@ -13,6 +13,7 @@
 #include <math.h>
 #include "sha256.h"
 #include "esp_heap_caps.h"
+#include "esp_random.h"
 static const char *TAG = "miner";
 miner_stats_t g_miner;
 extern uint32_t hwmine(uint32_t *tbl, uint32_t nonce_start, uint32_t count, uint32_t E, uint32_t d2);
@@ -66,6 +67,9 @@ static void run_bench(void) {
 // hashes are checked down to this difficulty even when the pool asks for more, so the best difficulty keeps moving on a
 // pool that sets 1 or higher (public-pool); stratum submits only those that reach the pool's (about 1 in 4 s at 1 MH/s)
 #define SEEN_DIFF 0.001
+// extranonce2: the engine takes the even values, the software hasher the odd ones, so they never hash the same header even
+// when the pool gives a 1-byte extranonce2 (it goes out as its lowest bytes); a random start per job spreads restarts
+#define EN2_START(odd) ((esp_random() & 0x7fffff) << 1 | (odd))
 static uint32_t hit_mask_for(double pool_diff) {
     if (pool_diff > SEEN_DIFF) pool_diff = SEEN_DIFF;
     // a share needs >= 32 + floor(log2(diff)) leading zero bits of the hash number, whose top 32 bits are bswap(word7)
@@ -95,30 +99,31 @@ static void task(void *arg) {
     periph_module_enable(PERIPH_SHA_MODULE);
     s_tbl[19] = 0x80000000u; s_tbl[20] = 640; s_tbl[21] = 256; s_tbl[22] = 1; s_tbl[23] = 0xFFFFFFFFu; set_timing(g_timing);
     selftest();
-    static job_t job; static session_t sess; uint32_t seq = 0; static uint32_t w[19]; uint32_t en2 = 0, nonce = 0; bool have = false;
+    static job_t job; static session_t sess; uint32_t seq = 0; static uint32_t w[19]; uint32_t en2 = 0; uint64_t next = 0; bool have = false;
     int64_t win_t = esp_timer_get_time(); uint64_t win_h = 0; g_miner.start_us = win_t;
     s_tbl[19] = 0x80000000u; s_tbl[20] = 640; s_tbl[21] = 256; s_tbl[22] = 1; s_tbl[23] = 0xFFFFFFFFu;
     for (;;) {
         if (g_bench.req) { g_bench.req = 0; run_bench(); g_bench.done = 1; }
         if (stratum_get_job(&job, &sess, &seq)) {
-            en2 = (uint32_t)(esp_timer_get_time() & 0xffff) << 8;   // spread extranonce2 between restarts
-            nonce = 0; job_build_words(&job, &sess, en2, w); memcpy(s_tbl, w, 19 * 4); have = true;
+            en2 = EN2_START(0);
+            next = 0; job_build_words(&job, &sess, en2, w); memcpy(s_tbl, w, 19 * 4); have = true;
             ESP_LOGI(TAG, "new job seq %u en2 %08x", (unsigned)seq, (unsigned)en2);
         }
-        if (!have || !g_stratum.connected) { have = have && g_stratum.connected; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
-        s_tbl[23] = hit_mask_for(g_stratum.pool_diff);
-        uint32_t count = (0xFFFFFFFFu - nonce < CHUNK) ? (0xFFFFFFFFu - nonce) : CHUNK;
-        if (count == 0) { en2++; nonce = 0; job_build_words(&job, &sess, en2, w); memcpy(s_tbl, w, 19 * 4); continue; }
+        if (!have || !g_stratum.connected || !stratum_job_live(seq)) { have = have && g_stratum.connected && stratum_job_live(seq); vTaskDelay(pdMS_TO_TICKS(100)); continue; }
+        // all 2^32 nonces of an extranonce2, then the next one of this hasher
+        if (next > 0xFFFFFFFFull) { en2 += 2; next = 0; job_build_words(&job, &sess, en2, w); memcpy(s_tbl, w, 19 * 4); continue; }
+        s_tbl[23] = hit_mask_for(stratum_pool_diff());
+        uint32_t nonce = (uint32_t)next, count = 0x100000000ull - next < CHUNK ? (uint32_t)(0x100000000ull - next) : CHUNK;
         s_tbl[24] = 0;
         portDISABLE_INTERRUPTS();
         uint32_t c0 = esp_cpu_get_cycle_count();
         uint32_t r = s_kernels[g_kernel](s_tbl, nonce, count, ENGINE_E, LOAD_D2);
         uint32_t cyc = esp_cpu_get_cycle_count() - c0;
         portENABLE_INTERRUPTS();
-        uint32_t done = (s_tbl[24] ? r + 1 : r) - nonce;
+        uint32_t done = (s_tbl[24] ? r + 1 : r) - nonce;   // modulo 2^32: the last chunk ends at nonce 0
         win_h += done; g_miner.total_hashes += done; if (done) g_miner.kernel_cycles = cyc / done;
-        if (s_tbl[24]) { candidate_t c = { .job_seq = seq, .en2 = en2, .nonce_word = r }; memcpy(c.w, w, sizeof w); stratum_submit_candidate(&c); g_miner.candidates++; nonce = r + 1; }
-        else nonce = r;
+        if (s_tbl[24]) { candidate_t c = { .job_seq = seq, .en2 = en2, .nonce_word = r }; memcpy(c.w, w, sizeof w); stratum_submit_candidate(&c); g_miner.candidates++; }
+        next += done;
         int64_t now = esp_timer_get_time();
         if (now - win_t >= 5000000) { g_miner.hashrate = (double)win_h * 1e6 / (now - win_t); win_t = now; win_h = 0; }
         if ((g_miner.total_hashes & 0xFFFFF) < done) taskYIELD();   // let core-0 housekeeping run occasionally
@@ -138,14 +143,14 @@ static void swtask(void *arg) {
     uint32_t en2 = 0, nonce = 0; bool have = false; int64_t win_t = esp_timer_get_time(); uint64_t win_h = 0;
     for (;;) {
         if (stratum_get_job(&job, &sess, &seq)) {
-            en2 = 0x80000000u | ((uint32_t)(esp_timer_get_time() & 0xffff) << 8); nonce = 0;
+            en2 = EN2_START(1); nonce = 0;
             job_build_words(&job, &sess, en2, sj.w); sw_prep(&sj); have = true;
         }
-        if (!have || !g_stratum.connected || !g_sw_enabled) { have = have && g_stratum.connected; if (!g_sw_enabled) g_miner.sw_hashrate = 0; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
-        uint32_t mask = hit_mask_for(g_stratum.pool_diff);
+        if (!have || !g_stratum.connected || !g_sw_enabled || !stratum_job_live(seq)) { have = have && g_stratum.connected && stratum_job_live(seq); if (!g_sw_enabled) g_miner.sw_hashrate = 0; vTaskDelay(pdMS_TO_TICKS(100)); continue; }
+        uint32_t mask = hit_mask_for(stratum_pool_diff());
         for (int k = 0; k < 2048; k++, nonce++) {
             if (!(sw_h7(&sj, nonce) & mask)) { candidate_t c = { .job_seq = seq, .en2 = en2, .nonce_word = nonce }; memcpy(c.w, sj.w, sizeof sj.w); stratum_submit_candidate(&c); }
-            if (nonce == 0xFFFFFFFFu) { en2++; nonce = 0; job_build_words(&job, &sess, en2, sj.w); sw_prep(&sj); break; }
+            if (nonce == 0xFFFFFFFFu) { en2 += 2; nonce = 0; job_build_words(&job, &sess, en2, sj.w); sw_prep(&sj); break; }
         }
         win_h += 2048; g_miner.sw_hashes += 2048;
         int64_t now = esp_timer_get_time();

@@ -30,6 +30,27 @@ The page: web/index.html -> `web/build.py [<dir>]` -> web/out/ and firmware/main
 - Optional: the upper 4 MB of the 8 MB PSRAM via himem for a pre-event video buffer (frames kept in 32 KB banks);
   SD card snapshots (the slot shares GPIO4 with the flash LED, GPIO2/12-15 with the card).
 - microSD: video recording (MJPEG AVI, by schedule or on motion), a file list with download and delete on the Camera tab.
+## Access modes and tokens (planned with the configurator, 2026-11-01)
+Two modes in Settings, picked when the board is set up:
+- **Home network** (default, today's behaviour): no password; LAN pages and programs only, pages from the internet refused
+  (Origin/Referer, Host against DNS rebinding).
+- **Internet**: the board is reachable from outside (a port forward, a tunnel or a relay). Every request that changes
+  something, and every read that shows the wallet or Wi-Fi name, needs a token (`Authorization: Bearer <token>`); the page
+  asks for it once and keeps it in the browser. The board speaks plain HTTP, so this mode is meant behind TLS (a proxy or a
+  tunnel); the page says so when it is turned on.
+- Token: 128 random bits made on the board, shown once, kept in NVS as a hash; a new one from Settings or the configurator
+  (over USB too, for a board nobody can reach any more). Several named tokens later (the configurator, Home Assistant).
+- The token work waits for the configurator below: it is where tokens are made, stored and handed to other programs.
+
+## Configurator (a separate program, planned 2026-11-01)
+A desktop/CLI program that finds every supported board and sets it up:
+- Finds boards on the LAN (the Swarm protocol: /probe, /api/system/info, /alive; NMMiner and AxeOS too) and over USB (serial
+  ports: chip, MAC, which firmware answers).
+- Flashes over USB (bootloader, partitions, image; esptool underneath, the CH340 fix built in) and over the air (/update),
+  the right image per board id, with checksums from the releases.
+- Sets Wi-Fi, pool, address, worker over USB (no set-up network needed) or the API; access mode and tokens (above).
+- Fleet view: versions, hashrate, rejects, restarts across all boards; updates many at once.
+
 ## Remote access (since 0.7.0 the board answers LAN and localhost pages only)
 - Options, roughly from the least firmware work:
   - A Tailscale subnet router on an always-on box on the LAN: the boards' subnet appears on the tailnet, the board's own page

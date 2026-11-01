@@ -59,13 +59,14 @@ static void led_init(void) {
 
 // one setter table for /control, /status and the NVS copy
 static int apply(sensor_t *s, const char *var, int val) {
-    if (!strcmp(var, "framesize")) { if (s->pixformat != PIXFORMAT_JPEG) return -1; return s->set_framesize(s, (framesize_t)val); }
-    if (!strcmp(var, "quality")) return s->set_quality(s, val);
+    // the driver indexes its resolution table with framesize unchecked: past UXGA (the OV2640's largest) it reads anywhere
+    if (!strcmp(var, "framesize")) { if (s->pixformat != PIXFORMAT_JPEG || val < 0 || val > FRAMESIZE_UXGA) return -1; return s->set_framesize(s, (framesize_t)val); }
+    if (!strcmp(var, "quality")) return val < 0 || val > 63 ? -1 : s->set_quality(s, val);
     if (!strcmp(var, "contrast")) return s->set_contrast(s, val);
     if (!strcmp(var, "brightness")) return s->set_brightness(s, val);
     if (!strcmp(var, "saturation")) return s->set_saturation(s, val);
     if (!strcmp(var, "sharpness")) return s->set_sharpness(s, val);
-    if (!strcmp(var, "gainceiling")) return s->set_gainceiling(s, (gainceiling_t)val);
+    if (!strcmp(var, "gainceiling")) return val < 0 || val > GAINCEILING_128X ? -1 : s->set_gainceiling(s, (gainceiling_t)val);
     if (!strcmp(var, "colorbar")) return s->set_colorbar(s, val);
     if (!strcmp(var, "awb")) return s->set_whitebal(s, val);
     if (!strcmp(var, "agc")) return s->set_gain_ctrl(s, val);
@@ -161,7 +162,8 @@ static int qint(httpd_req_t *r, const char *k, int def) {
     char q[200], v[16]; if (httpd_req_get_url_query_str(r, q, sizeof q) != ESP_OK || httpd_query_key_value(q, k, v, sizeof v) != ESP_OK) return def; return atoi(v);
 }
 
-static esp_err_t h_capture(httpd_req_t *r) {
+static esp_err_t h_capture(httpd_req_t *r) {   // lights the flash: another site's <img> must not
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     if (s_led) { led_set(s_led); vTaskDelay(pdMS_TO_TICKS(150)); }   // let exposure settle on the flash, as CameraWebServer
     camera_fb_t *fb = esp_camera_fb_get();
@@ -176,6 +178,7 @@ static esp_err_t h_capture(httpd_req_t *r) {
     esp_camera_fb_return(fb); return res;
 }
 static esp_err_t h_bmp(httpd_req_t *r) {
+    if (!web_get_allowed(r)) return ESP_OK;
     if (!s_ok) return not_ready(r);
     camera_fb_t *fb = esp_camera_fb_get(); if (!fb) { httpd_resp_send_500(r); return ESP_FAIL; }
     uint8_t *bmp = NULL; size_t n = 0; bool ok = frame2bmp(fb, &bmp, &n); esp_camera_fb_return(fb);
@@ -266,11 +269,14 @@ static esp_err_t h_stream(httpd_req_t *r) {
 
 // Flash writes disable the cache on both cores; the camera's DMA interrupt keeps firing meanwhile, its queue overflows
 // and core 0 ended in the coprocessor-exception vector until the interrupt watchdog reset the board mid-OTA.
-void camera_stop(void) {
-    if (!s_ok) return;
+// A /stream still sending a frame to a slow viewer (send timeout 5 s) holds a frame buffer: the driver is freed only once it
+// has left, otherwise the stream task would read freed memory
+bool camera_stop(void) {
+    if (!s_ok) return true;
     s_ok = false;   // a running /stream (its own server task) leaves after the frame it is sending; /capture runs in this server task
-    for (int i = 0; i < 100 && s_streaming; i++) vTaskDelay(pdMS_TO_TICKS(20));
-    led_set(0); esp_camera_deinit(); ESP_LOGI(TAG, "camera stopped");
+    for (int i = 0; i < 400 && s_streaming; i++) vTaskDelay(pdMS_TO_TICKS(20));
+    if (s_streaming) { s_ok = true; ESP_LOGW(TAG, "stream still open, camera kept"); return false; }
+    led_set(0); esp_camera_deinit(); ESP_LOGI(TAG, "camera stopped"); return true;
 }
 // microSD in the slot: SDMMC in 1-bit mode (CLK 14, CMD 15, D0 2) so GPIO4 stays the flash LED (it is D1 in 4-bit
 // mode). FAT; a card that does not mount is left alone until it is formatted from the page. Writes to the card do not
@@ -336,7 +342,7 @@ void camera_register_http(httpd_handle_t s) {
 }
 #else
 void camera_start(void) {}
-void camera_stop(void) {}
+bool camera_stop(void) { return true; }
 bool camera_streaming(void) { return false; }
 void camera_register_http(httpd_handle_t s) { (void)s; }
 int camera_http_handler_count(void) { return 0; }

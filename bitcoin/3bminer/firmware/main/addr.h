@@ -2,8 +2,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-// the bytes a Bitcoin address puts into an output script: the witness program (bech32/bech32m: 20 or 32 bytes)
-// or the hash160 (base58 P2PKH/P2SH: 20 bytes). Returns the length, 0 if the address does not parse.
-int addr_program(const char *addr, uint8_t out[40]);
-// true if the program occurs in buf: a solo pool pays the block reward straight to the miner's address
-bool addr_in(const uint8_t *buf, size_t n, const uint8_t *prog, int plen);
+#define ADDR_SCRIPT_MAX 42
+// the output script (scriptPubKey) that pays a Bitcoin address: P2PKH, P2SH (base58check), P2WPKH, P2WSH, P2TR and other
+// witness versions (bech32 / bech32m). Checksums, network prefix and lengths are checked. Returns its length, 0 = not an address
+int addr_script(const char *addr, uint8_t out[ADDR_SCRIPT_MAX]);
+// a whole coinbase transaction (coinb1 + extranonces + coinb2, no witness data): the percentage of its output value that
+// goes to script, -1 when it does not parse. A solo pool pays (nearly) all of it to the miner's address
+int addr_coinbase_share(const uint8_t *tx, size_t n, const uint8_t *script, int slen);

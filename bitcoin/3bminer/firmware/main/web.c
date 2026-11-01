@@ -23,29 +23,24 @@ static const char *TAG = "web";
 #include "camera.h"
 #include "history.h"
 #include "swarm.h"
+#include "addr.h"
+#include "netcheck.h"
 static char s_host[32];
 static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, n, "%.2fT", d / 1e12); else if (d >= 1e9) snprintf(out, n, "%.2fG", d / 1e9); else if (d >= 1e6) snprintf(out, n, "%.2fM", d / 1e6); else if (d >= 1e3) snprintf(out, n, "%.2fK", d / 1e3); else snprintf(out, n, "%.4g", d); }
 // Who may use the board from a browser: its own page, another miner's page on the LAN (the Swarm) and a preview served from
 // localhost. A page on the internet open in the same browser may neither read the answers (the wallet and Wi-Fi name are in
 // them) nor change anything; "null" (a sandboxed frame, a file) counts as outside. Programs (curl, VLC, Home Assistant) send
 // no Origin and no Sec-Fetch-Site and are not affected.
-// a whole IPv4 address and nothing after it: "10.1.evil.com" is a name, not an address
-static bool ipv4(const char *h, unsigned *a, unsigned *b) {
-    unsigned c, d; int n = -1; return sscanf(h, "%3u.%3u.%3u.%3u%n", a, b, &c, &d, &n) == 4 && n == (int)strlen(h) && *a < 256 && *b < 256 && c < 256 && d < 256;
-}
-static bool ends(const char *h, const char *t) { int k = strlen(h), m = strlen(t); return k > m && !strcmp(h + k - m, t); }
-// a name only the LAN resolves: localhost, a bare name, mDNS and the home suffixes; never one anybody can buy
-static bool local_name(const char *h) { return *h && (!strchr(h, '.') || ends(h, ".local") || ends(h, ".lan") || ends(h, ".home.arpa") || ends(h, ".internal")); }
-static bool lan_host(const char *host) {
-    unsigned a, b; if (ipv4(host, &a, &b)) return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || (a == 169 && b == 254);
-    return local_name(host);
+// a request header: 1 = in buf, 0 = not sent, -1 = longer than buf. A cut value must never pass for a missing one
+// (a long Origin or Host would slip through every check below), so callers treat -1 as a refusal
+static int hdr(httpd_req_t *r, const char *k, char *buf, size_t cap) {
+    esp_err_t e = httpd_req_get_hdr_value_str(r, k, buf, cap); return e == ESP_OK ? 1 : e == ESP_ERR_NOT_FOUND ? 0 : -1;
 }
 // DNS rebinding: a site points its own name at the board, and its page then counts as the board's own page. The browser
 // sends that name as Host, so the board answers only to an address or a LAN name; no Host (an old program) passes
 static bool host_ok(httpd_req_t *r) {
-    char h[64]; if (httpd_req_get_hdr_value_str(r, "Host", h, sizeof h) != ESP_OK) return true;
-    if (h[0] == '[') return true;   // an IPv6 address
-    char *c = strchr(h, ':'); if (c) *c = 0; unsigned a, b; return ipv4(h, &a, &b) || local_name(h);
+    char h[72]; int k = hdr(r, "Host", h, sizeof h); if (k == 0) return true; if (k < 0 || !net_host_part(h)) return false;
+    unsigned a, b; return net_ipv4(h, &a, &b) || net_local_name(h);
 }
 static esp_err_t guard(httpd_req_t *r) {
     if (!host_ok(r)) { ESP_LOGW(TAG, "%s for another name refused", r->uri); httpd_resp_set_status(r, "421 Misdirected Request"); return httpd_resp_send(r, "unknown host name", -1); }
@@ -53,80 +48,86 @@ static esp_err_t guard(httpd_req_t *r) {
 }
 // every handler goes through guard(): the board's own and the camera's, on both servers
 esp_err_t web_register(httpd_handle_t s, const httpd_uri_t *u) { httpd_uri_t g = *u; g.user_ctx = (void *)u->handler; g.handler = guard; return httpd_register_uri_handler(s, &g); }
-// the host of an Origin or Referer value ("http://host:port/..."); false for "null" or an empty one
-static bool url_host(const char *v, char *host, int cap) {
-    const char *h = strstr(v, "://"); if (!h) return false; h += 3; int k = 0;
-    while (h[k] && h[k] != ':' && h[k] != '/' && k < cap - 1) { host[k] = h[k]; k++; } host[k] = 0; return k > 0;
-}
 static bool from_ok(httpd_req_t *r, const char *v) {
-    char host[64]; if (!url_host(v, host, sizeof host)) return false;
-    char self[64]; if (httpd_req_get_hdr_value_str(r, "Host", self, sizeof self) == ESP_OK) { char *c = strchr(self, ':'); if (c) *c = 0; if (!strcmp(self, host)) return true; }
-    return lan_host(host);
+    char host[72]; if (!net_url_host(v, host, sizeof host)) return false;
+    char self[72]; if (hdr(r, "Host", self, sizeof self) == 1 && net_host_part(self) && !strcmp(self, host)) return true;
+    return net_lan_host(host);
 }
 static esp_err_t refuse(httpd_req_t *r, const char *from) {
     ESP_LOGW(TAG, "%s from %s refused", r->uri, from); httpd_resp_set_status(r, "403 Forbidden"); return httpd_resp_send(r, "cross-site request refused", -1);
 }
 // CORS for a JSON answer: only a LAN page may read it (the header names that page's origin)
 void web_cors(httpd_req_t *r) {
-    static __thread char o[80];   // the header value must outlive this call (httpd sends it later)
-    if (httpd_req_get_hdr_value_str(r, "Origin", o, sizeof o) == ESP_OK && from_ok(r, o)) { httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", o); httpd_resp_set_hdr(r, "Vary", "Origin"); }
+    static __thread char o[96];   // the header value must outlive this call (httpd sends it later)
+    if (hdr(r, "Origin", o, sizeof o) == 1 && from_ok(r, o)) { httpd_resp_set_hdr(r, "Access-Control-Allow-Origin", o); httpd_resp_set_hdr(r, "Vary", "Origin"); }
 }
 // a POST that changes the board: browsers always send Origin with it; none = a program
 bool web_post_allowed(httpd_req_t *r) {
-    char o[80]; if (httpd_req_get_hdr_value_str(r, "Origin", o, sizeof o) != ESP_OK || from_ok(r, o)) return true;
-    refuse(r, o); return false;
+    char o[96]; int k = hdr(r, "Origin", o, sizeof o); if (k == 0 || (k > 0 && from_ok(r, o))) return true;
+    refuse(r, k < 0 ? "a long Origin" : o); return false;
 }
-// a GET that changes something (camera controls, the engine check): an <img> or a link on another site would do it, the
-// browser marks those "cross-site"; they pass only when the page they come from is on the LAN
+// a GET that changes something (camera controls, the engine check, a Wi-Fi scan): an <img> or a link on another site would
+// do it. A browser marks those "cross-site" (Sec-Fetch-Site) and names the page in Origin or Referer; they pass only when
+// that page is on the LAN. A browser too old for Sec-Fetch-Site still sends Referer, so a foreign Referer is refused too
 bool web_get_allowed(httpd_req_t *r) {
-    char v[96]; if (httpd_req_get_hdr_value_str(r, "Sec-Fetch-Site", v, sizeof v) != ESP_OK || strcmp(v, "cross-site")) return true;
-    if (httpd_req_get_hdr_value_str(r, "Origin", v, sizeof v) == ESP_OK && from_ok(r, v)) return true;
-    if (httpd_req_get_hdr_value_str(r, "Referer", v, sizeof v) == ESP_OK && from_ok(r, v)) return true;
+    char v[256]; int k = hdr(r, "Sec-Fetch-Site", v, sizeof v); bool cross = k < 0 || (k > 0 && !strcmp(v, "cross-site"));
+    if ((k = hdr(r, "Origin", v, sizeof v)) != 0) { if (k > 0 && from_ok(r, v)) return true; refuse(r, "another site"); return false; }
+    if ((k = hdr(r, "Referer", v, sizeof v)) != 0) { if (k > 0 && from_ok(r, v)) return true; refuse(r, "another site"); return false; }
+    if (!cross) return true;
     refuse(r, "another site"); return false;
+}
+// a request body of len bytes into buf (NUL-terminated); false after 10 s without all of it (a client that announces a
+// body and never sends it must not hold the board's only server task)
+static bool recv_body(httpd_req_t *r, char *buf, int len) {
+    int got = 0; int64_t end = esp_timer_get_time() + 10000000;
+    while (got < len) { int n = httpd_req_recv(r, buf + got, len - got); if (n == HTTPD_SOCK_ERR_TIMEOUT && esp_timer_get_time() < end) continue; if (n <= 0) return false; got += n; }
+    buf[got] = 0; return true;
 }
 static uint32_t uptime_s(void) { return (uint32_t)(esp_timer_get_time() / 1000000); }
 static int ago(int64_t us) { return us ? (int)((esp_timer_get_time() - us) / 1000000) : -1; }   // seconds since an esp_timer time, -1 = never
 
 static esp_err_t h_probe(httpd_req_t *r) {
-    char b[320]; snprintf(b, sizeof b, "{\"model\":\"NMMiner\",\"hostname\":\"%s\",\"ver\":\"%s\",\"sw\":0,\"sh\":0,\"hr\":%.0f,\"sbd\":%.0f,\"ebd\":%.0f,\"ut\":%u}", s_host, "v" FW_VERSION, g_miner.hashrate + g_miner.sw_hashrate, g_stratum.best_session, g_stratum.best_ever, (unsigned)uptime_s());
+    char b[320]; snprintf(b, sizeof b, "{\"model\":\"NMMiner\",\"hostname\":\"%s\",\"ver\":\"%s\",\"sw\":0,\"sh\":0,\"hr\":%.0f,\"sbd\":%.0f,\"ebd\":%.0f,\"ut\":%u}", s_host, "v" FW_VERSION, g_miner.hashrate + g_miner.sw_hashrate, g_stratum.best_session, stratum_best_ever(), (unsigned)uptime_s());
     httpd_resp_set_type(r, "application/json"); web_cors(r); return httpd_resp_send(r, b, -1);
 }
 // NMMiner's /alive: this board and the miners its background search found (swarm.c), with the time since the last pass
 static esp_err_t h_alive(httpd_req_t *r) { static char b[700]; swarm_alive_json(b, sizeof b, wifi_ip()); httpd_resp_set_type(r, "application/json"); web_cors(r); return httpd_resp_send(r, b, -1); }
 // POST /api/swarm/add or /api/swarm/forget {"ip":"a.b.c.d"}: a miner the board keeps checking (e.g. on another subnet), or drops
+// only private and link-local addresses: the board is no port scanner for the internet
 static uint32_t body_ip(httpd_req_t *r) {
-    char buf[96]; int n = httpd_req_recv(r, buf, sizeof buf - 1); if (n <= 0) return 0; buf[n] = 0;
-    unsigned a, b, c, d; char *p = strstr(buf, "\"ip\"");
-    if (p && (p = strchr(p + 4, '"')) && sscanf(p + 1, "%u.%u.%u.%u", &a, &b, &c, &d) == 4 && a < 256 && b < 256 && c < 256 && d < 256) return a | b << 8 | c << 16 | d << 24;
-    return 0;
+    char buf[96]; int len = r->content_len; if (len <= 0 || len >= (int)sizeof buf || !recv_body(r, buf, len)) return 0;
+    unsigned a, b, c, d; char *p = strstr(buf, "\"ip\""), ip[20];
+    if (!p || !(p = strchr(p + 4, '"')) || sscanf(p + 1, "%19[0-9.]", ip) != 1 || !net_ipv4(ip, &a, &b) || !net_lan_host(ip) || a == 127) return 0;
+    sscanf(ip, "%u.%u.%u.%u", &a, &b, &c, &d); return a | b << 8 | c << 16 | d << 24;
 }
 static esp_err_t h_swarm_ip(httpd_req_t *r) {
     if (!web_post_allowed(r)) return ESP_OK;
     uint32_t ip = body_ip(r); httpd_resp_set_type(r, "application/json"); web_cors(r);
-    if (!ip) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "{\"status\":\"ip like 192.168.0.50\"}", -1); }
+    if (!ip) { httpd_resp_set_status(r, "400 Bad Request"); return httpd_resp_send(r, "{\"status\":\"a LAN address like 192.168.0.50\"}", -1); }
     bool ok = strstr(r->uri, "forget") ? swarm_forget(ip) : strstr(r->uri, "scan") ? swarm_scan(ip) : swarm_add(ip);
     return httpd_resp_send(r, ok ? "{\"status\":\"ok\"}" : "{\"status\":\"not ready\"}", -1);
 }
 static esp_err_t h_info(httpd_req_t *r) {
-    char nd[24], pd[24], ld[24], bs[24], be[24]; if (g_stratum.net_diff > 0) fmt_diff(g_stratum.net_diff, nd, sizeof nd); else strcpy(nd, "-"); fmt_diff(g_stratum.pool_diff, pd, sizeof pd); fmt_diff(g_stratum.last_share_diff, ld, sizeof ld); fmt_diff(g_stratum.best_session, bs, sizeof bs); fmt_diff(g_stratum.best_ever, be, sizeof be);
+    char nd[24], pd[24], ld[24], bs[24], be[24]; if (g_stratum.net_diff > 0) fmt_diff(g_stratum.net_diff, nd, sizeof nd); else strcpy(nd, "-"); fmt_diff(stratum_pool_diff(), pd, sizeof pd); fmt_diff(g_stratum.last_share_diff, ld, sizeof ld); fmt_diff(g_stratum.best_session, bs, sizeof bs); fmt_diff(stratum_best_ever(), be, sizeof be);
     char lr[96]; int k = 0; for (const char *q = g_stratum.last_reject; *q && k < 90; q++) if (*q != '"' && *q != '\\') lr[k++] = *q; lr[k] = 0;
     uint32_t shn, shs; double shk = stratum_share_hps(&shn, &shs);
     char b[2300];
     snprintf(b, sizeof b,
-        "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"time\":%lld,\"tz\":\"%s\",\"ntp\":\"%s\",\"ntpSync\":%lld,\"build\":\"%s %s\",\"idf\":\"%s\",\"slot\":\"%s\",\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s},"
+        "{\"identity\":{\"hwModel\":\"NMMiner\",\"hostName\":\"%s\",\"fwVersion\":\"%s\",\"rssi\":%d,\"displayName\":\"3BMiner\",\"time\":%lld,\"tz\":\"%s\",\"ntp\":\"%s\",\"ntpSync\":%lld,\"build\":\"%s %s\",\"idf\":\"%s\",\"slot\":\"%s\",\"board\":\"" CONFIG_BOARD_NAME "\",\"boardId\":\"" CONFIG_BOARD_ID "\",\"camera\":%s,\"mining\":%s,\"setupAp\":%s},"
         "\"miner\":{\"hashRate\":%.6f,\"sAccepted\":%u,\"sRejected\":%u,\"uptimeSeconds\":%u,\"uptimeEver\":%u,\"networkDiff\":\"%s\",\"poolDiff\":\"%s\",\"lastDiff\":\"%s\",\"bestDiffSession\":\"%s\",\"bestDiffEver\":\"%s\",\"blkhits\":0,\"resetReason\":%d,\"restartWhy\":\"%s\",\"freeHeap\":%u,\"minFreeHeap\":%u,\"freeInternal\":%u,\"kernelCycles\":%u,\"kernel\":%u,\"timing\":\"%u/%u/%u/%u/%u\",\"hashRateEngine\":%.6f,\"hashRateSw\":%.6f,\"candidates\":%u,\"totalHashes\":%llu,\"swHashes\":%llu,\"avg1hKhs\":%.1f,\"avg24hKhs\":%.1f,\"avgAllKhs\":%.1f,\"allSeconds\":%u,\"historyMinutes\":%u,\"shareKhs1h\":%.1f,\"shares1h\":%u,\"sharesWindow\":%u},"
-        "\"stratum\":{\"url\":\"%s\",\"solo\":%s,\"authorized\":%s,\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"lastReject\":\"%s\",\"connectedAgo\":%d,\"shareAgo\":%d},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
-        s_host, "v" FW_VERSION, wifi_rssi(), (long long)(time(NULL) > 1700000000 ? time(NULL) : 0), g_cfg.tz, g_ntp_server, (long long)g_ntp_sync, esp_app_get_description()->date, esp_app_get_description()->time, esp_app_get_description()->idf_ver, esp_ota_get_running_partition() ? esp_ota_get_running_partition()->label : "?", CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)(history_all_seconds() ? history_all_seconds() : uptime_s()),   // uptimeEver: all running time across restarts, like NMMiner's
+        "\"stratum\":{\"url\":\"%s\",\"solo\":%s,\"authorized\":%s,\"user\":\"%s\",\"connected\":%s,\"jobs\":%u,\"submitted\":%u,\"candDropped\":%u,\"staleDropped\":%u,\"oldJobSubmits\":%u,\"rejStale\":%u,\"rejDup\":%u,\"rejLowDiff\":%u,\"rejOther\":%u,\"submitLost\":%u,\"lastReject\":\"%s\",\"connectedAgo\":%d,\"shareAgo\":%d},\"temps\":{\"vcore\":null,\"asic\":null},\"storage\":{\"fsTotal\":0,\"fsUsed\":0}}",
+        s_host, "v" FW_VERSION, wifi_rssi(), (long long)(time(NULL) > 1700000000 ? time(NULL) : 0), g_cfg.tz, g_ntp_server, (long long)g_ntp_sync, esp_app_get_description()->date, esp_app_get_description()->time, esp_app_get_description()->idf_ver, esp_ota_get_running_partition() ? esp_ota_get_running_partition()->label : "?", CONFIG_BOARD_HAS_CAMERA_STR, g_cfg.mining ? "true" : "false", wifi_ap_active() ? "true" : "false", (g_miner.hashrate + g_miner.sw_hashrate) / 1e9, (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected, (unsigned)uptime_s(), (unsigned)(history_all_seconds() ? history_all_seconds() : uptime_s()),   // uptimeEver: all running time across restarts, like NMMiner's
         nd, pd, ld, bs, be, (int)esp_reset_reason(), main_restart_why(),
-        (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)g_miner.kernel_cycles, (unsigned)g_kernel, (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4], g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)g_miner.total_hashes, (unsigned long long)g_miner.sw_hashes, history_avg_khs(60), history_avg_khs(HISTORY_MINUTES), history_avg_all_khs(), (unsigned)history_all_seconds(), (unsigned)history_count(), shk / 1e3, (unsigned)shn, (unsigned)shs,
+        (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned)g_miner.kernel_cycles, (unsigned)g_kernel, (unsigned)g_timing[0], (unsigned)g_timing[1], (unsigned)g_timing[2], (unsigned)g_timing[3], (unsigned)g_timing[4], g_miner.hashrate / 1e9, g_miner.sw_hashrate / 1e9, (unsigned)g_miner.candidates, (unsigned long long)miner_read64(&g_miner.total_hashes), (unsigned long long)miner_read64(&g_miner.sw_hashes), history_avg_khs(60), history_avg_khs(HISTORY_MINUTES), history_avg_all_khs(), (unsigned)history_all_seconds(), (unsigned)history_count(), shk / 1e3, (unsigned)shn, (unsigned)shs,
         g_stratum.pool_desc, g_stratum.solo < 0 ? "null" : g_stratum.solo ? "true" : "false", g_stratum.authorized < 0 ? "null" : g_stratum.authorized ? "true" : "false", g_stratum.user, g_stratum.connected ? "true" : "false", (unsigned)g_stratum.jobs, (unsigned)g_stratum.submitted,
-        (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, lr,
+        (unsigned)g_stratum.cand_dropped, (unsigned)g_stratum.stale_dropped, (unsigned)g_stratum.old_job_submits, (unsigned)g_stratum.rej_stale, (unsigned)g_stratum.rej_dup, (unsigned)g_stratum.rej_lowdiff, (unsigned)g_stratum.rej_other, (unsigned)g_stratum.submit_lost, lr,
         ago(g_stratum.connected ? g_stratum.connect_us : 0), ago(g_stratum.share_us));
     httpd_resp_set_type(r, "application/json"); web_cors(r); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_swbench(httpd_req_t *r) {   // GET /api/swbench: software sha256d cost on core 1
+    if (!web_get_allowed(r)) return ESP_OK;
     int ok = 0; uint32_t c = sw_bench_cycles(&ok); char b[128]; snprintf(b, sizeof b, "{\"cyclesPerHash\":%u,\"khsOneCore\":%.1f,\"correct\":%s}", (unsigned)c, 240000.0 / c, ok ? "true" : "false");
-    httpd_resp_set_type(r, "application/json"); return httpd_resp_send(r, b, -1);
+    httpd_resp_set_type(r, "application/json"); web_cors(r); return httpd_resp_send(r, b, -1);
 }
 static esp_err_t h_bench(httpd_req_t *r) {   // GET /api/bench?t=W1,W2,W3,L1,L2&n=NONCES[&apply=1]
     if (!web_get_allowed(r)) return ESP_OK;
@@ -154,6 +155,7 @@ static esp_err_t h_history(httpd_req_t *r) {   // GET /api/history: {"step":60,"
     n += snprintf(b + n, sizeof b - n, "]}"); httpd_resp_send_chunk(r, b, n); return httpd_resp_send_chunk(r, NULL, 0);
 }
 static esp_err_t h_wifiscan(httpd_req_t *r) {   // GET /api/wifi/scan: access points in reach, strongest first, for the settings' AP lock list
+    if (!web_get_allowed(r)) return ESP_OK;
     httpd_resp_set_type(r, "application/json"); web_cors(r);
     wifi_scan_config_t sc = { .show_hidden = false };
     if (esp_wifi_scan_start(&sc, true) != ESP_OK) return httpd_resp_send(r, "{\"aps\":[],\"error\":\"scan failed\"}", -1);
@@ -178,11 +180,10 @@ static esp_err_t h_config_get(httpd_req_t *r) {
 static esp_err_t bad(httpd_req_t *r, const char *status, const char *msg) { httpd_resp_set_status(r, status); web_cors(r); return httpd_resp_send(r, msg, -1); }
 static esp_err_t h_config_post(httpd_req_t *r) {   // every value checked before any is taken: a refused request changes nothing
     if (!web_post_allowed(r)) return ESP_OK;
-    char buf[1024]; int len = r->content_len, got = 0; if (len <= 0 || len >= (int)sizeof buf) return bad(r, "400 Bad Request", "body empty or over 1 KB");
-    for (int tries = 0; got < len && tries < 20; ) { int n = httpd_req_recv(r, buf + got, len - got); if (n == HTTPD_SOCK_ERR_TIMEOUT) { tries++; continue; } if (n <= 0) return httpd_resp_send_500(r); got += n; }
-    if (got < len) return bad(r, "408 Request Timeout", "body incomplete");
-    buf[got] = 0;
-    cJSON *j = cJSON_Parse(buf); if (!j) return bad(r, "400 Bad Request", "bad json");
+    httpd_resp_set_type(r, "application/json");
+    char buf[1024]; int len = r->content_len; if (len <= 0 || len >= (int)sizeof buf) return bad(r, "400 Bad Request", "{\"status\":\"body empty or over 1 KB\"}");
+    if (!recv_body(r, buf, len)) return bad(r, "408 Request Timeout", "{\"status\":\"body incomplete\"}");
+    cJSON *j = net_json_depth_ok(buf, 4) ? cJSON_Parse(buf) : NULL; if (!cJSON_IsObject(j)) { cJSON_Delete(j); return bad(r, "400 Bad Request", "{\"status\":\"bad json\"}"); }
     miner_cfg_t c = g_cfg; const char *err = NULL; cJSON *x;
     // strings land in JSON answers and stratum lines as they are: no quotes, backslashes or control characters (the password only goes to Wi-Fi)
     #define S(k, f, plain) if (!err && (x = cJSON_GetObjectItem(j, k))) { if (!cJSON_IsString(x) || strlen(x->valuestring) >= sizeof c.f) err = k " too long or not a string"; \
@@ -194,6 +195,13 @@ static esp_err_t h_config_post(httpd_req_t *r) {   // every value checked before
     if (!err && (x = cJSON_GetObjectItem(j, "suggest"))) { if (!cJSON_IsNumber(x) || !(x->valuedouble >= 0 && x->valuedouble <= 1e12)) err = "suggest: a difficulty, 0 or more"; else c.suggest = x->valuedouble; }
     if (!err && (x = cJSON_GetObjectItem(j, "mining"))) { if (!cJSON_IsBool(x)) err = "mining: true or false"; else c.mining = cJSON_IsTrue(x); }
     cJSON_Delete(j);
+    // values that would cut the board off or mine for nobody: refused here, not found out after the restart
+    unsigned m[6]; char tail;
+    if (!err && !c.ssid[0]) err = "ssid: the Wi-Fi name is empty";
+    if (!err && c.bssid[0] && sscanf(c.bssid, "%2x:%2x:%2x:%2x:%2x:%2x%c", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &tail) != 6) err = "bssid: aa:bb:cc:dd:ee:ff or empty";
+    if (!err && c.pass[0] && (strlen(c.pass) < 8 || strlen(c.pass) > 63)) err = "pass: 8 to 63 characters (WPA2), or empty for an open network";
+    if (!err && !c.pool[0]) err = "pool: empty";
+    uint8_t spk[ADDR_SCRIPT_MAX]; if (!err && c.wallet[0] && !addr_script(c.wallet, spk)) err = "wallet: not a Bitcoin address (wrong checksum or length?)";
     if (err) { char m[96]; snprintf(m, sizeof m, "{\"status\":\"%s\"}", err); httpd_resp_set_type(r, "application/json"); return bad(r, "400 Bad Request", m); }
     g_cfg = c; bool ok = config_save();
     httpd_resp_set_type(r, "application/json"); web_cors(r); httpd_resp_send(r, ok ? "{\"status\":\"ok\",\"note\":\"restarting\"}" : "{\"status\":\"nvs error\"}", -1);
@@ -225,24 +233,29 @@ static esp_err_t h_update(httpd_req_t *r) {   // POST raw firmware image
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL); if (!part) return httpd_resp_send_500(r);
     if (r->content_len < 65536 || r->content_len > part->size) return bad(r, "400 Bad Request", "no image or larger than the slot");
     char *buf = malloc(4096); if (!buf) return httpd_resp_send_500(r);
-    g_ota_busy = true; camera_stop();   // no-op without a camera; on a camera board the image is written with the sensor off, a restart follows anyway
+    g_ota_busy = true;
+    // on a camera board the image is written with the sensor off (a restart follows anyway); a viewer that does not let go of
+    // the stream keeps the camera, and the upload is refused rather than freeing frame buffers under it
+    if (!camera_stop()) { free(buf); g_ota_busy = false; httpd_resp_set_status(r, "409 Conflict"); web_cors(r); return httpd_resp_send(r, "the camera stream is still open: close it and try again", -1); }
     // erased sector by sector as the image arrives: no seconds-long erase up front with the cache off and Wi-Fi waiting
     esp_ota_handle_t h; if (esp_ota_begin(part, OTA_WITH_SEQUENTIAL_WRITES, &h) != ESP_OK) { free(buf); ota_failed(); return httpd_resp_send_500(r); }
-    int remaining = r->content_len, total = 0, waits = 0; char tail[96]; int tl = 0, mk = 0;
+    int remaining = r->content_len, total = 0; char tail[96]; int tl = 0, mk = 0;
+    int64_t end = esp_timer_get_time() + 180000000;   // an image takes seconds; a client trickling it must not hold the server
     ESP_LOGI(TAG, "OTA start, %d bytes -> %s", remaining, part->label);
-    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining); if (n <= 0) { if (n == HTTPD_SOCK_ERR_TIMEOUT && ++waits < 10) continue; esp_ota_abort(h); free(buf); ota_failed(); return httpd_resp_send_500(r); }
-        waits = 0;
+    while (remaining > 0) { int n = httpd_req_recv(r, buf, remaining > 4096 ? 4096 : remaining);
+        if (n <= 0 || esp_timer_get_time() > end) { if (n == HTTPD_SOCK_ERR_TIMEOUT && esp_timer_get_time() < end) continue; esp_ota_abort(h); free(buf); ota_failed(); return httpd_resp_send_500(r); }
         if (mk == 0 || mk == 1) { int m = marker_scan(buf, n, tail, &tl); if (m) mk = m; }
         if (mk < 0) { esp_ota_abort(h); free(buf); ota_failed(); httpd_resp_set_status(r, "409 Conflict"); web_cors(r); return httpd_resp_send(r, "image is for another board (this is " CONFIG_BOARD_ID ")", -1); }
         if (esp_ota_write(h, buf, n) != ESP_OK) { esp_ota_abort(h); free(buf); ota_failed(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota write failed", -1); } remaining -= n; total += n; }
     free(buf);
-    if (!mk) ESP_LOGW(TAG, "OTA image has no board marker (pre-0.6 build?), accepted");
+    // only 3BMiner images for this board: any other ESP32 app would come up without this page and could only be undone over USB
+    if (mk != 1) { esp_ota_abort(h); ota_failed(); httpd_resp_set_status(r, "409 Conflict"); web_cors(r); return httpd_resp_send(r, "not a 3BMiner image for " CONFIG_BOARD_ID " (no board marker)", -1); }
     if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(part) != ESP_OK) { ota_failed(); httpd_resp_set_status(r, "500 Internal Server Error"); return httpd_resp_send(r, "ota end/validate failed", -1); }
     char b[96]; snprintf(b, sizeof b, "{\"status\":\"ok\",\"bytes\":%d,\"partition\":\"%s\",\"note\":\"restarting\"}", total, part->label);
     httpd_resp_set_type(r, "application/json"); web_cors(r); httpd_resp_send(r, b, -1); xTaskCreate(restart_later, "rst", 2048, NULL, 5, NULL); return ESP_OK;
 }
 extern const uint8_t www_gz_start[] asm("_binary_index_html_gz_start"), www_gz_end[] asm("_binary_index_html_gz_end"),
-    fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end");   // main/www (web-next/build.py), gzipped by the build
+    fav_gz_start[] asm("_binary_favicon_svg_gz_start"), fav_gz_end[] asm("_binary_favicon_svg_gz_end");   // main/www (web/build.py), gzipped by the build
 // the page is part of the image: its ETag is the image's SHA-256 (the build time stays the same in incremental builds),
 // and the browser asks every time (no-cache) - an unchanged page
 // costs a 304, an updated firmware shows its own page at once instead of the cached one for 5 minutes
