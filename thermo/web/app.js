@@ -71,7 +71,7 @@ function renderAlerts() {
 }
 
 function tileSensors() {
-  return visibleSensors().filter(([, s]) => s.kind === 'temp' || s.kind === 'power' || (s.kind === 'fan' && (s.v > 0 || s.lim.some(x => x !== null))));
+  return visibleSensors().filter(([, s]) => s.kind === 'temp' || s.kind === 'power' || s.kind === 'fan');
 }
 
 function renderTiles() {
@@ -86,7 +86,7 @@ function renderTiles() {
       const scale = top ? top : 100;
       bar = `<div class="bar"><i style="width:${Math.min(100, Math.max(0, s.v / scale * 100))}%"></i>${wh && ch ? `<u style="left:${wh / ch * 100}%"></u>` : ''}</div>`;
     }
-    const sub = [st ? `24ч макс ${fmt(st[2], Math.min(1, s.prec))}` : '', top ? `предел ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `мин ${s.lim[1]}` : '']
+    const sub = [st ? `24ч макс ${fmt(st[2], Math.min(1, s.prec))}` : '', top ? `предел ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `мин ${s.lim[1]}` : '', s.kind === 'fan' && !s.v ? 'стоит' : '']
       .filter(Boolean).join(' · ');
     const grp = (now.groups.find(g => g[0] === s.grp) || [, s.grp])[1];
     return `<div class="tile ${lv === 'ok' ? '' : lv}" title="${esc(s.note || '')}">
