@@ -4,13 +4,13 @@
 # security@beam.mw). checksums.txt in the release lists a different hash for
 # wallet-api, the signature is what counts. explorer-node matches checksums.txt.
 FROM debian:13-slim AS fetch
-ARG BEAM_VERSION=7.5.14493
-ARG NODE_SHA256=7cf5edcdd203f1b493d43f6dbdf045c0ec06fb2f02f1e19c9e8c784c49fab16e
-ARG WALLET_SHA256=91984c67e418f6e8edaf3966c47f43a578b813ddf4ba4297e9bc2fee78cb3403
-ARG WALLET_API_SHA256=02718022aa76e5996965417d0d809e112b0cfa33e17aa16092927252eb517b11
-ARG EXPLORER_SHA256=dc1a6d7804f49998c07625419161fd264df691fa558aab219bd3ead80a369228
+ARG BEAM_VERSION=7.5.14548
+ARG NODE_SHA256=8bfa80ddddf23e8fe4abb0d55fc6d95acb26be82dd64316a49473cf9a0bbd0d3
+ARG WALLET_SHA256=c39dc995ff45d58d65809b830c53c1cf34f9a1ec51aae872084eb47e29c312e7
+ARG WALLET_API_SHA256=2416ef739492df279cd9580fbde01caf546bd63b699439b9c0d03e0bb8a34e5f
+ARG EXPLORER_SHA256=4ae4c74f556f5ced67c9cedfc52519f70586a97d8ce588009b4f1a85500650b2
 # The explorer's contract parser shader (decodes contract calls and state), from the same tag.
-ARG PARSER_SHA256=4524e3db5cb74eebab633dcd1a4d2f787ec02d71adb81b4985b1157fd2688f8e
+ARG PARSER_SHA256=3f48697cabbfb959dd80a94c0a5709d128c6cedf7c7acb45f20f17f09398ad18
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /fetch
