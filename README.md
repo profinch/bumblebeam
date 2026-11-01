@@ -1,8 +1,7 @@
 # BumbleBeam
 
-An open-source ecosystem for miners: a pool, an explorer, a wallet and miners for
-[Beam](https://github.com/BeamMW/beam) ($BEAM), firmware that mines Bitcoin, and tools for the rig
-itself. Everything here is public and Apache-2.0.
+An open-source ecosystem around [Beam](https://github.com/BeamMW/beam) ($BEAM) and Bitcoin (BTC):
+pools, explorers, wallets, DEX, miners, games and tools. Everything here is public and Apache-2.0.
 
 | Direction | What is in it | Sites |
 |---|---|---|
