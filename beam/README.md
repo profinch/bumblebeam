@@ -1,6 +1,6 @@
 # BumbleBeam · Beam
 
-The Beam ($BEAM) direction of [BumbleBeam](../README.md): open mining tools, a pool, an explorer and a
+The Beam (BEAM) direction of [BumbleBeam](../README.md): open mining tools, a pool, an explorer and a
 wallet for the [Beam](https://github.com/BeamMW/beam) privacy blockchain, checked against the Beam core
 itself.
 

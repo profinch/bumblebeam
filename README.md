@@ -1,6 +1,6 @@
 # BumbleBeam
 
-An open-source ecosystem around [Beam](https://github.com/BeamMW/beam) ($BEAM) and Bitcoin (BTC):
+An open-source ecosystem around [Beam](https://github.com/BeamMW/beam) (BEAM) and Bitcoin (BTC):
 pools, explorers, wallets, DEX, miners, games and tools. Everything here is public and Apache-2.0.
 
 | Direction | What is in it | Sites |
