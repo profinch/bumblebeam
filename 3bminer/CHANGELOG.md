@@ -6,6 +6,12 @@ What changed per version. Which image ran where and what it measured: [HISTORY.m
 - API: the firmware version is given as NMMiner gives its own, with a "v" (fwVersion in /api/system/info, ver in
   /probe: v0.10.2), so NMMiner's Swarm page shows ours the same way. The stratum user agent stays 3BMiner/0.10.2.
 - Page: versions are shown as the device gives them; the page no longer puts a "v" in front of one that has none.
+- Security: the "page from the LAN" check read only the first two numbers of the Origin's host, so a site named like
+  10.1.evil.com passed it and could read the settings, change the wallet or pool, restart the board or upload firmware
+  from a browser on the LAN. An address now has to be a whole IPv4 address (four numbers, nothing after).
+- Security, DNS rebinding: a site that points its own name at the board counted as the board's own page. Every handler
+  (the board's, the camera's and the stream on :81) now answers only when Host is an IP address or a LAN-only name
+  (bare name, .local, .lan, .home.arpa, .internal); any other name gets 421.
 
 ## 0.10.1 (2026-10-29)
 - Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;

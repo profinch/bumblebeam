@@ -328,11 +328,11 @@ void camera_register_http(httpd_handle_t s) {
         { .uri = "/greg", .method = HTTP_GET, .handler = h_greg }, { .uri = "/pll", .method = HTTP_GET, .handler = h_pll },
         { .uri = "/resolution", .method = HTTP_GET, .handler = h_resolution }, { .uri = "/api/camera/save", .method = HTTP_POST, .handler = h_save },
         { .uri = "/api/sd", .method = HTTP_GET, .handler = h_sd }, { .uri = "/api/sd/format", .method = HTTP_POST, .handler = h_sd_format }, { .uri = "/api/sd/snap", .method = HTTP_POST, .handler = h_sd_snap } };
-    for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
+    for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) web_register(s, &u[i]);
     // the stream gets its own server (port 81, as CameraWebServer), pinned to core 1 like everything else
     httpd_config_t c = HTTPD_DEFAULT_CONFIG(); c.server_port = 81; c.ctrl_port = 32769; c.core_id = 1; c.max_open_sockets = 3; c.stack_size = 6144; c.lru_purge_enable = true;
     httpd_handle_t ss; if (httpd_start(&ss, &c) != ESP_OK) { ESP_LOGE(TAG, "stream server failed"); return; }
-    const httpd_uri_t st = { .uri = "/stream", .method = HTTP_GET, .handler = h_stream }; httpd_register_uri_handler(ss, &st);
+    const httpd_uri_t st = { .uri = "/stream", .method = HTTP_GET, .handler = h_stream }; web_register(ss, &st);
 }
 #else
 void camera_start(void) {}

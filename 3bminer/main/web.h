@@ -5,4 +5,5 @@ void web_start(void);
 bool web_post_allowed(httpd_req_t *r);
 bool web_get_allowed(httpd_req_t *r);    // false = refused (403 sent): a state-changing GET from a site outside the LAN
 void web_cors(httpd_req_t *r);
+esp_err_t web_register(httpd_handle_t s, const httpd_uri_t *u);   // httpd_register_uri_handler behind the Host check (DNS rebinding)
 const char *main_restart_why(void);     // "" or why the firmware last restarted itself (main.c)           // CORS for a LAN page only   // false = refused (403 sent): a cross-site POST from outside the LAN

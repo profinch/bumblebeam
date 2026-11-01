@@ -29,10 +29,30 @@ static void fmt_diff(double d, char *out, int n) { if (d >= 1e12) snprintf(out, 
 // localhost. A page on the internet open in the same browser may neither read the answers (the wallet and Wi-Fi name are in
 // them) nor change anything; "null" (a sandboxed frame, a file) counts as outside. Programs (curl, VLC, Home Assistant) send
 // no Origin and no Sec-Fetch-Site and are not affected.
-static bool lan_host(const char *host) {
-    unsigned a, b; if (sscanf(host, "%u.%u.", &a, &b) == 2) return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || (a == 169 && b == 254);
-    int k = strlen(host); return k && (!strchr(host, '.') || (k > 6 && !strcmp(host + k - 6, ".local")) || (k > 4 && !strcmp(host + k - 4, ".lan")));   // localhost, a bare name, mDNS
+// a whole IPv4 address and nothing after it: "10.1.evil.com" is a name, not an address
+static bool ipv4(const char *h, unsigned *a, unsigned *b) {
+    unsigned c, d; int n = -1; return sscanf(h, "%3u.%3u.%3u.%3u%n", a, b, &c, &d, &n) == 4 && n == (int)strlen(h) && *a < 256 && *b < 256 && c < 256 && d < 256;
 }
+static bool ends(const char *h, const char *t) { int k = strlen(h), m = strlen(t); return k > m && !strcmp(h + k - m, t); }
+// a name only the LAN resolves: localhost, a bare name, mDNS and the home suffixes; never one anybody can buy
+static bool local_name(const char *h) { return *h && (!strchr(h, '.') || ends(h, ".local") || ends(h, ".lan") || ends(h, ".home.arpa") || ends(h, ".internal")); }
+static bool lan_host(const char *host) {
+    unsigned a, b; if (ipv4(host, &a, &b)) return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || (a == 169 && b == 254);
+    return local_name(host);
+}
+// DNS rebinding: a site points its own name at the board, and its page then counts as the board's own page. The browser
+// sends that name as Host, so the board answers only to an address or a LAN name; no Host (an old program) passes
+static bool host_ok(httpd_req_t *r) {
+    char h[64]; if (httpd_req_get_hdr_value_str(r, "Host", h, sizeof h) != ESP_OK) return true;
+    if (h[0] == '[') return true;   // an IPv6 address
+    char *c = strchr(h, ':'); if (c) *c = 0; unsigned a, b; return ipv4(h, &a, &b) || local_name(h);
+}
+static esp_err_t guard(httpd_req_t *r) {
+    if (!host_ok(r)) { ESP_LOGW(TAG, "%s for another name refused", r->uri); httpd_resp_set_status(r, "421 Misdirected Request"); return httpd_resp_send(r, "unknown host name", -1); }
+    return ((esp_err_t (*)(httpd_req_t *))r->user_ctx)(r);
+}
+// every handler goes through guard(): the board's own and the camera's, on both servers
+esp_err_t web_register(httpd_handle_t s, const httpd_uri_t *u) { httpd_uri_t g = *u; g.user_ctx = (void *)u->handler; g.handler = guard; return httpd_register_uri_handler(s, &g); }
 // the host of an Origin or Referer value ("http://host:port/..."); false for "null" or an empty one
 static bool url_host(const char *v, char *host, int cap) {
     const char *h = strstr(v, "://"); if (!h) return false; h += 3; int k = 0;
@@ -241,9 +261,9 @@ void web_start(void) {
         { .uri = "/api/system/info", .method = HTTP_GET, .handler = h_info }, { .uri = "/api/system/restart", .method = HTTP_POST, .handler = h_restart },
         { .uri = "/api/swarm/find", .method = HTTP_POST, .handler = h_ok }, { .uri = "/api/config", .method = HTTP_GET, .handler = h_config_get }, { .uri = "/api/config", .method = HTTP_POST, .handler = h_config_post },
         { .uri = "/api/bench", .method = HTTP_GET, .handler = h_bench }, { .uri = "/api/history", .method = HTTP_GET, .handler = h_history }, { .uri = "/api/wifi/scan", .method = HTTP_GET, .handler = h_wifiscan }, { .uri = "/api/swbench", .method = HTTP_GET, .handler = h_swbench }, { .uri = "/api/swarm/add", .method = HTTP_POST, .handler = h_swarm_ip }, { .uri = "/api/swarm/forget", .method = HTTP_POST, .handler = h_swarm_ip }, { .uri = "/api/swarm/scan", .method = HTTP_POST, .handler = h_swarm_ip }, { .uri = "/update", .method = HTTP_POST, .handler = h_update } };
-    for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) httpd_register_uri_handler(s, &u[i]);
+    for (unsigned i = 0; i < sizeof u / sizeof u[0]; i++) web_register(s, &u[i]);
     camera_register_http(s);
 #ifdef CONFIG_BOARD_HAS_CAMERA
-    const httpd_uri_t cp = { .uri = "/camera", .method = HTTP_GET, .handler = h_root }; httpd_register_uri_handler(s, &cp);   // the page's Camera tab
+    const httpd_uri_t cp = { .uri = "/camera", .method = HTTP_GET, .handler = h_root }; web_register(s, &cp);   // the page's Camera tab
 #endif
 }
