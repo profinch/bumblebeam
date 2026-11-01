@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,16 +23,16 @@
       <span><em id="host">node1</em> <b>Thermo</b></span>
     </a>
     <div class="hw" id="hw"></div>
-    <div class="live" id="live"><span class="dot off"></span><span>подключение…</span></div>
+    <div class="live" id="live"><span class="dot off"></span><span>connecting…</span></div>
   </div>
 </header>
 
 <main>
   <div class="page-head">
-    <h1 class="page-title">Сейчас</h1>
+    <h1 class="page-title">Now</h1>
     <div class="actions">
-      <div class="seg" id="smooth" role="group" aria-label="Сглаживание температур" title="Сглаживание температур: скользящее среднее"></div>
-      <div class="seg range" id="range" role="group" aria-label="Период"></div>
+      <div class="seg" id="smooth" role="group" aria-label="Temperature smoothing" title="Temperature smoothing: moving average"></div>
+      <div class="seg range" id="range" role="group" aria-label="Range"></div>
     </div>
   </div>
 
@@ -41,16 +41,16 @@
   <div id="groups"></div>
 
   <section class="panel" id="nvme-panel">
-    <div class="panel-head"><h2 class="panel-title">NVMe: здоровье и троттлинг</h2>
-      <div class="panel-meta">SMART через admin ioctl, раз в 10 с</div></div>
+    <div class="panel-head"><h2 class="panel-title">NVMe: health and throttling</h2>
+      <div class="panel-meta">SMART over the admin ioctl, every 10 s</div></div>
     <div class="table-wrap"><table id="nvme"></table></div>
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2 class="panel-title">События</h2>
+    <div class="panel-head"><h2 class="panel-title">Events</h2>
       <div class="panel-meta"><span id="ev-count"></span></div></div>
     <div class="table-wrap"><table id="events"></table></div>
-    <div class="more"><button class="btn ghost small" id="ev-more" hidden>Показать ещё</button></div>
+    <div class="more"><button class="btn ghost small" id="ev-more" hidden>Show more</button></div>
   </section>
 </main>
 

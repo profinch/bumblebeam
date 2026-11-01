@@ -58,7 +58,7 @@ DEFAULTS = {
 }
 
 # Gigabyte AM4 boards with the IT8689E (lm-sensors configs from frankcrawford/it87)
-BOARD_TEMP = {1: 'System', 2: 'Chipset', 3: 'CPU (плата)', 4: 'temp4', 5: 'VRM MOS', 6: 'VSOC MOS'}
+BOARD_TEMP = {1: 'System', 2: 'Chipset', 3: 'CPU (board)', 4: 'temp4', 5: 'VRM MOS', 6: 'VSOC MOS'}
 BOARD_FAN = {1: 'CPU_FAN', 2: 'SYS_FAN1', 3: 'SYS_FAN2', 4: 'fan4', 5: 'fan5', 6: 'fan6'}
 # in#: label, external divider (the chip measures in 12 mV steps), nominal V for the ±5/10 % limits
 BOARD_VIN = {0: ('CPU Vcore', 1, None), 1: ('+3.3V', 1.649, 3.3), 2: ('+12V', 6, 12.0), 3: ('+5V', 2.5, 5.0),
@@ -78,7 +78,7 @@ DEFAULT_LIMITS = [
     ('gpu*.memtemp', (None, None, 95, 105)),
     ('net.*', (None, None, 100, 120)),
 ]
-GROUPS = [('cpu', 'CPU'), ('storage', 'NVMe'), ('gpu', 'GPU'), ('board', 'Плата'), ('net', 'Сеть'), ('other', 'Прочее')]
+GROUPS = [('cpu', 'CPU'), ('storage', 'NVMe'), ('gpu', 'GPU'), ('board', 'Board'), ('net', 'Network'), ('other', 'Other')]
 GPU_REASONS = {0x1: 'idle', 0x2: 'app clocks', 0x4: 'power cap', 0x8: 'HW slowdown', 0x10: 'sync boost',
                0x20: 'SW thermal', 0x40: 'HW thermal', 0x80: 'power brake', 0x100: 'display clock'}
 GPU_BAD = 0x8 | 0x20 | 0x40 | 0x80
@@ -230,7 +230,7 @@ def board_readings(temps, fans, vin, scaled_internal=False):
     for i, t in enumerate(temps, 1):
         if t is not None:
             out.append((f'board.temp{i}', t, M(BOARD_TEMP[i], 'board', 'temp', '°C', 400 + i, hidden=i == 4, res=1,
-                                               note='не подключён (по конфигу Gigabyte)' if i == 4 else '')))
+                                               note='not connected (per Gigabyte config)' if i == 4 else '')))
     for i, f in enumerate(fans, 1):
         if f is not None:
             out.append((f'board.fan{i}', f, M(BOARD_FAN[i], 'board', 'fan', 'RPM', 420 + i, prec=0)))
@@ -373,22 +373,22 @@ class NVML:
                 out.append((f'{p}.temp', float(t), M('GPU', 'gpu', 'temp', '°C', 300, (None, None, gmax - 10, gmax) if gmax else (None,) * 4, note, res=1)))
             fv = FieldValue(fieldId=82)              # NVML_FI_DEV_MEMORY_TEMP; GDDR6X junction is not exposed on GeForce
             if self.lib.nvmlDeviceGetFieldValues(h, 1, ctypes.byref(fv)) == 0 and fv.nvmlReturn == 0 and 0 < fv.value < 150:
-                out.append((f'{p}.memtemp', float(fv.value), M('GPU память', 'gpu', 'temp', '°C', 301)))
+                out.append((f'{p}.memtemp', float(fv.value), M('GPU memory', 'gpu', 'temp', '°C', 301)))
             for f in range(d['nfans']):
                 v = self.u('nvmlDeviceGetFanSpeed_v2', h, f)
                 if v is not None:
-                    out.append((f'{p}.fan{f}', float(v), M(f'Вентилятор {f + 1}, %', 'gpu', 'util', '%', 310 + f, prec=0)))
+                    out.append((f'{p}.fan{f}', float(v), M(f'Fan {f + 1}, %', 'gpu', 'util', '%', 310 + f, prec=0)))
                 r = FanRPM(version=ctypes.sizeof(FanRPM) | 1 << 24, fan=f)
                 if hasattr(self.lib, 'nvmlDeviceGetFanSpeedRPM') and self.lib.nvmlDeviceGetFanSpeedRPM(h, ctypes.byref(r)) == 0:
-                    out.append((f'{p}.rpm{f}', float(r.speed), M(f'GPU вентилятор {f + 1}', 'gpu', 'fan', 'RPM', 312 + f, prec=0)))
+                    out.append((f'{p}.rpm{f}', float(r.speed), M(f'GPU fan {f + 1}', 'gpu', 'fan', 'RPM', 312 + f, prec=0)))
             mw = self.u('nvmlDeviceGetPowerUsage', h)
             if mw is not None:
-                out.append((f'{p}.power', mw / 1000, M('GPU', 'gpu', 'power', 'W', 320, note=f"лимит {d['plimit']:.0f} W")))
+                out.append((f'{p}.power', mw / 1000, M('GPU', 'gpu', 'power', 'W', 320, note=f"limit {d['plimit']:.0f} W")))
             ut = Utilization()
             if self.lib.nvmlDeviceGetUtilizationRates(h, ctypes.byref(ut)) == 0:
-                out.append((f'{p}.util', float(ut.gpu), M('Ядро', 'gpu', 'util', '%', 305, prec=0)))
-                out.append((f'{p}.memutil', float(ut.memory), M('Контроллер памяти', 'gpu', 'util', '%', 306, prec=0)))
-            for clk, lab, o in ((1, 'SM', 330), (2, 'Память', 331)):
+                out.append((f'{p}.util', float(ut.gpu), M('Core', 'gpu', 'util', '%', 305, prec=0)))
+                out.append((f'{p}.memutil', float(ut.memory), M('Memory controller', 'gpu', 'util', '%', 306, prec=0)))
+            for clk, lab, o in ((1, 'SM', 330), (2, 'Memory', 331)):
                 v = self.u('nvmlDeviceGetClockInfo', h, clk)
                 if v is not None:
                     out.append((f'{p}.clk{clk}', float(v), M(lab, 'gpu', 'freq', 'MHz', o, prec=0)))
@@ -489,9 +489,9 @@ class GpuFans:
             t = vals.get(f'gpu{i}.temp')
             gmax = d['th'].get('gpu_max') or d['th'].get('slowdown') or 90
             self.hot[i] = t is None or t >= gmax - 3 or (self.hot.get(i, False) and t > gmax - 10)
-            want_c, why = self.target(i, t, vals) if t is not None else (100, 'нет температуры GPU')
+            want_c, why = self.target(i, t, vals) if t is not None else (100, 'no GPU temperature')
             if self.hot[i] and t is not None:
-                why = f'GPU {t:.1f} °C, у предела {gmax} °C'
+                why = f'GPU {t:.1f} °C, at the limit {gmax} °C'
             fans = []
             for f in range(d['nfans']):
                 mode, cur = self.modes[(i, f)], self.cur.get((i, f))
@@ -554,7 +554,7 @@ def cpu_readings(rates, t):
             continue
         w = rates.rate('rapl' + z, e, t, rdnum(z + '/max_energy_range_uj'))
         if w is not None:
-            out.append(('cpu.pkg_w', w / 1e6, M('CPU пакет', 'cpu', 'power', 'W', 120, note='RAPL package')))
+            out.append(('cpu.pkg_w', w / 1e6, M('CPU package', 'cpu', 'power', 'W', 120, note='RAPL package')))
     line = (rd('/proc/stat') or '').split('\n')[0].split()[1:]
     if line:
         v = list(map(int, line))
@@ -568,8 +568,8 @@ def cpu_readings(rates, t):
     f = [rdnum(p, 1000) for p in glob.glob('/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq')]
     f = [x for x in f if x]
     if f:
-        out.append(('cpu.mhz_avg', sum(f) / len(f), M('средняя', 'cpu', 'freq', 'MHz', 140, prec=0)))
-        out.append(('cpu.mhz_max', max(f), M('макс. ядро', 'cpu', 'freq', 'MHz', 141, prec=0)))
+        out.append(('cpu.mhz_avg', sum(f) / len(f), M('average', 'cpu', 'freq', 'MHz', 140, prec=0)))
+        out.append(('cpu.mhz_max', max(f), M('max core', 'cpu', 'freq', 'MHz', 141, prec=0)))
     return out
 
 
@@ -584,7 +584,7 @@ def disk_readings(rates, t, nvmes):
         if not m or m.group(1) not in by_ctrl:
             continue
         serial, v = by_ctrl[m.group(1)]
-        for col, kind, lab, o in ((5, 'rd', 'чтение', 0), (9, 'wr', 'запись', 1)):
+        for col, kind, lab, o in ((5, 'rd', 'read', 0), (9, 'wr', 'write', 1)):
             r = rates.rate(f'disk.{serial}.{kind}', int(f[col]) * 512, t)
             if r is not None:
                 out.append((f'nvme.{serial}.{kind}', r / 1e6, M(f"{v['name']} {lab}", 'storage', 'io', 'MB/s', 260 + 2 * v['n'] + o)))
@@ -605,7 +605,7 @@ def hwmon_readings(st):
                 v = rdnum(p, 1000)
                 if v is not None:
                     out.append((f'cpu.{lab.lower()}', v, M(lab, 'cpu', 'temp', '°C', 100 + len(out), res=0.125,
-                                                           note='Tctl = Tdie на 5900X' if lab == 'Tctl' else '')))
+                                                           note='Tctl = Tdie on Zen 3 desktop CPUs' if lab == 'Tctl' else '')))
                     st.fast_paths[f'cpu.{lab.lower()}'] = p
         elif name == 'nvme' and dev in st.nvme_by_ctrl:
             serial = st.nvme_by_ctrl[dev]
@@ -653,7 +653,7 @@ def hwmon_readings(st):
                 lim = (None, None, mx, cr) if (mx or cr) and (mx or 0) < 200 else (None,) * 4
                 out.append((f'{base}.t{n}', v, M(f'{lab0} {lab}' if lab else lab0, grp, 'temp', '°C',
                                                  (500 if grp == 'net' else 900) + int(n), lim,
-                                                 note='статичное значение ACPI' if grp == 'other' and name.startswith('acpitz') else '',
+                                                 note='static ACPI value' if grp == 'other' and name.startswith('acpitz') else '',
                                                  hidden=name.startswith('acpitz'))))
             for p in sorted(glob.glob(h + '/fan*_input'), key=natkey):
                 n = re.search(r'fan(\d+)', p).group(1)
@@ -834,7 +834,7 @@ class Alerts:
             msg = f"{m['label']}: {val} {side} {th:g}"
             self.active[key] = {'level': 'crit' if lvl == 2 else 'warn', 'since': ts, 'label': m['label']}
         else:
-            msg = f"{m['label']}: снова в норме, {val}"
+            msg = f"{m['label']}: back to normal, {val}"
             self.active.pop(key, None)
         self.event(ts, ['ok', 'warn', 'crit'][lvl] if lvl else ('ok' if old == 2 else 'info'), key, msg)
 
@@ -933,7 +933,7 @@ class Collector:
     def setup(self):
         ev = self.alerts.event
         ts = int(time.time())
-        ev(ts, 'info', '', f'коллектор запущен на {self.host}')
+        ev(ts, 'info', '', f'collector started on {self.host}')
         if any(re.fullmatch(r'it8[67]\d+', rd(h + '/name') or '') for h in glob.glob('/sys/class/hwmon/hwmon*')):
             self.it87_driver = True
         if self.conf['superio'] and not self.it87_driver:
@@ -967,17 +967,17 @@ class Collector:
                 model = (rd(f'/sys/class/nvme/{ctrl}/model') or '').strip()
                 v = self.nvmes[serial] = {'model': model, 'name': self.conf['names'].get(serial) or short_name(model),
                                           'n': len(self.nvmes)}
-                self.alerts.event(ts, 'info', f'nvme.{serial}', f"NVMe {v['name']} ({model}, {serial}) найден")
+                self.alerts.event(ts, 'info', f'nvme.{serial}', f"NVMe {v['name']} ({model}, {serial}) found")
             if not v.get('present') and v.get('was_present') is False:
-                self.alerts.event(ts, 'ok', f'nvme.{serial}', f"NVMe {v['name']} снова на шине ({ctrl})")
+                self.alerts.event(ts, 'ok', f'nvme.{serial}', f"NVMe {v['name']} back on the bus ({ctrl})")
             v.update(ctrl=ctrl, dev=f'/dev/{ctrl}', present=True, was_present=True)
             p = pci_info(pci)
             for k in ('aer_cor', 'aer_nonfatal', 'aer_fatal'):
                 if k in v and p[k] > v[k]:
                     self.alerts.event(ts, 'crit' if k == 'aer_fatal' else 'warn', f'nvme.{serial}',
-                                      f"{v['name']}: ошибки PCIe AER {k[4:]} +{p[k] - v[k]} (всего {p[k]})")
+                                      f"{v['name']}: PCIe AER errors {k[4:]} +{p[k] - v[k]} (total {p[k]})")
             if v.get('link') and p['link'] != v['link']:
-                self.alerts.event(ts, 'warn', f'nvme.{serial}', f"{v['name']}: PCIe линк {v['link']} → {p['link']}")
+                self.alerts.event(ts, 'warn', f'nvme.{serial}', f"{v['name']}: PCIe link {v['link']} → {p['link']}")
             v.update(p)
             if 'wctemp' not in v:
                 try:
@@ -990,7 +990,7 @@ class Collector:
         for serial, v in self.nvmes.items():
             if serial not in seen and v.get('was_present') is not False:
                 v.update(present=False, was_present=False)
-                self.alerts.event(ts, 'crit', f'nvme.{serial}', f"NVMe {v['name']} ({serial}) пропал с шины PCIe")
+                self.alerts.event(ts, 'crit', f'nvme.{serial}', f"NVMe {v['name']} ({serial}) dropped off the PCIe bus")
 
     def smart(self, ts):
         out = []
@@ -1002,19 +1002,19 @@ class Collector:
             except OSError as e:
                 print(f"smart {v['dev']}: {e}", flush=True)
                 continue
-            for k, lab in (('tmt1_n', 'TMT1 (лёгкий троттлинг)'), ('tmt2_n', 'TMT2 (сильный троттлинг)'),
-                           ('wctemp_min', 'минут выше WCTEMP'), ('cctemp_min', 'минут выше CCTEMP'), ('media_err', 'ошибок носителя')):
+            for k, lab in (('tmt1_n', 'TMT1 (light throttling)'), ('tmt2_n', 'TMT2 (heavy throttling)'),
+                           ('wctemp_min', 'minutes above WCTEMP'), ('cctemp_min', 'minutes above CCTEMP'), ('media_err', 'media errors')):
                 old = v.get('smart', {}).get(k)
                 if old is not None and s[k] > old:
-                    extra = f", всего {s[k.replace('_n', '_s')]} с" if k.endswith('_n') else ''
+                    extra = f", {s[k.replace('_n', '_s')]} s in total" if k.endswith('_n') else ''
                     self.alerts.event(ts, 'warn' if k in ('tmt1_n', 'wctemp_min') else 'crit', f'nvme.{serial}',
                                       f"{v['name']}: {lab} +{s[k] - old}{extra}")
             if s['cw'] and s['cw'] != v.get('smart', {}).get('cw'):
-                bits = [n for b, n in ((1, 'spare'), (2, 'температура'), (4, 'надёжность'), (8, 'read-only'), (16, 'backup')) if s['cw'] & b]
+                bits = [n for b, n in ((1, 'spare'), (2, 'temperature'), (4, 'reliability'), (8, 'read-only'), (16, 'backup')) if s['cw'] & b]
                 self.alerts.event(ts, 'crit', f'nvme.{serial}', f"{v['name']}: SMART critical warning: {', '.join(bits)}")
             v['smart'] = s
             o = 270 + 10 * v['n']
-            for k, lab in (('tmt1_n', 'TMT1 переходов'), ('tmt1_s', 'TMT1 секунд'), ('tmt2_n', 'TMT2 переходов'), ('tmt2_s', 'TMT2 секунд')):
+            for k, lab in (('tmt1_n', 'TMT1 transitions'), ('tmt1_s', 'TMT1 seconds'), ('tmt2_n', 'TMT2 transitions'), ('tmt2_s', 'TMT2 seconds')):
                 out.append((f'nvme.{serial}.{k}', float(s[k]), M(f"{v['name']} {lab}", 'storage', 'count', '', o, prec=0, hidden=True)))
                 o += 1
             for i, k in enumerate(s['sensors'][1:], 2):      # sensors hwmon does not show
@@ -1030,9 +1030,9 @@ class Collector:
             if bad != old:
                 if bad:
                     names = [n for b, n in GPU_REASONS.items() if bad & b]
-                    self.alerts.event(ts, 'crit' if bad & 0x48 else 'warn', p, f"{g['name']}: троттлинг — {', '.join(names)}")
+                    self.alerts.event(ts, 'crit' if bad & 0x48 else 'warn', p, f"{g['name']}: throttling: {', '.join(names)}")
                 else:
-                    self.alerts.event(ts, 'info', p, f"{g['name']}: троттлинг закончился")
+                    self.alerts.event(ts, 'info', p, f"{g['name']}: throttling ended")
             self.gpu_prev[p] = bad
 
     def apply_conf(self, key, m):
@@ -1086,7 +1086,7 @@ class Collector:
                 continue
             m = self.apply_conf(key, m)
             if key in means:
-                v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"шаг {m['res']:g}, среднее {self.conf['fast_hz']} опросов/с"]))
+                v, m['note'] = means[key], ' · '.join(filter(None, [m['note'], f"step {m['res']:g}, mean of {self.conf['fast_hz']} reads/s"]))
             sid = self.store.sid(key, m, ts)
             db.execute('INSERT OR REPLACE INTO h.raw VALUES(?,?,?)', (ts, sid, v))
             rows.append((sid, v))
@@ -1098,9 +1098,9 @@ class Collector:
             for p, c in self.fans.apply({k: x['v'] for k, x in now.items()}).items():
                 gpu.setdefault(p, {})['fan_ctl'] = c
             for i, f, old, new in self.fans.changes:
-                say = {'auto': 'авто (драйвер)', 'curve': 'кривая thermo'}
-                self.alerts.event(ts, 'info', f'gpu{i}.fan{f}', f"вентилятор GPU {f + 1}: {say.get(new, f'{new} %')}"
-                                  + (f" (было: {say.get(old, f'{old} %')})" if old is not None else ''))
+                say = {'auto': 'auto (driver)', 'curve': 'thermo curve'}
+                self.alerts.event(ts, 'info', f'gpu{i}.fan{f}', f"GPU fan {f + 1}: {say.get(new, f'{new} %')}"
+                                  + (f" (was: {say.get(old, f'{old} %')})" if old is not None else ''))
             self.fans.changes = []
         self.write_now(ts, now, gpu)
 
@@ -1135,8 +1135,8 @@ class Collector:
         doc = {'ts': ts, 'host': self.host, 'board': self.board, 'cpu': self.cpu, 'interval': self.conf['interval'],
                'groups': GROUPS, 'sensors': sensors, 'alerts': self.alerts.active, 'nvme': nv, 'gpu': gpu,
                'control': bool(self.conf.get('control_token')),
-               'superio': (f'{self.superio.chip} @ {self.superio.base:#x}, отброшено {self.superio.dropped}'
-                           if self.superio else ('драйвер it87' if self.it87_driver else 'нет')),
+               'superio': (f'{self.superio.chip} @ {self.superio.base:#x}, dropped {self.superio.dropped}'
+                           if self.superio else ('it87 driver' if self.it87_driver else 'none')),
                'uptime': rdnum('/proc/uptime') and float((rd('/proc/uptime') or '0').split()[0])}
         path = self.conf['now']
         if not path:
@@ -1187,7 +1187,7 @@ class Collector:
         if self.bb.minute is not None:
             self.bb.write()
         self.flush(int(time.time()) // 60 * 60)
-        self.alerts.event(int(time.time()), 'info', '', 'коллектор остановлен')
+        self.alerts.event(int(time.time()), 'info', '', 'collector stopped')
 
 
 # ---------------------------------------------------------------- web
@@ -1258,9 +1258,9 @@ class Web(BaseHTTPRequestHandler):
                 return self.send(404, {'error': 'not found'})
             tok = self.conf.get('control_token')
             if not tok:
-                return self.send(403, {'error': 'управление выключено: нет control_token в /etc/thermo.conf'})
+                return self.send(403, {'error': 'control is off: no control_token in /etc/thermo.conf'})
             if not hmac.compare_digest(self.headers.get('X-Thermo-Token', '').encode(), str(tok).encode()):
-                return self.send(403, {'error': 'неверный токен'})
+                return self.send(403, {'error': 'wrong token'})
             n = int(self.headers.get('Content-Length') or 0)
             if not 0 < n <= 1024:
                 return self.send(400, {'error': 'body'})
@@ -1268,13 +1268,13 @@ class Web(BaseHTTPRequestHandler):
             with open(self.conf['now']) as f:
                 ctl = json.load(f).get('gpu', {}).get(req.get('gpu'), {}).get('fan_ctl')
             if not ctl:
-                return self.send(400, {'error': 'нет такой видеокарты'})
+                return self.send(400, {'error': 'no such GPU'})
             mode = req.get('mode')
             if not (mode in ('auto', 'curve') or (type(mode) is int and ctl['min'] <= mode <= ctl['max'])):
-                return self.send(400, {'error': f"режим: auto, curve или {ctl['min']}-{ctl['max']}"})
+                return self.send(400, {'error': f"mode: auto, curve or {ctl['min']}-{ctl['max']}"})
             fans = range(len(ctl['fans'])) if req.get('fan') == 'all' else [req.get('fan')]
             if not all(type(f) is int and 0 <= f < len(ctl['fans']) for f in fans):
-                return self.send(400, {'error': 'нет такого вентилятора'})
+                return self.send(400, {'error': 'no such fan'})
             path = self.conf['fanctl']
             with self.lock:
                 return self.send(200, self.fanctl_set(path, req['gpu'], fans, mode))

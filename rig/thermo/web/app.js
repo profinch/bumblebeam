@@ -8,14 +8,14 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 
-const RANGES = [['15м', 900], ['1ч', 3600], ['6ч', 21600], ['24ч', 86400], ['7д', 604800], ['30д', 2592000], ['1г', 31536000]];
+const RANGES = [['15m', 900], ['1h', 3600], ['6h', 21600], ['24h', 86400], ['7d', 604800], ['30d', 2592000], ['1y', 31536000]];
 // series hues validated for this surface (dataviz validate_palette, dark, #063355): yellow and red stay for thresholds
 const PALETTE = ['#00ad95', '#5280ff', '#cc7a24', '#b061dc', '#6f9e2c', '#d9608f'];
-const KINDS = [['temp', 'Температуры'], ['fan', 'Вентиляторы'], ['power', 'Мощность'], ['util', 'Загрузка'], ['io', 'Диск'], ['freq', 'Частота']];
-const UNIT = { '°C': '°C', RPM: 'об/мин', W: 'Вт', 'MB/s': 'МБ/с', MHz: 'МГц', V: 'В', '%': '%', '': '' };
-const LEVEL = { ok: 'норма', info: 'инфо', warn: 'внимание', crit: 'критично' };
+const KINDS = [['temp', 'Temperatures'], ['fan', 'Fans'], ['power', 'Power'], ['util', 'Load'], ['io', 'Disk'], ['freq', 'Frequency']];
+const UNIT = { '°C': '°C', RPM: 'RPM', W: 'W', 'MB/s': 'MB/s', MHz: 'MHz', V: 'V', '%': '%', '': '' };
+const LEVEL = { ok: 'ok', info: 'info', warn: 'warning', crit: 'critical' };
 
-const SMOOTH = [['сырые', 0], ['30 с', 30], ['2 мин', 120]];
+const SMOOTH = [['raw', 0], ['30 s', 30], ['2 min', 120]];
 let range = store.get('range', 3600);
 let smooth = store.get('smooth', 30);
 let hidden = new Set(store.get('hidden', []));
@@ -24,7 +24,7 @@ let built = '';
 
 const fmt = (v, p = 1) => (v === null || v === undefined || Number.isNaN(v)) ? '—' : Number(v).toFixed(p);
 const unit = u => UNIT[u] ?? u;
-const tfmt = (ts, withDate) => new Date(ts * 1000).toLocaleString('ru-RU', withDate
+const tfmt = (ts, withDate) => new Date(ts * 1000).toLocaleString('en-GB', withDate
   ? { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }
   : { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const levelOf = s => ['ok', 'warn', 'crit'][s?.st || 0];
@@ -43,11 +43,11 @@ function visibleSensors() {
 
 function renderHead() {
   const gpu = Object.values(now.gpu || {}).map(g => g.name.replace('NVIDIA GeForce ', '')).join(', ');
-  const nv = Object.values(now.nvme || {}).map(n => n.name + (n.present ? '' : ' (нет на шине)')).join(' + ');
+  const nv = Object.values(now.nvme || {}).map(n => n.name + (n.present ? '' : ' (off the bus)')).join(' + ');
   $('#host').textContent = now.host;
   document.title = `Thermo · ${now.host}`;
   $('#hw').innerHTML = `<b>${esc(now.board)}</b> · ${esc(now.cpu)}${gpu ? ' · ' + esc(gpu) : ''}${nv ? ' · NVMe ' + esc(nv) : ''}`;
-  $('#src').textContent = `Super I/O: ${now.superio} · замер каждые ${now.interval} с · uptime ${Math.floor(now.uptime / 3600)} ч`;
+  $('#src').textContent = `Super I/O: ${now.superio} · sample every ${now.interval} s · uptime ${Math.floor(now.uptime / 3600)} h`;
 }
 
 function renderLive() {
@@ -57,7 +57,7 @@ function renderLive() {
   const age = Math.max(0, (Date.now() - seenAt) / 1000);
   const stale = age > now.interval * 3 + 3;
   el.className = 'live ' + (stale ? 'stale' : 'ok');
-  el.innerHTML = `<span class="dot ${stale ? 'off' : ''}"></span><span>${stale ? `нет данных ${Math.round(age)} с` : 'live · ' + tfmt(now.ts)}</span>`;
+  el.innerHTML = `<span class="dot ${stale ? 'off' : ''}"></span><span>${stale ? `no data for ${Math.round(age)} s` : 'live · ' + tfmt(now.ts)}</span>`;
 }
 
 function renderAlerts() {
@@ -66,7 +66,7 @@ function renderAlerts() {
     const s = now.sensors[k];
     const v = s ? `${fmt(s.v, s.prec)} ${unit(s.unit)}` : '';
     return `<div class="alert ${al.level}"><span class="badge ${al.level}">${al.level === 'crit' ? '▲' : '●'} ${LEVEL[al.level]}</span>
-      <b>${esc(al.label)}</b> ${esc(v)}<span class="dim">с ${tfmt(al.since, true)}</span></div>`;
+      <b>${esc(al.label)}</b> ${esc(v)}<span class="dim">since ${tfmt(al.since, true)}</span></div>`;
   }).join('');
 }
 
@@ -86,7 +86,7 @@ function renderTiles() {
       const scale = top ? top : 100;
       bar = `<div class="bar"><i style="width:${Math.min(100, Math.max(0, s.v / scale * 100))}%"></i>${wh && ch ? `<u style="left:${wh / ch * 100}%"></u>` : ''}</div>`;
     }
-    const sub = [st ? `24ч макс ${fmt(st[2], Math.min(1, s.prec))}` : '', top ? `предел ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `мин ${s.lim[1]}` : '', s.kind === 'fan' && !s.v ? 'стоит' : '']
+    const sub = [st ? `24h max ${fmt(st[2], Math.min(1, s.prec))}` : '', top ? `limit ${fmt(top, 0)}` : '', s.kind === 'fan' && s.lim[1] ? `min ${s.lim[1]}` : '', s.kind === 'fan' && !s.v ? 'stopped' : '']
       .filter(Boolean).join(' · ');
     const grp = (now.groups.find(g => g[0] === s.grp) || [, s.grp])[1];
     return `<div class="tile ${lv === 'ok' ? '' : lv}" title="${esc(s.note || '')}">
@@ -109,7 +109,7 @@ function groupTitle(g, name) {
 function groupMeta(g) {
   const S = now.sensors;
   const v = (k, p, u) => S[k] ? `<b>${fmt(S[k].v, p)}</b> ${u}` : '';
-  if (g === 'cpu') return [v('cpu.pkg_w', 0, 'Вт'), v('cpu.util', 0, '%'), v('cpu.mhz_max', 0, 'МГц макс'), v('cpu.load1', 2, 'load')].filter(Boolean).join(' · ');
+  if (g === 'cpu') return [v('cpu.pkg_w', 0, 'W'), v('cpu.util', 0, '%'), v('cpu.mhz_max', 0, 'MHz max'), v('cpu.load1', 2, 'load')].filter(Boolean).join(' · ');
   if (g === 'gpu') return Object.entries(now.gpu || {}).map(([, x]) =>
     `${x.pstate || ''} <span class="badges">${(x.reason_names || []).map(r => `<span class="badge ${/thermal|slowdown|brake/i.test(r) ? 'crit' : r === 'power cap' ? 'warn' : 'info'}">${esc(r)}</span>`).join('')}</span>`).join(' ');
   if (g === 'board') return `Super I/O ${esc(now.superio)}`;
@@ -128,7 +128,7 @@ function buildGroups() {
       ${g === 'gpu' ? '<div class="fanctl" data-fanctl></div>' : ''}
       <div class="charts">${kinds.map(([kd, t]) => `<div class="chart-box" data-g="${g}" data-k="${kd}">
         <h3 class="chart-title">${t}</h3><svg class="chart"></svg><div class="legend"></div></div>`).join('')}</div>
-      <details class="more-table" ${store.get('open-' + g, false) ? 'open' : ''} data-g="${g}"><summary>Все датчики группы</summary>
+      <details class="more-table" ${store.get('open-' + g, false) ? 'open' : ''} data-g="${g}"><summary>All sensors in the group</summary>
         <div class="table-wrap"><table data-table="${g}"></table></div></details>
     </section>`;
   }).join('');
@@ -147,13 +147,13 @@ function renderTables() {
   for (const t of document.querySelectorAll('[data-table]')) {
     const g = t.dataset.table;
     const rows = Object.entries(now.sensors).filter(([, s]) => s.grp === g).sort((a, b) => a[1].ord - b[1].ord);
-    t.innerHTML = `<thead><tr><th>Датчик</th><th class="num">Сейчас</th><th class="num">Мин ${rangeLabel()}</th><th class="num">Средн</th>
-      <th class="num">Макс</th><th class="num">Шаг</th><th>Пороги</th><th>Ключ</th><th>Заметка</th></tr></thead><tbody>${rows.map(([k, s]) => {
+    t.innerHTML = `<thead><tr><th>Sensor</th><th class="num">Now</th><th class="num">Min ${rangeLabel()}</th><th class="num">Avg</th>
+      <th class="num">Max</th><th class="num">Step</th><th>Thresholds</th><th>Key</th><th>Note</th></tr></thead><tbody>${rows.map(([k, s]) => {
       const st = statsR[k] || [];
       const lv = levelOf(s);
       const [wl, cl, wh, ch] = s.lim;
       const th = [wl !== null && `↓${fmt(wl, 2)}`, cl !== null && `↓↓${fmt(cl, 2)}`, wh !== null && `↑${fmt(wh, 1)}`, ch !== null && `↑↑${fmt(ch, 1)}`].filter(Boolean).join(' ');
-      return `<tr><td>${esc(s.label)}${s.hidden ? ' <span class="dim">(скрыт)</span>' : ''}</td>
+      return `<tr><td>${esc(s.label)}${s.hidden ? ' <span class="dim">(hidden)</span>' : ''}</td>
         <td class="num ${lv === 'ok' ? '' : lv}">${fmt(s.v, s.prec)} ${unit(s.unit)}</td>
         <td class="num">${fmt(st[0], s.prec)}</td><td class="num">${fmt(st[1], s.prec)}</td><td class="num">${fmt(st[2], s.prec)}</td>
         <td class="num dim">${s.res ? s.res : '—'}</td><td class="dim">${th || '—'}</td><td class="dim">${esc(k)}</td><td class="dim">${esc(s.note || '')}</td></tr>`;
@@ -210,7 +210,7 @@ function drawChart(box) {
     <i style="background:${color[k]}"></i>${esc(S[k].label)} <b>${fmt(S[k].v, S[k].prec)}</b></button>`).join('');
 
   if (!data || !on.length) {
-    svg.innerHTML = `<text class="empty" x="${W / 2}" y="${H / 2}" text-anchor="middle">${data ? 'все серии скрыты' : 'загрузка…'}</text>`;
+    svg.innerHTML = `<text class="empty" x="${W / 2}" y="${H / 2}" text-anchor="middle">${data ? 'all series hidden' : 'loading…'}</text>`;
     return;
   }
   const t = data.t, n = t.length;
@@ -257,8 +257,8 @@ function drawChart(box) {
   for (let x = Math.ceil((t[0] - tz) / ts) * ts + tz; x <= t[n - 1]; x += ts) {
     const px = L + (x - t[0]) / span * pw;
     const d = new Date(x * 1000);
-    const lab = ts >= 86400 ? d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
-      : d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const lab = ts >= 86400 ? d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+      : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     h += `<line class="grid" x1="${px}" x2="${px}" y1="${T}" y2="${T + ph}"/><text x="${px}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
   }
   for (const x of thr) h += `<line class="th-${x.c}" x1="${L}" x2="${L + pw}" y1="${Y(x.v)}" y2="${Y(x.v)}"/><text x="${L + pw + 4}" y="${Y(x.v) + 3}">${fmt(x.v, 0)}</text>`;
@@ -289,7 +289,7 @@ function drawChart(box) {
   h += `<line class="cross" x1="0" x2="0" y1="${T}" y2="${T + ph}" visibility="hidden"/><g class="dots"></g>
     <rect x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/>`;
   svg.innerHTML = h;
-  if (thr.length) legend.insertAdjacentHTML('beforeend', thr.map(x => `<span class="th"><i class="${x.c[0]}"></i>${x.c === 'crit' ? 'предел' : 'внимание'} ${fmt(x.v, 0)}${on.length > 1 ? ' · ' + esc(S[x.k].label) : ''}</span>`).join(''));
+  if (thr.length) legend.insertAdjacentHTML('beforeend', thr.map(x => `<span class="th"><i class="${x.c[0]}"></i>${x.c === 'crit' ? 'limit' : 'warning'} ${fmt(x.v, 0)}${on.length > 1 ? ' · ' + esc(S[x.k].label) : ''}</span>`).join(''));
 
   const cross = $('.cross', svg), dots = $('.dots', svg), tip = $('#tip');
   svg.onpointermove = e => {
@@ -304,9 +304,9 @@ function drawChart(box) {
       const mm = s.n[i] !== s.x[i] ? `<span class="mm">${fmt(s.n[i], m.prec)}…${fmt(s.x[i], m.prec)}</span>` : '<span></span>';
       return `<div class="r"><i style="background:${color[k]}"></i><span>${esc(m.label)} ${mm}</span><b>${fmt(A[k][i], m.prec)} ${unit(m.unit)}</b></div>`;
     }).join('');
-    const how = [data.step > now.interval && `шаг ${data.step >= 60 ? data.step / 60 + ' мин' : data.step + ' с'}`,
-      isSm && `сглаж. ${smooth >= 60 ? smooth / 60 + ' мин' : smooth + ' с'}`].filter(Boolean).join(', ');
-    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${how ? ` · ${how}; мелко: мин…макс` : ''}</div>${rows}`;
+    const how = [data.step > now.interval && `step ${data.step >= 60 ? data.step / 60 + ' min' : data.step + ' s'}`,
+      isSm && `smoothed ${smooth >= 60 ? smooth / 60 + ' min' : smooth + ' s'}`].filter(Boolean).join(', ');
+    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${how ? ` · ${how}; light: min…max` : ''}</div>${rows}`;
     tip.hidden = false;
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = Math.min(window.innerWidth - tw - 8, e.clientX + 14) + 'px';
@@ -331,7 +331,7 @@ document.addEventListener('click', e => {
 // ---------------------------------------------------------------- GPU fan control
 
 // The collector applies the modes; the web only writes them (POST /api/fan, token from /etc/thermo.conf).
-const FMODES = [['auto', 'Авто'], ['curve', 'Кривая'], ['manual', 'Вручную']];
+const FMODES = [['auto', 'Auto'], ['curve', 'Curve'], ['manual', 'Manual']];
 let fanSig = '', fanMsg = '', fanMsgT = 0;
 const fanToken = () => store.get('fan-token', '');
 const fanIdx = (c, f) => f === 'all' ? c.fans.map((_, i) => i) : [+f];
@@ -345,22 +345,22 @@ function renderFanCtl() {
   if (sig !== fanSig) {
     fanSig = sig;
     el.innerHTML = gs.map(([p, x]) => `<div class="fc" data-gpu="${p}">
-      <div class="fc-head"><h3 class="chart-title">Вентиляторы: управление</h3><span class="fc-why"></span></div>
-      ${[['all', 'Оба'], ...x.fan_ctl.fans.map((_, f) => [f, `Вентилятор ${f + 1}`])].map(([f, lab]) => `<div class="fc-row" data-fan="${f}">
+      <div class="fc-head"><h3 class="chart-title">Fan control</h3><span class="fc-why"></span></div>
+      ${[['all', 'Both'], ...x.fan_ctl.fans.map((_, f) => [f, `Fan ${f + 1}`])].map(([f, lab]) => `<div class="fc-row" data-fan="${f}">
         <span class="fc-lab">${lab}</span><span class="fc-now"></span>
-        <div class="seg" role="group" aria-label="${lab}: режим">${FMODES.map(([m, l]) => `<button type="button" data-m="${m}" ${can ? '' : 'disabled'}>${l}</button>`).join('')}</div>
-        <span class="fc-man"><input type="range" min="${x.fan_ctl.min}" max="${x.fan_ctl.max}" step="5" aria-label="${lab}: обороты" ${can ? '' : 'disabled'}><output></output></span>
+        <div class="seg" role="group" aria-label="${lab}: mode">${FMODES.map(([m, l]) => `<button type="button" data-m="${m}" ${can ? '' : 'disabled'}>${l}</button>`).join('')}</div>
+        <span class="fc-man"><input type="range" min="${x.fan_ctl.min}" max="${x.fan_ctl.max}" step="5" aria-label="${lab}: speed" ${can ? '' : 'disabled'}><output></output></span>
       </div>`).join('')}
-      <div class="fc-auth">${!now.control ? '<span class="dim">Только просмотр: для управления задайте <code>control_token</code> в /etc/thermo.conf</span>'
-        : fanToken() ? '<button type="button" class="btn ghost small" data-act="logout">Забыть токен</button>'
-        : '<form data-act="login"><input type="password" placeholder="токен управления" autocomplete="current-password" required><button class="btn small">Войти</button></form>'}
+      <div class="fc-auth">${!now.control ? '<span class="dim">Read-only: set <code>control_token</code> in /etc/thermo.conf to control the fans</span>'
+        : fanToken() ? '<button type="button" class="btn ghost small" data-act="logout">Forget token</button>'
+        : '<form data-act="login"><input type="password" placeholder="control token" autocomplete="current-password" required><button class="btn small">Log in</button></form>'}
         <span class="fc-msg"></span></div>
     </div>`).join('');
   }
   for (const [p, x] of gs) {
     const box = $(`.fc[data-gpu="${p}"]`, el), c = x.fan_ctl, S = now.sensors;
-    $('.fc-why', box).innerHTML = c.hot ? `<span class="badge crit">▲ у предела: 100 %</span> <span class="dim">${esc(c.why)}</span>`
-      : `<span class="dim">кривая сейчас</span> <b>${c.curve} %</b> <span class="dim">· ${esc(c.why)}</span>`;
+    $('.fc-why', box).innerHTML = c.hot ? `<span class="badge crit">▲ at the limit: 100 %</span> <span class="dim">${esc(c.why)}</span>`
+      : `<span class="dim">curve now</span> <b>${c.curve} %</b> <span class="dim">· ${esc(c.why)}</span>`;
     for (const row of box.querySelectorAll('.fc-row')) {
       const idx = fanIdx(c, row.dataset.fan);
       const modes = [...new Set(idx.map(i => c.fans[i].mode))];
@@ -371,9 +371,9 @@ function renderFanCtl() {
       if (typeof m === 'number' && document.activeElement !== r) r.value = m;
       $('.fc-man', row).hidden = kind !== 'manual';
       $('output', row).textContent = r.value + ' %';
-      $('.fc-now', row).innerHTML = row.dataset.fan === 'all' ? (m === null ? '<span class="dim">разные режимы</span>' : '')
-        : `<b>${fmt(S[`${p}.rpm${idx[0]}`]?.v, 0)}</b> об/мин · ${fmt(S[`${p}.fan${idx[0]}`]?.v, 0)} %`
-          + (c.fans[idx[0]].set !== null ? ` <span class="dim">· задано ${c.fans[idx[0]].set} %</span>` : '');
+      $('.fc-now', row).innerHTML = row.dataset.fan === 'all' ? (m === null ? '<span class="dim">mixed modes</span>' : '')
+        : `<b>${fmt(S[`${p}.rpm${idx[0]}`]?.v, 0)}</b> RPM · ${fmt(S[`${p}.fan${idx[0]}`]?.v, 0)} %`
+          + (c.fans[idx[0]].set !== null ? ` <span class="dim">· set ${c.fans[idx[0]].set} %</span>` : '');
     }
     const msg = $('.fc-msg', box);
     msg.textContent = Date.now() < fanMsgT ? fanMsg.replace(/^!/, '') : '';
@@ -390,7 +390,7 @@ async function fanSet(gpu, fan, mode) {
       if (r.status === 403) store.set('fan-token', '');
       throw new Error(j.error || r.status);
     }
-    fanMsg = 'принято, применится на следующем замере';
+    fanMsg = 'accepted, applies on the next sample';
   } catch (err) { fanMsg = '!' + err.message; }
   fanMsgT = Date.now() + 6000;
   renderFanCtl();
@@ -437,21 +437,21 @@ function renderNvme() {
   if (!d.length) { $('#nvme-panel').hidden = true; return; }
   const K = x => x ? `${fmt(x - 273.15, 0)} °C` : '—';
   const rows = [
-    ['Модель / прошивка', n => `${esc(n.model)} / ${esc(n.fw || '—')}`],
-    ['На шине', n => n.present ? `<span class="badge ok">да · ${esc(n.ctrl)} · ${esc(n.pci)}</span>` : '<span class="badge crit">нет — пропал</span>'],
-    ['PCIe линк (макс)', n => `${esc(n.link || '—')} <span class="dim">(${esc(n.link_max || '—')})</span>`],
-    ['Температура SMART', n => n.smart?.temp ? `${fmt(n.smart.temp - 273.15, 0)} °C` : '—'],
-    ['Пороги TMT1 / TMT2', n => `${K(n.tmt1)} / ${K(n.tmt2)}`],
+    ['Model / firmware', n => `${esc(n.model)} / ${esc(n.fw || '—')}`],
+    ['On the bus', n => n.present ? `<span class="badge ok">yes · ${esc(n.ctrl)} · ${esc(n.pci)}</span>` : '<span class="badge crit">no, dropped off</span>'],
+    ['PCIe link (max)', n => `${esc(n.link || '—')} <span class="dim">(${esc(n.link_max || '—')})</span>`],
+    ['SMART temperature', n => n.smart?.temp ? `${fmt(n.smart.temp - 273.15, 0)} °C` : '—'],
+    ['TMT1 / TMT2 thresholds', n => `${K(n.tmt1)} / ${K(n.tmt2)}`],
     ['WCTEMP / CCTEMP', n => `${fmt(n.wctemp_c, 0)} / ${fmt(n.cctemp_c, 0)} °C`],
-    ['Троттлинг TMT1: раз / сек', n => cnt(n.smart?.tmt1_n, 'warn') + ' / ' + fmt(n.smart?.tmt1_s, 0)],
-    ['Троттлинг TMT2: раз / сек', n => cnt(n.smart?.tmt2_n, 'crit') + ' / ' + fmt(n.smart?.tmt2_s, 0)],
-    ['Минут выше WCTEMP / CCTEMP', n => cnt(n.smart?.wctemp_min, 'warn') + ' / ' + cnt(n.smart?.cctemp_min, 'crit')],
-    ['Ошибки PCIe AER: corr / nonfatal / fatal', n => [cnt(n.aer_cor, 'warn'), cnt(n.aer_nonfatal, 'crit'), cnt(n.aer_fatal, 'crit')].join(' / ')],
-    ['Critical warning', n => n.smart?.cw ? `<span class="badge crit">0x${n.smart.cw.toString(16)}</span>` : (n.smart ? '<span class="badge ok">нет</span>' : '—')],
-    ['Ошибки носителя', n => cnt(n.smart?.media_err, 'crit')],
-    ['Износ / резерв', n => n.smart ? `${n.smart.used}% / ${n.smart.spare}%` : '—'],
-    ['Записано / прочитано', n => n.smart ? `${fmt(n.smart.written_tb, 2)} / ${fmt(n.smart.read_tb, 2)} TB` : '—'],
-    ['Часов / аварийных выкл.', n => n.smart ? `${n.smart.hours} / ${n.smart.unsafe}` : '—'],
+    ['TMT1 throttling: times / s', n => cnt(n.smart?.tmt1_n, 'warn') + ' / ' + fmt(n.smart?.tmt1_s, 0)],
+    ['TMT2 throttling: times / s', n => cnt(n.smart?.tmt2_n, 'crit') + ' / ' + fmt(n.smart?.tmt2_s, 0)],
+    ['Minutes above WCTEMP / CCTEMP', n => cnt(n.smart?.wctemp_min, 'warn') + ' / ' + cnt(n.smart?.cctemp_min, 'crit')],
+    ['PCIe AER errors: corr / nonfatal / fatal', n => [cnt(n.aer_cor, 'warn'), cnt(n.aer_nonfatal, 'crit'), cnt(n.aer_fatal, 'crit')].join(' / ')],
+    ['Critical warning', n => n.smart?.cw ? `<span class="badge crit">0x${n.smart.cw.toString(16)}</span>` : (n.smart ? '<span class="badge ok">none</span>' : '—')],
+    ['Media errors', n => cnt(n.smart?.media_err, 'crit')],
+    ['Wear / spare', n => n.smart ? `${n.smart.used}% / ${n.smart.spare}%` : '—'],
+    ['Written / read', n => n.smart ? `${fmt(n.smart.written_tb, 2)} / ${fmt(n.smart.read_tb, 2)} TB` : '—'],
+    ['Hours / unsafe shutdowns', n => n.smart ? `${n.smart.hours} / ${n.smart.unsafe}` : '—'],
   ];
   $('#nvme').innerHTML = `<thead><tr><th></th>${d.map(([s, n]) => `<th>${esc(n.name)} <span class="dim">${esc(s)}</span></th>`).join('')}</tr></thead>
     <tbody>${rows.map(([lab, f]) => `<tr><td class="dim">${lab}</td>${d.map(([, n]) => `<td>${f(n)}</td>`).join('')}</tr>`).join('')}</tbody>`;
@@ -460,10 +460,10 @@ const cnt = (v, lv) => v === undefined || v === null ? '—' : v > 0 ? `<span cl
 
 async function loadEvents() {
   const ev = await api(`/api/events?limit=${evLimit}`);
-  $('#ev-count').textContent = `последние ${ev.length}`;
+  $('#ev-count').textContent = `last ${ev.length}`;
   $('#ev-more').hidden = ev.length < evLimit;
-  $('#events').innerHTML = `<thead><tr><th>Время</th><th>Уровень</th><th>Событие</th><th>Ключ</th></tr></thead><tbody>${ev.map(e =>
-    `<tr><td>${tfmt(e.ts, true)}</td><td><span class="badge ${e.level}">${LEVEL[e.level] || e.level}</span></td><td class="msg">${esc(e.msg)}</td><td class="dim">${esc(e.key)}</td></tr>`).join('') || '<tr><td colspan="4" class="dim">пока пусто</td></tr>'}</tbody>`;
+  $('#events').innerHTML = `<thead><tr><th>Time</th><th>Level</th><th>Event</th><th>Key</th></tr></thead><tbody>${ev.map(e =>
+    `<tr><td>${tfmt(e.ts, true)}</td><td><span class="badge ${e.level}">${LEVEL[e.level] || e.level}</span></td><td class="msg">${esc(e.msg)}</td><td class="dim">${esc(e.key)}</td></tr>`).join('') || '<tr><td colspan="4" class="dim">nothing yet</td></tr>'}</tbody>`;
 }
 $('#ev-more').onclick = () => { evLimit += 200; loadEvents(); };
 

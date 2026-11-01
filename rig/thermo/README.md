@@ -95,7 +95,7 @@ used when `gpu_fan` has none. RPM per fan is recorded as `gpuN.rpmF`.
 `/etc/thermo.conf`, JSON, every key optional (`thermo.conf.example`): `interval`, `port`, `raw_hours`, `flush_min`, `blackbox_s`,
 `names` (NVMe serial -> name), `labels` (key -> label), `limits` (key glob ->
 `[warn_lo, crit_lo, warn_hi, crit_hi]`), `hide` (key globs), `telegram` (`{"token", "chat"}`), `gpu_fan`, `control_token`.
-Sensor keys are on the dashboard under "Все датчики группы".
+Sensor keys are on the dashboard under "All sensors in the group".
 
 ## Install
 
