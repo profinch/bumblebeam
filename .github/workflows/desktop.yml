@@ -125,7 +125,7 @@ jobs:
       - name: The bundled programs
         shell: bash
         run: |
-          (cd miner && cargo build --release --target ${{ matrix.target }})
+          (cd beam/miner && cargo build --release --target ${{ matrix.target }})
           (cd beam/miner/desktop/bb-power && cargo build --release --target ${{ matrix.target }})
           B=beam/miner/desktop/src-tauri/binaries
           cp mxbm-bin/mxbm${{ matrix.exe }} $B/mxbm-${{ matrix.target }}${{ matrix.exe }}

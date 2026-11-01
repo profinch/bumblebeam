@@ -52,11 +52,11 @@ jobs:
           fi
           echo "VER=$v" >> "$GITHUB_ENV"
       - name: Build
-        working-directory: miner
+        working-directory: beam/miner
         run: cargo build --release --target ${{ matrix.target }}
       - name: Unit tests
         if: matrix.test
-        working-directory: miner
+        working-directory: beam/miner
         run: cargo test --release --target ${{ matrix.target }}
       - name: Package
         shell: bash
