@@ -84,6 +84,9 @@ API
 - `/api/system/info`: `identity.setupAp` (the set-up network is open), `identity.boardName` (e.g. ESP32-WROOM-32),
   `miner.resetReasonText`, `stratum.submitLost`, `stratum.lastRejectCode` (number or null) and `stratum.lastRejectMsg`;
   `fwVersion` / `/probe` `ver` with a "v".
+- `miner.blkhits` counts for real (was always 0): blocks found and sent to the pool, all time, kept in NVS like the best
+  share (survives restarts and OTA). No reset: a found block stays found. The dashboard shows it under the best share
+  once it is above 0.
 
 ## 0.10.1 (2026-10-29)
 - Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;

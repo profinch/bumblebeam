@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "nvs.h"
 static uint16_t *s_h; static volatile uint32_t s_n, s_pos; static uint64_t s_last;
-static volatile bool s_save; static double s_best_saved; static uint64_t s_base_h, s_start_h; static uint32_t s_base_s; static int64_t s_start_us; static uint32_t s_minutes;
+static volatile bool s_save; static double s_best_saved; static uint32_t s_blocks_saved; static uint64_t s_base_h, s_start_h; static uint32_t s_base_s; static int64_t s_start_us; static uint32_t s_minutes;
 static void sample(void *arg) {
     uint64_t t = MINER_ALL_HASHES(), d = t - s_last; s_last = t;
     uint32_t khs = (uint32_t)(d / 60000); if (khs > 65535) khs = 65535;
@@ -15,14 +15,15 @@ static void sample(void *arg) {
     if (++s_minutes % 10 == 0) s_save = true;   // all-time totals to NVS every 10 minutes (~144 small writes a day, far below flash wear limits)
 }
 // from the main task, not the esp_timer callback: a flash write stalls both cores for milliseconds, which the timer task must not carry
-// the best share ever is kept too (as the double's bits), written within 30 s of a new best: it survives restarts and
-// firmware updates (OTA leaves NVS alone), not an NVS erase
+// the best share ever is kept too (as the double's bits), and the blocks found, written within 30 s of a change: they
+// survive restarts and firmware updates (OTA leaves NVS alone), not an NVS erase
 void history_save(void) {
-    double best = stratum_best_ever(); bool nb = best > s_best_saved;
-    if (!s_save && !nb) return;
+    double best = stratum_best_ever(); bool nb = best > s_best_saved; uint32_t bl = g_stratum.blocks;
+    if (!s_save && !nb && bl == s_blocks_saved) return;
     nvs_handle_t h; if (nvs_open("stats", NVS_READWRITE, &h) != ESP_OK) return;
     if (s_save) { s_save = false; nvs_set_u64(h, "hashes", s_base_h + (MINER_ALL_HASHES() - s_start_h)); nvs_set_u32(h, "secs", history_all_seconds()); }
     if (nb) { uint64_t b; memcpy(&b, &best, sizeof b); nvs_set_u64(h, "best", b); s_best_saved = best; }
+    if (bl != s_blocks_saved) { nvs_set_u32(h, "blocks", bl); s_blocks_saved = bl; }
     nvs_commit(h); nvs_close(h);
 }
 void history_start(void) {
@@ -32,6 +33,7 @@ void history_start(void) {
     s_last = s_start_h = MINER_ALL_HASHES(); s_start_us = esp_timer_get_time();
     nvs_handle_t h; if (nvs_open("stats", NVS_READONLY, &h) == ESP_OK) { nvs_get_u64(h, "hashes", &s_base_h); nvs_get_u32(h, "secs", &s_base_s);
         uint64_t b; if (nvs_get_u64(h, "best", &b) == ESP_OK) { memcpy(&s_best_saved, &b, sizeof b); stratum_best(s_best_saved); }
+        if (nvs_get_u32(h, "blocks", &s_blocks_saved) == ESP_OK) g_stratum.blocks += s_blocks_saved;
         nvs_close(h); }
     const esp_timer_create_args_t a = { .callback = sample, .name = "history" }; esp_timer_handle_t t;
     if (esp_timer_create(&a, &t) == ESP_OK) esp_timer_start_periodic(t, 60ULL * 1000000);

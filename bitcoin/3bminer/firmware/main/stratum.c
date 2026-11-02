@@ -178,7 +178,7 @@ static void do_submits(void) {
         uint32_t nonce = __builtin_bswap32(c.nonce_word);
         char line[512]; uint32_t id = ++s_id;
         snprintf(line, sizeof line, "{\"id\":%u,\"method\":\"mining.submit\",\"params\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%08x\"]}\n", (unsigned)id, g_stratum.user, cur.job_id, en2hex, cur.ntime_hex, (unsigned)nonce);
-        if (send_line(line) == 0) { g_stratum.submitted++; g_stratum.last_share_diff = d; if (s_npend < 64) { s_pending_submit_ids[s_npend] = id; s_pending_diff[s_npend++] = pd; } ESP_LOGI(TAG, "submit nonce %08x diff %.4f (pool %.4f)", (unsigned)nonce, d, pd); }
+        if (send_line(line) == 0) { g_stratum.submitted++; if (block) { g_stratum.blocks++; ESP_LOGW(TAG, "*** A BLOCK sent, %u so far", (unsigned)g_stratum.blocks); } g_stratum.last_share_diff = d; if (s_npend < 64) { s_pending_submit_ids[s_npend] = id; s_pending_diff[s_npend++] = pd; } ESP_LOGI(TAG, "submit nonce %08x diff %.4f (pool %.4f)", (unsigned)nonce, d, pd); }
         else { g_stratum.submit_lost++; if (block) ESP_LOGE(TAG, "a BLOCK could not be sent: %s", line); }
     }
 }
