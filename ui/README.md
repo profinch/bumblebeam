@@ -15,7 +15,6 @@ accents (`#bitcoin` in the URL starts in the Bitcoin one).
 | [`components.css`](components.css) | ecosystem bar, header, panels, tiles, tables, buttons, pills, badges, fields, card list, notes, code, steps, chart and donut styles, footer |
 | [`components/bb.js`](components/bb.js) | web components: `<bb-logo>` (the animated bee on the chain's hexagon), `<bb-eco here="pool">` (the ecosystem bar; the site list lives here) |
 | [`charts/`](charts) | `charts.js`: sparkline, time-series line/area chart with crosshair, donut; see [charts/README.md](charts/README.md) |
-| [`build.py`](build.py) | delivers the library into a site: `copy`, `inline`, `swift` |
 
 ## Chains
 
@@ -52,13 +51,15 @@ Link the files relative to the page (or `ui/ui.css`, the three CSS files in one)
 <!-- the site's own CSS after, for what is only its own -->
 ```
 
-Then deliver the library the way the site ships:
+No build tool of its own: each site takes `ui/` the way it already ships.
 
-| Site ships as | Command | Sites |
+| Site ships as | How it takes `ui/` | Sites |
 |---|---|---|
-| files (a Docker image, files copied to a box) | `ui/build.py copy <site dir>` → `<site dir>/ui/` with `VERSION` | pool, explorer, thermo, NiceHash dashboard, puzzle |
-| one HTML file | `ui/build.py inline in.html out.html` | 3BMiner firmware page, wallet popup |
-| SwiftUI | `ui/build.py swift Theme.generated.swift` | Mac miner |
+| a Docker image built by CI from the repo root | `COPY ui/ /usr/share/nginx/html/ui/` in its Dockerfile; links carry `?v=dev`, which the Dockerfile's existing `sed` turns into the release version. Also `!ui` in the root `.dockerignore` (a whitelist) and `ui/**` in `.github/workflows/images.yml` paths, so a ui change rebuilds the images | pool, explorer, puzzle |
+| files copied to a box | its install script copies `ui/` next to the page | thermo, NiceHash dashboard |
+| one gzipped page in firmware | its own `web/build.py` reads the `ui/` files into the page, as it already does with `{{LOGO}}` | 3BMiner |
+| an extension or desktop bundle | the `ui/` files copied into the bundle at packaging | wallet, desktop miner |
+| SwiftUI | the colours copied into its `Theme.swift` from `tokens.css` (a generator when it migrates) | Mac miner |
 
 A site keeps only what is its own in its own CSS; anything a second site needs moves here.
 
