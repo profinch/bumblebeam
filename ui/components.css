@@ -96,8 +96,11 @@
   cursor: help;
 }
 
-/* room for "loading…" and "$0.0088" from the start, so the price arriving does not move the header */
-.price-chip b { display: inline-block; width: 8.5ch; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
+/* the chip fits what it says ("loading…", then the price), its left edge fixed under the brand word, the
+   price in the middle of it (equal padding); only its own right side moves when the price arrives */
+.price-chip b { display: inline-block; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
+/* the footer's status pill tells more in its tip */
+.foot .pill-status { cursor: help; }
 .cta-top.active { background: rgba(var(--accent-rgb), 0.15); }
 .main-nav a.nav-cta.active { background: rgba(var(--accent-rgb), 0.15); border-bottom-color: rgba(var(--accent-rgb), 0.6); }
 .demo-banner {
