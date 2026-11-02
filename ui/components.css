@@ -100,9 +100,10 @@
    it loads; the text sits in the middle of it. The chip's left edge is fixed under the brand word. */
 .price-chip b { display: inline-block; width: 8.5ch; text-align: center; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
 /* the footer's status pill tells more in its tip. Its text has a fixed room (each site sets --status-room to
-   its longest usual text, "connecting…" fits), centred, so the pill keeps one width while it connects */
+   its longest usual text, "connecting…" fits), so the pill keeps one width while it connects; the text starts
+   by the dot, where the loaded text starts too */
 .foot .pill-status { cursor: help; }
-.foot .pill-status > span { display: inline-block; min-width: var(--status-room, 21ch); text-align: center; }
+.foot .pill-status > span { display: inline-block; min-width: var(--status-room, 21ch); text-align: left; }
 .cta-top.active { background: rgba(var(--accent-rgb), 0.15); }
 .main-nav a.nav-cta.active { background: rgba(var(--accent-rgb), 0.15); border-bottom-color: rgba(var(--accent-rgb), 0.6); }
 .demo-banner {
@@ -251,7 +252,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .field { display: flex; flex-direction: column; gap: 6px; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .field input {
   height: 36px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
+  background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
 }
 .field input:focus { border-color: rgba(var(--accent-rgb), 0.5); outline: none; }
 
@@ -262,7 +263,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .dd-btn {
   width: 100%; height: 36px; padding: 0 30px 0 10px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--field-bg);
+  background: var(--field-fill);
   border: 1px solid var(--border); border-radius: 6px;
 }
 .dd-btn:focus-visible { outline: none; border-color: rgba(var(--accent-rgb), 0.5); }
@@ -272,7 +273,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .dd-list {
   position: absolute; left: 0; right: 0; top: calc(100% - 1px); z-index: 30; margin: 0; padding: 2px 0 6px; list-style: none;
   max-height: 300px; overflow-y: auto; color-scheme: dark;
-  background: var(--field-bg); border: 1px solid rgba(var(--accent-rgb), 0.5); border-top: 0; border-radius: 0 0 6px 6px;
+  background: var(--field-fill); border: 1px solid rgba(var(--accent-rgb), 0.5); border-top: 0; border-radius: 0 0 6px 6px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
   /* the shadow only below and beside: above, it fell on the button and drew a seam */
   clip-path: inset(0 -40px -40px -40px);
@@ -332,6 +333,12 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 
 /* the last line: the copyright, what the pool is, its licence and source */
 .foot .foot-copy { flex-basis: 100%; margin: 4px 0 0; text-align: center; font: 400 11px var(--font-mono); letter-spacing: 0.02em; text-transform: none; color: var(--muted2); }
+/* the copyright line in parts (3BMiner's way): <span class="fp">…</span><span class="fd d1"> · </span><span class="fp">…</span>
+   <span class="fd d2"> · </span><span class="fp">…</span>. A part never breaks inside; on a tablet the last part goes to
+   its own line, on a phone every part does, and the dots between them go */
+.foot-copy .fp { white-space: nowrap; }
+@media (max-width: 820px) { .foot-copy .d2 { display: none; } .foot-copy .fp:last-child { display: block; } }
+@media (max-width: 480px) { .foot-copy .d1 { display: none; } .foot-copy .fp { display: block; } }
 
 /* links in running text and quiet links in panel heads ("All blocks"): grey, dotted underline, white on hover */
 .text-link, .foot .foot-copy a { font: 400 11px var(--font-mono); letter-spacing: 0.02em; color: var(--muted); text-decoration: underline dotted rgba(255, 255, 255, 0.25); text-underline-offset: 3px; }
@@ -488,7 +495,7 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .note.bad { border-color: rgba(var(--red-rgb), 0.35); background: rgba(var(--red-rgb), 0.07); }
 .field textarea {
   min-height: 72px; padding: 8px 10px; resize: vertical; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
+  background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
 }
 .field textarea:focus { border-color: rgba(var(--accent-rgb), 0.5); outline: none; }
 

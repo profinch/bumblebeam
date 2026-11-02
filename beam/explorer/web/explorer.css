@@ -18,7 +18,7 @@ tr.grp-sub > td:first-child { padding-left: 18px; }
 table.peer-table { width: auto; min-width: min(360px, 100%); }
 /* names: tools row, sortable headers */
 .names-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
-.names-q { flex: 1 1 220px; min-width: 0; height: 32px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
+.names-q { flex: 1 1 220px; min-width: 0; height: 32px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
 .names-q:focus { outline: none; border-color: rgba(0, 246, 210, 0.5); }
 .names-pager { margin-left: auto; display: flex; align-items: center; gap: 10px; font: 11px var(--font-mono); }
 /* names: fixed column widths sized for the longest content, so paging and filters never move them */

@@ -39,6 +39,10 @@
   --surface3: rgba(0, 0, 0, 0.4);
   --panel-bg: rgba(255, 255, 255, 0.04);
   --field-bg: #193b55;
+  /* fields and card lists: the page's own gradient, fixed to the window like the page's, with a light veil, so
+     they keep their place against the panels around them at any scroll position and still cover what is
+     under an open list (a flat colour looked lighter at the top of the window and darker lower down) */
+  --field-fill: linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.09)) fixed, var(--page-gradient) fixed;
   --text: #ffffff;
   --text-dim: rgba(255, 255, 255, 0.8);
   --muted: rgba(255, 255, 255, 0.5);
