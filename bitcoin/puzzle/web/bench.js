@@ -22,9 +22,9 @@
     $('b-odds').href = '/?speed=' + Math.round(rate) + '#odds';
     if (!$('b-name').value) $('b-name').value = kind === 'cpu' ? 'CPU, ' + P.threads() + ' threads' : guess(name);
   }
-  function guess(info) {
-    var m = /(rtx|gtx|rx|arc|radeon|geforce|apple|m\d)[^·]*/i.exec(info || '');
-    return m ? m[0].trim() : '';
+  function guess(info) { // the model part of gpuName(), without the vendor's brand words
+    var m = (info || '').replace(/\s*\(.*\)\s*$/, '').replace(/^(NVIDIA\s+)?(GeForce\s+)?/i, '').trim();
+    return /^(gpu|nvidia|amd|intel|apple)?$/i.test(m) ? '' : m;
   }
 
   async function runGpu() {

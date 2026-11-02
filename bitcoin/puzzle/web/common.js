@@ -51,9 +51,27 @@
     }
     return gpuP;
   }
+  // WebGPU tells only the vendor and the generation ("nvidia · ampere"); WebGL in Chrome and Edge still tells the
+  // model ("ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x...) Direct3D11 ...)"). Shown here, kept nowhere.
+  var glName;
+  function webglModel() {
+    if (glName !== undefined) return glName;
+    glName = null;
+    try {
+      var gl = document.createElement('canvas').getContext('webgl');
+      var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      var r = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+      var m = /ANGLE \([^,]*,\s*([^(,]+?)\s*(\(0x[0-9a-f]+\))?\s*(Direct3D|OpenGL|Vulkan|Metal|,|\))/i.exec(r || '');
+      glName = (m ? m[1] : r || '').trim() || null;
+      var lose = gl && gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    } catch (_) { /* no WebGL */ }
+    return glName;
+  }
   function gpuName(e) {
     var i = (e && e.info) || {};
-    return [i.vendor, i.architecture, i.description].filter(Boolean).join(' · ') || 'GPU';
+    var gen = [i.vendor, i.architecture].filter(Boolean).join(' · ');
+    var model = i.description || webglModel();
+    return model ? model + (gen ? ' (' + gen + ')' : '') : gen || 'GPU';
   }
   function hasGpu() { return !!(navigator.gpu); }
 
