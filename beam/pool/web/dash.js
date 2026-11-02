@@ -454,14 +454,16 @@
   }
 
   let minerQuery = '';
-  // the miners table: sorted by a column (first click ascending, again descending, a third time the server's order -
-  // the latest share or first sight first) and searched here, by a part of the address or of a worker's name
-  const msort = { key: '', dir: 1 };
+  // the miners table: by the miner's number (#) by default; a column's header sorts by it (first click ascending,
+  // again descending, a third time back to the numbers); searched here, by a part of the address or of a worker's
+  // name. Every column compares as numbers, never as text (where 10 would come before 9).
+  const msort = { key: 'id', dir: 1 };
+  const num = (x) => Number(x) || 0;
   const M_SORTS = {
-    id: (a, b) => a.id - b.id,
-    hashrate: (a, b) => a.hashrate24h - b.hashrate24h,
-    first: (a, b) => a.firstSeen - b.firstSeen,
-    last: (a, b) => (a.lastShare || 0) - (b.lastShare || 0),
+    id: (a, b) => num(a.id) - num(b.id),
+    hashrate: (a, b) => num(a.hashrate24h) - num(b.hashrate24h),
+    first: (a, b) => num(a.firstSeen) - num(b.firstSeen),
+    last: (a, b) => num(a.lastShare) - num(b.lastShare),
   };
   // what the search looks in: the address (default), the miner's id (from its start, # optional) or a worker's name
   // (the last 24 h and the recent sessions)
@@ -617,7 +619,7 @@
       }));
     };
     const sortBy = (key) => {
-      if (msort.key !== key) { msort.key = key; msort.dir = 1; } else if (msort.dir > 0) msort.dir = -1; else { msort.key = ''; msort.dir = 1; }
+      if (msort.key !== key) { msort.key = key; msort.dir = 1; } else if (msort.dir > 0) msort.dir = -1; else { msort.key = 'id'; msort.dir = 1; }
       draw();
     };
     view.querySelectorAll('#miners-table th[data-sort]').forEach((t) => {
