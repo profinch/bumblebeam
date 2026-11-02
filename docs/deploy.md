@@ -323,10 +323,11 @@ sed -e "s|^api_key = .*|api_key = \"$KEY\"|" -e "s|^token = .*|token = \"$ADMIN\
   | sudo install -m 600 -o 10001 -g 10001 /dev/stdin $B/pool/pool.toml
 echo "operator token: $ADMIN"        # for the dashboard at /dash; it is also in pool.toml
 unset PW KEY ADMIN
-cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml build beam-node
-sudo docker run --rm -u 10001:10001 -v $B/node/secrets:/s bumblebeam-beam \
+cd /data/docker && sudo docker compose -f compose-bumblebeam.yaml pull beam-node     # BEAM_IMAGE in .env
+BEAM=$(sudo grep ^BEAM_IMAGE= .env | cut -d= -f2)
+sudo docker run --rm -u 10001:10001 -v $B/node/secrets:/s $BEAM \
   openssl req -x509 -newkey rsa:2048 -nodes -keyout /s/stratum.key -out /s/stratum.crt -subj /CN=beam-node -days 3650
-sudo docker run --rm -u 10001:10001 -v $B/pool/tls:/s bumblebeam-beam \
+sudo docker run --rm -u 10001:10001 -v $B/pool/tls:/s $BEAM \
   openssl req -x509 -newkey rsa:2048 -nodes -keyout /s/pool.key -out /s/pool.crt -subj /CN=stratum.example.org \
   -addext subjectAltName=DNS:stratum.example.org -days 825
 ```
@@ -415,8 +416,9 @@ and `www` to the pool.
 The explorer: copy `explorer-node.cfg.example` to `/data/bumblebeam/explorer/explorer-node.cfg`
 (owned by 10001), then `up -d explorer-node explorer-web`. explorer-node is a second full node with
 Beam's HTTP explorer API; it syncs from our archival node over the compose network and decodes
-contract calls with the parser shader in the Beam image. To rebuild one service without touching
-the running node, use `up -d --no-deps <service>`.
+contract calls with the parser shader in the Beam image. To replace one service without touching
+the running node, use `up -d --no-deps <service>`. On a restart explorer-node loads its index for about 7
+minutes; explorer.bumblebeam.org's /api and /v1 answer 502 until then.
 
 ### D8. Operations
 
@@ -439,8 +441,9 @@ the running node, use `up -d --no-deps <service>`.
   every line of `.env`. Web releases (`web-vX.Y.Z`: `POOL_WEB_IMAGE`, `EXPLORER_WEB_IMAGE`) and API releases
   (`api-vX.Y.Z`: `EXPLORER_API_IMAGE`) touch neither half of the pool. A change to the shared `styles.css` goes into
   both web images.
-- Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
-  (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
+- Beam update: change `BEAM_VERSION` and the sha256 values in `containers/beam/Dockerfile` (check the
+  release's `.asc` signatures first) and push; CI builds `bumblebeam-beam:sha-<7>`. Set `BEAM_IMAGE`, `pull`, then
+  `up -d --no-deps beam-node wallet-api explorer-node` (stratum reconnects to the node by itself within 30 s).
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and
   `sudo docker exec bumblebeam-postgres pg_dump -U bumblebeam bumblebeam`. The node database is
   disposable, but an archival resync takes long.
