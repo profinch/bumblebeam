@@ -69,6 +69,12 @@ Page
 - Only the maker part (first 3 bytes) of nearby access points' addresses goes to the pool for the vendor lookup.
 - Firmware upload: the file is checked in the browser first (a 3BMiner image for this board), 5 minutes timeout.
 - Settings: port range checked, the board's error text shown as it comes. Out-of-order answers no longer overwrite newer ones.
+- Design: the page takes the shared BumbleBeam design library (ui/tokens.css at the repository root) with Bitcoin's
+  orange accent instead of its own copy of the palette; web/build.py folds the Bitcoin values in and inlines only the
+  tokens the page uses (14). The logo, the sparkline, the chevrons (a mask now, as a data: image cannot read a variable),
+  switches and the display previews follow the accent.
+- Page work: an element is written only when its text changes (the dashboard rewrote ~40 every 3 s), the board clock
+  stops while the tab is hidden, CSS is minified by the build.
 - Pool card: a link to the pool's site (https:// and its host) next to the copy button; the worker has one underline.
 - The page shows devices' values as they send them (docs/device-values.md): no "AxeOS" or "rev" of its own in Swarm; the
   board name, the reset reason in words and the pool's error code and message now come from the firmware, not from tables
