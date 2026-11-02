@@ -9,8 +9,8 @@ const store = {
 };
 
 const RANGES = [['15m', 900], ['1h', 3600], ['6h', 21600], ['24h', 86400], ['7d', 604800], ['30d', 2592000], ['1y', 31536000]];
-// series hues validated for this surface (dataviz validate_palette, dark, #063355): yellow and red stay for thresholds
-const PALETTE = ['#00ad95', '#5280ff', '#cc7a24', '#b061dc', '#6f9e2c', '#d9608f'];
+// series colours from ui/tokens.css (checked on the dark surfaces); yellow and red stay for thresholds
+const PALETTE = [1, 2, 3, 4, 5, 6].map(i => `var(--chart-${i})`);
 const KINDS = [['temp', 'Temperatures'], ['fan', 'Fans'], ['power', 'Power'], ['util', 'Load'], ['io', 'Disk'], ['freq', 'Frequency']];
 const UNIT = { '°C': '°C', RPM: 'RPM', W: 'W', 'MB/s': 'MB/s', MHz: 'MHz', V: 'V', '%': '%', '': '' };
 const LEVEL = { ok: 'ok', info: 'info', warn: 'warning', crit: 'critical' };
@@ -56,8 +56,8 @@ function renderLive() {
   // age by the local clock since the sample stamp last moved: the browser's and the host's clocks may differ
   const age = Math.max(0, (Date.now() - seenAt) / 1000);
   const stale = age > now.interval * 3 + 3;
-  el.className = 'live ' + (stale ? 'stale' : 'ok');
-  el.innerHTML = `<span class="dot ${stale ? 'off' : ''}"></span><span>${stale ? `no data for ${Math.round(age)} s` : 'live · ' + tfmt(now.ts)}</span>`;
+  el.className = 'pill-status' + (stale ? ' off' : '');
+  el.innerHTML = `<i></i><span>${stale ? `no data for ${Math.round(age)} s` : 'live · ' + tfmt(now.ts)}</span>`;
 }
 
 function renderAlerts() {
@@ -269,7 +269,7 @@ function drawChart(box) {
     const flush = () => {
       if (seg.length > 1) {
         const top = seg.map(i => `${X(i).toFixed(1)},${Y(s.x[i]).toFixed(1)}`), bot = seg.slice().reverse().map(i => `${X(i).toFixed(1)},${Y(s.n[i]).toFixed(1)}`);
-        h += `<polygon points="${top.join(' ')} ${bot.join(' ')}" fill="${color[k]}" fill-opacity=".16"/>`;
+        h += `<polygon points="${top.join(' ')} ${bot.join(' ')}" style="fill:${color[k]}" fill-opacity=".16"/>`;
       }
       seg = [];
     };
@@ -284,7 +284,7 @@ function drawChart(box) {
       d += `${pen ? 'L' : 'M'}${X(i).toFixed(1)},${Y(a[i]).toFixed(1)}`;
       pen = true;
     }
-    h += `<path d="${d}" fill="none" stroke="${color[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    h += `<path d="${d}" fill="none" style="stroke:${color[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
   h += `<line class="cross" x1="0" x2="0" y1="${T}" y2="${T + ph}" visibility="hidden"/><g class="dots"></g>
     <rect x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/>`;
@@ -297,7 +297,7 @@ function drawChart(box) {
     const x = (e.clientX - r.left) * W / r.width;
     const i = Math.max(0, Math.min(n - 1, Math.round((x - L) / pw * (n - 1))));
     cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('visibility', 'visible');
-    dots.innerHTML = on.filter(k => A[k][i] !== null).map(k => `<circle cx="${X(i)}" cy="${Y(A[k][i])}" r="4" fill="${color[k]}" stroke="#042548" stroke-width="2"/>`).join('');
+    dots.innerHTML = on.filter(k => A[k][i] !== null).map(k => `<circle cx="${X(i)}" cy="${Y(A[k][i])}" r="4" style="fill:${color[k]};stroke:var(--bg)" stroke-width="2"/>`).join('');
     const rows = on.map(k => {
       const s = data.s[k], m = S[k];
       if (A[k][i] === null) return '';
@@ -306,7 +306,7 @@ function drawChart(box) {
     }).join('');
     const how = [data.step > now.interval && `step ${data.step >= 60 ? data.step / 60 + ' min' : data.step + ' s'}`,
       isSm && `smoothed ${smooth >= 60 ? smooth / 60 + ' min' : smooth + ' s'}`].filter(Boolean).join(', ');
-    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${how ? ` · ${how}; light: min…max` : ''}</div>${rows}`;
+    tip.innerHTML = `<div class="t">${tfmt(t[i], span > 86400)}${how ? ` · ${how}; band: min…max` : ''}</div>${rows}`;
     tip.hidden = false;
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = Math.min(window.innerWidth - tw - 8, e.clientX + 14) + 'px';

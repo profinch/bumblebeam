@@ -1197,7 +1197,9 @@ class Web(BaseHTTPRequestHandler):
     local = threading.local()
     lock = threading.Lock()                 # fanctl read-modify-write
     STATIC = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
-              '/style.css': ('style.css', 'text/css; charset=utf-8'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
+              '/style.css': ('style.css', 'text/css; charset=utf-8'), '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
+              **{f'/ui/{f}': (f'ui/{f}', 'text/css; charset=utf-8') for f in ('tokens.css', 'base.css', 'components.css')},
+              **{f'/ui/components/{f}': (f'ui/components/{f}', 'text/javascript; charset=utf-8') for f in ('bb.js', 'tips.js')}}
     server_version = 'thermo'
 
     def log_message(self, *a):

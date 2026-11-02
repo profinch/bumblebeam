@@ -104,4 +104,9 @@ Sensor keys are on the dashboard under "All sensors in the group".
 sudo ./deploy/install.sh      # user thermo, /opt/thermo, two systemd units, enables and starts them
 ```
 
+Run it from a checkout of the whole repository: it copies the BumbleBeam UI library (`ui/` at the repo root:
+tokens, base, components, the ecosystem bar and tooltips) next to the page. `web/style.css` keeps only thermo's own
+rules; the group charts are thermo's own (thresholds, series toggles, smoothing with the raw band) in the library's
+`--chart-1..6` colours.
+
 API: `POST /api/fan` (`{gpu, fan: index | "all", mode}`, token), `/api/now`, `/api/series?group=cpu&range=3600`, `/api/stats?range=86400`, `/api/events?limit=200`.

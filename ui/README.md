@@ -72,7 +72,8 @@ A site keeps only what is its own in its own CSS; anything a second site needs m
 | pool (`beam/pool/web`) | yes: its `styles.css` keeps only pool-only rules (block-time bars, payouts table, trackers, the hashrate head) |
 | explorer (`beam/explorer/web`) | yes: ui/ plus its own `explorer.css`; no longer copies the pool's stylesheet or tooltips |
 | puzzle | will start on it |
-| thermo, NiceHash dashboard, desktop miner, wallet, 3BMiner | not yet |
+| thermo (`rig/thermo/web`) | yes: tokens, base, components, `bb.js` (ecosystem bar), `tips.js`; its install script copies them; the group charts stay thermo's own (threshold lines, series toggles, a tooltip with every series) in the `--chart-*` colours |
+| NiceHash dashboard, desktop miner, wallet, 3BMiner | not yet |
 
 The pool's look is the reference: `base.css` and `components.css` are its former shared rules with the
 accent as tokens, checked against before/after screenshots of every pool and explorer page (desktop and
