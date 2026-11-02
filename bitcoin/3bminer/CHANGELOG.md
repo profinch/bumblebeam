@@ -65,6 +65,7 @@ Page
 - Only the maker part (first 3 bytes) of nearby access points' addresses goes to the pool for the vendor lookup.
 - Firmware upload: the file is checked in the browser first (a 3BMiner image for this board), 5 minutes timeout.
 - Settings: port range checked, the board's error text shown as it comes. Out-of-order answers no longer overwrite newer ones.
+- Pool card: a link to the pool's site (https:// and its host) next to the copy button; the worker has one underline.
 
 API
 - `/api/system/info`: `identity.setupAp` (the set-up network is open), `stratum.submitLost`; `fwVersion` / `/probe` `ver` with a "v".
