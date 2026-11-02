@@ -17,3 +17,9 @@ Ecosystem-wide work not tied to one component.
   CI goes there first; the role locks keep a second stratum or app off the production database.
 - [ ] **Backups** of the pool database and the pool wallet, daily, encrypted, off the server, with a restore test.
 
+- [ ] **Prerender: look again** (2026-11-02). The image is 1.15 GB (Alpine Chromium 264 MB plus Mesa/LLVM, ICU,
+  codecs, fonts) for a script that snapshots ~11 pages every 10 minutes, and every change pulls all of it again.
+  Options to weigh: `chrome-headless-shell` instead of full Chromium (~250-300 MB); render on the server side
+  instead of a browser (the pages are filled by app.js from our own APIs, so pool-web / explorer-web or explorer-api
+  could write the HTML themselves, no browser at all); render in CI or on another host and only copy the snapshots;
+  or keep it as it is if none of these is worth the work.
