@@ -41,10 +41,9 @@
     if (!opts) { try { opts = JSON.parse(localStorage.getItem('bb-gpu-cfg') || 'null') || undefined; } catch (_) { /* no storage */ } }
     if (!gpuP) {
       gpuP = (async function () {
-        log && log('Starting WebGPU and compiling the shaders…');
-        var t = performance.now();
-        var e = await window.BBGpu.create(opts);
-        log && log('Compiled in ' + Math.round(performance.now() - t) + ' ms. Self-test against the reference:');
+        log && log('Starting WebGPU and compiling the engine (the first time takes a few seconds; the browser keeps it afterwards)…');
+        var e = await window.BBGpu.create(Object.assign({}, opts, { log: log }));
+        log && log('Compiled in ' + (e.compileMs / 1000).toFixed(1) + ' s. Self-test against the reference:');
         await e.selftest(function (m) { log && log('  ✓ ' + m); });
         return e;
       })();

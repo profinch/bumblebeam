@@ -8,7 +8,7 @@
 
   var last = null, busy = false;
   // shapes: K (a step checks the 2K + 1 keys around each thread's centre point, one inversion for them all) and threads
-  var SHAPES = [{ K: 16, threads: 65536 }, { K: 24, threads: 32768 }, { K: 32, threads: 16384 }];
+  var SHAPES = [{ K: 24, threads: 32768 }, { K: 32, threads: 16384 }];
 
   function result(rate, kind, cfg, name) {
     last = { rate: rate, kind: kind, cfg: cfg, info: name };
@@ -36,7 +36,9 @@
       for (var i = 0; i < SHAPES.length; i++) {
         var sh = SHAPES[i];
         log('Engine with ' + (2 * sh.K + 1) + ' keys per thread and step, ' + sh.threads + ' threads:');
-        var e = await window.BBGpu.create({ K: sh.K, threads: sh.threads });
+        log('  compiling (the first time takes a few seconds; the browser keeps it afterwards)…');
+        var e = await window.BBGpu.create({ K: sh.K, threads: sh.threads, log: function (m) { log('  ' + m); } });
+        log('  compiled in ' + (e.compileMs / 1000).toFixed(1) + ' s');
         $('b-gpu').textContent = P.gpuName(e);
         await e.selftest(function (m) { log('  ✓ ' + m); });
         await e.bench(1.5); // warm up
