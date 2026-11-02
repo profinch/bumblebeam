@@ -174,9 +174,9 @@ was re-checked and holds.
 
 ### MEDIUM
 
-2. **Wallet down at the scheduled minute = a whole interval skipped** (`payouts.rs:115-120`): `next_payout` and
-   `payouts_next_at` move forward *before* `pay_once`; a failed `wallet.status()` only warns. Fix: retry in 10 min
-   on error, show "last run failed" in attention.
+2. ~~**Wallet down at the scheduled minute = a whole interval skipped**~~ **fixed 2026-11-02**: before a run only
+   a retry in 5 min is booked; the full interval after a run that went through, and after a failed one 5, 10, 20, 40
+   min ... up to the interval (`payouts.rs` `retry_delay`). Still open: "last run failed" in attention.
 3. **A pool-side `tx_send` refusal counts as the miner's failure and carries no reason** (`payouts.rs:272-276`):
    refunded as `failed` with `failed_at` (fee too low, ACL, stale `available`) → 2 h … 24 h backoff;
    `set_failure_reason` is only called in `poll_pending`, so `payoutFailures.reason` is null. Fix: write the reason

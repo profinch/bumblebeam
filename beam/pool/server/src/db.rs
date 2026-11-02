@@ -210,6 +210,40 @@ CREATE INDEX IF NOT EXISTS benchmarks_machine ON benchmarks (chip, device, power
 /// Schema version. Older databases are migrated in `migrate`; one without a version is refused.
 pub const SCHEMA_VERSION: i32 = 9;
 
+/// The oldest schema version whose binaries still run correctly against this binary's schema. A migration that only
+/// adds (a table, a nullable or defaulted column, an index) keeps it, so an older half of the pool (pool-stratum
+/// released less often than pool-app) still starts after the other half migrated; one that drops, renames or changes
+/// the meaning of something raises it to the new SCHEMA_VERSION, and older binaries then refuse to start.
+/// Stored in meta as `schema_compat` by whoever migrates or creates the database.
+pub const SCHEMA_COMPAT: i32 = 9;
+
+/// What a starting binary does with the database's schema (`Db::prepare`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum SchemaStep {
+    /// an empty database: create the schema
+    Create,
+    /// the same version: run the idempotent DDL
+    Same,
+    /// an older database: migrate it from this version
+    Migrate(i32),
+    /// a newer database this binary may still use (its schema_compat allows it): no DDL at all
+    NewerCompatible,
+    /// a newer database this binary must not touch
+    Refuse,
+}
+
+/// `db`: meta `schema`; `db_compat`: meta `schema_compat` (absent before it existed: then only the same version
+/// counts as compatible); `bin`: this binary's SCHEMA_VERSION.
+pub fn schema_step(db: Option<i32>, db_compat: Option<i32>, bin: i32) -> SchemaStep {
+    match db {
+        None => SchemaStep::Create,
+        Some(v) if v == bin => SchemaStep::Same,
+        Some(v) if v < bin => SchemaStep::Migrate(v),
+        Some(v) if db_compat.unwrap_or(v) <= bin => SchemaStep::NewerCompatible,
+        Some(_) => SchemaStep::Refuse,
+    }
+}
+
 /// Statements that bring a database from version `from` to `from + 1`.
 fn migration(from: i32) -> Option<&'static str> {
     match from {
@@ -334,16 +368,20 @@ impl Db {
 
     async fn prepare(c: &deadpool_postgres::Client) -> Result<()> {
         c.batch_execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)").await?;
-        let ver: Option<i32> = c.query_opt("SELECT value FROM meta WHERE key='schema'", &[]).await?.and_then(|r| r.get::<_, String>(0).parse().ok());
-        match ver {
-            None => {
+        let get = |key: &'static str| async move {
+            Ok::<Option<i32>, anyhow::Error>(c.query_opt("SELECT value FROM meta WHERE key=$1", &[&key]).await?.and_then(|r| r.get::<_, String>(0).parse().ok()))
+        };
+        let ver = get("schema").await?;
+        let compat = get("schema_compat").await?;
+        match schema_step(ver, compat, SCHEMA_VERSION) {
+            SchemaStep::Create => {
                 let has_old = c.query_opt("SELECT 1 FROM information_schema.tables WHERE table_name='shares' AND table_schema = current_schema()", &[]).await?.is_some();
                 anyhow::ensure!(!has_old, "database has tables from before schema versioning: drop and recreate it (no real data existed before v3)");
                 ensure_schema(&c).await?;
                 c.execute("INSERT INTO meta (key, value) VALUES ('schema', $1)", &[&SCHEMA_VERSION.to_string()]).await?;
             }
-            Some(v) if v == SCHEMA_VERSION => ensure_schema(&c).await?,
-            Some(mut v) if v < SCHEMA_VERSION => {
+            SchemaStep::Same => ensure_schema(&c).await?,
+            SchemaStep::Migrate(mut v) => {
                 while v < SCHEMA_VERSION {
                     let Some(sql) = migration(v) else { anyhow::bail!("no migration from schema version {v}") };
                     c.batch_execute(sql).await.with_context(|| format!("migrating schema {v} -> {}", v + 1))?;
@@ -353,8 +391,23 @@ impl Db {
                 }
                 ensure_schema(&c).await?;
             }
-            Some(v) => anyhow::bail!("database schema version {v} is newer than this binary ({SCHEMA_VERSION})"),
+            SchemaStep::NewerCompatible => {
+                // the other half of the pool migrated it; this binary's tables and columns are all still there
+                tracing::warn!(database = ver, compat, binary = SCHEMA_VERSION, "database schema is newer than this binary but compatible: no DDL, running");
+                return Ok(());
+            }
+            SchemaStep::Refuse => anyhow::bail!(
+                "database schema version {} (compatible down to {}) is newer than this binary ({SCHEMA_VERSION})",
+                ver.unwrap_or(0),
+                compat.unwrap_or(ver.unwrap_or(0))
+            ),
         }
+        // whoever created or brought the schema to this binary's version says which older binaries still fit it
+        c.execute(
+            "INSERT INTO meta (key, value) VALUES ('schema_compat', $1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            &[&SCHEMA_COMPAT.to_string()],
+        )
+        .await?;
         Ok(())
     }
 
@@ -1403,4 +1456,23 @@ pub async fn pplns_window_in<C: deadpool_postgres::GenericClient>(c: &C, ts: i64
         )
         .await?;
     Ok(rows.iter().map(|r| (r.get(0), r.get(1))).collect())
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::{schema_step, SchemaStep};
+
+    #[test]
+    fn schema_steps() {
+        assert_eq!(schema_step(None, None, 9), SchemaStep::Create);
+        assert_eq!(schema_step(Some(9), Some(9), 9), SchemaStep::Same);
+        assert_eq!(schema_step(Some(7), None, 9), SchemaStep::Migrate(7));
+        // pool-app migrated to 10 with an additive change (compat 9): a v9 pool-stratum still starts
+        assert_eq!(schema_step(Some(10), Some(9), 9), SchemaStep::NewerCompatible);
+        // a breaking change (compat 10): the v9 binary refuses
+        assert_eq!(schema_step(Some(10), Some(10), 9), SchemaStep::Refuse);
+        // a database from before schema_compat existed: only the same version is compatible
+        assert_eq!(schema_step(Some(10), None, 9), SchemaStep::Refuse);
+        assert_eq!(schema_step(Some(12), Some(8), 9), SchemaStep::NewerCompatible);
+    }
 }

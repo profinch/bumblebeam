@@ -100,6 +100,7 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
         shared.payouts_frozen_left.store(left, Relaxed);
         warn!(left, "scheduled payouts are frozen by the operator (dashboard); they wait until resumed");
     }
+    let mut failed_runs: u32 = 0;
     loop {
         if *shared.stopping.borrow() {
             return;
@@ -113,11 +114,27 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
                 warn!("payout status: {e:#}");
             }
             if shared.payouts_frozen_left.load(Relaxed) < 0 && now() >= shared.next_payout.load(Relaxed) {
-                shared.next_payout.store(now() + interval, Relaxed);
-                let _ = shared.db.meta_set(META_NEXT, &(now() + interval).to_string()).await;
-                if let Err(e) = pay_once(&shared, &wallet, None).await {
-                    warn!("payout run: {e:#}");
-                }
+                // the full interval only after a run that went through: a wallet or database error at the scheduled
+                // minute retries soon instead of skipping the whole interval. Before the run, the first retry is
+                // already booked, so a crash during the run does not skip it either (a rerun pays nobody twice:
+                // balances are debited when a payment is created).
+                let at = now() + retry_delay(0, interval);
+                shared.next_payout.store(at, Relaxed);
+                let _ = shared.db.meta_set(META_NEXT, &at.to_string()).await;
+                let at = match pay_once(&shared, &wallet, None).await {
+                    Ok(_) => {
+                        failed_runs = 0;
+                        now() + interval
+                    }
+                    Err(e) => {
+                        failed_runs += 1;
+                        let wait = retry_delay(failed_runs, interval);
+                        warn!(failed_runs, retry_in_secs = wait, "payout run: {e:#}");
+                        now() + wait
+                    }
+                };
+                shared.next_payout.store(at, Relaxed);
+                let _ = shared.db.meta_set(META_NEXT, &at.to_string()).await;
             }
         }
         // the same loop answers the operator, so a payout run never overlaps another
@@ -134,6 +151,13 @@ pub async fn run(shared: Arc<Shared>, mut requests: tokio::sync::mpsc::Receiver<
             }
         }
     }
+}
+
+/// The wait before the next scheduled run: 5 minutes after the first failed run (or as the booking before a run),
+/// doubling with each failure in a row, never longer than the payout interval.
+fn retry_delay(failed_runs: u32, interval: i64) -> i64 {
+    let first = 300i64.min(interval);
+    (first << failed_runs.saturating_sub(1).min(16)).min(interval)
 }
 
 fn new_tx_id() -> String {
@@ -476,4 +500,24 @@ async fn poll_pending(shared: &Arc<Shared>, wallet: &Wallet) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::retry_delay;
+
+    #[test]
+    fn retry_waits() {
+        let two_h = 7200;
+        assert_eq!(retry_delay(0, two_h), 300);
+        assert_eq!(retry_delay(1, two_h), 300);
+        assert_eq!(retry_delay(2, two_h), 600);
+        assert_eq!(retry_delay(3, two_h), 1200);
+        assert_eq!(retry_delay(4, two_h), 2400);
+        assert_eq!(retry_delay(5, two_h), 4800);
+        assert_eq!(retry_delay(6, two_h), 7200);
+        assert_eq!(retry_delay(60, two_h), 7200);
+        // an interval shorter than five minutes is never exceeded
+        assert_eq!(retry_delay(3, 120), 120);
+    }
 }

@@ -436,7 +436,9 @@ minutes; explorer.bumblebeam.org's /api and /v1 answer 502 until then.
     `accounting::credit_loop`, `coinbase`: the finalizer link, uploads and expiry live there): also
     `STRATUM_IMAGE=<the same image>`, `pull pool-stratum` and `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
     NiceHash after ~40 s;
-  - both: both, the app first. Schema changes run on start of either half (they are idempotent).
+  - both: both, the app first. Schema changes run on start of either half (they are idempotent). A migration that
+    only adds keeps `SCHEMA_COMPAT` (db.rs), so the older half still starts on the migrated database; one that
+    drops or renames raises it, and then both halves must move together.
   A rollback is the previous image in `.env` and the same `up -d`. Always name the services: a bare `up -d` applies
   every line of `.env`. Web releases (`web-vX.Y.Z`: `POOL_WEB_IMAGE`, `EXPLORER_WEB_IMAGE`) and API releases
   (`api-vX.Y.Z`: `EXPLORER_API_IMAGE`) touch neither half of the pool. After a web release run `restart prerender`: its

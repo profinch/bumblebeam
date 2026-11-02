@@ -65,6 +65,14 @@ instead of failing: `/api/health` answers 503 with `stratum: down`, and `connect
 app processes or two stratum processes can never run against one database, while one of each can. The stratum
 lock is the old single-process lock, so an old binary and a new stratum process never run together.
 
+### Schema across the two halves
+
+The halves can run different releases (pool-stratum moves rarely). The database keeps `schema` and `schema_compat` in
+`meta`: a binary with an older `SCHEMA_VERSION` still starts if `schema_compat` allows it, and then runs no DDL at all.
+Additive migrations (a table, a nullable or defaulted column, an index) keep `SCHEMA_COMPAT`; a drop, a rename or a
+changed meaning raises it to the new version, so the older half refuses to start instead of running against a schema
+it does not understand (`db.rs` `schema_step`, tested in `schema_tests`).
+
 ### Who writes what (no double writers)
 
 - shares, `miners.last_share`, `share_events`, `miner_sessions`, blocks at find time, their PPLNS credits: stratum
