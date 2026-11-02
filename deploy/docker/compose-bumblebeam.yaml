@@ -5,14 +5,14 @@
 #   pool/      pool.toml, database.url, tls/   (mounted at /etc/bumblebeam)
 #   postgres/  database files;  secrets/postgres.pass
 #   letsencrypt/  certificates (certbot, Cloudflare DNS-01);  logs/
-#   docker compose -f compose-bumblebeam.yaml up -d --build
+# Every image comes from CI (ghcr.io/profinch/, .github/workflows/images.yml), named per service in .env:
+#   docker compose -f compose-bumblebeam.yaml pull <service> && docker compose -f compose-bumblebeam.yaml up -d --no-deps <service>
 
 services:
   beam-node:
-    image: bumblebeam-beam
+    image: ${BEAM_IMAGE:?set BEAM_IMAGE in .env}
     container_name: beam-node
     hostname: beam-node
-    build: ./containers/beam
     restart: unless-stopped
     command: ["beam-node", "--config_file=/data/beam-node.cfg"]
     working_dir: /data
@@ -31,7 +31,7 @@ services:
   # syncing from our archival node over the compose network. Published nowhere;
   # explorer-web proxies the read-only API.
   explorer-node:
-    image: bumblebeam-beam
+    image: ${BEAM_IMAGE:?set BEAM_IMAGE in .env}
     container_name: explorer-node
     hostname: explorer-node
     restart: unless-stopped
@@ -94,10 +94,8 @@ services:
   # serve, so search engines and AI crawlers that run no JavaScript read the page with its data.
   # Stopping it changes nothing for visitors: old snapshots expire and the sites are the bare app.
   prerender:
-    image: bumblebeam-prerender
+    image: ${PRERENDER_IMAGE:?set PRERENDER_IMAGE in .env}
     container_name: prerender
-    build:
-      context: ./containers/prerender
     restart: unless-stopped
     network_mode: host                  # reaches the host nginx on 127.0.0.1:443
     init: true                          # reaps Chromium's processes
@@ -112,7 +110,7 @@ services:
   # Payouts. Anyone who can reach 10001 can spend the wallet: it is on its own
   # internal network, published nowhere, and only answers the pool's address.
   wallet-api:
-    image: bumblebeam-beam
+    image: ${BEAM_IMAGE:?set BEAM_IMAGE in .env}
     container_name: wallet-api
     hostname: wallet-api
     restart: unless-stopped
@@ -230,9 +228,8 @@ services:
   # on 127.0.0.1:8091. Same image as on h1: cron runs
   # nginx-reload.sh daily at 04:00, which reloads when certbot left a trigger.
   nginx:
-    image: bumblebeam-nginx
+    image: ${NGINX_IMAGE:?set NGINX_IMAGE in .env}
     container_name: bumblebeam-nginx
-    build: ./containers/nginx
     restart: unless-stopped
     network_mode: host
     environment:
@@ -250,9 +247,8 @@ services:
   # Let's Encrypt for bumblebeam.org + *.bumblebeam.org over Cloudflare DNS-01,
   # same scripts as on h1: checked at start and daily at 03:00 UTC.
   certbot:
-    image: bumblebeam-certbot
+    image: ${CERTBOT_IMAGE:?set CERTBOT_IMAGE in .env}
     container_name: bumblebeam-certbot
-    build: ./containers/certbot
     restart: unless-stopped
     environment:
       - HOST_HOSTNAME=${HOST_HOSTNAME:-}

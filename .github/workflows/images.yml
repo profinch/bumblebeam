@@ -5,6 +5,8 @@ name: images
 #   tag pool-vX.Y.Z         -> bumblebeam-pool:X.Y.Z (pool-stratum and pool-app)
 #   tag web-vX.Y.Z          -> bumblebeam-pool-web:X.Y.Z and bumblebeam-explorer-web:X.Y.Z
 #   tag api-vX.Y.Z          -> bumblebeam-explorer-api:X.Y.Z
+# The infrastructure images (beam: the official Beam binaries, sha256-pinned; nginx; certbot; prerender) are built
+# from their own folders and get only :sha-<7> and :main (BEAM_IMAGE, NGINX_IMAGE, CERTBOT_IMAGE, PRERENDER_IMAGE).
 on:
   push:
     branches: [main]
@@ -19,6 +21,10 @@ on:
       - 'deploy/docker/containers/pool-web/**'
       - 'deploy/docker/containers/explorer-web/**'
       - 'deploy/docker/containers/explorer-api/**'
+      - 'deploy/docker/containers/beam/**'
+      - 'deploy/docker/containers/nginx/**'
+      - 'deploy/docker/containers/certbot/**'
+      - 'deploy/docker/containers/prerender/**'
       - '.dockerignore'
       - '.github/workflows/images.yml'
     tags: ['pool-v*', 'web-v*', 'api-v*']
@@ -32,10 +38,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: bumblebeam-pool, dir: pool, tag: pool-v }
-          - { name: bumblebeam-pool-web, dir: pool-web, tag: web-v }
-          - { name: bumblebeam-explorer-web, dir: explorer-web, tag: web-v }
-          - { name: bumblebeam-explorer-api, dir: explorer-api, tag: api-v }
+          - { name: bumblebeam-pool, context: ., file: deploy/docker/containers/pool/Dockerfile, tag: pool-v }
+          - { name: bumblebeam-pool-web, context: ., file: deploy/docker/containers/pool-web/Dockerfile, tag: web-v }
+          - { name: bumblebeam-explorer-web, context: ., file: deploy/docker/containers/explorer-web/Dockerfile, tag: web-v }
+          - { name: bumblebeam-explorer-api, context: ., file: deploy/docker/containers/explorer-api/Dockerfile, tag: api-v }
+          - { name: bumblebeam-beam, context: deploy/docker/containers/beam, file: deploy/docker/containers/beam/Dockerfile, tag: none }
+          - { name: bumblebeam-nginx, context: deploy/docker/containers/nginx, file: deploy/docker/containers/nginx/Dockerfile, tag: none }
+          - { name: bumblebeam-certbot, context: deploy/docker/containers/certbot, file: deploy/docker/containers/certbot/Dockerfile, tag: none }
+          - { name: bumblebeam-prerender, context: deploy/docker/containers/prerender, file: deploy/docker/containers/prerender/Dockerfile, tag: none }
     runs-on: ubuntu-24.04
     steps:
       - name: Which images this push builds
@@ -67,8 +77,8 @@ jobs:
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         if: steps.want.outputs.build == '1'
         with:
-          context: .
-          file: deploy/docker/containers/${{ matrix.dir }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           build-args: VERSION=${{ steps.want.outputs.version }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
