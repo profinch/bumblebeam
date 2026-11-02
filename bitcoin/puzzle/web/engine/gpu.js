@@ -414,37 +414,52 @@ fn hashes(@builtin(global_invocation_id) gid: vec3<u32>) {
     return true;
   };
 
+  // Steps per dispatch adapt so that one dispatch keeps the GPU busy for about `ms` (default 60): on a laptop
+  // the same GPU draws the screen, and long dispatches freeze the browser or the whole desktop.
+  function Pacer(ms) {
+    this.ms = ms || 60; this.steps = 2;
+  }
+  Pacer.prototype.next = function (max) { return Math.max(1, Math.min(this.steps, max)); };
+  Pacer.prototype.took = function (steps, ms) {
+    if (ms <= 0) return;
+    var want = steps * this.ms / ms;
+    this.steps = Math.max(1, Math.min(256, Math.round(this.steps * 0.5 + want * 0.5)));
+  };
+
   // brute force [from, to] (BigInt); calls onProgress({checked, total, rate, seconds}) and resolves with the key or null.
-  // stop() on the returned handle ends it early. opts: steps (per dispatch), segMax, isPaused.
+  // stop() on the returned handle ends it early. opts: ms (target dispatch time), segMax, isPaused.
   // Thread p covers keys chunk + p·seg .. + seg - 1, its centre starting K above the first.
   Engine.prototype.search = function (from, to, targetHex, onProgress, opts) {
     var self = this; opts = opts || {};
     var stopped = false, handle = { stop: function () { stopped = true; } };
     from = BigInt(from); to = BigInt(to);
     var total = to - from + 1n, n = BigInt(this.npts), B = BigInt(this.B), K = BigInt(this.K);
-    var steps = opts.steps || 32, per = B * BigInt(steps);
     var segMax = BigInt(opts.segMax || 1 << 22);
     var seg = (total + n - 1n) / n;
     if (seg > segMax) seg = segMax;
-    seg = ((seg + per - 1n) / per) * per;
-    var dispatches = Number(seg / per);
+    seg = ((seg + B - 1n) / B) * B;
+    var segSteps = Number(seg / B), pace = new Pacer(opts.ms);
     handle.done = (async function () {
       var chunk = from, checked = 0n, t0 = performance.now();
       while (chunk <= to && !stopped) {
-        self.params(chunk + K, targetHex, Number(seg), steps, 0);
+        self.params(chunk + K, targetHex, Number(seg), 0, 0);
         self.dispatch(self.pInit, self.npts);
         self.clearOut();
-        for (var di = 0; di < dispatches && !stopped; di++) {
+        await self.readOut(self.out, 16);
+        for (var done = 0; done < segSteps && !stopped;) {
           if (opts.isPaused && opts.isPaused()) {
             var p0 = performance.now();
             while (opts.isPaused() && !stopped) await new Promise(function (r) { setTimeout(r, 250); });
             t0 += performance.now() - p0;
             if (stopped) break;
           }
-          self.params(chunk + K, targetHex, Number(seg), steps, di * steps);
+          var st = pace.next(segSteps - done), d0 = performance.now();
+          self.params(chunk + K, targetHex, Number(seg), st, done);
           self.dispatch(self.pStep, self.npts);
           var o = await self.readOut(self.out, 16);
-          checked += per * n;
+          pace.took(st, performance.now() - d0);
+          done += st;
+          checked += BigInt(st) * B * n;
           if (o[0] > 0) {
             var key = chunk + BigInt(o[1]) * seg + BigInt(o[2]) * B + BigInt(o[3]);
             if (key >= from && key <= to && S.hash160OfKey(key) === targetHex) return key;
@@ -460,19 +475,21 @@ fn hashes(@builtin(global_invocation_id) gid: vec3<u32>) {
     return handle;
   };
 
-  // keys per second on a chunk far from any target, for `seconds`
-  Engine.prototype.bench = async function (seconds, onProgress, steps) {
-    var start = (1n << 70n) + 12345n, keys = 0, seg = 1 << 30;
-    steps = steps || 32;
-    this.params(start, null, seg, steps, 0);
+  // keys per second on a chunk far from any target, for `seconds`, paced like the search
+  Engine.prototype.bench = async function (seconds, onProgress, ms) {
+    var start = (1n << 70n) + 12345n, keys = 0, seg = 1 << 30, pace = new Pacer(ms);
+    this.params(start, null, seg, 0, 0);
     this.dispatch(this.pInit, this.npts);
     await this.readOut(this.out, 16);
     var t0 = performance.now();
-    for (var base = 0; (performance.now() - t0) / 1000 < seconds; base += steps) {
-      this.params(start, null, seg, steps, base);
+    for (var base = 0; (performance.now() - t0) / 1000 < seconds;) {
+      var st = pace.next(1 << 20), d0 = performance.now();
+      this.params(start, null, seg, st, base);
       this.dispatch(this.pStep, this.npts);
       await this.readOut(this.out, 16);
-      keys += steps * this.B * this.npts;
+      pace.took(st, performance.now() - d0);
+      base += st;
+      keys += st * this.B * this.npts;
       if (onProgress) onProgress(keys / ((performance.now() - t0) / 1000));
     }
     return keys / ((performance.now() - t0) / 1000);

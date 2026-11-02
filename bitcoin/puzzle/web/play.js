@@ -102,7 +102,7 @@
         var e = await P.gpu(log);
         $('r-engine').textContent = P.gpuName(e);
         log('Searching on ' + P.gpuName(e) + '.');
-        run = e.search(from, to, targetHex, onProgress, { steps: 32, isPaused: P.hidden });
+        run = e.search(from, to, targetHex, onProgress, { isPaused: P.hidden });
       } else {
         $('r-engine').textContent = P.threads() + ' CPU threads';
         log('Searching on ' + P.threads() + ' CPU threads.');
