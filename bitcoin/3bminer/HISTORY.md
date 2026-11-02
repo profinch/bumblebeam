@@ -1,7 +1,9 @@
 # 3BMiner history
 
 Every image that ran on a board, when, how it got there and what it measured. What changed in each version is in
-[CHANGELOG.md](CHANGELOG.md); the images up to 0.5.6 are kept outside git (on the developer's machine), from 0.6.0 on `tools/build.sh` puts them in `dist/`.
+[CHANGELOG.md](CHANGELOG.md). The code of 0.2.0-0.5.6 (still called esp32miner, before this repository) is in git as dated
+commits with tags `3bminer-v0.2.0` ... `3bminer-v0.5.6`, joined to main in a merge (`git log --full-history -- 3bminer`, or
+the tags on GitHub); their images are not kept. From 0.6.0 on `tools/build.sh` puts the images in `dist/`.
 
 ## Versions
 
