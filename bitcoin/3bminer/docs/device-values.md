@@ -1,7 +1,26 @@
 # What the page adds to device values
 
-Audit of 2026-10-31: places where the web UI (web-next/index.src.html) shows something other than what the device
-reports. To analyse later. The "v" the page put in front of versions (vv()) is already gone in 0.10.2.
+Audit of 2026-10-31: places where the web UI (web/index.html, then web-next/index.src.html) shows something other than
+what the device reports.
+
+## The rule (agreed 2026-11-02)
+The page shows what a device sends and only formats numbers. When a value needs words or a nicer name, our own firmware
+sends them in the API; other devices' values are shown as they come.
+
+## Done in 1.0.0
+| # | What | Now |
+|---|---|---|
+| - | "v" before versions (vv()) | gone; the firmware sends its own version as v1.0.0 |
+| 2 | the word `AxeOS ` before a Bitaxe's version | gone: its `version` as sent |
+| 3 | `rev ` before a Bitaxe's board version | gone: `ASICModel, boardVersion` as sent |
+| 4 | board ids renamed and upper-cased in the page (BN table) | the firmware sends `identity.boardName` (ESP32-WROOM-32, ESP32-CAM); older firmware: its `board` id as sent |
+| 6 | reset reason code -> text from a table in the page (RR) | the firmware sends `miner.resetReasonText`; older firmware: the number |
+| 7 | `lastReject` text split by the page | the firmware sends `stratum.lastRejectCode` (number or null) and `stratum.lastRejectMsg`; older firmware: the raw text |
+
+Kept on purpose: 1 (both parts come from the device), 5 (`-` is an empty cell, not data), 8-11 (conveniences that change
+no value), 12-20 (number formatting and the page's own calculations). Still to talk over.
+
+## The list as audited
 
 ## Adds or changes text
 

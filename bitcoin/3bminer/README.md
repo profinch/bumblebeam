@@ -48,7 +48,7 @@ bench/      measured runs; docs/ notes
 ## First start
 
 A board with no Wi-Fi saved, or one that has not reached its network for 2 minutes, opens its own set-up network
-**3BMiner-xxxxxx** (WPA2 password `3bminer-setup`) and keeps trying its own. Join it, open `http://192.168.4.1/`,
+**3BMiner-xxxxxx** (open, no password: it exists only while a board is being set up) and keeps trying its own. Join it, open `http://192.168.4.1/`,
 fill in Settings (Wi-Fi, pool, Bitcoin address) and save: the board restarts onto your network. The set-up network
 closes once the board is back on its own and nobody is connected to it. Settings are checked before they are taken:
 an empty network name, a password of under 8 characters or a Bitcoin address with a wrong checksum is refused.

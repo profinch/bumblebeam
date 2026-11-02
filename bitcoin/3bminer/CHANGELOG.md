@@ -36,8 +36,8 @@ Security
   gain ceiling too.
 
 Wi-Fi and settings
-- Set-up network: with no Wi-Fi saved, or 2 minutes without its network, the board opens 3BMiner-xxxxxx (password
-  `3bminer-setup`, page at http://192.168.4.1/) and keeps trying its own; no more restart loops that only USB could end.
+- Set-up network: with no Wi-Fi saved, or 2 minutes without its network, the board opens 3BMiner-xxxxxx (open, page at
+  http://192.168.4.1/) and keeps trying its own; no more restart loops that only USB could end.
 - Settings are checked before they are taken: empty Wi-Fi name, a password under 8 characters, a malformed BSSID, an empty
   pool and a Bitcoin address with a wrong checksum or length (bech32/bech32m/base58check) are refused.
 - Settings are stored as one NVS blob: a power cut or a full NVS leaves the old settings or the new ones, never a mix (each
@@ -57,6 +57,9 @@ Mining
 - Solo detection reads the coinbase's outputs: solo when 95%+ of the reward goes to the configured address (it used to
   find the address bytes anywhere in the coinbase, an OP_RETURN would do).
 - Pool difficulty, best difficulties and the hash counters are read without tearing across cores.
+- set_difficulty: a higher difficulty is taken at once, a lower one from the next job (shares for the job in hand at the
+  lower one were refused as "low difficulty" by pools that still scored that job at the old one); an accepted share counts
+  at the difficulty it was sent at, not the one in force when the answer came.
 
 Page
 - Versions shown as the device gives them (no "v" of its own); the firmware gives its own as v1.0.0, like NMMiner.
@@ -66,9 +69,14 @@ Page
 - Firmware upload: the file is checked in the browser first (a 3BMiner image for this board), 5 minutes timeout.
 - Settings: port range checked, the board's error text shown as it comes. Out-of-order answers no longer overwrite newer ones.
 - Pool card: a link to the pool's site (https:// and its host) next to the copy button; the worker has one underline.
+- The page shows devices' values as they send them (docs/device-values.md): no "AxeOS" or "rev" of its own in Swarm; the
+  board name, the reset reason in words and the pool's error code and message now come from the firmware, not from tables
+  in the page (older firmware: its raw values).
 
 API
-- `/api/system/info`: `identity.setupAp` (the set-up network is open), `stratum.submitLost`; `fwVersion` / `/probe` `ver` with a "v".
+- `/api/system/info`: `identity.setupAp` (the set-up network is open), `identity.boardName` (e.g. ESP32-WROOM-32),
+  `miner.resetReasonText`, `stratum.submitLost`, `stratum.lastRejectCode` (number or null) and `stratum.lastRejectMsg`;
+  `fwVersion` / `/probe` `ver` with a "v".
 
 ## 0.10.1 (2026-10-29)
 - Dashboard, hashrate by shares: the tip on "by shares" only, the figures white (yellow when work is lost), the window grey;
