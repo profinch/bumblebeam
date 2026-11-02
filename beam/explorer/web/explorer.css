@@ -77,3 +77,5 @@ table.doc td, table.nested td { vertical-align: top; }
 /* filter buttons: never break a label, wrap whole buttons onto the next line instead */
 .names-tools .seg { flex-wrap: wrap; }
 .names-tools .seg button { white-space: nowrap; }
+/* the footer status's text room: its longest usual text, "syncing · 4,107,117" */
+#foot-status { --status-room: 19ch; }

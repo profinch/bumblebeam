@@ -99,8 +99,10 @@
 /* the value has a fixed room that holds "loading…" and the price alike, so the chip keeps one width while
    it loads; the text sits in the middle of it. The chip's left edge is fixed under the brand word. */
 .price-chip b { display: inline-block; width: 8.5ch; text-align: center; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
-/* the footer's status pill tells more in its tip */
+/* the footer's status pill tells more in its tip. Its text has a fixed room (each site sets --status-room to
+   its longest usual text, "connecting…" fits), centred, so the pill keeps one width while it connects */
 .foot .pill-status { cursor: help; }
+.foot .pill-status > span { display: inline-block; min-width: var(--status-room, 21ch); text-align: center; }
 .cta-top.active { background: rgba(var(--accent-rgb), 0.15); }
 .main-nav a.nav-cta.active { background: rgba(var(--accent-rgb), 0.15); border-bottom-color: rgba(var(--accent-rgb), 0.6); }
 .demo-banner {

@@ -87,3 +87,5 @@ tr.you > td { background: rgba(var(--accent-rgb), 0.05); }
   .hr-head .seg:last-child { justify-self: end; }
 }
 .net-more { display: contents; }
+/* the footer status's text room: its longest usual text, "stratum down → 4,107,102" */
+#foot-status { --status-room: 24ch; }
