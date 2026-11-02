@@ -1,5 +1,5 @@
 // BumbleBeam Explorer: a Beam block explorer over the HTTP API of Beam's own explorer-node.
-// No framework, no build step; the pool's styles.css plus explorer.css.
+// No framework, no build step; the shared ui/ library plus explorer.css.
 //
 // Data comes from /api/* (explorer-web proxies it to our explorer-node). From localhost,
 // ?api=<url> points the page at another explorer API, e.g. https://explorer.0xmx.net/api.

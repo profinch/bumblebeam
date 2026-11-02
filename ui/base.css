@@ -1,44 +1,40 @@
-/* BumbleBeam UI base: the page, type, links, focus, scrollbars. Needs tokens.css first. */
+/* BumbleBeam UI base: the page, type, links, focus. Needs tokens.css first.
+   From the pool's styles.css (the reference look), with the colours as tokens. */
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-/* the gradient on its own fixed layer, as tall as the viewport with the browser bars hidden (lvh):
-   a fixed-attachment body background restarts in a band at the bottom on phones */
+
+/* The page gradient on its own fixed layer, as tall as the viewport with the browser bars
+   hidden (lvh). A "background-attachment: fixed" body is sized to the viewport with the bars
+   shown, so on phones a band of restarted gradient showed at the bottom while scrolling. */
 body::before {
   content: ''; position: fixed; left: 0; top: 0; z-index: -1; pointer-events: none;
   width: 100%; height: 100vh; height: 100lvh;
   background: var(--page-gradient);
 }
-/* past the page's ends (overscroll) the gradient's last colour; the scrollbar is always there,
-   so short and long pages are equally wide and a centred header never shifts */
-html { background: var(--page-end); overflow-y: scroll; color-scheme: dark; }
+html, body { margin: 0; padding: 0; }
+
+/* the colour past the page's ends (overscroll) is the gradient's last one. The scrollbar is
+   always there, so a short page (a loading view, the explorer while it syncs) is as wide as a
+   long one and the centred header does not shift between pages or between the two sites. */
+html { background: var(--page-end); overflow-y: scroll; }
 body {
-  min-height: 100vh; display: flex; flex-direction: column;
-  color: var(--text); font-family: var(--font-sans); font-size: var(--fs-body);
-  background: transparent; overflow-x: hidden;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  background: transparent;
+  overflow-x: hidden;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input:focus { outline: none; }
-h1, h2, h3 { margin: 0; }
 
-main { flex: 1 0 auto; width: 100%; max-width: var(--page-width); margin: 0 auto; padding: var(--sp-2) var(--page-padding-x) 40px; }
 
-.mono { font-family: var(--font-mono); }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.mid { text-align: center; }
-.dim { color: var(--muted); }
+/* ---- page ---- */
+main { flex: 1 0 auto; width: 100%; max-width: var(--page-width); margin: 0 auto; padding: 8px var(--page-padding-x) 40px; }
+
+/* utilities every site uses */
 .accent { color: var(--accent); }
-.err { color: var(--color-red); }
 .caps { font: 700 var(--fs-xs) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--muted); }
-
-/* thin scrollbars in the accent, for lists, tables and code that scroll */
-.scroll-thin::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .dd-list::-webkit-scrollbar, .code pre::-webkit-scrollbar { width: 4px; height: 4px; }
-.scroll-thin::-webkit-scrollbar-track, .table-wrap::-webkit-scrollbar-track, .dd-list::-webkit-scrollbar-track, .code pre::-webkit-scrollbar-track { background: transparent; }
-.scroll-thin::-webkit-scrollbar-thumb, .table-wrap::-webkit-scrollbar-thumb, .dd-list::-webkit-scrollbar-thumb, .code pre::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.45); border-radius: 2px; }
-.scroll-thin::-webkit-scrollbar-button, .table-wrap::-webkit-scrollbar-button, .dd-list::-webkit-scrollbar-button, .code pre::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-}

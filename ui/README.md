@@ -14,6 +14,7 @@ accents (`#bitcoin` in the URL starts in the Bitcoin one).
 | [`base.css`](base.css) | the page: gradient background, type, links, focus, thin scrollbars, reduced motion |
 | [`components.css`](components.css) | ecosystem bar, header, panels, tiles, tables, buttons, pills, badges, fields, card list, notes, code, steps, chart and donut styles, footer |
 | [`components/bb.js`](components/bb.js) | web components: `<bb-logo>` (the animated bee on the chain's hexagon), `<bb-eco here="pool">` (the ecosystem bar; the site list lives here) |
+| [`components/tips.js`](components/tips.js) | the sites' own tooltips: any element with a `title` gets them (mouse, focus, tap) |
 | [`charts/`](charts) | `charts.js`: sparkline, time-series line/area chart with crosshair, donut; see [charts/README.md](charts/README.md) |
 
 ## Chains
@@ -47,6 +48,7 @@ Link the files relative to the page (or `ui/ui.css`, the three CSS files in one)
 <link rel="stylesheet" href="ui/base.css">
 <link rel="stylesheet" href="ui/components.css">
 <script src="ui/components/bb.js"></script>
+<script src="ui/components/tips.js"></script>
 <script src="ui/charts/charts.js"></script>
 <!-- the site's own CSS after, for what is only its own -->
 ```
@@ -65,8 +67,14 @@ A site keeps only what is its own in its own CSS; anything a second site needs m
 
 ## Status (2026-11-02)
 
-The library exists; no site uses it yet. Migration, one site at a time, each checked against
-screenshots before and after: pool and explorer first (live), then puzzle (built on it from the
-start), thermo, NiceHash dashboard, desktop miner, wallet, 3BMiner. The 2026-11-02 audit found the
-palette in 8+ copies under four naming schemes, about 20 font sizes, 12 radii and 11 breakpoints;
-this library is the pool's set, tokenised.
+| Site | On ui/ |
+|---|---|
+| pool (`beam/pool/web`) | yes: its `styles.css` keeps only pool-only rules (block-time bars, payouts table, trackers, the hashrate head) |
+| explorer (`beam/explorer/web`) | yes: ui/ plus its own `explorer.css`; no longer copies the pool's stylesheet or tooltips |
+| puzzle | will start on it |
+| thermo, NiceHash dashboard, desktop miner, wallet, 3BMiner | not yet |
+
+The pool's look is the reference: `base.css` and `components.css` are its former shared rules with the
+accent as tokens, checked against before/after screenshots of every pool and explorer page (desktop and
+phone widths: no visual change). The vocabulary is the pool's: `.bar` is yellow, `.bar.accent` the accent;
+`.pill-status` live / `.demo` / `.off`; a `.dd-list` is shown and hidden with the `hidden` attribute.

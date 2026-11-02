@@ -1,4 +1,4 @@
-# images built from the repository root (pool, pool-web, explorer-web, explorer-api) need only beam/ and deploy/
+# images built from the repository root (pool, pool-web, explorer-web, explorer-api) need only beam/, ui/ and deploy/
 *
 !beam/oracle
 !beam/vectors
@@ -6,5 +6,6 @@
 !beam/pool/web
 !beam/explorer/web
 !beam/explorer/api
+!ui
 !deploy/docker/containers
 **/target

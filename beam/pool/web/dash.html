@@ -8,6 +8,10 @@
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <!-- the v=dev query becomes the commit hash in the Docker build, so a release never mixes cached and new files -->
+<!-- the shared look: ui/ in the repo root, copied in by the image build; v=dev becomes the commit hash -->
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
 <link rel="stylesheet" href="/styles.css?v=dev">
 <style>
   /* the countdown to the next payout, left of the menu */
@@ -135,6 +139,6 @@
 </footer>
 
 <script src="/dash.js?v=dev"></script>
-<script src="/tips.js?v=dev"></script>
+<script src="/ui/components/tips.js?v=dev"></script>
 </body>
 </html>

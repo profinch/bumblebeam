@@ -439,7 +439,7 @@ minutes; explorer.bumblebeam.org's /api and /v1 answer 502 until then.
   - both: both, the app first. Schema changes run on start of either half (they are idempotent).
   A rollback is the previous image in `.env` and the same `up -d`. Always name the services: a bare `up -d` applies
   every line of `.env`. Web releases (`web-vX.Y.Z`: `POOL_WEB_IMAGE`, `EXPLORER_WEB_IMAGE`) and API releases
-  (`api-vX.Y.Z`: `EXPLORER_API_IMAGE`) touch neither half of the pool. A change to the shared `styles.css` goes into
+  (`api-vX.Y.Z`: `EXPLORER_API_IMAGE`) touch neither half of the pool. A change to `ui/` (the shared look, tokens, components, tooltips) goes into
   both web images.
 - Beam update: change `BEAM_VERSION` and the sha256 values in `containers/beam/Dockerfile` (check the
   release's `.asc` signatures first) and push; CI builds `bumblebeam-beam:sha-<7>`. Set `BEAM_IMAGE`, `pull`, then

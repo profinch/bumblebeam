@@ -17,6 +17,7 @@ on:
       - 'beam/pool/web/**'
       - 'beam/explorer/web/**'
       - 'beam/explorer/api/**'
+      - 'ui/**'
       - 'deploy/docker/containers/pool/**'
       - 'deploy/docker/containers/pool-web/**'
       - 'deploy/docker/containers/explorer-web/**'

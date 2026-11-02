@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="../components.css">
 <script src="../components/bb.js"></script>
+<script src="../components/tips.js" defer></script>
 <script src="../charts/charts.js"></script>
 <style>
   /* showcase-only helpers */
@@ -43,7 +44,7 @@
       </div>
     </div>
   </div>
-  <p class="hint">One brand, an accent per chain: <code>&lt;html data-chain="bitcoin"&gt;</code> switches the accent, the logo's hexagon and the main chart colour. Everything below is <code>ui/tokens.css</code> + <code>base.css</code> + <code>components.css</code>, <code>components/bb.js</code> and <code>charts/charts.js</code>.</p>
+  <p class="hint">The pool and the explorer are built on this library. One brand, an accent per chain: <code>&lt;html data-chain="bitcoin"&gt;</code> switches the accent, the logo's hexagon and the main chart colour. Everything below is <code>ui/tokens.css</code> + <code>base.css</code> + <code>components.css</code>, <code>components/bb.js</code> and <code>charts/charts.js</code>.</p>
 
   <h2 class="sec">Stat tiles</h2>
   <div class="tiles">
@@ -73,7 +74,7 @@
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2 class="panel-title">Miners</h2><div class="panel-meta"><span class="pill-status"><i></i>live</span><span class="pill-status warn"><i></i>demo</span><span class="pill-status off"><i></i>offline</span></div></div>
+    <div class="panel-head"><h2 class="panel-title">Miners</h2><div class="panel-meta"><span class="pill-status"><i></i>live</span><span class="pill-status demo"><i></i>demo</span><span class="pill-status off"><i></i>offline</span></div></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Miner</th><th>Mode</th><th class="num">Hashrate</th><th>Trend</th><th class="num">Share</th></tr></thead>
       <tbody id="miners"></tbody>
@@ -96,11 +97,11 @@
       <label class="field">Payout address<input value="bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" spellcheck="false"></label>
       <div class="field">Range
         <div class="dd" id="dd"><button class="dd-btn" type="button" aria-haspopup="listbox">Last 24 hours</button>
-          <ul class="dd-list" role="listbox"><li role="option" aria-selected="true">Last 24 hours</li><li role="option">Last 7 days</li><li role="option">Last 30 days</li></ul></div>
+          <ul class="dd-list" role="listbox" hidden><li role="option" aria-selected="true">Last 24 hours</li><li role="option">Last 7 days</li><li role="option">Last 30 days</li></ul></div>
       </div>
     </div>
-    <div class="bar" style="margin-top:16px"><i style="width:62%"></i></div>
-    <div class="bar warn"><i style="width:28%"></i></div>
+    <div class="bar accent" style="margin-top:16px"><i style="width:62%"></i></div>
+    <div class="bar"><i style="width:28%"></i></div>
   </section>
 
   <h2 class="sec">Text</h2>
@@ -178,7 +179,7 @@
   var rows = '';
   ['bumble-rig', 'nicehash', 'esp32-devkit', 'garage-3090'].forEach(function (n, i) {
     var s = hashrate(6), last = s[s.length - 1][1] / (i + 1);
-    rows += '<tr><td><span class="name">' + n + '</span><span class="sub">bc1q…' + (1000 + i * 37) + '</span></td><td>' + (i === 2 ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>') + '</td><td class="num">' + BBCharts.compact(last) + '</td><td>' + BBCharts.spark(s) + '</td><td class="num">' + (40 - i * 9) + '%<div class="bar"><i style="width:' + (40 - i * 9) + '%"></i></div></td></tr>';
+    rows += '<tr><td><span class="name">' + n + '</span><span class="sub">bc1q…' + (1000 + i * 37) + '</span></td><td>' + (i === 2 ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>') + '</td><td class="num">' + BBCharts.compact(last) + '</td><td>' + BBCharts.spark(s) + '</td><td class="num">' + (40 - i * 9) + '%<div class="bar accent"><i style="width:' + (40 - i * 9) + '%"></i></div></td></tr>';
   });
   document.getElementById('miners').innerHTML = rows;
 
@@ -202,11 +203,12 @@
   if (location.hash === '#bitcoin') chain('bitcoin');
 
   var dd = document.getElementById('dd');
-  dd.querySelector('.dd-btn').onclick = function () { dd.classList.toggle('open'); };
+  var list = dd.querySelector('.dd-list');
+  dd.querySelector('.dd-btn').onclick = function () { list.hidden = !list.hidden; dd.classList.toggle('open', !list.hidden); };
   dd.querySelector('.dd-list').onclick = function (e) {
     var o = e.target.closest('[role="option"]'); if (!o) return;
     this.querySelectorAll('[role="option"]').forEach(function (x) { x.setAttribute('aria-selected', x === o); });
-    dd.querySelector('.dd-btn').textContent = o.textContent; dd.classList.remove('open');
+    dd.querySelector('.dd-btn').textContent = o.textContent; list.hidden = true; dd.classList.remove('open');
   };
 })();
 </script>

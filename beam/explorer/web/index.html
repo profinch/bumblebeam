@@ -7,8 +7,10 @@
 <meta name="description" content="BumbleBeam Explorer: an open-source block explorer for Beam (BEAM), served from our own archival node">
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<!-- styles.css is the pool's, copied in by the image build; the v=dev query becomes the commit hash -->
-<link rel="stylesheet" href="/styles.css?v=dev">
+<!-- the shared look: ui/ in the repo root, copied in by the image build; v=dev becomes the commit hash -->
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
 <link rel="stylesheet" href="/explorer.css?v=dev">
 </head>
 <body>
@@ -64,7 +66,7 @@
   <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
 </footer>
 
-<script src="/tips.js?v=dev"></script>
+<script src="/ui/components/tips.js?v=dev"></script>
 <script src="/app.js?v=dev"></script>
 </body>
 </html>

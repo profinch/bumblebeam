@@ -1,7 +1,7 @@
 // BumbleBeam tooltips: every element with a title, on the pool site and the explorer, gets the
 // sites' own tooltip instead of the browser's. The title moves to data-tip on first use, so the
 // native one never appears; elements rendered later work the same way. Mouse, keyboard focus and
-// touch (tap to show, tap elsewhere to hide). Shared with the explorer, like styles.css.
+// touch (tap to show, tap elsewhere to hide). Part of the shared ui/ library (styles: .bb-tip, .tipped in ui/components.css).
 (() => {
   if (window.__bbTips) return;
   window.__bbTips = true;
