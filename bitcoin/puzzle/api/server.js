@@ -73,7 +73,7 @@ async function newConfirmed(addr, knownIds) {
 // ---------- state ----------
 // state.addr[n-1] = { address, txs: [{txid, time, height, in, out}] (in/out = sats to/from the address), checked }
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
-let state = { puzzleTime: 0, addr: [], events: [], baseline: false };
+let state = { puzzleTime: 0, addr: [], events: [], baseline: false, bench: [] };
 try { state = Object.assign(state, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); } catch (_) { /* first start */ }
 let saveTimer = null;
 function save() {
@@ -292,9 +292,47 @@ function send(res, status, body, maxAge = 0) {
   res.end(s);
 }
 
+// ---------- benchmark results (/bench): what visitors' GPUs and CPUs did ----------
+const benchSeen = new Map(); // client -> last post time
+function benchTable() {
+  const by = new Map();
+  for (const b of state.bench || []) {
+    const k = b.kind + ':' + b.gpu.toLowerCase().replace(/\s+/g, ' ');
+    if (!by.has(k)) by.set(k, { gpu: b.gpu, kind: b.kind, rates: [] });
+    by.get(k).rates.push(b.rate);
+  }
+  const rows = [...by.values()].map((g) => {
+    const r = g.rates.sort((a, b) => a - b);
+    return { gpu: g.gpu, kind: g.kind, runs: r.length, best: r[r.length - 1], median: r[Math.floor(r.length / 2)] };
+  });
+  return rows.sort((a, b) => b.best - a.best).slice(0, 200);
+}
+function benchPost(req, res) {
+  const who = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.socket.remoteAddress || '';
+  const now = Date.now();
+  if (now - (benchSeen.get(who) || 0) < 60000) return send(res, 429, { error: 'one result a minute' });
+  let body = '';
+  req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
+  req.on('end', () => {
+    let b;
+    try { b = JSON.parse(body); } catch (_) { return send(res, 400, { error: 'JSON body' }); }
+    const gpu = String(b.gpu || '').replace(/[^\w .,+()\-/·]/g, '').trim().slice(0, 60);
+    const rate = Number(b.rate);
+    const kind = b.kind === 'cpu' ? 'cpu' : 'gpu';
+    if (!gpu || !(rate > 1000 && rate < 1e12)) return send(res, 400, { error: 'gpu (a name) and rate (keys/s) are needed' });
+    benchSeen.set(who, now);
+    if (benchSeen.size > 10000) benchSeen.clear();
+    state.bench = (state.bench || []).concat([{ time: Math.floor(now / 1000), gpu, kind, rate: Math.round(rate), cfg: String(b.cfg || '').slice(0, 20), info: String(b.info || '').slice(0, 120) }]).slice(-5000);
+    save();
+    send(res, 200, { ok: true });
+  });
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/api/bench' && req.method === 'POST') return benchPost(req, res);
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'GET only' });
+  if (url.pathname === '/api/bench') return send(res, 200, { rows: benchTable() }, 30);
   if (url.pathname === '/api/health') {
     const ok = live.ready && Date.now() - live.lastPoll < POLL_MS * 5;
     return send(res, ok ? 200 : 503, { ok, last_poll: live.lastPoll ? Math.floor(live.lastPoll / 1000) : null, error: live.lastError, tip: live.tip });
@@ -309,7 +347,7 @@ http.createServer((req, res) => {
     return send(res, 200, Object.assign(analyse(n), { history: a.txs.filter((t) => t.time >= state.puzzleTime).map((t) => ({ txid: t.txid, time: t.time, height: t.height, in: t.in / SAT, out: t.out / SAT })) }), 20);
   }
   if (url.pathname === '/api/events') return send(res, 200, { events: state.events.slice(0, 100) }, 20);
-  send(res, 404, { error: 'not found', endpoints: ['/api/puzzles', '/api/puzzles/{n}', '/api/events', '/api/health'] });
+  send(res, 404, { error: 'not found', endpoints: ['/api/puzzles', '/api/puzzles/{n}', '/api/events', '/api/bench', '/api/health'] });
 }).listen(PORT, () => console.log(`puzzle-api on :${PORT}, node ${NODE_API.replace(/\/\/[^/]+/, '//…')}`));
 
 poll();

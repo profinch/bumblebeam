@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Play - BumbleBeam Puzzle</title>
+<meta name="description" content="Search for a Bitcoin puzzle key in your browser, on your GPU (WebGPU) or CPU: solve the small puzzles in seconds, or buy a lottery ticket on #71.">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+</head>
+<body>
+<bb-eco here="puzzle"></bb-eco>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
+    <div class="top-tools"></div>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/play" class="active">Play</a>
+      <a href="/learn">Learn</a>
+      <a href="/bench">Benchmark</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="page-head"><h1 class="page-title">Search for a key</h1></div>
+  <p class="hint lead">Your browser checks keys one by one: it turns each number into a Bitcoin address and compares it with the puzzle's. The small puzzles were solved long ago, so they are a fair test: you will find their keys, and see how fast the work grows with every bit. The search runs only while this tab is visible.</p>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Puzzle</h2><div class="panel-meta" id="p-status"></div></div>
+    <div class="calc">
+      <label class="field"><span>Puzzle</span><select id="p-puzzle"></select></label>
+      <div class="field"><span>Engine</span>
+        <div class="seg" id="p-engine" role="group" aria-label="Engine">
+          <button type="button" data-e="gpu">GPU · WebGPU</button>
+          <button type="button" data-e="cpu">CPU</button>
+        </div>
+      </div>
+    </div>
+    <div class="target-grid">
+      <div><div class="k">Address</div><div class="mono addr" id="p-addr">…</div></div>
+      <div><div class="k">Key range</div><div class="mono" id="p-range">…</div></div>
+      <div><div class="k">Keys in range</div><div class="mono" id="p-keys">…</div></div>
+      <div><div class="k">Expected at this speed</div><div class="mono" id="p-eta">…</div></div>
+    </div>
+    <div class="note warn" id="p-lottery" hidden>#71 is open: 7.1 BTC to whoever finds the key. One browser checks a random piece of its 2<sup>70</sup> keys: a lottery ticket with odds in the trillions. The coordinated search, where nobody repeats anybody's keys, comes next.</div>
+    <div class="actions-row">
+      <button class="btn solid" type="button" id="p-start">Start</button>
+      <button class="btn ghost" type="button" id="p-stop" disabled>Stop</button>
+      <span class="dim mono" id="p-engine-note"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="p-run" hidden>
+    <div class="panel-head"><h2 class="panel-title">Search</h2><div class="panel-meta"><span class="pill-status" id="p-state"><i></i><span id="p-state-t">…</span></span></div></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Keys checked</div><div class="v accent" id="r-checked">0</div><div class="s" id="r-share">&nbsp;</div></div>
+      <div class="tile"><div class="k">Speed</div><div class="v" id="r-rate">…</div><div class="s" id="r-engine">&nbsp;</div></div>
+      <div class="tile"><div class="k">Time</div><div class="v" id="r-time">0 s</div><div class="s" id="r-left">&nbsp;</div></div>
+    </div>
+    <div class="bar accent"><i id="r-bar" style="width:0%"></i></div>
+    <pre class="log" id="r-log"></pre>
+  </section>
+
+  <section class="panel found" id="p-found" hidden>
+    <div class="panel-head"><h2 class="panel-title">Key found</h2></div>
+    <div class="target-grid">
+      <div><div class="k">Private key (hex)</div><div class="mono accent" id="f-hex"></div></div>
+      <div><div class="k">Decimal</div><div class="mono" id="f-dec"></div></div>
+      <div><div class="k">Address it gives</div><div class="mono" id="f-addr"></div></div>
+      <div><div class="k">Found after</div><div class="mono" id="f-after"></div></div>
+    </div>
+    <div class="note" id="f-note"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="https://pool.bumblebeam.org">Mine BEAM</a>
+  <a href="https://t.me/BumbleBeamOrg" target="_blank" rel="noopener">Telegram</a>
+  <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<script src="/ui/components/bb.js?v=dev"></script>
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/gpu.js?v=dev"></script>
+<script src="/common.js?v=dev"></script>
+<script src="/play.js?v=dev"></script>
+</body>
+</html>

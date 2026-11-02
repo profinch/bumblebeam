@@ -1,5 +1,5 @@
 /* puzzle.bumblebeam.org: the 160 puzzles, the odds calculator and the radar, from /api (bitcoin/puzzle/api).
-   English and Russian; the language comes from ?lang=, then the visitor's last choice, then the browser. */
+   English only for now; the strings stay in one table (STR) so another language can be added later. */
 (function () {
   'use strict';
 
@@ -17,9 +17,9 @@
       targetTitle: function (n) { return 'Puzzle #' + n + ' · next in line'; },
       targetMeta: function (n) { return 'the smallest open puzzle whose public key is hidden'; },
       address: 'Address', range: 'Key range', keys: 'Keys to check', prize: 'Prize',
-      soon: 'A coordinated search is coming: every browser and GPU gets its own piece of the range, nobody checks the same keys twice, and the finder keeps <b>6 of 7.1 BTC</b>. Until then: the odds below, honestly.',
+      soon: 'A coordinated search is coming: every browser and GPU gets its own piece of the range, nobody checks the same keys twice, and the finder keeps <b>6 of 7.1 BTC</b>. Until then: <a href="/play">search a small puzzle yourself</a>, <a href="/bench">time your GPU</a>, and the odds below, honestly.',
       oddsTitle: 'Odds calculator', oddsMeta: 'your hardware against the range',
-      oddsHint: 'A hidden public key leaves only brute force: every key in the range is a lottery ticket. Where the public key is on the chain (#140, #145, … #160), Pollard\'s kangaroo needs about 2·√range steps instead. Speeds are estimates until our own WebGPU benchmark.',
+      oddsHint: 'A hidden public key leaves only brute force: every key in the range is a lottery ticket. Where the public key is on the chain (#140, #145, … #160), Pollard\'s kangaroo needs about 2·√range steps instead. Speeds are estimates; <a href="/bench">the benchmark</a> measures yours.',
       cPuzzle: 'Puzzle', cDevice: 'Device', cSpeed: 'Keys per second, each', cCount: 'How many', cHours: 'Hours a day', cDays: 'Days', cWatts: 'Watts, each', cKwh: 'Electricity, $ per kWh',
       devices: { browser: 'A browser tab (WebGPU), estimate', r3090: 'RTX 3090, estimate', r4090: 'RTX 4090, estimate', custom: 'My own number' },
       method: { bf: 'brute force', kg: 'kangaroo' },
@@ -56,66 +56,9 @@
       ago: function (s) { return s < 90 ? s + ' s ago' : Math.round(s / 60) + ' min ago'; },
       loadErr: 'The puzzle data is not available right now. Retrying…',
     },
-    ru: {
-      priceTip: 'Курс BTC/USD с нашей собственной ноды (ценовой поток mempool)',
-      navPuzzles: 'Пазлы', navOdds: 'Шансы', navRadar: 'Радар', navAbout: 'О пазле',
-      title: 'Биткоин-пазл вживую',
-      lead: 'В январе 2015 года кто-то отправил биткоины на 256 адресов, приватные ключи которых — числа из растущих диапазонов: ключ пазла #N лежит между 2<sup>N−1</sup> и 2<sup>N</sup>−1. Кто найдёт ключ, забирает приз. Всё ниже читается с нашей собственной ноды Bitcoin.',
-      tOpen: 'Призы ждут', tCount: 'Пазлы', tTarget: 'Следующий', tLast: 'Последний решённый',
-      openSolved: function (o, s) { return o + ' открыто · ' + s + ' решено'; },
-      exposedN: function (n) { return 'у ' + n + ' известен публичный ключ'; },
-      targetSub: function (b) { return b + ' BTC, только перебор'; },
-      targetTitle: function (n) { return 'Пазл #' + n + ' · следующий'; },
-      targetMeta: function () { return 'наименьший открытый пазл со скрытым публичным ключом'; },
-      address: 'Адрес', range: 'Диапазон ключа', keys: 'Ключей перебрать', prize: 'Приз',
-      soon: 'Скоро — совместный поиск: каждый браузер и видеокарта получают свой кусок диапазона, никто не проверяет одни и те же ключи дважды, а нашедший получает <b>6 из 7.1 BTC</b>. А пока — честные шансы ниже.',
-      oddsTitle: 'Калькулятор шансов', oddsMeta: 'твоё железо против диапазона',
-      oddsHint: 'Если публичный ключ скрыт, остаётся только перебор: каждый ключ диапазона — лотерейный билет. Если публичный ключ в блокчейне (#140, #145, … #160), кенгуру Полларда нужно лишь около 2·√диапазона шагов. Скорости — оценки, пока нет нашего бенчмарка WebGPU.',
-      cPuzzle: 'Пазл', cDevice: 'Устройство', cSpeed: 'Ключей в секунду, каждое', cCount: 'Сколько штук', cHours: 'Часов в сутки', cDays: 'Дней', cWatts: 'Ватт, каждое', cKwh: 'Свет, $ за кВт·ч',
-      devices: { browser: 'Вкладка браузера (WebGPU), оценка', r3090: 'RTX 3090, оценка', r4090: 'RTX 4090, оценка', custom: 'Своё число' },
-      method: { bf: 'перебор', kg: 'кенгуру' },
-      oChance: 'Шанс найти', oHalf: 'Время до шанса 50%', oEv: 'Ожидаемый выигрыш', oPower: 'Электричество',
-      chanceSub: function (d, m) { return 'за ' + d + ' дн., ' + m; },
-      halfSub: function (s) { return 'при ' + s + ' суммарно'; },
-      evSub: function (usd) { return '≈ $' + usd + ' (шанс × приз)'; },
-      powerSub: function (kwh) { return kwh + ' кВт·ч'; },
-      verdictBad: function (r) { return 'Электричество стоит примерно в <b>' + r + '×</b> больше ожидаемого выигрыша. Как лотерейный билет — ради интереса можно, как вложение — нет.'; },
-      verdictOk: function (r) { return 'Ожидаемый выигрыш примерно в <b>' + r + '×</b> больше стоимости света. Помни о гонке: транзакцию с найденным ключом, отправленную в публичный мемпул, перебивают боты, которые вычитывают из неё ключ.'; },
-      oneIn: function (x) { return '1 из ' + x; },
-      years: function (y) { return y + ' лет'; }, days: function (d) { return d + ' дн.'; }, hours: function (h) { return h + ' ч'; },
-      radarTitle: 'Радар', radarMeta: 'каждый открытый адрес, каждую минуту',
-      radarHint: 'Наша нода следит за всеми открытыми адресами пазлов. Трата в мемпуле значит, что приз забирают прямо сейчас; подтверждённая — что пазл решён.',
-      quiet: function (t) { return 'Тихо: с начала наблюдения (' + t + ') ничего не двигалось.'; },
-      ev: {
-        solved: function (e) { return 'Пазл #' + e.n + ' решён: забрали ' + fmtBtc(e.amount) + ' BTC'; },
-        claiming: function (e) { return 'Пазл #' + e.n + ': в мемпуле трата ' + fmtBtc(e.amount) + ' BTC'; },
-        exposed: function (e) { return 'Пазл #' + e.n + ': его публичный ключ появился в блокчейне'; },
-        topup: function (e) { return 'Пазл #' + e.n + ': +' + fmtBtc(e.delta) + ' BTC'; },
-        target: function (e) { return 'Следующий меняется с #' + e.from + ' на #' + e.to; },
-      },
-      claimingNow: function (p) { return 'Пазл #' + p.n + ' забирают прямо сейчас: в мемпуле транзакция, которая тратит ' + fmtBtc(p.balance) + ' BTC.'; },
-      recentSolves: 'Последние решения', when: 'Когда', how: 'Как', tx: 'Транзакция',
-      allTitle: 'Все 160 пазлов', fAll: 'Все', fOpen: 'Открытые', fExposed: 'Ключ известен', fSolved: 'Решённые',
-      rangeFrom: 'Диапазон от', status: 'Статус', pubkey: 'Публичный ключ', solvedOn: 'Решён',
-      sOpen: 'открыт', sSolved: 'решён', sClaiming: 'в мемпуле',
-      pkHidden: 'скрыт', pkKnown: 'в блокчейне', pkKnownTip: function (d) { return 'С адреса тратили ' + d + ': публичный ключ в блокчейне'; },
-      aboutTitle: 'О пазле',
-      aboutBody: '<p>Пазл создан в 2015 году одной транзакцией на 256 адресов; в 2017-м создатель забрал #161–#256 и увеличил остальные призы в десять раз, в 2023-м — ещё в десять. Сейчас на #N лежит около N/10 BTC. В 2019-м создатель потратил немного с каждого пятого адреса начиная с #65, и их публичные ключи попали в блокчейн.</p><p>Сайт берёт всё это с собственной ноды Bitcoin, а не из чужого API. Открытый код — в <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">репозитории BumbleBeam</a>.</p><p>Честно: нижние открытые пазлы — гонка с фермами видеокарт. Калькулятор показывает, на что может рассчитывать домашняя карта с учётом света. Играй ради интереса, а не ради денег.</p>',
-      footPool: 'Майни BEAM',
-      live: 'онлайн', stale: 'устарело', down: 'нет данных',
-      updated: function (t, h) { return 'блок ' + h + ' · обновлено ' + t; },
-      ago: function (s) { return s < 90 ? s + ' с назад' : Math.round(s / 60) + ' мин назад'; },
-      loadErr: 'Данные пазлов сейчас недоступны. Пробуем ещё…',
-    },
   };
 
-  function pickLang() {
-    var q = new URLSearchParams(location.search).get('lang');
-    if (q === 'en' || q === 'ru') return q;
-    try { var s = localStorage.getItem('bb-lang'); if (s === 'en' || s === 'ru') return s; } catch (_) { /* no storage */ }
-    return /^ru\b/i.test(navigator.language || '') ? 'ru' : 'en';
-  }
-  var lang = pickLang();
+  var lang = 'en';
   function L() { return STR[lang]; }
 
   function applyLang() {
@@ -124,23 +67,15 @@
     document.querySelectorAll('[data-i18n]').forEach(function (el) { var v = s[el.getAttribute('data-i18n')]; if (typeof v === 'string') el.textContent = v; });
     document.querySelectorAll('[data-i18n-html]').forEach(function (el) { var v = s[el.getAttribute('data-i18n-html')]; if (typeof v === 'string') el.innerHTML = v; });
     document.querySelectorAll('[data-i18n-title]').forEach(function (el) { el.title = s[el.getAttribute('data-i18n-title')]; });
-    document.querySelectorAll('[data-lang]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-lang') === lang); });
     fillDevices();
     if (data) render();
   }
-  document.querySelectorAll('[data-lang]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      lang = b.getAttribute('data-lang');
-      try { localStorage.setItem('bb-lang', lang); } catch (_) { /* no storage */ }
-      applyLang();
-    });
-  });
 
   // ---------- formatting ----------
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function fmtBtc(x) { return x >= 100 ? x.toFixed(0) : x >= 1 ? (Math.round(x * 100) / 100).toString() : (Math.round(x * 1e4) / 1e4).toString(); }
-  function fmtInt(x) { return Math.round(x).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US'); }
+  function fmtInt(x) { return Math.round(x).toLocaleString('en-US'); }
   function sci(x) {
     if (!isFinite(x)) return '∞';
     if (x < 1e4) return x >= 100 ? fmtInt(x) : (Math.round(x * 100) / 100).toString();
@@ -284,7 +219,9 @@
     renderRadar(ps, solved);
     renderRows();
     fillPuzzles();
-    if (!$('c-speed').value) onDevice(); else calc();
+    var qs = Number(new URLSearchParams(location.search).get('speed'));
+    if (!$('c-speed').value && qs > 0) { $('c-device').value = 'custom'; $('c-speed').value = qs.toExponential(2).replace('+', ''); $('c-watts').value = 200; calc(); }
+    else if (!$('c-speed').value) onDevice(); else calc();
   }
 
   function renderLive() {

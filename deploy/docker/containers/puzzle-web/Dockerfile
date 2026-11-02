@@ -6,5 +6,5 @@ ARG VERSION=dev
 COPY bitcoin/puzzle/web/ /usr/share/nginx/html/
 COPY ui/ /usr/share/nginx/html/ui/
 # version the asset URLs, so a release never mixes cached and new files
-RUN sed -i "s/?v=dev/?v=${VERSION}/g" /usr/share/nginx/html/index.html
+RUN sed -i "s/?v=dev/?v=${VERSION}/g" /usr/share/nginx/html/*.html
 COPY deploy/docker/containers/puzzle-web/default.conf /etc/nginx/conf.d/default.conf

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn - BumbleBeam Puzzle</title>
+<meta name="description" content="How a Bitcoin private key becomes an address, and three ways to find one in a range: brute force, baby-step giant-step and Pollard's kangaroo, raced live in your browser.">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+</head>
+<body>
+<bb-eco here="puzzle"></bb-eco>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
+    <div class="top-tools"></div>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/play">Play</a>
+      <a href="/learn" class="active">Learn</a>
+      <a href="/bench">Benchmark</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="page-head"><h1 class="page-title">How the puzzle works</h1></div>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">1 · From a key to an address</h2><div class="panel-meta">one way only</div></div>
+    <p class="hint">A private key is just a number. Multiplying the curve's starting point G by it gives the public key; two hashes of that give the address. Every step is quick forwards and, as far as anyone knows, impossible backwards: the only way from an address to its key is to try keys.</p>
+    <label class="field keyin"><span>Private key (decimal or 0x hex)</span><input id="k-in" value="1" spellcheck="false"></label>
+    <ol class="chain" id="k-out"></ol>
+    <p class="hint">Puzzle #N's key has exactly N bits, so it lies between 2<sup>N−1</sup> and 2<sup>N</sup>−1. Try <a href="#" data-k="3">3</a> (#2), <a href="#" data-k="0xd2c55">0xd2c55</a> (#20) or <a href="#" data-k="0x349b84b6431a6c4ef1">0x349b84b6431a6c4ef1</a> (#70): each gives that puzzle's address.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">2 · Three ways to find a key</h2><div class="panel-meta">raced live on your CPU</div></div>
+    <p class="hint"><b>Brute force</b> needs only the address and tries keys in order: on average half the range. <b>Baby-step giant-step</b> and <b>Pollard's kangaroo</b> need the public key, and then about 2·√range steps: for a 40-bit range a million instead of half a trillion. BSGS pays with memory (a table of √range points), the kangaroo only keeps a few “distinguished” points it lands on.</p>
+    <div class="row race-ctl">
+      <label class="field"><span>Range: bits</span><input id="r-bits" type="number" min="16" max="44" value="40"></label>
+      <button class="btn solid" type="button" id="r-go">Hide a key and race</button>
+      <button class="btn ghost" type="button" id="r-stop" disabled>Stop</button>
+      <span class="dim mono" id="r-secret"></span>
+    </div>
+    <div class="race" id="race">
+      <div class="lane" data-m="brute"><div class="lane-h"><b>Brute force</b><span class="dim">needs: the address</span><span class="mono lane-v" id="v-brute">–</span></div><canvas height="34"></canvas></div>
+      <div class="lane" data-m="bsgs"><div class="lane-h"><b>Baby-step giant-step</b><span class="dim">needs: the public key, √range memory</span><span class="mono lane-v" id="v-bsgs">–</span></div><canvas height="34"></canvas></div>
+      <div class="lane" data-m="kangaroo"><div class="lane-h"><b>Kangaroo</b><span class="dim">needs: the public key, little memory</span><span class="mono lane-v" id="v-kangaroo">–</span></div><canvas height="34"></canvas></div>
+    </div>
+    <div class="note" id="r-note">Each lane is the range from 2<sup>N−1</sup> to 2<sup>N</sup>−1. Brute force fills it from the left; BSGS lays out its baby steps, then strides through in giant steps; the kangaroo's tame herd leaves marks where it lands on distinguished points, until a wild one lands on the same trail.</div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">3 · Why every fifth puzzle is different</h2></div>
+    <div class="about-body">
+      <p>In 2019 the puzzle's creator spent a little from #65, #70, #75 … #160. A spend reveals the public key, so those puzzles fell to the kangaroo instead of brute force: #135 needs about 2·2<sup>67</sup> ≈ 3 × 10<sup>20</sup> kangaroo jumps, against 2<sup>133</sup> ≈ 10<sup>40</sup> keys by brute force. That is why #120, #125, #130 and #135 were solved while #71 to #74, far smaller, are still open.</p>
+      <p>For the others only the address is known, and brute force is all there is. Each bit doubles the work: #71 has four times the keys of #69, which fell to brute force in April 2025. Open puzzles with a known public key today: #140, #145, #150, #155, #160, the next candidates for a kangaroo pool.</p>
+      <p>The solves so far, with dates and transactions, are on the <a href="/#radar">radar</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="https://pool.bumblebeam.org">Mine BEAM</a>
+  <a href="https://t.me/BumbleBeamOrg" target="_blank" rel="noopener">Telegram</a>
+  <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<script src="/ui/components/bb.js?v=dev"></script>
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/common.js?v=dev"></script>
+<script src="/learn.js?v=dev"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU benchmark - BumbleBeam Puzzle</title>
+<meta name="description" content="How fast is your graphics card at Bitcoin keys? A WebGPU benchmark in the browser: secp256k1, SHA-256 and RIPEMD-160, self-tested, with a table of results by GPU.">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+</head>
+<body>
+<bb-eco here="puzzle"></bb-eco>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
+    <div class="top-tools"></div>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/play">Play</a>
+      <a href="/learn">Learn</a>
+      <a href="/bench" class="active">Benchmark</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="page-head"><h1 class="page-title">How fast is your GPU?</h1></div>
+  <p class="hint lead">The same engine as the search: for every key a point on the secp256k1 curve, SHA-256, RIPEMD-160 and a comparison, all on your graphics card through WebGPU. First it checks itself against a plain JavaScript reference, so the number below is for correct work only.</p>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Benchmark</h2><div class="panel-meta" id="b-gpu"></div></div>
+    <div class="actions-row">
+      <button class="btn solid" type="button" id="b-run">Run the GPU benchmark</button>
+      <button class="btn ghost" type="button" id="b-cpu">CPU instead</button>
+      <span class="dim mono" id="b-note">about 30 seconds; keep this tab in front</span>
+    </div>
+    <div class="tiles calc-out" id="b-out" hidden>
+      <div class="tile"><div class="k">Your speed</div><div class="v accent" id="b-rate">…</div><div class="s" id="b-cfg">&nbsp;</div></div>
+      <div class="tile"><div class="k">#71 alone, 50% chance</div><div class="v" id="b-71">…</div><div class="s">brute force over 2⁷⁰ keys</div></div>
+      <div class="tile"><div class="k">A small puzzle, #40</div><div class="v" id="b-40">…</div><div class="s">the whole range</div></div>
+      <div class="tile"><div class="k">Per day</div><div class="v" id="b-day">…</div><div class="s">keys, at this speed</div></div>
+    </div>
+    <pre class="log" id="b-log" hidden></pre>
+    <div class="row submit" id="b-submit" hidden>
+      <label class="field grow"><span>Your GPU model, for the table</span><input id="b-name" maxlength="60" spellcheck="false" placeholder="e.g. RTX 3060 Laptop"></label>
+      <button class="btn" type="button" id="b-send">Add to the table</button>
+      <a class="btn ghost" id="b-odds" href="/#odds">Odds with this speed</a>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Results by GPU</h2><div class="panel-meta">best and median of what visitors sent</div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>GPU</th><th class="num">Best</th><th class="num">Median</th><th class="num">Runs</th><th class="num">#71, 50% alone</th></tr></thead>
+      <tbody id="b-table"><tr><td colspan="5" class="dim">…</td></tr></tbody>
+    </table></div>
+    <p class="hint">Browsers report the GPU vaguely on purpose; the model name is what each visitor typed. Speeds depend on the browser, the driver and the power plan, too.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="https://pool.bumblebeam.org">Mine BEAM</a>
+  <a href="https://t.me/BumbleBeamOrg" target="_blank" rel="noopener">Telegram</a>
+  <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<script src="/ui/components/bb.js?v=dev"></script>
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/gpu.js?v=dev"></script>
+<script src="/common.js?v=dev"></script>
+<script src="/bench.js?v=dev"></script>
+</body>
+</html>

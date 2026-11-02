@@ -20,13 +20,12 @@
     <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
     <div class="top-tools">
       <span class="price-chip" id="btc-price" data-i18n-title="priceTip">BTC <b id="btc-price-v">…</b></span>
-      <div class="seg" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ru">RU</button></div>
     </div>
     <nav class="main-nav" aria-label="Main">
-      <a href="#puzzles" data-i18n="navPuzzles">Puzzles</a>
-      <a href="#odds" data-i18n="navOdds">Odds</a>
-      <a href="#radar" data-i18n="navRadar">Radar</a>
-      <a href="#about" data-i18n="navAbout">About</a>
+      <a href="/" class="active">Puzzles</a>
+      <a href="/play">Play</a>
+      <a href="/learn">Learn</a>
+      <a href="/bench">Benchmark</a>
     </nav>
   </div>
 </header>
@@ -51,12 +50,12 @@
       <div><div class="k" data-i18n="keys">Keys to check</div><div class="mono" id="target-keys">…</div></div>
       <div><div class="k" data-i18n="prize">Prize</div><div class="mono accent" id="target-prize">…</div></div>
     </div>
-    <div class="note" data-i18n-html="soon">A coordinated search is coming: every browser and GPU gets its own piece of the range, nobody checks the same keys twice, and the finder keeps <b>6 of 7.1 BTC</b>. Until then: the odds below, honestly.</div>
+    <div class="note" data-i18n-html="soon">A coordinated search is coming: every browser and GPU gets its own piece of the range, nobody checks the same keys twice, and the finder keeps <b>6 of 7.1 BTC</b>. Until then: <a href="/play">search a small puzzle yourself</a>, <a href="/bench">time your GPU</a>, and the odds below, honestly.</div>
   </section>
 
   <section class="panel" id="odds">
     <div class="panel-head"><h2 class="panel-title" data-i18n="oddsTitle">Odds calculator</h2><div class="panel-meta" data-i18n="oddsMeta">your hardware against the range</div></div>
-    <p class="hint" data-i18n-html="oddsHint">A hidden public key leaves only brute force: every key in the range is a lottery ticket. Where the public key is on the chain (#140, #145, … #160), Pollard's kangaroo needs about 2·√range steps instead. Speeds are estimates until our own WebGPU benchmark.</p>
+    <p class="hint" data-i18n-html="oddsHint">A hidden public key leaves only brute force: every key in the range is a lottery ticket. Where the public key is on the chain (#140, #145, … #160), Pollard's kangaroo needs about 2·√range steps instead. Speeds are estimates; <a href="/bench">the benchmark</a> measures yours.</p>
     <div class="calc">
       <label class="field"><span data-i18n="cPuzzle">Puzzle</span><select id="c-puzzle"></select></label>
       <label class="field"><span data-i18n="cDevice">Device</span><select id="c-device"></select></label>
