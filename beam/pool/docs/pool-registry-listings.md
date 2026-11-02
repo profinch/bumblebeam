@@ -10,7 +10,7 @@ the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 | Where | Beam pools page | How it was sent | Date | Status |
 |---|---|---|---|---|
 | MiningBoard | https://miningboard.com/pool-stats/beam | not recorded, probably https://miningboard.com/pools/submit | 2026-10 | **listed**, https://miningboard.com/pools/pool.bumblebeam.org. 2026-10-27: confirmed the footer mark; sent an outlined mark.svg (brand kit at /brand-kit), swapped in 607a897; replied offering /v1/network data and asking about featured placement and co-announcements |
-| MiningPoolStats | https://miningpoolstats.stream/beam | "Missing pool?" form on that page (pool URL + API URL), several times without a result; then the footer's envelope form "Quick Message to MiningPoolStats" with profinch@gmail.com for a reply (125 blocks in 24 h) | 2026-10-08, 2026-10-09, 2026-10-25 | **listed by 2026-10-28** (https://miningpoolstats.stream/beam). Footer mark live 2026-10-28 (9a739c4, own drawing of their pick-and-shovel icon, `beam/pool/web/img/miningpoolstats.svg`), order MiningBoard, MiningChamp, MiningPoolStats. They have no email: the footer's Quick Message form now has a Cloudflare Turnstile captcha, so the thank-you/badge note went by hand: sent 2026-10-28 from profinch@gmail.com (thanks, footer link, ports, API fields offer) |
+| MiningPoolStats | https://miningpoolstats.stream/beam | "Missing pool?" form on that page (pool URL + API URL), several times without a result; then the footer's envelope form "Quick Message to MiningPoolStats" with the owner's address for a reply (125 blocks in 24 h) | 2026-10-08, 2026-10-09, 2026-10-25 | **listed by 2026-10-28** (https://miningpoolstats.stream/beam). Footer mark live 2026-10-28 (9a739c4, own drawing of their pick-and-shovel icon, `beam/pool/web/img/miningpoolstats.svg`), order MiningBoard, MiningChamp, MiningPoolStats. They have no email: the footer's Quick Message form now has a Cloudflare Turnstile captcha, so the thank-you/badge note went by hand: sent 2026-10-28 from the owner's address (thanks, footer link, ports, API fields offer) |
 | WhatToMine | https://whattomine.com/coins/294-beam-beamhashiii | https://whattomine.com/pool_requests/new?coin_id=294 | 2026-10-08 | sent |
 | minerstat | https://minerstat.com/coin/beam#pools | https://minerstat.com/submit | 2026-10-08 | sent |
 | hashrate.no | https://hashrate.no/coins/BEAM/pools | https://hashrate.no/submit (Pool tab) | 2026-10-08 | sent |
@@ -18,7 +18,7 @@ the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 | PoolBay | https://poolbay.io (no Beam pools yet) | email to admin@poolbay.io | 2026-10-08 | sent |
 | MinerBox (phone app) | 2Miners and HeroMiners for Beam | email to minerbox@witplex.com, asks for integration through `/api/miners/{address}` | 2026-10-08 | sent |
 | Blockwatch X (iOS app, last update 2021) | | email to blockwatchapp@gmail.com, same request | 2026-10-08 | sent |
-| Awesome Miner | predefined pools for BeamHash III (only NiceHash so far) | https://www.awesomeminer.com/contact, topic "Feature request", replies go to profinch@gmail.com | 2026-10-08 | sent |
+| Awesome Miner | predefined pools for BeamHash III (only NiceHash so far) | https://www.awesomeminer.com/contact, topic "Feature request", replies go to the owner's address | 2026-10-08 | sent |
 | BeamTerminal (source of explorer.beam.mw) | https://explorer.beam.mw/#/explorer/mining | patch https://git.maxnflaxl.dev/maxnflaxl/BeamTerminal/commit/07a22c593076efcc9a1582edea8c59554a3c5d4c, adds the pool to `backend/src/mining/pools.ts` | 2026-10-08 | sent |
 | Bitcointalk | | own thread https://bitcointalk.org/index.php?topic=5596205 and a reply in the Beam ANN thread https://bitcointalk.org/index.php?topic=5052151.msg67218589#msg67218589 | 2026-10-08 | posted |
 | NiceHash | https://www.nicehash.com (BEAMV3 algorithm) | pool created on the marketplace, see below | 2026-10-08 | **live** |
@@ -58,7 +58,7 @@ confirmed in total. Still not listed on MiningPoolStats (the Beam list has had t
 least 2024-04, while other coins gained pools through 2026).
 
 - MiningPoolStats: "Missing pool?" form (pool + API URL with the report fields) and the footer's Quick
-  Message (from profinch@gmail.com), both posted to contact.php / contact_email.php as the page does:
+  Message (from the owner's address), both posted to contact.php / contact_email.php as the page does:
   both answered SENT.
 - WhatToMine: form ("Your request has been submitted"), API URL /api/stats, software "custom, open source".
 - minerstat: Mining pool tab ("Submission received").
