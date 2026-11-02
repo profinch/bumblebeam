@@ -1,8 +1,4 @@
 /* BumbleBeam Explorer: additions to the pool's styles.css */
-.hash { font-family: var(--font-mono); word-break: break-all; }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font: 12px var(--font-mono); }
-.kv dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding-top: 2px; }
-.kv dd { margin: 0; min-width: 0; word-break: break-all; color: var(--text-dim); }
 tr.hit td { background: rgba(0, 246, 210, 0.1); }
 .pager { display: flex; gap: 8px; }
 @media (max-width: 560px) {
@@ -16,23 +12,15 @@ tr.grp-first > td { border-top: 1px solid var(--border); }
 tr.grp-sub > td { border-top: 0; color: var(--text-dim); }
 /* only the row's own cells: a nested table inside (Funds, Arguments) keeps its own layout */
 tr.grp-sub > td:first-child { padding-left: 18px; }
-.amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.amt.neg { color: var(--color-red); }
-.amt.pos { color: var(--accent); }
 .doc-obj .kv .kv { margin-top: 2px; }
 .doc-kernel + .doc-kernel { margin-top: 14px; }
 .peers { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--text-dim); }
-td .kv { font-size: 11px; gap: 2px 10px; }
-.nowrap { white-space: nowrap; }
 table.peer-table { width: auto; min-width: min(360px, 100%); }
-.copy { cursor: pointer; }
-.copy:hover { color: var(--accent); }
 /* names: tools row, sortable headers */
 .names-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
 .names-q { flex: 1 1 220px; min-width: 0; height: 32px; padding: 0 10px; color: var(--text); font: 13px var(--font-mono); background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark; }
 .names-q:focus { outline: none; border-color: rgba(0, 246, 210, 0.5); }
 .names-pager { margin-left: auto; display: flex; align-items: center; gap: 10px; font: 11px var(--font-mono); }
-.small { font-size: 10px; }
 /* names: fixed column widths sized for the longest content, so paging and filters never move them */
 #names-table { table-layout: fixed; min-width: 1060px; }
 #names-table col.w-h { width: 160px; }
@@ -54,7 +42,6 @@ table.peer-table { width: auto; min-width: min(360px, 100%); }
 #contracts-table tr.open td { background: rgba(255, 255, 255, 0.02); }
 /* asset metadata: description cells with more / less, the asset page's about block */
 table.doc td, table.nested td { vertical-align: top; }
-.meta-cell .wrap, .wrap { white-space: normal; }
 .meta-cell { max-width: 520px; }
 .meta-long { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
 .meta-long .small { margin-top: 4px; }

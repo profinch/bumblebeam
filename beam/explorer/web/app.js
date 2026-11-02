@@ -487,7 +487,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Latest blocks</h2><div class="panel-meta"><span id="blocks-count"></span></div></div>
         ${bk.rows.length ? `<div class="names-tools">
-          <input id="bk-q" class="names-q" placeholder="Any height, or a hash among loaded blocks…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
+          <input id="bk-q" class="names-q" data-esc placeholder="Any height, or a hash among loaded blocks…" autocomplete="off" spellcheck="false" aria-label="Search blocks" value="${esc(bk.q)}">
           <div class="seg"><button type="button" id="bk-tx">With transactions</button><button type="button" id="bk-calls">Contract calls</button><button type="button" id="bk-sh">Shielded</button><button type="button" id="bk-fees">With fees</button><button type="button" id="bk-ours" title="Blocks found by the BumbleBeam pool">Our pool${ours.map.size ? ` · ${int(ours.map.size)}` : ''}</button></div>
         </div>
         <div class="table-wrap"><table id="blocks-table"><colgroup><col class="w-h"><col class="w-t"><col class="w-a"><col class="w-p"><col><col class="w-d"><col class="w-tx"><col class="w-io"><col class="w-c"><col class="w-f"></colgroup>
@@ -636,7 +636,7 @@
     return `<div class="page-head"><h1 class="page-title">Assets</h1></div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Confidential assets</h2><div class="panel-meta"><span id="assets-count"></span></div></div>
         <div class="names-tools">
-          <input id="assets-q" class="names-q" placeholder="Search by name, ticker, ID or owner key…" autocomplete="off" spellcheck="false" aria-label="Search assets" value="${esc(as.q)}">
+          <input id="assets-q" class="names-q" data-esc placeholder="Search by name, ticker, ID or owner key…" autocomplete="off" spellcheck="false" aria-label="Search assets" value="${esc(as.q)}">
           <div class="seg"><button type="button" id="assets-described">With description</button></div>
         </div>
         <div class="table-wrap"><table id="assets-table"><colgroup><col class="w-id"><col><col class="w-key"><col class="w-tick"><col class="w-sup"><col class="w-dec"><col class="w-dep"></colgroup>
@@ -765,7 +765,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Deployed contracts</h2><div class="panel-meta"><span id="contracts-count"></span></div></div>
         <div class="names-tools">
-          <input id="contracts-q" class="names-q" placeholder="Search by kind, contract ID or asset…" autocomplete="off" spellcheck="false" aria-label="Search contracts" value="${esc(cs.q)}">
+          <input id="contracts-q" class="names-q" data-esc placeholder="Search by kind, contract ID or asset…" autocomplete="off" spellcheck="false" aria-label="Search contracts" value="${esc(cs.q)}">
           <div class="seg"><button type="button" id="contracts-known">Known kinds</button><button type="button" id="contracts-funds">Holding funds</button></div>
         </div>
         <div class="table-wrap"><table id="contracts-table"><colgroup><col class="w-cid"><col class="w-kind"><col class="w-dep"><col class="w-fund"><col><col class="w-more"></colgroup>
@@ -900,7 +900,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Liquidity pools</h2><div class="panel-meta"><span id="dex-count"></span></div></div>
         <div class="names-tools">
-          <input id="dex-q" class="names-q" placeholder="Search by asset, pair (beam/nph) or asset ID…" autocomplete="off" spellcheck="false" aria-label="Search pools" value="${esc(ds.q)}">
+          <input id="dex-q" class="names-q" data-esc placeholder="Search by asset, pair (beam/nph) or asset ID…" autocomplete="off" spellcheck="false" aria-label="Search pools" value="${esc(ds.q)}">
           <div class="seg" id="dex-tier" role="group" aria-label="Fee tier">${['All', 'Low', 'Medium', 'High'].map((t) => `<button type="button" data-tier="${t}">${t === 'All' ? 'All' : `${t} ${FEE_TIER[t]}`}</button>`).join('')}</div>
           <div class="seg"><button type="button" id="dex-empty">Show empty</button></div>
         </div>
@@ -1044,7 +1044,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2 class="panel-title">Beam Anonymous Name Service</h2><div class="panel-meta"><span id="names-count"></span></div></div>
         <div class="names-tools">
-          <input id="names-q" class="names-q" placeholder="Search by name…" autocomplete="off" spellcheck="false" aria-label="Search names" value="${esc(ns.q)}">
+          <input id="names-q" class="names-q" data-esc placeholder="Search by name…" autocomplete="off" spellcheck="false" aria-label="Search names" value="${esc(ns.q)}">
           <div class="seg" id="names-filter" role="group" aria-label="Status">${['All', 'Active', 'On Hold', 'Expired'].map((s) => `<button type="button" data-status="${s}">${s === 'On Hold' ? 'On hold' : s}</button>`).join('')}</div>
           <div class="seg"><button type="button" id="names-sale">For sale only</button></div>
           <div class="names-pager"><button type="button" class="btn ghost small" id="names-prev">‹ Prev</button><span class="dim" id="names-page"></span><button type="button" class="btn ghost small" id="names-next">Next ›</button></div>
@@ -1389,14 +1389,7 @@
     go(path);
   });
   $('#search-input').addEventListener('input', (e) => e.target.setCustomValidity(''));
-  window.addEventListener('keydown', (e) => {
-    const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-    if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#search-input').focus(); }
-    // Esc in a search box: clear it (the results follow), and leave it once it is empty
-    else if (e.key === 'Escape' && t && t.tagName === 'INPUT' && (t.id === 'search-input' || t.classList.contains('names-q'))) {
-      if (t.value) { t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); } else t.blur();
-    }
-  });
+  // "/" and Esc in the search boxes: ui/components/keys.js
   // The latest blocks refresh every 30 s unless older ones were loaded.
   setInterval(() => {
     // the block list refreshes unless older blocks were loaded without a search to keep up with

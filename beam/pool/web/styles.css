@@ -33,7 +33,6 @@ tr.you > td { background: rgba(var(--accent-rgb), 0.05); }
 @media (max-width: 480px) {
   .code pre .arg { overflow-wrap: anywhere; }
 }
-.calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
 
 /* the stats sites that track the pool, above the footer links: their marks alone, grey until
    hovered, then in their own colours; the name is in the tooltip. Local copies (img/): the pages

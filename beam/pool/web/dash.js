@@ -226,64 +226,8 @@
     : b.status === 'unverified' ? `<span class="badge bad" title="${esc(STATUS_TIPS.unverified)}">unverified</span>`
     : `<span class="badge pending" title="maturing: ${int(Math.min(b.confirmations, MATURITY))} of the ${MATURITY} confirmations a coinbase needs">${int(Math.min(b.confirmations, MATURITY))}/${MATURITY}</span>`);
 
-  // A listbox in place of a native <select> (the pool site's dropdown(), the same .dd styles):
-  // arrows, Home/End, Enter or Space to pick, Esc or Tab to close.
-  function dropdown(root, onPick) {
-    const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
-    const items = [...list.querySelectorAll('[role="option"]')];
-    let active = -1;
-    const isOpen = () => !list.hidden;
-    function mark(i) {
-      active = i;
-      items.forEach((li, j) => li.classList.toggle('active', j === i));
-      if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
-    }
-    function set(v) {
-      const li = items.find((x) => x.dataset.v === v) || items.find((x) => x.dataset.v === '');
-      items.forEach((x) => x.setAttribute('aria-selected', String(x === li)));
-      root.dataset.value = li ? li.dataset.v : '';
-      btn.textContent = li ? li.textContent : '';
-    }
-    function open() {
-      list.hidden = false;
-      root.classList.add('open');
-      btn.setAttribute('aria-expanded', 'true');
-      mark(Math.max(0, items.findIndex((x) => x.getAttribute('aria-selected') === 'true')));
-    }
-    function close(focus = true) {
-      list.hidden = true;
-      root.classList.remove('open');
-      btn.setAttribute('aria-expanded', 'false');
-      if (focus) btn.focus();
-    }
-    function pick(i) {
-      const li = items[i];
-      if (!li) return;
-      set(li.dataset.v);
-      close();
-      onPick(li.dataset.v);
-    }
-    btn.addEventListener('click', () => (isOpen() ? close() : open()));
-    list.addEventListener('mousedown', (e) => e.preventDefault());
-    list.addEventListener('click', (e) => { const li = e.target.closest('[role="option"]'); if (li) pick(items.indexOf(li)); });
-    list.addEventListener('mousemove', (e) => { const li = e.target.closest('[role="option"]'); if (li && items.indexOf(li) !== active) mark(items.indexOf(li)); });
-    btn.addEventListener('keydown', (e) => {
-      const k = e.key;
-      if (!isOpen()) {
-        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) { e.preventDefault(); open(); }
-        return;
-      }
-      if (k === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
-      else if (k === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
-      else if (k === 'Home') { e.preventDefault(); mark(0); }
-      else if (k === 'End') { e.preventDefault(); mark(items.length - 1); }
-      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(active); }
-      else if (k === 'Escape') { e.preventDefault(); close(); }
-      else if (k === 'Tab') close(false);
-    });
-    document.addEventListener('click', (e) => { if (isOpen() && !root.contains(e.target)) close(false); });
-    set(root.dataset.value || '');
-  }
+  // the card list (.dd) in place of a native <select>: the shared one in ui/components/dd.js
+  function dropdown(root, onPick) { return window.BB.dropdown(root, onPick); }
   const ddHtml = (id, label, value, opts) => `<div class="dd compact" id="${id}" data-value="${esc(value)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="${esc(label)}"></button>
     <ul class="dd-list" role="listbox" tabindex="-1" hidden>${opts.map(([v, t]) => `<li role="option" data-v="${esc(v)}">${esc(t)}</li>`).join('')}</ul></div>`;
 

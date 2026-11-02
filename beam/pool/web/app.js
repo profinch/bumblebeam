@@ -844,67 +844,8 @@
     return { cls: 'warn', text: 'This does not look like a Beam address.' };
   }
 
-  // A small listbox in place of a native <select>, whose open list the browser draws itself (system
-  // colours, square corners). Opened, it continues the button seamlessly: same fill and border,
-  // the button's bottom corners square, the list's bottom corners round. Keyboard: arrows,
-  // Home/End, Enter or Space to pick, Esc or Tab to close.
-  function dropdown(root, onPick) {
-    const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
-    const items = [...list.querySelectorAll('[role="option"]')];
-    let active = -1;
-    const isOpen = () => !list.hidden;
-    function mark(i) {
-      active = i;
-      items.forEach((li, j) => li.classList.toggle('active', j === i));
-      if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
-    }
-    function set(v) {
-      const li = items.find((x) => x.dataset.v === v) || items.find((x) => x.dataset.v === '');
-      items.forEach((x) => x.setAttribute('aria-selected', String(x === li)));
-      root.dataset.value = li ? li.dataset.v : '';
-      btn.textContent = li ? li.textContent : '';
-    }
-    function open() {
-      list.hidden = false;
-      root.classList.add('open');
-      btn.setAttribute('aria-expanded', 'true');
-      mark(Math.max(0, items.findIndex((x) => x.getAttribute('aria-selected') === 'true')));
-    }
-    function close(focus = true) {
-      list.hidden = true;
-      root.classList.remove('open');
-      btn.setAttribute('aria-expanded', 'false');
-      if (focus) btn.focus();
-    }
-    function pick(i) {
-      const li = items[i];
-      if (!li) return;
-      set(li.dataset.v);
-      close();
-      onPick(li.dataset.v);
-    }
-    btn.addEventListener('click', () => (isOpen() ? close() : open()));
-    list.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus on the button
-    list.addEventListener('click', (e) => { const li = e.target.closest('[role="option"]'); if (li) pick(items.indexOf(li)); });
-    list.addEventListener('mousemove', (e) => { const li = e.target.closest('[role="option"]'); if (li && items.indexOf(li) !== active) mark(items.indexOf(li)); });
-    btn.addEventListener('keydown', (e) => {
-      const k = e.key;
-      if (!isOpen()) {
-        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(k)) { e.preventDefault(); open(); }
-        return;
-      }
-      if (k === 'ArrowDown') { e.preventDefault(); mark(Math.min(items.length - 1, active + 1)); }
-      else if (k === 'ArrowUp') { e.preventDefault(); mark(Math.max(0, active - 1)); }
-      else if (k === 'Home') { e.preventDefault(); mark(0); }
-      else if (k === 'End') { e.preventDefault(); mark(items.length - 1); }
-      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(active); }
-      else if (k === 'Escape') { e.preventDefault(); close(); }
-      else if (k === 'Tab') close(false);
-    });
-    document.addEventListener('click', (e) => { if (isOpen() && !root.contains(e.target)) close(false); });
-    set(root.dataset.value || '');
-    return { set };
-  }
+  // the card list (.dd) in place of a native <select>: the shared one in ui/components/dd.js
+  function dropdown(root, onPick) { return window.BB.dropdown(root, onPick); }
 
   function bindConnect() {
     const ctx = $('#ctx');
@@ -1226,15 +1167,7 @@
     go(minerHref(v));
   });
   setMyLink();
-  // "/" focuses the search, as on GitHub, unless the user is typing somewhere; Esc leaves it.
-  window.addEventListener('keydown', (e) => {
-    const t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-    if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); $('#search-input').focus(); }
-    // Esc in a search box: clear it (the results follow), and leave it once it is empty
-    else if (e.key === 'Escape' && t && t.tagName === 'INPUT' && (t.id === 'search-input' || t.classList.contains('names-q'))) {
-      if (t.value) { t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); } else t.blur();
-    }
-  });
+  // "/" and Esc in the search boxes: ui/components/keys.js
   // Live refresh every 30 s, except where the user is typing or has a list open (filters and
   // sorting of the blocks tables are kept across it).
   setInterval(() => {

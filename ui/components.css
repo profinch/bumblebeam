@@ -96,9 +96,9 @@
   cursor: help;
 }
 
-/* the chip fits what it says ("loading…", then the price), its left edge fixed under the brand word, the
-   price in the middle of it (equal padding); only its own right side moves when the price arrives */
-.price-chip b { display: inline-block; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
+/* the value has a fixed room that holds "loading…" and the price alike, so the chip keeps one width while
+   it loads; the text sits in the middle of it. The chip's left edge is fixed under the brand word. */
+.price-chip b { display: inline-block; width: 8.5ch; text-align: center; white-space: nowrap; color: var(--accent); letter-spacing: 0.02em; }
 /* the footer's status pill tells more in its tip */
 .foot .pill-status { cursor: help; }
 .cta-top.active { background: rgba(var(--accent-rgb), 0.15); }
@@ -495,3 +495,21 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .legend b { color: var(--text); font-weight: 700; margin-left: 6px; }
 .donut path { transition: opacity .15s; }
 .donut-wrap.hovering .donut path:not(.on) { opacity: .35; }
+
+/* small shared pieces (were the explorer's): a hash or key that may break anywhere, a key-value list,
+   signed amounts, no-wrap / wrap, a click-to-copy text, small print */
+.hash { font-family: var(--font-mono); word-break: break-all; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font: 12px var(--font-mono); }
+.kv dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding-top: 2px; }
+.kv dd { margin: 0; min-width: 0; word-break: break-all; color: var(--text-dim); }
+td .kv { font-size: 11px; gap: 2px 10px; }
+.amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amt.neg { color: var(--color-red); }
+.amt.pos { color: var(--accent); }
+.nowrap { white-space: nowrap; }
+.wrap { white-space: normal; }
+.copy { cursor: pointer; }
+.copy:hover { color: var(--accent); }
+.small { font-size: 10px; }
+/* a calculator's results: tiles in a grid (were the pool's) */
+.calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
