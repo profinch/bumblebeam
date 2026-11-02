@@ -17,6 +17,7 @@ beam/       the Beam direction: oracle, vectors, pool, explorer (+ api), wallet,
 bitcoin/    the Bitcoin direction: 3bminer
 rig/        tools for the mining box, any coin: thermo
 hive/       shared services across directions (planned)
+ui/         the one design library for every site: tokens, components, charts, showcase
 deploy/     the production stack: Docker compose, nginx, certbot, host firewall
 skills/     agent skills for the explorer and the pool APIs
 brand/      the logo, banners and their generators

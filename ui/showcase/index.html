@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BumbleBeam UI</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../base.css">
+<link rel="stylesheet" href="../components.css">
+<script src="../components/bb.js"></script>
+<script src="../charts/charts.js"></script>
+<style>
+  /* showcase-only helpers */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+  .sw { border: 1px solid var(--border-dim); border-radius: var(--radius-l); overflow: hidden; font: var(--fs-s) var(--font-mono); }
+  .sw > div { height: 44px; }
+  .sw p { margin: 0; padding: var(--sp-2) 10px; color: var(--text-dim); }
+  .sw p span { display: block; color: var(--muted); margin-top: 2px; }
+  .scale p { margin: 0 0 var(--sp-2); font-family: var(--font-mono); }
+  .scale p span { color: var(--muted); display: inline-block; width: 110px; font-size: var(--fs-s); }
+  .demo-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }
+  h2.sec { font: 700 var(--fs-m) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--muted); margin: 32px 0 var(--sp-3); }
+</style>
+</head>
+<body>
+<bb-eco here="pool"></bb-eco>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="#"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>UI</em></span></a>
+    <form class="search" onsubmit="return false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input placeholder="Payout address" aria-label="Search"><kbd>/</kbd></form>
+    <span class="price-chip">BEAM <b>$0.0412</b></span>
+    <nav class="main-nav" aria-label="Main"><a class="active" href="#">Components</a><a href="#charts">Charts</a><a href="#tokens">Tokens</a></nav>
+  </div>
+</header>
+
+<main>
+  <div class="page-head">
+    <h1 class="page-title">Design library</h1>
+    <div class="actions">
+      <div class="seg" role="group" aria-label="Chain accent">
+        <button id="chain-beam" class="on" type="button">Beam</button>
+        <button id="chain-btc" type="button">Bitcoin</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint">One brand, an accent per chain: <code>&lt;html data-chain="bitcoin"&gt;</code> switches the accent, the logo's hexagon and the main chart colour. Everything below is <code>ui/tokens.css</code> + <code>base.css</code> + <code>components.css</code>, <code>components/bb.js</code> and <code>charts/charts.js</code>.</p>
+
+  <h2 class="sec">Stat tiles</h2>
+  <div class="tiles">
+    <div class="tile"><div class="k">Pool hashrate</div><div class="v accent">6.52 kSol/s</div><div class="s">24 h avg 5.91k</div></div>
+    <div class="tile"><div class="k">Miners</div><div class="v">37</div><div class="s">112 workers</div></div>
+    <div class="tile"><div class="k">Blocks 24 h</div><div class="v">121</div><div class="s">effort 96%</div></div>
+    <div class="tile"><div class="k">Keys checked</div><div class="v">4.81 × 10¹⁵</div><div class="s">Shuffle 639/1000</div></div>
+  </div>
+
+  <div class="grid2">
+    <section class="panel" id="charts">
+      <div class="panel-head"><h2 class="panel-title">Hashrate</h2>
+        <div class="seg" id="range"><button class="on" data-h="24">24h</button><button data-h="168">7d</button><button data-h="720">30d</button></div>
+        <div class="panel-meta">now <b id="now-v">–</b></div></div>
+      <div id="chart-main"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Blocks per pool</h2><div class="panel-meta">24 h</div></div>
+      <div id="donut"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Temperatures</h2><div class="panel-meta">several series, a band under the first</div></div>
+    <div id="chart-multi"></div>
+    <div class="legend" id="legend-multi"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Miners</h2><div class="panel-meta"><span class="pill-status"><i></i>live</span><span class="pill-status warn"><i></i>demo</span><span class="pill-status off"><i></i>offline</span></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Miner</th><th>Mode</th><th class="num">Hashrate</th><th>Trend</th><th class="num">Share</th></tr></thead>
+      <tbody id="miners"></tbody>
+    </table></div>
+  </section>
+
+  <h2 class="sec">Controls</h2>
+  <section class="panel">
+    <div class="demo-row">
+      <button class="btn" type="button">Start mining</button>
+      <button class="btn solid" type="button">Claim</button>
+      <button class="btn ghost" type="button">Cancel</button>
+      <button class="btn small" type="button">Copy</button>
+      <button class="btn" type="button" disabled>Disabled</button>
+      <span class="pill on">on</span><span class="pill">off</span>
+      <span class="badge ok">confirmed</span><span class="badge pending">pending</span><span class="badge bad">orphan</span><span class="badge solo">solo</span>
+      <span class="dot"></span><span class="dot off"></span>
+    </div>
+    <div class="row">
+      <label class="field">Payout address<input value="bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" spellcheck="false"></label>
+      <div class="field">Range
+        <div class="dd" id="dd"><button class="dd-btn" type="button" aria-haspopup="listbox">Last 24 hours</button>
+          <ul class="dd-list" role="listbox"><li role="option" aria-selected="true">Last 24 hours</li><li role="option">Last 7 days</li><li role="option">Last 30 days</li></ul></div>
+      </div>
+    </div>
+    <div class="bar" style="margin-top:16px"><i style="width:62%"></i></div>
+    <div class="bar warn"><i style="width:28%"></i></div>
+  </section>
+
+  <h2 class="sec">Text</h2>
+  <section class="panel">
+    <p class="hint">A hint under a title: muted, 12px, line height 1.5.</p>
+    <div class="note">A note: something worth knowing, in a thin frame.</div>
+    <div class="note warn">A warning note: <b>demo data</b>, nothing here is live.</div>
+    <div class="note bad">An error note: the node is not reachable.</div>
+    <div class="steps" style="margin-top:16px">
+      <div class="step"><h3>Point your miner at the pool</h3><div class="code"><pre>stratum+tcp://stratum.bumblebeam.org:3333</pre><button class="btn small" type="button">Copy</button></div></div>
+      <div class="step"><h3>Use your address as the login</h3><p>Payouts go to it every two hours. <a class="text-link" href="#">Read more</a></p></div>
+    </div>
+    <div class="empty">No data yet</div>
+  </section>
+
+  <h2 class="sec" id="tokens">Tokens</h2>
+  <section class="panel">
+    <div class="swatches" id="swatches"></div>
+  </section>
+  <section class="panel scale">
+    <p><span>--fs-xs 10</span><b class="caps">Tile key · table head</b></p>
+    <p style="font-size:var(--fs-s)"><span>--fs-s 11</span>Meta, footer, pills</p>
+    <p style="font-size:var(--fs-m)"><span>--fs-m 12</span>Tables, data, buttons</p>
+    <p style="font-size:var(--fs-base)"><span>--fs-base 13</span>Fields, nav, panel text</p>
+    <p style="font-size:var(--fs-body);font-family:var(--font-sans)"><span>--fs-body 14</span>The page in the sans face</p>
+    <p style="font-size:var(--fs-l);font-weight:700"><span>--fs-l 19</span>Brand</p>
+    <p style="font-size:var(--fs-xl);font-weight:700"><span>--fs-xl 22</span>4.81 kSol/s</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="#">Pool</a><a href="#">Explorer</a><a href="#">API</a><a href="#">GitHub</a>
+  <p class="foot-copy">© BumbleBeam · open source, Apache-2.0</p>
+</footer>
+
+<script>
+(function () {
+  var now = Math.floor(Date.now() / 1000);
+  // deterministic demo data
+  var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function hashrate(hours) {
+    var pts = [], n = Math.min(288, hours * 4), v = 5200;
+    for (var i = 0; i < n; i++) { v = Math.max(800, v + (rnd() - 0.48) * 600); pts.push([now - (hours * 3600) * (1 - i / (n - 1)), v]); }
+    return pts;
+  }
+  function drawMain(h) {
+    var s = hashrate(h);
+    document.getElementById('chart-main').innerHTML = BBCharts.line(s, { title: 'Hashrate', peak: true, label: function (v) { return BBCharts.compact(v); } });
+    document.getElementById('now-v').textContent = BBCharts.compact(s[s.length - 1][1]) + ' Sol/s';
+  }
+  drawMain(24);
+  document.getElementById('range').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    drawMain(+b.dataset.h);
+  });
+
+  var names = ['CPU', 'GPU 0', 'GPU 1', 'NVMe', 'VRM'], multi = [], legend = '';
+  names.forEach(function (n, k) {
+    var pts = [], band = [], base = 38 + k * 7;
+    for (var i = 0; i < 120; i++) {
+      var t = now - 6 * 3600 * (1 - i / 119), v = base + Math.sin(i / 9 + k) * 4 + rnd() * 1.5;
+      pts.push([t, v]); if (k === 0) band.push([t, v - 2 - rnd(), v + 2 + rnd()]);
+    }
+    multi.push({ name: n, points: pts, band: k === 0 ? band : null });
+    legend += '<span><i style="background:var(--chart-' + (k + 1) + ')"></i>' + n + '<b>' + pts[pts.length - 1][1].toFixed(1) + '°C</b></span>';
+  });
+  document.getElementById('chart-multi').innerHTML = BBCharts.line(multi, { title: 'Temperatures', now: false, zero: false, label: function (v) { return v.toFixed(0) + '°'; } });
+  document.getElementById('legend-multi').innerHTML = legend;
+
+  document.getElementById('donut').innerHTML = BBCharts.donut([
+    { name: '2Miners', value: 64 }, { name: 'BumbleBeam', value: 31, color: 'var(--accent)' }, { name: 'Herominers', value: 15 }, { name: 'K1Pool', value: 7 }, { name: 'Other', value: 4 }
+  ], { total: '121', sub: 'blocks' });
+
+  var rows = '';
+  ['bumble-rig', 'nicehash', 'esp32-devkit', 'garage-3090'].forEach(function (n, i) {
+    var s = hashrate(6), last = s[s.length - 1][1] / (i + 1);
+    rows += '<tr><td><span class="name">' + n + '</span><span class="sub">bc1q…' + (1000 + i * 37) + '</span></td><td>' + (i === 2 ? '<span class="badge solo">solo</span>' : '<span class="badge ok">pplns</span>') + '</td><td class="num">' + BBCharts.compact(last) + '</td><td>' + BBCharts.spark(s) + '</td><td class="num">' + (40 - i * 9) + '%<div class="bar"><i style="width:' + (40 - i * 9) + '%"></i></div></td></tr>';
+  });
+  document.getElementById('miners').innerHTML = rows;
+
+  var sw = ['--accent', '--color-red', '--color-yellow', '--color-blue', '--color-purple', '--color-orange', '--bg', '--field-bg', '--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5', '--chart-6'];
+  function swatches() {
+    var cs = getComputedStyle(document.documentElement);
+    document.getElementById('swatches').innerHTML = sw.map(function (n) {
+      return '<div class="sw"><div style="background:var(' + n + ')"></div><p>' + n + '<span>' + cs.getPropertyValue(n).trim() + '</span></p></div>';
+    }).join('');
+  }
+  swatches();
+
+  function chain(c) {
+    if (c === 'bitcoin') document.documentElement.setAttribute('data-chain', 'bitcoin'); else document.documentElement.removeAttribute('data-chain');
+    document.getElementById('chain-beam').classList.toggle('on', c !== 'bitcoin');
+    document.getElementById('chain-btc').classList.toggle('on', c === 'bitcoin');
+    swatches();
+  }
+  document.getElementById('chain-beam').onclick = function () { chain('beam'); };
+  document.getElementById('chain-btc').onclick = function () { chain('bitcoin'); };
+  if (location.hash === '#bitcoin') chain('bitcoin');
+
+  var dd = document.getElementById('dd');
+  dd.querySelector('.dd-btn').onclick = function () { dd.classList.toggle('open'); };
+  dd.querySelector('.dd-list').onclick = function (e) {
+    var o = e.target.closest('[role="option"]'); if (!o) return;
+    this.querySelectorAll('[role="option"]').forEach(function (x) { x.setAttribute('aria-selected', x === o); });
+    dd.querySelector('.dd-btn').textContent = o.textContent; dd.classList.remove('open');
+  };
+})();
+</script>
+</body>
+</html>

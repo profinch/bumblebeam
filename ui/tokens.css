@@ -1,0 +1,101 @@
+/* BumbleBeam UI tokens: the one source of colours, type, spacing and chart colours for every site.
+   Names follow beam/pool/web/styles.css, so the pool, the explorer and thermo read them as they are.
+   One brand (the dark Beam blue, the type, the components), an accent per chain:
+     <html>                      Beam: turquoise #00f6d2, the Beam gradient (default)
+     <html data-chain="bitcoin"> Bitcoin: orange #f7931a, an orange gradient
+   Use the accent through var(--accent) and rgba(var(--accent-rgb), a), never as a literal. */
+
+:root {
+  /* palette (fixed, the same on every chain) */
+  --color-red: #f25f5b;
+  --color-yellow: #f4ce4a;
+  --color-green: #00f6d2;
+  --color-blue: #0bccf7;
+  --color-purple: #da68f5;
+  --color-orange: #f7931a;
+  --color-dark-blue: #042548;
+  --color-darkest-blue: #032e49;
+  --red-rgb: 242, 95, 91;
+  --yellow-rgb: 244, 206, 74;
+  --purple-rgb: 218, 104, 245;
+
+  /* chain accent: Beam by default */
+  --accent: #00f6d2;
+  --accent-rgb: 0, 246, 210;
+  --accent-dim: rgba(var(--accent-rgb), 0.18);
+  --gradient-accent: linear-gradient(135deg, #0b76ff 0%, #39fff2 100%);
+  --gradient-beam: linear-gradient(135deg, #0b76ff 0%, #39fff2 100%);
+  --gradient-bitcoin: linear-gradient(135deg, #f7931a 0%, #ffc46b 100%);
+  /* the bee's hexagon (<bb-logo>) takes the chain's gradient; the bee itself never changes */
+  --logo-from: #0b76ff;
+  --logo-to: #39fff2;
+
+  /* surfaces and text */
+  --bg: #042548;
+  --page-gradient: linear-gradient(180deg, #031d35 0%, #043a5b 55%, #0a5a80 100%);
+  --page-end: #0a5a80;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface2: rgba(255, 255, 255, 0.05);
+  --surface3: rgba(0, 0, 0, 0.4);
+  --panel-bg: rgba(255, 255, 255, 0.04);
+  --field-bg: #193b55;
+  --text: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.8);
+  --muted: rgba(255, 255, 255, 0.5);
+  --muted2: rgba(255, 255, 255, 0.4);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-dim: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* type: system fonts only (nothing is downloaded) */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+  /* the type scale: seven sizes instead of the twenty the sites had */
+  --fs-xs: 10px;   /* labels in caps: tile keys, table heads, badges */
+  --fs-s: 11px;    /* meta, footer, pills, small buttons */
+  --fs-m: 12px;    /* tables, data, buttons */
+  --fs-base: 13px; /* fields, nav, running text in panels */
+  --fs-body: 14px; /* the page */
+  --fs-l: 19px;    /* the brand, section numbers */
+  --fs-xl: 22px;   /* tile values */
+  --caps-spacing: 0.06em;
+
+  /* spacing and shape */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 36px;
+  --radius-s: 4px;    /* badges, kbd */
+  --radius-m: 6px;    /* buttons, fields, notes */
+  --radius-l: 8px;    /* panels, tiles, search */
+  --radius-pill: 999px;
+  --page-padding-x: clamp(14px, 2.5vw, 36px);
+  --page-width: 1370px;
+  /* breakpoints (media queries cannot read variables; use these numbers): 480px phone, 820px tablet, 1080px narrow desktop */
+
+  /* charts: series hues checked on the dark surfaces (from thermo), then the fixed roles */
+  --chart-1: #00ad95;
+  --chart-2: #5280ff;
+  --chart-3: #cc7a24;
+  --chart-4: #b061dc;
+  --chart-5: #6f9e2c;
+  --chart-6: #d9608f;
+  --chart-main: var(--accent);         /* the one series of a single-series chart */
+  --chart-up: #00f6d2;                 /* candles and deltas: up stays turquoise on every chain */
+  --chart-down: #f25f5b;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-text: rgba(255, 255, 255, 0.6);
+  --chart-cross: rgba(255, 255, 255, 0.35);
+  --chart-label-bg: #193b55;
+  --chart-label-text: #ffffff;
+}
+
+:root[data-chain="bitcoin"] {
+  --accent: #f7931a;
+  --accent-rgb: 247, 147, 26;
+  --gradient-accent: linear-gradient(135deg, #f7931a 0%, #ffc46b 100%);
+  --logo-from: #f7931a;
+  --logo-to: #ffc46b;
+}
