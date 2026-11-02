@@ -24,8 +24,7 @@ config BOARD_TITLE
     default "ESP32-CAM" if BOARD_ESP32CAM
 config BOARD_HOST_PREFIX
     string
-    default "3BMiner" if BOARD_DEVKIT
-    default "3BMiner-Cam" if BOARD_ESP32CAM
+    default "3BMiner"
 config BOARD_DEFAULT_WORKER
     string
     default "esp32" if BOARD_DEVKIT

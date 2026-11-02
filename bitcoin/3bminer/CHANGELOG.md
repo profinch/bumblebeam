@@ -38,6 +38,7 @@ Security
 Wi-Fi and settings
 - Set-up network: with no Wi-Fi saved, or 2 minutes without its network, the board opens 3BMiner-xxxxxx (open, page at
   http://192.168.4.1/) and keeps trying its own; no more restart loops that only USB could end.
+- Every board is named 3BMiner-<last 3 bytes of its MAC> (host name, set-up network); the camera board was 3BMiner-Cam-....
 - Settings are checked before they are taken: empty Wi-Fi name, a password under 8 characters, a malformed BSSID, an empty
   pool and a Bitcoin address with a wrong checksum or length (bech32/bech32m/base58check) are refused.
 - Settings are stored as one NVS blob: a power cut or a full NVS leaves the old settings or the new ones, never a mix (each
