@@ -1,8 +1,7 @@
 # 3BMiner history
 
 Every image that ran on a board, when, how it got there and what it measured. What changed in each version is in
-[CHANGELOG.md](CHANGELOG.md); the images up to 0.5.6 are kept outside git ( and
-`a local folder`), from 0.6.0 on `tools/build.sh` puts them in `dist/`.
+[CHANGELOG.md](CHANGELOG.md); the images up to 0.5.6 are kept outside git (on the developer's machine), from 0.6.0 on `tools/build.sh` puts them in `dist/`.
 
 ## Versions
 
@@ -26,10 +25,10 @@ Every image that ran on a board, when, how it got there and what it measured. Wh
 
 ## Boards
 
-| Board | MAC | Address | Flash backup |
-|---|---|---|---|
-| ESP32-WROOM-32 devkit (CP2102, COM6) | e4:65:b8:00:00:01 | 192.168.0.21, 192.168.0.21 before 2026-10-28 11:20 | NerdMiner V1.8.3 image,  |
-| AI-Thinker ESP32-CAM on ESP32-CAM-MB (CH340, COM7) | e0:5a:1b:00:00:02 | 192.168.0.22, 192.168.0.22 before | CameraWebServer (arduino-esp32 3.3.6),  |
+| Board | Address | Flash backup |
+|---|---|---|
+| ESP32-WROOM-32 devkit (CP2102, COM6) | 192.168.0.21 | NerdMiner V1.8.3 image, `backup-full-4MB.bin` |
+| AI-Thinker ESP32-CAM on ESP32-CAM-MB (CH340, COM7) | 192.168.0.22 | CameraWebServer (arduino-esp32 3.3.6), `original-full-4MB.bin` |
 
 ## Flash log
 

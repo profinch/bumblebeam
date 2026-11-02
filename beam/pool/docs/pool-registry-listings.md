@@ -141,7 +141,7 @@ Mining OS and smaller trackers, checked 2026-10-08:
 - mmpOS: pools are added per account in the app (app.mmpos.eu); no public route to a shared list found.
 - NiceHash "compatible pools" page https://www.nicehash.com/compatible-pools: a hand-picked list of 11 pools
   "known to work flawlessly"; for Beam only 2Miners and Cruxpool. No form; ask NiceHash support (a ticket from
-  the account) once NiceHash orders have actually run on the pool. 
+  the account) once NiceHash orders have actually run on the pool.
 - Pool-monitor phone apps add pools on request and need the per-miner stats API: MinerBox and Blockwatch X
   emailed, see the table. Poolguard: request from inside the app, still to do. Mining Pool Monitor (iOS):
   last update 2018, six pools, no contact; skipped.

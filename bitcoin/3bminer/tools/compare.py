@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # Side-by-side benchmark of miners on one pool: every minute each device's /api/system/info and the pool's per-worker
 # numbers, into <outdir>/samples.csv; at the end summary.md and report.html (tools/benchreport.py).
-#   tools/compare.py <hours> <outdir> [pool-api]   e.g. tools/compare.py 8 bench/2026-10-29-solobtc-0.9.0
+#   tools/compare.py <hours> <outdir> [pool-api]   e.g. MINERS='devkit=192.168.0.21' tools/compare.py 8 bench/2026-10-29-solobtc-0.9.0 <pool-api>
 #   (a run's folder: the day it starts, the pool, our firmware version)
-#   pool-api: the pool's per-address API, solobtc.nmminer.com by default: public-pool and its forks, e.g.
+#   pool-api: the pool's per-address API (or POOL_URL): public-pool and its forks, e.g.
 #   https://public-pool.io:40557/api/client/<address>, or ckpool's, e.g. https://pool.nerdminers.org/users/<address>
-# DEV, POOL and POOLNAME below are this setup's: the devices' addresses, the pool's per-address API, the worker names.
+# MINERS names the devices and their addresses; POOLNAME below maps a name to the pool's worker name (default: the same).
 # A device may have several addresses (NMMiner has no access-point lock and moves between the two networks on one SSID):
 # the one that answered last is asked first, the others when it does not answer.
 import json, time, urllib.request, csv, sys, datetime, statistics, os
 HOURS = float(sys.argv[1]) if len(sys.argv) > 1 else 8.0
 OUT = (sys.argv[2] if len(sys.argv) > 2 else '.').rstrip('/') + '/'; os.makedirs(OUT, exist_ok=True)
-DEV = {'nmminer': ['192.168.0.23', '192.168.0.23'], 'devkit': ['192.168.0.21'], 'devcam': ['192.168.0.22']}
-POOL = sys.argv[3] if len(sys.argv) > 3 else 'https://solobtc.nmminer.com/api/client/bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'
+# the miners from MINERS, e.g. MINERS='nmminer=192.168.0.23 devkit=192.168.0.21 devcam=192.168.0.22' (a name may list
+# several addresses, comma-separated); the pool's per-address stats URL as the third argument or POOL_URL
+DEV = {n: a.split(',') for n, a in (p.split('=', 1) for p in os.environ.get('MINERS', '').split())}
+POOL = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('POOL_URL', '')
+if not DEV or not POOL: sys.exit('set MINERS and the pool stats URL (argument 3 or POOL_URL)')
 POOLNAME = {'nmminer': 'nmminer', 'devkit': 'devkit', 'devcam': 'devcam'}
 def get(url, t=8):
     try:
@@ -40,7 +43,7 @@ with open(OUT + 'samples.csv', 'w', newline='') as f:
         ts = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'); pool = get(POOL, 15) or {}
         pw = workers(pool)
         for dev in DEV:
-            d, ip = device(dev); d = d or {}; m = d.get('miner', {}); p = pw.get(POOLNAME[dev], {})
+            d, ip = device(dev); d = d or {}; m = d.get('miner', {}); p = pw.get(POOLNAME.get(dev, dev), {})
             row = [ts, dev, round(float(m.get('hashRate', 0)) * 1e6, 1), round(float(p.get('hashRate', 0)) / 1e3, 1) if p else '', m.get('sAccepted', ''), m.get('sRejected', ''), pdiff(m.get('bestDiffSession', 0)), m.get('uptimeSeconds', ''), m.get('freeHeap', ''), p.get('bestDifficulty', '') if p else '', d.get('identity', {}).get('rssi', ''),
                    round(float(m['hashRateEngine']) * 1e6, 1) if 'hashRateEngine' in m else '', round(float(m['hashRateSw']) * 1e6, 1) if 'hashRateSw' in m else '', d.get('identity', {}).get('fwVersion', ''), ip]
             w.writerow(row); rows.append(row)

@@ -13,7 +13,7 @@ shows through `/api/admin/miners/:id`. A ticket that opens next to the miner's c
 question. Off-the-shelf helpdesks (FreeScout, Zammad) cannot do that, add a second login and a second stack
 (PHP / Elasticsearch) to patch.
 
-Mail stays in mailcow (mail.example.org): the support service is a mail client of the mailbox, like SOGo. Nothing is
+Mail stays in mailcow: the support service is a mail client of the mailbox, like SOGo. Nothing is
 lost if the service is down, and SOGo still shows everything.
 
 ## Architecture
@@ -45,7 +45,7 @@ support ─HTTPS─► api.telegram.org (@BumbleBeam_bot) ◄──┘
 - **In:** IMAP IDLE on INBOX (plus a full resync every 10 min and at start). Each new message is parsed, stored,
   then moved to the IMAP folder `Tickets` (created by the service). Import is idempotent: unique on `Message-ID`
   (or a hash of the raw message when it has none), so a crash between the insert and the move only repeats a no-op.
-- **Out:** SMTP submission `mail.example.org:587` STARTTLS as support@. Replies carry `In-Reply-To` / `References`
+- **Out:** SMTP submission on the mail server's port 587, STARTTLS as support@. Replies carry `In-Reply-To` / `References`
   of the thread and `[BB-<id>]` in the subject; a copy is appended to `Sent` over IMAP so SOGo shows it too.
   Every mail goes through mailcow, so it is DKIM-signed `d=bumblebeam.org` (see DNS below).
 - **Not imported:** DMARC aggregate reports, bounces (`MAILER-DAEMON`, `multipart/report`), auto-replies
@@ -143,8 +143,8 @@ CREATE TABLE support.files (
 
 | Record | State |
 |---|---|
-| MX | `mail.example.org` |
-| SPF | `v=spf1 include:example.org ~all` → `example.org` `a mx` → 203.0.113.10 (mail.example.org, PTR matches) |
+| MX | the mailcow host |
+| SPF | `include:` of the mail server's domain, `~all`; the mail host's PTR matches |
 | DKIM | `dkim._domainkey`, RSA 2048, same key as in mailcow; outgoing mail is signed `d=bumblebeam.org` |
 | DMARC | **missing** - add before the form sends confirmations |
 

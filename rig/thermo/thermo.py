@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""thermo: every temperature on node1, plus the fans, voltages, power and load that explain them.
+"""thermo: every temperature on a Linux box, plus the fans, voltages, power and load that explain them.
 
   collect  (root)  every 2 s: hwmon (k10temp, nvme, NIC, ACPI, any later driver), the IT8689E
                    Super I/O read straight from its ports (fans, voltages, board temps; the

@@ -1,7 +1,8 @@
 # Thermo
 
 Every temperature on a Linux box, plus the fans, voltages, power and load that explain them, in a
-dashboard in the BumbleBeam look.
+dashboard in the BumbleBeam look. Board-specific parts (the IT8689E Super I/O of Gigabyte AM4 boards,
+NVIDIA GPUs over NVML) are used when present; everything else is generic.
 Python 3 stdlib only, no build step.
 
 ```
