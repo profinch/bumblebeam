@@ -7,5 +7,8 @@
 !beam/explorer/web
 !beam/explorer/api
 !ui
+# the showcase and the docs stay in the repo, the sites serve only the library
+ui/showcase
+ui/**/*.md
 !deploy/docker/containers
 **/target
