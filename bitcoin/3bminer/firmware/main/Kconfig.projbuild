@@ -18,6 +18,10 @@ config BOARD_NAME
     string
     default "esp32-wroom-32" if BOARD_DEVKIT
     default "esp32-cam" if BOARD_ESP32CAM
+config BOARD_TITLE
+    string
+    default "ESP32-WROOM-32" if BOARD_DEVKIT
+    default "ESP32-CAM" if BOARD_ESP32CAM
 config BOARD_HOST_PREFIX
     string
     default "3BMiner" if BOARD_DEVKIT

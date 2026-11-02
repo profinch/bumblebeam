@@ -236,10 +236,9 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
                                       explorer-api, explorer-web, nginx, certbot
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
-  containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-app; pool-stratum at STRATUM_REF)
-  containers/pool-web/                builds the pool UI (beam/pool/web) at POOL_WEB_REF (else BUMBLEBEAM_REF), nginx
-  containers/explorer-api/            builds the API and MCP server (beam/explorer/api/server.js) at BUMBLEBEAM_REF, Node
-  containers/explorer-web/            builds the explorer UI (beam/explorer/web) at BUMBLEBEAM_REF, nginx
+  containers/pool/, pool-web/,         Dockerfiles of the images CI builds from the repository root and pushes to
+  explorer-api/, explorer-web/        ghcr.io/profinch/ (.github/workflows/images.yml); the server only pulls them,
+                                      by the *_IMAGE lines in .env
   containers/nginx/, containers/certbot/
   beam-node.cfg.example, explorer-node.cfg.example, pool.toml.example, wallet-setup.sh, .env
   pool-tls-sync.sh                    copies the wildcard certificate for stratum TLS (D7)
@@ -366,8 +365,8 @@ sudo docker compose -f compose-bumblebeam.yaml up -d --force-recreate beam-node 
 ### D6. The pool
 
 ```sh
-echo "POOL_REF=<commit>" | sudo tee -a /data/docker/.env     # picks the source and tags the image
-sudo docker compose -f compose-bumblebeam.yaml build pool-app pool-web   # pool-app builds the image; pool-stratum runs it too while STRATUM_REF is empty
+# .env: POOL_IMAGE, STRATUM_IMAGE, POOL_WEB_IMAGE (see .env.example), then
+sudo docker compose -f compose-bumblebeam.yaml pull pool-app pool-stratum pool-web
 sudo docker compose -f compose-bumblebeam.yaml up -d postgres pool-stratum pool-app pool-web
 curl -s localhost:8080/api/health
 ```
@@ -427,19 +426,19 @@ the running node, use `up -d --no-deps <service>`.
   leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
   shares, and why it ended); addresses are shortened in logs.
 - Pool update (beam/pool/docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
-  blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from images tagged with commits: `pool-app` runs `POOL_REF`, `pool-stratum` runs `STRATUM_REF` (empty = `POOL_REF`).
-  Set `POOL_REF=<commit>` in `.env`, `build pool-app` (it builds the image), then
+  blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from one image built by CI: a tag `pool-vX.Y.Z` makes `ghcr.io/profinch/bumblebeam-pool:X.Y.Z`, every push to main
+  a candidate `:sha-<7 chars>`. `pool-app` runs `POOL_IMAGE`, `pool-stratum` runs `STRATUM_IMAGE`. Set `POOL_IMAGE`, `pull pool-app`, then
   - a change only to the app half (`api`, `admin`, `payouts`, `accounting::confirm_loop`, `network`, `db` queries
     used there): `up -d --no-deps pool-app` - no miner notices (2026-10-23: 0.47 s, 0 disconnects);
   - a change to the stratum half (`stratum`, `upstream`, `pow`, `conns`, the share writer, found blocks and
     `accounting::credit_loop`, `coinbase`: the finalizer link, uploads and expiry live there): also
-    `STRATUM_REF=<the same commit>` (or empty) and `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
+    `STRATUM_IMAGE=<the same image>`, `pull pool-stratum` and `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
     NiceHash after ~40 s;
   - both: both, the app first. Schema changes run on start of either half (they are idempotent).
-  A rollback is the previous `POOL_REF` (or `STRATUM_REF`) and the same `up -d` (the old image tag is still there). Always
-  name the services: a bare `up -d` applies `STRATUM_REF` too. `pool-web` takes
-  `POOL_WEB_REF` (falling back to `BUMBLEBEAM_REF`), so UI releases touch neither half. A change to the shared `styles.css`
-  rebuilds `pool-web` and `explorer-web`.
+  A rollback is the previous image in `.env` and the same `up -d`. Always name the services: a bare `up -d` applies
+  every line of `.env`. Web releases (`web-vX.Y.Z`: `POOL_WEB_IMAGE`, `EXPLORER_WEB_IMAGE`) and API releases
+  (`api-vX.Y.Z`: `EXPLORER_API_IMAGE`) touch neither half of the pool. A change to the shared `styles.css` goes into
+  both web images.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`
   (check the release's `.asc` signatures first), rebuild, `up -d beam-node wallet-api`.
 - Backups: `/data/bumblebeam/wallet` (`wallet.db`, `wallet.pass`) and

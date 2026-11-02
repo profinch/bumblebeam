@@ -23,14 +23,15 @@ static void ntp_synced(struct timeval *tv) {
 }
 static volatile bool s_conn = false; static char s_ip[16] = "0.0.0.0";
 // Set-up access point: a board with no Wi-Fi saved, or one that has not reached its network for 2 minutes, also opens its own
-// network (3BMiner-xxxxxx, password WIFI_AP_PASS) with the page at http://192.168.4.1/, while it keeps trying its own. Once
-// it is back on its network and nobody is connected to the set-up one, that closes again
+// network (3BMiner-xxxxxx, open: it exists only while the board is being set up, within Wi-Fi reach) with the page at
+// http://192.168.4.1/, while it keeps trying its own. Once it is back on its network and nobody is connected to the set-up
+// one, that closes again
 #define AP_AFTER_US (120LL * 1000000)
 static volatile bool s_ap = false; static int64_t s_down_since; static char s_host[32];
 static void ap_set(bool on) {
     if (on == s_ap) return;
-    if (on) { wifi_config_t ac = { .ap = { .max_connection = 2, .authmode = WIFI_AUTH_WPA2_PSK, .channel = 1 } };
-        int l = snprintf((char *)ac.ap.ssid, sizeof ac.ap.ssid, "%s", s_host); ac.ap.ssid_len = l; snprintf((char *)ac.ap.password, sizeof ac.ap.password, "%s", WIFI_AP_PASS);
+    if (on) { wifi_config_t ac = { .ap = { .max_connection = 2, .authmode = WIFI_AUTH_OPEN, .channel = 1 } };
+        int l = snprintf((char *)ac.ap.ssid, sizeof ac.ap.ssid, "%s", s_host); ac.ap.ssid_len = l;
         esp_wifi_set_mode(WIFI_MODE_APSTA); esp_wifi_set_config(WIFI_IF_AP, &ac); ESP_LOGW(TAG, "set-up network %s open: http://192.168.4.1/", s_host); }
     else { esp_wifi_set_mode(WIFI_MODE_STA); ESP_LOGI(TAG, "set-up network closed"); }
     s_ap = on;

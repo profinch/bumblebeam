@@ -11,7 +11,9 @@ typedef struct {
     volatile int8_t solo;           // 1 = the coinbase pays the configured address (solo pool), 0 = it does not, -1 = no job yet
     volatile int8_t authorized;     // 1 = the pool took the user, 0 = refused it, -1 = no answer yet
     volatile uint32_t cand_dropped, stale_dropped, old_job_submits, rej_stale, rej_dup, rej_lowdiff, rej_other, submit_lost; char last_reject[96];
+    volatile int last_reject_code; char last_reject_msg[80];   // the pool's error code (STRATUM_NO_CODE: none) and message, JSON-safe
 } stratum_stats_t;
+#define STRATUM_NO_CODE (-99999)
 extern stratum_stats_t g_stratum;
 void stratum_start(void);
 // miner side

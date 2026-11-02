@@ -23,7 +23,7 @@ static const char *TAG = "stratum";
 stratum_stats_t g_stratum;
 static job_t s_job; static session_t s_sess; static SemaphoreHandle_t s_lock; static QueueHandle_t s_cands;
 static int s_sock = -1; static uint32_t s_id = 10; static char s_rx[12288]; static int s_rxlen = 0;
-static uint32_t s_pending_submit_ids[64]; static int s_npend = 0;
+static uint32_t s_pending_submit_ids[64]; static double s_pending_diff[64]; static int s_npend = 0;   // each submit with the pool difficulty it was sent at
 static uint8_t s_spk[ADDR_SCRIPT_MAX]; static int s_spklen = 0;   // the output script that pays the configured address
 // recent jobs: a non-clean notify keeps the older ones acceptable to the pool. A clean one (or a new session) marks them
 // replaced instead of dropping them: a share for a replaced job is stale, but a hash that is a whole block is still
@@ -34,6 +34,7 @@ static recent_job_t s_recent[NRECENT]; static int s_nrecent = 0; static uint32_t
 static void replace_recent(void) { for (int i = 0; i < s_nrecent; i++) s_recent[i].replaced = true; }   // under s_lock
 
 static bool s_reconnect = false;   // client.reconnect from the pool
+static double s_next_diff;   // a set_difficulty waiting for the next job
 // doubles are two words on the ESP32: read and written under a spinlock, so another core never sees half of one
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 void stratum_set_pool_diff(double d) { portENTER_CRITICAL(&s_mux); g_stratum.pool_diff = d; portEXIT_CRITICAL(&s_mux); }
@@ -105,6 +106,7 @@ static void handle_notify(cJSON *p) {
     if (s_spklen) { static uint8_t cb[sizeof j->coinb1 + 24 + sizeof j->coinb2]; size_t n = 0; memcpy(cb, j->coinb1, j->coinb1_len); n += j->coinb1_len;
         int en = s_sess.en1_len + s_sess.en2_size; memset(cb + n, 0, en); n += en; memcpy(cb + n, j->coinb2, j->coinb2_len); n += j->coinb2_len;
         int pc = addr_coinbase_share(cb, n, s_spk, s_spklen); g_stratum.solo = pc < 0 ? -1 : pc >= 95; }
+    if (s_next_diff > 0) { stratum_set_pool_diff(s_next_diff); s_next_diff = 0; }
     xSemaphoreTake(s_lock, portMAX_DELAY); j->seq = ++s_seqctr; memcpy(&s_job, j, sizeof *j);
     if (j->clean) replace_recent();
     memmove(&s_recent[1], &s_recent[0], sizeof(recent_job_t) * (NRECENT - 1)); if (s_nrecent < NRECENT) s_nrecent++;
@@ -120,7 +122,12 @@ static void handle_line(char *line) {
     if (method && cJSON_IsString(method)) {
         cJSON *p = cJSON_GetObjectItem(m, "params");
         if (!strcmp(method->valuestring, "mining.notify")) handle_notify(p);
-        else if (!strcmp(method->valuestring, "mining.set_difficulty")) { cJSON *d = cJSON_GetArrayItem(p, 0); if (cJSON_IsNumber(d) && d->valuedouble > 0 && isfinite(d->valuedouble)) { stratum_set_pool_diff(d->valuedouble); ESP_LOGI(TAG, "pool diff %g", d->valuedouble); } }
+        else if (!strcmp(method->valuestring, "mining.set_difficulty")) { cJSON *d = cJSON_GetArrayItem(p, 0); if (cJSON_IsNumber(d) && d->valuedouble > 0 && isfinite(d->valuedouble)) {
+            // stratum v1 says a new difficulty holds from the next job; pools differ (ckpool scores a job's shares at the old
+            // one, public-pool checks against the newest). The safe side for both: a higher one at once (nothing below it is
+            // sent), a lower one from the next job (a share at the higher one is good either way)
+            if (s_job.seq && s_sess.en2_size && d->valuedouble < stratum_pool_diff()) { s_next_diff = d->valuedouble; ESP_LOGI(TAG, "pool diff %g from the next job", d->valuedouble); }
+            else { stratum_set_pool_diff(d->valuedouble); ESP_LOGI(TAG, "pool diff %g", d->valuedouble); } } }
         else if (!strcmp(method->valuestring, "mining.set_extranonce")) { if (cJSON_IsArray(p)) set_session(jstr(p, 0), cJSON_GetArrayItem(p, 1)); }
         else if (!strcmp(method->valuestring, "client.reconnect")) { ESP_LOGW(TAG, "reconnect requested"); s_reconnect = true; }   // to the configured pool: a host in the params is not followed
     } else if (id && cJSON_IsNumber(id)) {
@@ -131,11 +138,16 @@ static void handle_line(char *line) {
         } else if (rid == 2) { g_stratum.authorized = cJSON_IsTrue(res) ? 1 : 0; ESP_LOGI(TAG, "authorize: %s", g_stratum.authorized ? "ok" : "FAILED"); }
         else if (rid == 3) { /* suggest_difficulty */ }
         else {
-            bool pend = false; for (int i = 0; i < s_npend; i++) if (s_pending_submit_ids[i] == (uint32_t)rid) { pend = true; s_pending_submit_ids[i] = s_pending_submit_ids[--s_npend]; break; }
-            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; g_stratum.share_us = esp_timer_get_time(); share_count(stratum_pool_diff()); ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
+            bool pend = false; double sd = 0; for (int i = 0; i < s_npend; i++) if (s_pending_submit_ids[i] == (uint32_t)rid) { pend = true; sd = s_pending_diff[i]; --s_npend; s_pending_submit_ids[i] = s_pending_submit_ids[s_npend]; s_pending_diff[i] = s_pending_diff[s_npend]; break; }
+            if (pend) { if (cJSON_IsTrue(res)) { g_stratum.accepted++; g_stratum.share_us = esp_timer_get_time(); share_count(sd); ESP_LOGI(TAG, "share ACCEPTED (%u/%u)", (unsigned)g_stratum.accepted, (unsigned)g_stratum.rejected); } else { g_stratum.rejected++; ESP_LOGW(TAG, "share REJECTED: %.160s", line);
                 char *e = err ? cJSON_PrintUnformatted(err) : NULL; snprintf((char *)g_stratum.last_reject, sizeof g_stratum.last_reject, "%s", e ? e : "?"); free(e);
                 // stratum error codes: 21 job not found (stale), 22 duplicate share, 23 low difficulty; fall back to the message text
-                cJSON *ec = cJSON_IsArray(err) ? cJSON_GetArrayItem(err, 0) : NULL; int code = cJSON_IsNumber(ec) ? ec->valueint : 0; const char *lr = (const char *)g_stratum.last_reject;
+                cJSON *ec = cJSON_IsArray(err) ? cJSON_GetArrayItem(err, 0) : cJSON_GetObjectItem(err, "code"); int code = cJSON_IsNumber(ec) ? ec->valueint : 0; const char *lr = (const char *)g_stratum.last_reject;
+                // code and message apart, as the pool sent them ([code, "message", data] or {"code", "message"}); the message
+                // keeps no quotes, backslashes or control characters, so it can go into JSON answers as it is
+                const char *em = cJSON_IsArray(err) ? jstr(err, 1) : cJSON_IsString(cJSON_GetObjectItem(err, "message")) ? cJSON_GetObjectItem(err, "message")->valuestring : cJSON_IsString(err) ? err->valuestring : "";
+                { int k = 0; for (const char *q = em; *q && k < (int)sizeof g_stratum.last_reject_msg - 1; q++) if (*q != '"' && *q != '\\' && (unsigned char)*q >= 32) g_stratum.last_reject_msg[k++] = *q; g_stratum.last_reject_msg[k] = 0; }
+                g_stratum.last_reject_code = cJSON_IsNumber(ec) ? ec->valueint : STRATUM_NO_CODE;
                 if (code == 21 || strstr(lr, "tale") || strstr(lr, "not found")) g_stratum.rej_stale++;
                 else if (code == 22 || strstr(lr, "uplicate")) g_stratum.rej_dup++;
                 else if (code == 23 || strstr(lr, "ifficult") || strstr(lr, "low")) g_stratum.rej_lowdiff++;
@@ -166,7 +178,7 @@ static void do_submits(void) {
         uint32_t nonce = __builtin_bswap32(c.nonce_word);
         char line[512]; uint32_t id = ++s_id;
         snprintf(line, sizeof line, "{\"id\":%u,\"method\":\"mining.submit\",\"params\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%08x\"]}\n", (unsigned)id, g_stratum.user, cur.job_id, en2hex, cur.ntime_hex, (unsigned)nonce);
-        if (send_line(line) == 0) { g_stratum.submitted++; g_stratum.last_share_diff = d; if (s_npend < 64) s_pending_submit_ids[s_npend++] = id; ESP_LOGI(TAG, "submit nonce %08x diff %.4f (pool %.4f)", (unsigned)nonce, d, pd); }
+        if (send_line(line) == 0) { g_stratum.submitted++; g_stratum.last_share_diff = d; if (s_npend < 64) { s_pending_submit_ids[s_npend] = id; s_pending_diff[s_npend++] = pd; } ESP_LOGI(TAG, "submit nonce %08x diff %.4f (pool %.4f)", (unsigned)nonce, d, pd); }
         else { g_stratum.submit_lost++; if (block) ESP_LOGE(TAG, "a BLOCK could not be sent: %s", line); }
     }
 }
@@ -184,7 +196,7 @@ static void task(void *arg) {
         snprintf(g_stratum.pool_desc, sizeof g_stratum.pool_desc, "%s:%u", g_cfg.pool, g_cfg.port);
         snprintf(g_stratum.user, sizeof g_stratum.user, "%s%s%s", g_cfg.wallet, g_cfg.worker[0] ? "." : "", g_cfg.worker);
         ESP_LOGI(TAG, "connected to %s", g_stratum.pool_desc);
-        xSemaphoreTake(s_lock, portMAX_DELAY); s_sess.en2_size = 0; xSemaphoreGive(s_lock); s_reconnect = false; g_stratum.authorized = -1;   // no mining until this session's subscribe answer
+        xSemaphoreTake(s_lock, portMAX_DELAY); s_sess.en2_size = 0; xSemaphoreGive(s_lock); s_reconnect = false; g_stratum.authorized = -1; s_next_diff = 0;   // no mining until this session's subscribe answer
         char line[300];
         snprintf(line, sizeof line, "{\"id\":1,\"method\":\"mining.subscribe\",\"params\":[\"3BMiner/" FW_VERSION "\"]}\n"); send_line(line);
         snprintf(line, sizeof line, "{\"id\":2,\"method\":\"mining.authorize\",\"params\":[\"%s\",\"x\"]}\n", g_stratum.user); send_line(line);
@@ -211,7 +223,7 @@ static void task(void *arg) {
     }
 }
 void stratum_start(void) {
-    s_lock = xSemaphoreCreateMutex(); s_cands = xQueueCreate(32, sizeof(candidate_t)); stratum_set_pool_diff(1.0); g_stratum.solo = -1;
+    s_lock = xSemaphoreCreateMutex(); s_cands = xQueueCreate(32, sizeof(candidate_t)); stratum_set_pool_diff(1.0); g_stratum.solo = -1; g_stratum.last_reject_code = STRATUM_NO_CODE;
     s_spklen = addr_script(g_cfg.wallet, s_spk); if (!s_spklen) ESP_LOGW(TAG, "payout address does not parse: solo detection off");
 #ifdef CONFIG_SPIRAM
     // PSRAM boards: the camera's DMA buffers leave little internal RAM, and this task never touches flash, so its stack can live in PSRAM

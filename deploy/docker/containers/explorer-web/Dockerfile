@@ -1,16 +1,9 @@
-# BumbleBeam Explorer: the static UI from the public repository at a given ref, plus the pool's
-# stylesheet, tooltips and icon, served by nginx, which also proxies the read-only explorer API.
-FROM alpine:3.22 AS src
-ARG BUMBLEBEAM_REPO=https://github.com/profinch/bumblebeam
-ARG BUMBLEBEAM_REF=main
-RUN apk add --no-cache git
-RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
-# refs from before the beam/ layout (2026-11-01) are moved into it, so a rollback still builds
-RUN [ -d /src/beam ] || { mkdir /src/beam; for d in oracle vectors pool explorer; do [ ! -e /src/$d ] || mv /src/$d /src/beam/; done; [ ! -e /src/api ] || mv /src/api /src/beam/explorer/api; }
-# version the asset URLs with the commit, so a release never mixes cached and new files
-RUN sed -i "s/?v=dev/?v=$(git -C /src rev-parse --short HEAD)/g" /src/beam/explorer/web/index.html
-
+# BumbleBeam Explorer: the static UI plus the pool's stylesheet, tooltips and icons, served by nginx, which also
+# proxies the read-only explorer API. Built by CI from the repository root:
+#   docker build -f deploy/docker/containers/explorer-web/Dockerfile --build-arg VERSION=<v> .
 FROM nginx:1.28-alpine
-COPY --from=src /src/beam/explorer/web/ /usr/share/nginx/html/
-COPY --from=src /src/beam/pool/web/styles.css /src/beam/pool/web/tips.js /src/beam/pool/web/favicon.svg /src/beam/pool/web/404.svg /usr/share/nginx/html/
-COPY default.conf /etc/nginx/conf.d/default.conf
+ARG VERSION=dev
+COPY beam/explorer/web/ /usr/share/nginx/html/
+COPY beam/pool/web/styles.css beam/pool/web/tips.js beam/pool/web/favicon.svg beam/pool/web/404.svg /usr/share/nginx/html/
+RUN sed -i "s/?v=dev/?v=${VERSION}/g" /usr/share/nginx/html/index.html
+COPY deploy/docker/containers/explorer-web/default.conf /etc/nginx/conf.d/default.conf

@@ -49,13 +49,9 @@ services:
 
   # pool.bumblebeam.org's pages, apart from the pool, so UI releases leave stratum alone.
   pool-web:
-    image: bumblebeam-pool-web
+    image: ${POOL_WEB_IMAGE:?set POOL_WEB_IMAGE in .env}
     container_name: pool-web
     hostname: pool-web
-    build:
-      context: ./containers/pool-web
-      args:
-        BUMBLEBEAM_REF: ${POOL_WEB_REF:-${BUMBLEBEAM_REF:-main}}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8091:8080"             # for the host nginx
@@ -67,13 +63,9 @@ services:
   # The BumbleBeam API (/v1, plain JSON for bots) and the MCP server (/mcp, for agents), over
   # explorer-node and the pool; explorer-web proxies both. Published nowhere.
   explorer-api:
-    image: bumblebeam-explorer-api
+    image: ${EXPLORER_API_IMAGE:?set EXPLORER_API_IMAGE in .env}
     container_name: explorer-api
     hostname: explorer-api
-    build:
-      context: ./containers/explorer-api
-      args:
-        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
     restart: unless-stopped
     environment:
       EXPLORER_URL: http://explorer-node:8888
@@ -84,13 +76,9 @@ services:
 
   # explorer.bumblebeam.org: the explorer UI and a read-only proxy to explorer-node's API.
   explorer-web:
-    image: bumblebeam-explorer-web
+    image: ${EXPLORER_WEB_IMAGE:?set EXPLORER_WEB_IMAGE in .env}
     container_name: explorer-web
     hostname: explorer-web
-    build:
-      context: ./containers/explorer-web
-      args:
-        BUMBLEBEAM_REF: ${BUMBLEBEAM_REF:-main}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8080"             # for the host nginx
@@ -172,12 +160,11 @@ services:
   # and changes rarely; pool-app (API, admin, payouts, maturity) takes most releases without dropping a miner.
   # Both read the same pool.toml; the app reaches the stratum process's control interface on pool-stratum:8081.
   # The host's journal keeps their logs across rebuilds: journalctl CONTAINER_NAME=bumblebeam-pool-stratum (or -app).
-  # POOL_REF (a commit) picks the source and tags the image pool-app runs (pool-app builds it), so a rollback is
-  # POOL_REF=<previous> + up -d pool-app. pool-stratum runs STRATUM_REF's image (empty = POOL_REF's): stratum releases
-  # are rare and drop every miner, so it moves only on purpose - set STRATUM_REF to the new commit (or empty it), then
-  # up -d pool-stratum. Name the services in `up -d`: a bare `up -d` also applies whatever STRATUM_REF says.
+  # Images come from CI (.github/workflows/images.yml, ghcr.io/profinch/...): POOL_IMAGE for pool-app, STRATUM_IMAGE
+  # for pool-stratum (the same image, moved on its own: a stratum restart drops every miner). A release or a rollback
+  # is the image in .env plus `up -d <service>`; always name the services.
   pool-stratum:
-    image: bumblebeam-pool:${STRATUM_REF:-${POOL_REF:?set POOL_REF in .env}}
+    image: ${STRATUM_IMAGE:?set STRATUM_IMAGE in .env}
     container_name: bumblebeam-pool-stratum
     hostname: pool-stratum
     command: ["run", "stratum"]
@@ -204,13 +191,9 @@ services:
       - bumblebeam
 
   pool-app:
-    image: bumblebeam-pool:${POOL_REF:?set POOL_REF in .env}
+    image: ${POOL_IMAGE:?set POOL_IMAGE in .env}
     container_name: bumblebeam-pool-app
     hostname: pool-app
-    build:
-      context: ./containers/pool
-      args:
-        BUMBLEBEAM_REF: ${POOL_REF}
     command: ["run", "app"]
     restart: unless-stopped
     # the graceful stop: a payout in hand finishes

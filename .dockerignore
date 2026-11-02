@@ -1,0 +1,10 @@
+# images built from the repository root (pool, pool-web, explorer-web, explorer-api) need only beam/ and deploy/
+*
+!beam/oracle
+!beam/vectors
+!beam/pool/server
+!beam/pool/web
+!beam/explorer/web
+!beam/explorer/api
+!deploy/docker/containers
+**/target

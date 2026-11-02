@@ -1,15 +1,14 @@
-# bumblebeam-pool built from the public repository at a given ref.
+# bumblebeam-pool, built by CI (.github/workflows/images.yml) from the repository root:
+#   docker build -f deploy/docker/containers/pool/Dockerfile .
 # The oracle (C++) is compiled into the binary by build.rs, hence g++.
 FROM rust:1-slim-trixie AS build
-ARG BUMBLEBEAM_REPO=https://github.com/profinch/bumblebeam
-ARG BUMBLEBEAM_REF=main
-RUN apt-get update && apt-get install -y --no-install-recommends git g++ ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
-# refs from before the beam/ layout (2026-11-01) are moved into it, so a rollback still builds
-RUN [ -d /src/beam ] || { mkdir /src/beam; for d in oracle vectors pool explorer; do [ ! -e /src/$d ] || mv /src/$d /src/beam/; done; [ ! -e /src/api ] || mv /src/api /src/beam/explorer/api; }
+COPY beam/oracle /src/beam/oracle
+COPY beam/vectors /src/beam/vectors
+COPY beam/pool/server /src/beam/pool/server
 WORKDIR /src/beam/pool/server
-# Cargo.lock is committed: the same ref builds the same binary
+# Cargo.lock is committed: the same commit builds the same binary
 RUN cargo build --release --locked
 
 FROM debian:13-slim

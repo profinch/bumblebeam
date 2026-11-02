@@ -232,11 +232,10 @@ const CPI=document.getElementById('pu-c').innerHTML,OKI='<svg viewBox="0 0 16 16
 function cpBtn(id,get){const b=$(id);let tm=0;b.onclick=()=>{const v=get();if(!v)return;copyText(v).then(()=>{b.innerHTML=OKI;b.classList.add('done');clearTimeout(tm);tm=setTimeout(()=>{b.innerHTML=CPI;b.classList.remove('done')},2000)}).catch(()=>{})}}
 cpBtn('pu-c',()=>(D&&D.stratum&&D.stratum.url||'').replace(/:\d+$/,''));cpBtn('wk-c',()=>{const u=D&&D.stratum&&D.stratum.user||'';return u.split('.')[0]});
 const ut=s=>{s=+s||0;const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m '+(s%60|0)+'s'};
-const BN=b=>({'esp32-wroom-32':'ESP32-WROOM-32','esp32-cam':'ESP32-CAM'})[b]||String(b||'').toUpperCase();
-const RR=['?','power on','reset pin','software','crash','int watchdog','task watchdog','watchdog','deep sleep','brownout','sdio'];
-// the pool's error as the firmware keeps it, e.g. [21,Job not found,]: only the message
-const rejMsg=r=>{if(!r)return'-';const p=String(r).replace(/^\[|\]$/g,'').split(',').map(x=>x.trim()).filter(x=>x&&!/^-?\d+$/.test(x)&&x!='null');return p[0]||r};
-const rejCode=r=>{const m=String(r||'').match(/^\[?\s*(-?\d+)\s*,/);return m?m[1]:'-'};
+// the board as the firmware names it (boardName since 1.0.0); older ones send only their id, shown as it is
+const BN=I=>String(I.boardName||I.board||I.hwModel||'')
+// the pool's last error: code and message apart since 1.0.0; before, the raw text as the firmware kept it
+const rejMsg=s=>s.lastRejectMsg!=null?(s.lastRejectMsg||'-'):(s.lastReject||'-'),rejCode=s=>s.lastRejectCode!==undefined?(s.lastRejectCode??'-'):'-';
 const txt=(i,t)=>{const e=$(i);if(e){e.textContent=t;e.classList.remove('gone')}},htm=(i,t)=>{const e=$(i);if(e)e.innerHTML=t};
 // text from a board, the pool or another device on the LAN never goes into the page as markup
 const he=v=>String(v??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
@@ -307,12 +306,12 @@ const wait=s.shareAgo>=0&&s.shareAgo<=s.connectedAgo?s.shareAgo:s.connectedAgo; 
 htm('shr',(t?(100*m.sRejected/t).toFixed(2)+'% rejected':!s.connected?'not connected to the pool':s.authorized===false?'<span class=r>the pool refused the worker</span>':'waiting for the first share'));
 $('shb').hidden=!(slow&&wait>=0);$('shb').firstChild.style.width=Math.min(100,100*wait/EVERY)+'%';txt('shb-a',dm(Math.max(0,wait)));txt('shb-b','avg '+dm(EVERY));
 txt('bd',sp(m.bestDiffSession));htm('bde','ever '+he(sp(m.bestDiffEver))+(slow&&pd(m.bestDiffSession)<pd(m.poolDiff)?'<br>a share needs '+he(sp(m.poolDiff)):''));htm('df',he(sp(m.poolDiff))+(slow?' <small class="r tipped" title="So high that a share takes over 5 minutes on average at this hashrate (public-pool, for one, gives nothing below 1). It does not change the chance of finding a block, only how often shares, and the pool&#39;s statistics, come.">high</small>':''));$('df').classList.toggle('r',slow);dfn();
-htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(RR[m.resetReason]||'-')+(m.restartWhy?' ('+m.restartWhy+')':''));
+htm('up',ut(m.uptimeSeconds));txt('upr','last reset: '+(m.resetReasonText??m.resetReason??'-')+(m.restartWhy?' ('+m.restartWhy+')':''));
 txt('pu',s.url||'-');{const h=(s.url||'').replace(/:\d+$/,''),l=$('pu-l');l.hidden=!h;if(h&&l.dataset.h!=h){l.dataset.h=h;l.href='https://'+h+'/'}}$('pu').className=s.url?'tipped':'';if(s.url)$('pu').setAttribute('data-tip','*stratum+tcp://*'+s.url.replace(/(:\d+)$/,'*$1*'));const u=s.user||'',i=u.indexOf('.'),a=i<0?u:u.slice(0,i);if($('wk').dataset.u!=u){$('wk').dataset.u=u;htm('wk','<span class=tipped title="'+he(i<0?u:u.slice(0,i+1)+'*'+u.slice(i+1)+'*')+'">'+he(a.length>13?a.slice(0,5)+'…'+a.slice(-5):a)+(i<0?'':'<span class=sm>'+he(u.slice(i))+'</span>')+'</span>')}   // rebuilt only when it changes, so an open tip stays
 txt('jb',(s.jobs??'-')+' / '+(s.submitted??'-'));txt('ld',sp(m.lastDiff));txt('sph',m.uptimeSeconds?(m.sAccepted*3600/m.uptimeSeconds).toFixed(0):'-');
-txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s.lastReject));txt('rcode',rejCode(s.lastReject));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
-txt('hn',d.identity.hostName);if(d.identity.camera&&$('nav-cam').hidden){$('nav-cam').hidden=false;if(view()=='camera')cvLoad()}txt('fw',d.identity.fwVersion);txt('bo',BN(d.identity.board||d.identity.hwModel));txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
-txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity.board||d.identity.hwModel));for(const r of $('f-boards').rows)r.classList.toggle('me',r.dataset.b==d.identity.boardId);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
+txt('r1',(s.rejStale??'-')+' / '+(s.rejDup??'-'));txt('r2',(s.rejLowDiff??'-')+' / '+(s.rejOther??'-'));txt('lr',rejMsg(s));txt('rcode',rejCode(s));txt('cd',(s.candDropped??0)+' / '+(s.staleDropped??0));
+txt('hn',d.identity.hostName);if(d.identity.camera&&$('nav-cam').hidden){$('nav-cam').hidden=false;if(view()=='camera')cvLoad()}txt('fw',d.identity.fwVersion);txt('bo',BN(d.identity));txt('rs',d.identity.rssi+' dBm');txt('hp',(m.freeHeap/1024).toFixed(0)+' KB');
+txt('f-ver',d.identity.fwVersion);txt('f-bd',BN(d.identity));for(const r of $('f-boards').rows)r.classList.toggle('me',r.dataset.b==d.identity.boardId);txt('f-ker',(m.kernelCycles??'-')+' cycles / nonce');
 if(d.identity.build)txt('f-built',d.identity.build);if(d.identity.idf)txt('f-idf',d.identity.idf);if(d.identity.slot)txt('f-slot',d.identity.slot);if(m.timing)txt('f-tim',m.timing+' - kernel '+m.kernel);
 CK={t:d.identity.time||0,at:Date.now(),tz:d.identity.tz,sync:d.identity.ntpSync||0,src:d.identity.ntp};boardClock();
 if(view()=='settings'&&!cfgLoaded)loadCfg();
@@ -399,8 +398,8 @@ $('sw-th').onclick=e=>{const k=e.target.dataset.k;if(!k)return;if(swSort!=k){swS
 // another device's answer is untrusted: every number is made a number here (null when missing), the texts are escaped where
 // they are drawn
 const nm=v=>v==null||v===''||!isFinite(+v)?null:+v;
-function mapInfo(ip,d){const I=d.identity||{},M=d.miner;if(M)return{ip,host:String(I.hostName??''),model:I.displayName?BN(I.board):'-',ver:(I.displayName||I.hwModel||'')+' '+(I.fwVersion||''),hr:nm(M.hashRate)*1e6,acc:nm(M.sAccepted),rej:nm(M.sRejected),best:pd(M.bestDiffEver),bestS:M.bestDiffEver,bestSess:M.bestDiffSession,upEver:nm(M.uptimeEver),pdiff:pd(M.poolDiff),up:nm(M.uptimeSeconds),rssi:nm(I.rssi),heap:nm(M.freeHeap),heapMin:nm(M.minFreeHeap)};
-return{ip,host:String(d.hostname??''),model:[d.ASICModel,d.boardVersion&&'rev '+d.boardVersion].filter(Boolean).join(', ')||'-',ver:'AxeOS '+(d.version||''),hr:nm(d.hashRate)*1e6,acc:nm(d.sharesAccepted),rej:nm(d.sharesRejected),best:pd(d.bestDiff),bestS:d.bestDiff,bestSess:d.bestSessionDiff,pdiff:nm(d.poolDifficulty)||0,up:nm(d.uptimeSeconds),rssi:nm(d.wifiRSSI),heap:nm(d.freeHeap)}}
+function mapInfo(ip,d){const I=d.identity||{},M=d.miner;if(M)return{ip,host:String(I.hostName??''),model:I.displayName?BN(I):'-',ver:(I.displayName||I.hwModel||'')+' '+(I.fwVersion||''),hr:nm(M.hashRate)*1e6,acc:nm(M.sAccepted),rej:nm(M.sRejected),best:pd(M.bestDiffEver),bestS:M.bestDiffEver,bestSess:M.bestDiffSession,upEver:nm(M.uptimeEver),pdiff:pd(M.poolDiff),up:nm(M.uptimeSeconds),rssi:nm(I.rssi),heap:nm(M.freeHeap),heapMin:nm(M.minFreeHeap)};
+return{ip,host:String(d.hostname??''),model:[d.ASICModel,d.boardVersion].filter(Boolean).join(', ')||'-',ver:String(d.version||''),hr:nm(d.hashRate)*1e6,acc:nm(d.sharesAccepted),rej:nm(d.sharesRejected),best:pd(d.bestDiff),bestS:d.bestDiff,bestSess:d.bestSessionDiff,pdiff:nm(d.poolDifficulty)||0,up:nm(d.uptimeSeconds),rssi:nm(d.wifiRSSI),heap:nm(d.freeHeap)}}
 async function swPoll(ip){try{const c=new AbortController();setTimeout(()=>c.abort(),2500);const d=await(await fetch('http://'+ip+'/api/system/info',{signal:c.signal})).json();if(FG.has(ip))return 0;const o=mapInfo(ip,d);o.seen=Date.now();SW.set(ip,o);swSave();swDraw();return 1}catch(e){const o=SW.get(ip);if(o){o.off=1;if(Date.now()-(o.seen||0)>FORGET)SW.delete(ip);swSave()}swDraw();return 0}}
 // 3 s: a miner on Wi-Fi power save answers the router's first ARP late, the retry comes after ~1 s; at 1.5 s a cold address
 // (another subnet, first scan) was missed and found only by the second scan

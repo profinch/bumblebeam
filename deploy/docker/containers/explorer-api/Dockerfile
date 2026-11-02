@@ -1,15 +1,8 @@
-# BumbleBeam API (/v1) and MCP server (/mcp): beam/explorer/api/server.js from the public repository at a given
-# ref. Node, no dependencies; reads explorer-node and the pool over the compose network.
-FROM alpine:3.22 AS src
-ARG BUMBLEBEAM_REPO=https://github.com/profinch/bumblebeam
-ARG BUMBLEBEAM_REF=main
-RUN apk add --no-cache git
-RUN git clone "$BUMBLEBEAM_REPO" /src && git -C /src checkout --detach "$BUMBLEBEAM_REF"
-# refs from before the beam/ layout (2026-11-01) are moved into it, so a rollback still builds
-RUN [ -d /src/beam ] || { mkdir /src/beam; for d in oracle vectors pool explorer; do [ ! -e /src/$d ] || mv /src/$d /src/beam/; done; [ ! -e /src/api ] || mv /src/api /src/beam/explorer/api; }
-
+# BumbleBeam API (/v1) and MCP server (/mcp): beam/explorer/api/server.js, Node, no dependencies; reads
+# explorer-node and the pool over the compose network. Built by CI from the repository root:
+#   docker build -f deploy/docker/containers/explorer-api/Dockerfile .
 FROM node:22-alpine
-COPY --from=src /src/beam/explorer/api/server.js /app/server.js
+COPY beam/explorer/api/server.js /app/server.js
 USER node
 WORKDIR /app
 EXPOSE 8080
