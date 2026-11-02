@@ -89,6 +89,36 @@ services:
     networks:
       - bumblebeam
 
+  # puzzle.bumblebeam.org's API: the 160 Bitcoin puzzle addresses read from a Bitcoin node's REST API
+  # (PUZZLE_NODE_API in .env, not in the repo), the radar and its optional Telegram posts. Published nowhere.
+  puzzle-api:
+    image: ${PUZZLE_API_IMAGE:?set PUZZLE_API_IMAGE in .env}
+    container_name: puzzle-api
+    hostname: puzzle-api
+    restart: unless-stopped
+    environment:
+      NODE_API: ${PUZZLE_NODE_API:?set PUZZLE_NODE_API in .env}
+      DATA_DIR: /data
+      PUBLIC_URL: https://puzzle.bumblebeam.org
+      TG_BOT_TOKEN: ${PUZZLE_TG_BOT_TOKEN:-}
+      TG_CHAT_ID: ${PUZZLE_TG_CHAT_ID:-}
+      TG_LANG: ${PUZZLE_TG_LANG:-en}
+    volumes:
+      - /data/bumblebeam/puzzle:/data       # state.json; owned by uid 1000 (node)
+    networks:
+      - bumblebeam
+
+  # puzzle.bumblebeam.org: the static site and a read-only proxy to puzzle-api.
+  puzzle-web:
+    image: ${PUZZLE_WEB_IMAGE:?set PUZZLE_WEB_IMAGE in .env}
+    container_name: puzzle-web
+    hostname: puzzle-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8092:8080"             # for the host nginx
+    networks:
+      - bumblebeam
+
   # Prerendered pages: headless Chromium fills each indexable page of the pool and the explorer
   # through the host nginx every 10 minutes and saves the HTML for pool-web and explorer-web to
   # serve, so search engines and AI crawlers that run no JavaScript read the page with its data.

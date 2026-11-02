@@ -1,4 +1,5 @@
-# images built from the repository root (pool, pool-web, explorer-web, explorer-api) need only beam/, ui/ and deploy/
+# images built from the repository root (pool, pool-web, explorer-web, explorer-api, puzzle-web, puzzle-api) need only
+# beam/, bitcoin/puzzle, ui/ and deploy/
 *
 !beam/oracle
 !beam/vectors
@@ -6,6 +7,8 @@
 !beam/pool/web
 !beam/explorer/web
 !beam/explorer/api
+!bitcoin/puzzle/api
+!bitcoin/puzzle/web
 !ui
 # the showcase and the docs stay in the repo, the sites serve only the library
 ui/showcase

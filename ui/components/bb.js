@@ -15,7 +15,7 @@
     { id: 'pool', name: 'Pool', href: 'https://pool.bumblebeam.org', chain: 'beam' },
     { id: 'explorer', name: 'Explorer', href: 'https://explorer.bumblebeam.org', chain: 'beam' },
     { id: 'wallet', name: 'Wallet', href: 'https://github.com/profinch/bumblebeam/tree/main/beam/wallet', chain: 'beam' },
-    { id: 'puzzle', name: 'Puzzle', href: 'https://puzzle.bumblebeam.org', chain: 'bitcoin', planned: true },
+    { id: 'puzzle', name: 'Puzzle', href: 'https://puzzle.bumblebeam.org', chain: 'bitcoin' },
     { id: '3bminer', name: '3BMiner', href: 'https://github.com/profinch/bumblebeam/tree/main/bitcoin/3bminer', chain: 'bitcoin' },
     { id: 'thermo', name: 'Thermo', href: 'https://github.com/profinch/bumblebeam/tree/main/rig/thermo', chain: 'rig' },
   ];

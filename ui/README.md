@@ -71,7 +71,7 @@ A site keeps only what is its own in its own CSS; anything a second site needs m
 |---|---|
 | pool (`beam/pool/web`) | yes: its `styles.css` keeps only pool-only rules (block-time bars, payouts table, trackers, the hashrate head) |
 | explorer (`beam/explorer/web`) | yes: ui/ plus its own `explorer.css`; no longer copies the pool's stylesheet or tooltips |
-| puzzle | will start on it |
+| puzzle (`bitcoin/puzzle/web`) | yes, from day one: `data-chain="bitcoin"`, tokens, base, components, `bb.js`, `tips.js`; its own `puzzle.css` (header without search, target card, calculator, radar) |
 | thermo (`rig/thermo/web`) | yes: tokens, base, components, `bb.js` (ecosystem bar), `tips.js`; its install script copies them; the group charts stay thermo's own (threshold lines, series toggles, a tooltip with every series) in the `--chart-*` colours |
 | NiceHash dashboard (private repo) | yes: links `/ui/` from the pool site, then the pool's `/styles.css`, and `/ui/components/tips.js` |
 | 3BMiner (`bitcoin/3bminer/web`) | tokens: yes, `data-chain="bitcoin"`; its `web/build.py` inlines only the tokens the page uses (fails on a missing one). Components: not yet (`components.css` is too big for the firmware page as is) |

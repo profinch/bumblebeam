@@ -1,10 +1,12 @@
 name: images
 # The server's images, built here and pushed to ghcr.io/profinch/<image>; the server only pulls them
-# (deploy/docker/.env: POOL_IMAGE, STRATUM_IMAGE, POOL_WEB_IMAGE, EXPLORER_WEB_IMAGE, EXPLORER_API_IMAGE).
+# (deploy/docker/.env: POOL_IMAGE, STRATUM_IMAGE, POOL_WEB_IMAGE, EXPLORER_WEB_IMAGE, EXPLORER_API_IMAGE,
+# PUZZLE_WEB_IMAGE, PUZZLE_API_IMAGE).
 #   push to main            -> :sha-<7 chars> and :main of every image (a candidate, not a release)
 #   tag pool-vX.Y.Z         -> bumblebeam-pool:X.Y.Z (pool-stratum and pool-app)
 #   tag web-vX.Y.Z          -> bumblebeam-pool-web:X.Y.Z and bumblebeam-explorer-web:X.Y.Z
 #   tag api-vX.Y.Z          -> bumblebeam-explorer-api:X.Y.Z
+#   tag puzzle-vX.Y.Z       -> bumblebeam-puzzle-web:X.Y.Z and bumblebeam-puzzle-api:X.Y.Z
 # The infrastructure images (beam: the official Beam binaries, sha256-pinned; nginx; certbot; prerender) are built
 # from their own folders and get only :sha-<7> and :main (BEAM_IMAGE, NGINX_IMAGE, CERTBOT_IMAGE, PRERENDER_IMAGE).
 on:
@@ -17,18 +19,22 @@ on:
       - 'beam/pool/web/**'
       - 'beam/explorer/web/**'
       - 'beam/explorer/api/**'
+      - 'bitcoin/puzzle/api/**'
+      - 'bitcoin/puzzle/web/**'
       - 'ui/**'
       - 'deploy/docker/containers/pool/**'
       - 'deploy/docker/containers/pool-web/**'
       - 'deploy/docker/containers/explorer-web/**'
       - 'deploy/docker/containers/explorer-api/**'
+      - 'deploy/docker/containers/puzzle-web/**'
+      - 'deploy/docker/containers/puzzle-api/**'
       - 'deploy/docker/containers/beam/**'
       - 'deploy/docker/containers/nginx/**'
       - 'deploy/docker/containers/certbot/**'
       - 'deploy/docker/containers/prerender/**'
       - '.dockerignore'
       - '.github/workflows/images.yml'
-    tags: ['pool-v*', 'web-v*', 'api-v*']
+    tags: ['pool-v*', 'web-v*', 'api-v*', 'puzzle-v*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,6 +49,8 @@ jobs:
           - { name: bumblebeam-pool-web, context: ., file: deploy/docker/containers/pool-web/Dockerfile, tag: web-v }
           - { name: bumblebeam-explorer-web, context: ., file: deploy/docker/containers/explorer-web/Dockerfile, tag: web-v }
           - { name: bumblebeam-explorer-api, context: ., file: deploy/docker/containers/explorer-api/Dockerfile, tag: api-v }
+          - { name: bumblebeam-puzzle-web, context: ., file: deploy/docker/containers/puzzle-web/Dockerfile, tag: puzzle-v }
+          - { name: bumblebeam-puzzle-api, context: ., file: deploy/docker/containers/puzzle-api/Dockerfile, tag: puzzle-v }
           - { name: bumblebeam-beam, context: deploy/docker/containers/beam, file: deploy/docker/containers/beam/Dockerfile, tag: none }
           - { name: bumblebeam-nginx, context: deploy/docker/containers/nginx, file: deploy/docker/containers/nginx/Dockerfile, tag: none }
           - { name: bumblebeam-certbot, context: deploy/docker/containers/certbot, file: deploy/docker/containers/certbot/Dockerfile, tag: none }
