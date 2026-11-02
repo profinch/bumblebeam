@@ -236,7 +236,7 @@ separate 300 GB `/data` disk). Files live in [`deploy/docker`](../deploy/docker)
                                       explorer-api, explorer-web, nginx, certbot
   containers/beam/                    node, explorer node, wallet CLI, wallet-api from the release (sha256 pinned,
                                       GPG-checked) and the explorer's contract parser shader
-  containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-stratum and pool-app)
+  containers/pool/                    builds bumblebeam-pool from this repository at POOL_REF (pool-app; pool-stratum at STRATUM_REF)
   containers/pool-web/                builds the pool UI (beam/pool/web) at POOL_WEB_REF (else BUMBLEBEAM_REF), nginx
   containers/explorer-api/            builds the API and MCP server (beam/explorer/api/server.js) at BUMBLEBEAM_REF, Node
   containers/explorer-web/            builds the explorer UI (beam/explorer/web) at BUMBLEBEAM_REF, nginx
@@ -367,7 +367,7 @@ sudo docker compose -f compose-bumblebeam.yaml up -d --force-recreate beam-node 
 
 ```sh
 echo "POOL_REF=<commit>" | sudo tee -a /data/docker/.env     # picks the source and tags the image
-sudo docker compose -f compose-bumblebeam.yaml build pool-stratum pool-web   # pool-stratum builds the image pool-app uses too
+sudo docker compose -f compose-bumblebeam.yaml build pool-app pool-web   # pool-app builds the image; pool-stratum runs it too while STRATUM_REF is empty
 sudo docker compose -f compose-bumblebeam.yaml up -d postgres pool-stratum pool-app pool-web
 curl -s localhost:8080/api/health
 ```
@@ -427,16 +427,17 @@ the running node, use `up -d --no-deps <service>`.
   leaves a `login` line (with its IP) and a `disconnect` line (minutes, accepted / stale / rejected
   shares, and why it ended); addresses are shortened in logs.
 - Pool update (beam/pool/docs/pool-split.md): the pool runs as `pool-stratum` (`run stratum`: miners, the node link, found
-  blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from one image tagged with `POOL_REF`. Set
-  `POOL_REF=<commit>` in `.env`, `build pool-stratum` (it builds the image both containers run), then
+  blocks) and `pool-app` (`run app`: API, admin, payouts, maturity) from images tagged with commits: `pool-app` runs `POOL_REF`, `pool-stratum` runs `STRATUM_REF` (empty = `POOL_REF`).
+  Set `POOL_REF=<commit>` in `.env`, `build pool-app` (it builds the image), then
   - a change only to the app half (`api`, `admin`, `payouts`, `accounting::confirm_loop`, `network`, `db` queries
     used there): `up -d --no-deps pool-app` - no miner notices (2026-10-23: 0.47 s, 0 disconnects);
   - a change to the stratum half (`stratum`, `upstream`, `pow`, `conns`, the share writer, found blocks and
     `accounting::credit_loop`, `coinbase`: the finalizer link, uploads and expiry live there): also
-    `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
+    `STRATUM_REF=<the same commit>` (or empty) and `up -d --no-deps pool-stratum` at a quiet moment - it stops gracefully, most miners are back within 1-2 s,
     NiceHash after ~40 s;
   - both: both, the app first. Schema changes run on start of either half (they are idempotent).
-  A rollback is the previous `POOL_REF` and the same `up -d` (the old image tag is still there). `pool-web` takes
+  A rollback is the previous `POOL_REF` (or `STRATUM_REF`) and the same `up -d` (the old image tag is still there). Always
+  name the services: a bare `up -d` applies `STRATUM_REF` too. `pool-web` takes
   `POOL_WEB_REF` (falling back to `BUMBLEBEAM_REF`), so UI releases touch neither half. A change to the shared `styles.css`
   rebuilds `pool-web` and `explorer-web`.
 - Beam update: change `BEAM_VERSION` and the three sha256 values in `containers/beam/Dockerfile`

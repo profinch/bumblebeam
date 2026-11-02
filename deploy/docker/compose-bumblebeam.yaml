@@ -172,15 +172,14 @@ services:
   # and changes rarely; pool-app (API, admin, payouts, maturity) takes most releases without dropping a miner.
   # Both read the same pool.toml; the app reaches the stratum process's control interface on pool-stratum:8081.
   # The host's journal keeps their logs across rebuilds: journalctl CONTAINER_NAME=bumblebeam-pool-stratum (or -app).
-  # POOL_REF (a commit) picks the source and tags the image, so a rollback is POOL_REF=<previous> + up -d.
+  # POOL_REF (a commit) picks the source and tags the image pool-app runs (pool-app builds it), so a rollback is
+  # POOL_REF=<previous> + up -d pool-app. pool-stratum runs STRATUM_REF's image (empty = POOL_REF's): stratum releases
+  # are rare and drop every miner, so it moves only on purpose - set STRATUM_REF to the new commit (or empty it), then
+  # up -d pool-stratum. Name the services in `up -d`: a bare `up -d` also applies whatever STRATUM_REF says.
   pool-stratum:
-    image: bumblebeam-pool:${POOL_REF:?set POOL_REF in .env}
+    image: bumblebeam-pool:${STRATUM_REF:-${POOL_REF:?set POOL_REF in .env}}
     container_name: bumblebeam-pool-stratum
     hostname: pool-stratum
-    build:
-      context: ./containers/pool
-      args:
-        BUMBLEBEAM_REF: ${POOL_REF}
     command: ["run", "stratum"]
     restart: unless-stopped
     # the graceful stop: connections, the share queue, a block being credited
@@ -208,6 +207,10 @@ services:
     image: bumblebeam-pool:${POOL_REF:?set POOL_REF in .env}
     container_name: bumblebeam-pool-app
     hostname: pool-app
+    build:
+      context: ./containers/pool
+      args:
+        BUMBLEBEAM_REF: ${POOL_REF}
     command: ["run", "app"]
     restart: unless-stopped
     # the graceful stop: a payout in hand finishes
