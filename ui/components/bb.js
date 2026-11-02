@@ -40,9 +40,16 @@
   function define(name, render) {
     if (!window.customElements || customElements.get(name)) return;
     customElements.define(name, class extends HTMLElement {
-      connectedCallback() { render(this); }
+      // While the page is still being read (bb.js loads in <head>), the element is created before its own
+      // contents are parsed: a prerendered snapshot carries the drawn logo inside it, and drawing now would
+      // add a second one. So draw once the page is read, replacing whatever is inside.
+      connectedCallback() {
+        var el = this;
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { render(el); }, { once: true });
+        else render(el);
+      }
       static get observedAttributes() { return ['here', 'size']; }
-      attributeChangedCallback() { if (this.isConnected) render(this); }
+      attributeChangedCallback() { if (this.isConnected && document.readyState !== 'loading') render(this); }
     });
   }
 
