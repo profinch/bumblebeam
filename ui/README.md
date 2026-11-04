@@ -65,6 +65,16 @@ No build tool of its own: each site takes `ui/` the way it already ships.
 
 A site keeps only what is its own in its own CSS; anything a second site needs moves here.
 
+## Opt-in pieces
+
+Each acts only through its own class, so pages that do not use it do not change.
+
+| Class | What | First used by |
+|---|---|---|
+| `.page-lead` | a lead paragraph under the page title | pool connect page |
+| `.howto` | an `<ol>`/`<ul>` of instructions in running text; its `<code>` is a small chip | pool connect page |
+| `.faq` | questions that open in place: `<div class="faq"><details><summary>Q</summary><div>A</div></details>…</div>` | pool connect page |
+
 ## Status (2026-11-02)
 
 | Site | On ui/ |

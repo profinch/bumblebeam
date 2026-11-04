@@ -26,7 +26,7 @@ tr.you > td { background: rgba(var(--accent-rgb), 0.05); }
 .addr span { flex: 1; min-width: 0; }
 .why { gap: 10px; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 .why b { color: var(--accent); }
-#portline { font-size: 11px; }
+#portline { font-size: 11px; margin-bottom: 8px; }
 .code pre .arg { display: inline-block; max-width: 100%; }
 
 /* phones: commands wrap instead of hiding behind a sideways scroll, copy goes under them */
@@ -89,3 +89,12 @@ tr.you > td { background: rgba(var(--accent-rgb), 0.05); }
 .net-more { display: contents; }
 /* the footer status's text room: its longest usual text, "stratum down → 4,107,102" */
 #foot-status { --status-room: 24ch; }
+
+/* connect guide: the miner tabs' body, its option switches and the small labels over commands */
+.how-body { margin-top: 12px; }
+.how-body > p { margin: 0 0 10px; color: var(--text-dim); line-height: 1.5; }
+.how-opts { margin: 0 0 10px !important; gap: 12px 18px; }
+.how-label { font-size: 10px; margin: 0 0 4px; }
+.how-body .code + .howto, .how-body .row + .howto { margin-top: 10px; }
+.how-body .row > .code { flex: 1 1 auto; align-items: center; }
+#my-stats[aria-disabled="true"] { opacity: .6; }
