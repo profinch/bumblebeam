@@ -443,7 +443,7 @@
           const { done, total } = m.result;
           if (total && done < total) {
             pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`);
-            beamMeta(`syncing ${Math.floor((done / total) * 100)}%`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
+            beamMeta(`<span class="warn">syncing ${Math.floor((done / total) * 100)}%</span>`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
           }
         }
         break;
