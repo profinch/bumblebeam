@@ -546,11 +546,7 @@
       const d = await host('ethBalances', a.address);
       if (ethFor !== a.address) return;
       ethData = d;
-      const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null }]
-        .concat(d.tokens.map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals),
-          u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
-          title: t.address })));
-      $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
+      ethRows();
       pill('ethPill', '', 'Ethereum live'); netDot('ethDot', '', 'Ethereum: online through public RPCs');
     } catch (e) {
       // the last balances stay, marked as not current; none yet: the reason
@@ -558,6 +554,17 @@
       pill('ethPill', 'off', 'Ethereum: no RPC'); netDot('ethDot', 'down', `Ethereum: no RPC answers (${msg(e)}); the balances shown may be old`);
     }
     total();
+  }
+  // the Ethereum card's rows from the last balances, at the current prices: drawn again when prices come
+  // (the balances can arrive first, and their dollars stayed empty)
+  function ethRows() {
+    const d = ethData;
+    if (!d) return;
+    const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null }]
+      .concat(d.tokens.map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals),
+        u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
+        title: t.address })));
+    $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
   }
   $('acctRename').onclick = renameAccount;
   $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
@@ -584,7 +591,12 @@
     const d = t - t0, pc = t0 > 0 ? (d / t0) * 100 : 0;
     $('totalCh').textContent = rates.ch && t >= 0.01 ? `${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}% 24h` : '';
   }
-  async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
+  async function priceTick() {
+    try {
+      rates = await host('rates'); total(); ethRows();
+      if (beamStatus) $('beamUsd').textContent = usd((beamStatus.available || 0) / GROTH * rates.beam);
+    } catch {}
+  }
 
   $('ethAddNew').onclick = async () => {
     const w = W();
