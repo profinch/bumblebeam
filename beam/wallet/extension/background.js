@@ -29,7 +29,7 @@ const OPS = {
 
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
 let lockedImages = null;
-// the badge, pixel by pixel on a 16-px icon (doubled for 32): a light disc 9 px across in the lower right
+// the badge, pixel by pixel on a 16-px icon (doubled for 32): a light disc 9 px across in the lower left
 // corner, a dark padlock on it. L light, h light at half, S the shackle, D the body, G its lower edge
 const BADGE = [
   '..hLLLh..',
@@ -56,7 +56,7 @@ async function lockedIcon() {
     BADGE.forEach((row, y) => [...row].forEach((k, x) => {
       const ink = INK[k]; if (!ink) return;
       g.fillStyle = `rgba(${ink[0]}, ${ink[1]}, ${ink[2]}, ${ink[3] / 255})`;
-      g.fillRect((7 + x) * u, (7 + y) * u, u, u);
+      g.fillRect(x * u, (7 + y) * u, u, u);
     }));
     out[n] = g.getImageData(0, 0, n, n);
   }
