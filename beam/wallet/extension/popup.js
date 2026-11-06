@@ -505,7 +505,7 @@
       ethData = d;
       const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null }]
         .concat(d.tokens.map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals),
-          u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * rates.beam : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
+          u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
           title: t.address })));
       $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
       pill('ethPill', '', 'Ethereum live');
@@ -528,7 +528,7 @@
       for (const x of ethData.tokens) {
         const v = units(x.balance, x.decimals);
         if (!(v > 0)) continue;
-        if (x.address.toLowerCase() === st.contracts.wbeam) add(v * rates.beam, ch.beam);
+        if (x.address.toLowerCase() === st.contracts.wbeam) add(v * (rates.wbeam || rates.beam), ch.wbeam);
         else if (x.usd) add(v * x.usd, NaN);
       }
     }

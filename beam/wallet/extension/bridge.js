@@ -43,7 +43,7 @@ const Bridge = (() => {
     return out;
   }
 
-  // BEAM and ETH in USD, cached a minute; the last good price is kept for 10 min if every source fails.
+  // BEAM and ETH in USD, cached a minute (BEAM: the oracle's price whenever it agrees with a market within 3x); the last good price is kept for 10 min if every source fails.
   // BEAM: Beam's own on-chain price oracle (the median of its providers), read by our pool's node, as the
   // pool site shows it; then CoinGecko, then Coinpaprika. Not explorer-api.beam.mw/bridges/rates: on
   // 2026-11-05 it said $0.0325 while the oracle and the markets said $0.0067-0.0071, and a BEAM price
@@ -70,7 +70,9 @@ const Bridge = (() => {
     const near = (a, b) => a.v / b.v < 3 && b.v / a.v < 3;
     const ok = got.filter((a) => got.some((b) => b !== a && near(a, b))).sort((a, b) => a.v - b.v);
     if (!ok.length) return null;                     // all disagree: the last good price, or none
-    return ok[(ok.length - 1) >> 1];
+    // BEAM: our oracle's own price when it is among those that agree, as the pool shows it; markets only without it
+    const oracle = ok.find((x) => x.name === 'Beam oracle');
+    return oracle || ok[(ok.length - 1) >> 1];
   }
   // BEAM's change over 24 h by Beam's own oracle, as its price: the oracle's median now (the pool's priceUsd)
   // against its median 1440 blocks ago, rebuilt from the oracle contract's FeedData calls (each provider's
@@ -117,15 +119,40 @@ const Bridge = (() => {
     } catch {}
     return null;
   }
+  // WBEAM at its market on Ethereum (DexScreener): Uniswap pools of WBEAM against USDT, USDC, ETH or WETH with
+  // at least $1000 liquidity, weighted by liquidity, the 24 h change the same way. Thin pools ($20-40k,
+  // 2026-11-06): it can differ from BEAM by a few %. None: Blockscout's exchange rate, else BEAM's price.
+  async function wbeamMarket() {
+    try {
+      const j = await Eth.getJSON(`https://api.dexscreener.com/latest/dex/tokens/${WBEAM}`);
+      const ps = (j.pairs || []).filter((p) => p.chainId === 'ethereum' && p.dexId === 'uniswap'
+        && p.baseToken && p.baseToken.address.toLowerCase() === WBEAM.toLowerCase()
+        && /^(USDT|USDC|ETH|WETH)$/.test(p.quoteToken && p.quoteToken.symbol) && Number(p.priceUsd) > 0 && (p.liquidity && p.liquidity.usd) >= 1000);
+      const w = ps.reduce((a, p) => a + p.liquidity.usd, 0);
+      if (w > 0) {
+        const price = ps.reduce((a, p) => a + Number(p.priceUsd) * p.liquidity.usd, 0) / w;
+        const ch = ps.filter((p) => p.priceChange && isFinite(Number(p.priceChange.h24)));
+        const cw = ch.reduce((a, p) => a + p.liquidity.usd, 0);
+        return { price, ch: cw > 0 ? ch.reduce((a, p) => a + Number(p.priceChange.h24) * p.liquidity.usd, 0) / cw : NaN, src: 'Uniswap' };
+      }
+    } catch {}
+    try {
+      const v = Number((await Eth.getJSON(`https://eth.blockscout.com/api/v2/tokens/${WBEAM}`)).exchange_rate);
+      if (v > 0) return { price: v, ch: NaN, src: 'Blockscout' };
+    } catch {}
+    return null;
+  }
   let rateCache = null, lastGood = null;
   async function rates() {
     if (rateCache && Date.now() - rateCache.at < 60000) return rateCache.r;
-    const [b, e, ch] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth), change24h()]);
+    const [b, e, ch, wb] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth), change24h(), wbeamMarket()]);
     if (!b || !e) {
       if (lastGood && Date.now() - lastGood.at < 600000) return lastGood.r;
       throw new Error(`no ${!b ? 'BEAM' : 'ETH'} price to trust: the sources failed or disagree (more than 3x)`);
     }
-    const r = { eth: e.v, beam: b.v, src: `BEAM: ${b.name}, ETH: ${e.name}`, ch };
+    // wbeam: the market's, else BEAM's (1:1 through the bridge); its change likewise
+    const r = { eth: e.v, beam: b.v, wbeam: wb ? wb.price : b.v, src: `BEAM: ${b.name}, ETH: ${e.name}, WBEAM: ${wb ? wb.src : 'as BEAM'}`,
+      ch: ch || wb ? { ...(ch || {}), wbeam: wb && isFinite(wb.ch) ? wb.ch : ch ? ch.beam : NaN } : null };
     rateCache = lastGood = { at: Date.now(), r };
     return r;
   }
