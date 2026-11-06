@@ -161,7 +161,7 @@ while the wallet is locked.</p>
   <section id="x-beamRecv" class="screen sheet" hidden>
     <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Receive BEAM</h2></div>
     <div class="seg" id="addrType">
-      <button class="on" data-t="regular" title="Needs this wallet running (unlocked once since the browser started) until the transfer completes; the popup may be closed">Regular</button>
+      <button class="on" data-t="regular" title="Online while this wallet is the open one and unlocked; the transfer completes while both sides are online. The popup may be closed">Regular</button>
       <button data-t="offline" title="Takes payments even while the wallet is off: the sender's wallet completes it alone">Offline</button>
       <button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool (Lelantus); one payment per address">Max privacy</button>
       <button data-t="public_offline" title="One address for any number of payments while the wallet is off: for a pool's payouts, an exchange, donations. Less private: every payment goes to the same public key">Public</button>
@@ -286,7 +286,7 @@ while the wallet is locked.</p>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
             <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
             <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></label>
-      <p class="hint">Unlocked, every Beam wallet runs: all their regular addresses are online. Locking takes Beam offline (a transfer still being made finishes first); offline and public addresses take payments anyway. Closing the browser locks it.</p>
+      <p class="hint">Only the open wallet's Beam part runs: its regular addresses are online while it is unlocked. The other wallets take payments to their offline, public and max-privacy addresses all the time; their regular addresses wait until they are opened. Locking takes Beam offline (a transfer still being made finishes first). Closing the browser locks it.</p>
       <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
     </div>
     <div class="panel">

@@ -70,10 +70,13 @@
   // a running snapshot import is not idle time (it ends by itself: beam.js gives up on a stalled one)
   const onProgress = (wallet, step, done, total) => { progress = { wallet, step, done, total }; lastActive = Date.now(); broadcast({ type: 'progress', ...progress }); };
 
-  // ---------- the Beam engines: one per Beam wallet ----------
-  // All Beam wallets run while the wallet is unlocked: every regular address of every wallet is online.
-  // Locking stops them, except one with a transfer still being made (it runs until that ends: a regular
-  // transfer needs both wallets online to complete). The browser's start runs none until the first unlock.
+  // ---------- the Beam engines: one per Beam wallet, only the open one runs ----------
+  // Only the open wallet's Beam part runs (each engine is a wasm module of 100 MB with a thread per CPU core:
+  // ten wallets would be ten of them). Another wallet starts when it is opened, in a few seconds; one that is
+  // left keeps running only while a transfer of its own is still being made (a regular transfer needs both
+  // sides online), then stops. A wallet that is not running still takes payments to its offline, public and
+  // max-privacy addresses (the sender completes those alone); its regular addresses wait until it is opened.
+  // Locking stops them all the same way. The browser's start runs none until the first unlock.
   //
   // Each wallet has one slot: its status and, while it runs, its engine. Everything that starts, stops,
   // restarts, restores, exports or copies a wallet's engine runs in that wallet's own queue (withWallet), one
@@ -214,7 +217,7 @@
       setStatus(id, 'failed', err.message);
       // tried again after 30 s, 1, 2, 4 … 10 min
       const wait = Math.min(600000, 30000 * 2 ** s.retry++);
-      setTimeout(() => withWallet(id, () => (data && slot(id).status === 'failed' ? start(id, 0) : null)).catch(() => {}), wait);
+      setTimeout(() => withWallet(id, () => (data && settings.active === id && slot(id).status === 'failed' ? start(id, 0) : null)).catch(() => {}), wait);
     }
   }
 
@@ -252,27 +255,25 @@
     });
   }
 
-  // every wallet's Beam part, one after another (each loads a wasm engine); the open one first
-  function startAll() {
-    if (!data) return Promise.resolve();
-    const order = [...data.wallets].filter((w) => w.beam).sort((a, b) => (b.id === settings.active) - (a.id === settings.active));
-    return order.reduce((p, w) => p.then(() => withWallet(w.id, () => {
-      const s = slot(w.id);
-      if (s.status === 'running') { s.lingering = false; return null; }
-      return data ? start(w.id, 0) : null;
-    })).catch(() => {}), Promise.resolve());
+  // the open wallet's Beam part, if it has one
+  function startOpen() {
+    const id = settings.active, cfg = data && beamCfg(id);
+    if (!cfg) return Promise.resolve();
+    return withWallet(id, () => (data && settings.active === id ? start(id, 0) : null)).catch(() => {});
   }
-
-  // locked: an engine with a transfer still being made keeps running until it ends (lingering); the others stop
-  function stopIdle() {
-    return Promise.all([...slots.keys()].map((id) => withWallet(id, async () => {
+  // a wallet that is not the open one (or every one, locked) stops, unless a transfer of its own is still
+  // being made: then it is looked at again on the next round
+  function sweep(id) {
+    return withWallet(id, async () => {
       const s = live(id);
-      if (!s) { if (!data && slot(id).status !== 'stopped') await stop(id); return; }
-      if (data) return;                                 // unlocked meanwhile: it stays
+      if (!s) { if (slot(id).status === 'failed' && (!data || settings.active !== id)) setStatus(id, 'stopped'); return; }
+      if (data && settings.active === id) return;
       if (await busyTx(s.e)) { s.lingering = true; return; }
-      if (!data) await stop(id);
-    })));
+      if (!data || settings.active !== id) await stop(id);
+    }).catch(() => {});
   }
+  // locked: every wallet stops, each once its own transfers are done
+  const stopIdle = () => Promise.all([...slots.keys()].map(sweep));
 
   // Each Beam wallet keeps one public offline address of its own for the others: Send offers it under "my
   // wallets". Public offline (as pools and exchanges are paid): any number of payments, and the wallet that
@@ -360,8 +361,8 @@
     }
   }, 120000);
 
-  // while locked: lingering engines stop once their transfers are done
-  setInterval(() => { if (!data && [...slots.keys()].some((id) => live(id))) stopIdle().catch(() => {}); }, 60000);
+  // every minute: a wallet left running for its transfer (not the open one, or locked) stops once it is done
+  setInterval(() => { for (const id of [...slots.keys()]) if (live(id) && (!data || settings.active !== id)) sweep(id); }, 60000);
 
   // ---------- the vault ----------
   const need = () => { if (!data) throw new Error('the wallet is locked'); };
@@ -560,7 +561,7 @@
       // the databases of the old shared folder move into their own stores, then every Beam wallet starts
       serial(async () => {
         try { await migrate(); } catch (e) { broadcast({ type: 'event', method: 'bb_error', result: `moving a Beam database: ${e.message}` }); }
-        await startAll();
+        await startOpen();
       }).catch(() => {});
     },
     lock,
@@ -634,9 +635,11 @@
         broadcast({ type: 'event', method: 'bb_failed', result: e.message });
         throw e;
       }
+      const before = settings.active;
       settings.active = id;
       await saveSettings();
       if (made) await withWallet(id, () => adopt(id, made, { db: w.beam.db, pass: w.beam.pass }, slot(id).gen));
+      if (before && before !== id) sweep(before);
       broadcast({ type: 'event', method: 'bb_changed' });
       return id;
     }),
@@ -683,13 +686,21 @@
           if (slot(id).gen === gen) setStatus(id, 'missing', e.message);
           throw e;
         } finally {
-          for (const o of paused) withWallet(o, () => (data ? start(o, 0) : null)).catch(() => {});
+          for (const o of paused) withWallet(o, () => (data && settings.active === o ? start(o, 0) : null)).catch(() => {});
         }
       });
     },
 
     // every Beam wallet runs already: switching only changes what the popup shows
-    switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} }); },
+    // the opened wallet's Beam part starts; the one before stops (once its own transfers are done)
+    switchWallet: async (id) => {
+      wallet(id);
+      const before = settings.active;
+      settings.active = id; await saveSettings();
+      broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} });
+      startOpen();
+      if (before && before !== id) sweep(before);
+    },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
     removeWallet: (id, pass) => serial(async () => {
       await verify(pass);
@@ -705,6 +716,7 @@
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
       delete settings.activeEth[id]; delete settings.beamAddr[id];
       await saveSettings();
+      startOpen();
       broadcast({ type: 'event', method: 'bb_changed' });
     }),
     // a wallet without one part gets it: Ethereum from a new or given phrase or a key

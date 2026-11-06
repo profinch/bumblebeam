@@ -669,7 +669,7 @@
   // ---------- sheets ----------
   let addrType = 'regular';
   const ADDR_HINT = {
-    regular: 'Give it to the sender. Online while the wallet is unlocked (every Beam wallet runs then); the transfer completes while both wallets are online. The popup may be closed.',
+    regular: 'Give it to the sender. Online while this wallet is the open one and unlocked; the transfer completes while both wallets are online. The popup may be closed.',
     offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address); the sender pays 0.011 BEAM and the coins arrive shielded. For many payments use Public.',
     max_privacy: 'One payment, maximum anonymity (the shielded pool); the coins mature over a while before they can be spent.',
     public_offline: 'A public offline address: any number of payments, the wallet need not run (for a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM; the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
