@@ -96,6 +96,7 @@
     qa('.screen').forEach((s) => { s.hidden = s.id !== id; });
     const inside = id.startsWith('t-') || id.startsWith('x-');
     $('tabs').hidden = !inside;
+    $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside;
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
     $('lockBtn').hidden = !(st && st.phase === 'unlocked');

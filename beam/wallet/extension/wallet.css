@@ -18,9 +18,10 @@ html.popup main { padding: 4px 12px 14px; }
 .wtop { padding: 0 16px; }
 html.popup .wtop { padding: 0 12px; }
 .wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; }
-/* no brand in the popup: the wallet picker on the left, the lock on the right; the row goes when both are hidden */
+/* the brand as in the pool's and the explorer's header (ui .brand: 19px, the logo 11px from the word), on the start
+   and lock screens; inside the wallet the picker takes its place on the left, the lock on the right */
+.wrow .brand { margin-right: auto; flex: none; }
 .wrow .dd.compact { min-width: 84px; flex: 0 1 200px; margin-right: auto; }
-.wrow:not(:has(> :not([hidden]))) { display: none; }
 .wnav { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-between; gap: 0; }
 .wnav a { flex: 1; text-align: center; padding: 8px 4px; }
 .ibtn {
