@@ -158,12 +158,27 @@
       const inVal = () => (input && input.secret ? $('dInput').value : $('dInput').value.trim());
       const done = (ok) => { dlgCancel = null; $('dlg').close(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
       dlgCancel = () => done(false);
+      // A check may answer { title, html, note }: the same dialog, still open, then shows that (a seed phrase,
+      // a key) with one button. Closing a modal dialog and opening the next at once lost the popup's focus on
+      // Windows, and Chrome closes a popup that loses focus.
+      let shown = false;
       $('dYes').onclick = async () => {
-        if (check) {
+        if (check && !shown) {
           $('dYes').disabled = true;
-          try { await check({ pass: $('dPass').value, input: inVal() }); }
+          let res;
+          try { res = await check({ pass: $('dPass').value, input: inVal() }); }
           catch (e) { note('dErr', 'bad', msg(e)); $('dYes').disabled = false; return; }
           $('dYes').disabled = false;
+          if (res && res.html != null) {
+            shown = true;
+            const pass = $('dPass').value;
+            $('dTitle').textContent = res.title || title; $('dBody').innerHTML = res.html;
+            $('dNote').textContent = res.note || ''; $('dNote').hidden = !res.note;
+            $('dPassBox').hidden = true; $('dInputBox').hidden = true; $('dPass').value = pass;
+            $('dYes').textContent = res.yes || 'Done'; $('dNo').hidden = true;
+            $('dYes').focus();
+            return;
+          }
         }
         done(true);
       };
@@ -337,7 +352,7 @@
     $('unlockMsg').textContent = '';
     if (!$('uPass').value) { $('unlockMsg').textContent = 'type the password'; return $('uPass').focus(); }
     $('doUnlock').disabled = true;
-    try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); }
+    try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); tabAct(); }
     catch (e) { $('unlockMsg').textContent = unlockText(e); $('uPass').select(); }
     $('doUnlock').disabled = false;
   }
@@ -362,7 +377,7 @@
     try {
       if (v === '__add') await host('addEthAccount', w.id);
       else if (v === '__import') { if (!(await importAccount(w))) return load(); }
-      else if (v === '__remove') { await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
+      else if (v === '__remove') { if (inTabOr('removeAccount', w.id)) return; await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
       else await host('setActiveEth', w.id, Number(v));
     } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
     await load(); renderEth(); ethRefresh();
@@ -1154,12 +1169,40 @@
     host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
   }
   $('addWallet').onclick = () => welcome();
-  $('wList').onclick = async (e) => {
+  // in a tab opened for an action (#act=…&w=…): run it once the wallet is unlocked here
+  async function tabAct() {
+    const h = new URLSearchParams(location.hash.slice(1)), act = h.get('act');
+    if (!inTab || !act || !TAB_ACTS.has(act)) return;
+    if (!st || st.phase !== 'unlocked') return;                                           // unlock() runs it after
+    history.replaceState(null, '', location.pathname + location.search);                    // once
+    const w = st.wallets.find((x) => x.id === h.get('w')) || W();
+    if (!w) return;
+    tab('settings');
+    if (act === 'chPass') return $('chPass').click();
+    if (act === 'removeAccount') { await removeAccount(w); await load(); return settingsOpen(); }
+    await walletAct(w, act);
+  }
+  // What asks for the password and then shows a secret or runs long is done in a tab, not in the popup:
+  // Chrome closes a popup the moment anything else takes the focus (another program, a password manager,
+  // a dialog), and whatever was shown or typed is gone. A tab stays. The popup opens the tab with the action
+  // and closes; the tab, already unlocked (the host holds the vault), runs it at once.
+  const TAB_ACTS = new Set(['phrase', 'ethPhrase', 'ethKey', 'backup', 'restoreBeam', 'remove', 'chPass', 'removeAccount']);
+  function inTabOr(act, walletId) {
+    if (inTab || !TAB_ACTS.has(act)) return false;
+    chrome.tabs.create({ url: chrome.runtime.getURL(`popup.html?tab=1#act=${act}${walletId ? `&w=${walletId}` : ''}`) });
+    window.close();
+    return true;
+  }
+  $('wList').onclick = (e) => {
     const a = e.target.closest('[data-a]');
     if (!a) return;
     e.preventDefault();
     const w = st.wallets.find((x) => x.id === a.closest('[data-w]').dataset.w);
     const act = a.dataset.a;
+    if (inTabOr(act, w.id)) return;
+    walletAct(w, act);
+  };
+  async function walletAct(w, act) {
     try {
       if (act === 'use') { await host('switchWallet', w.id); await load(); settingsOpen(); }
       if (act === 'restoreBeam') {
@@ -1178,31 +1221,32 @@
         if (r.ok && r.input) { await host('renameWallet', w.id, r.input); await load(); settingsOpen(); }
       }
       if (act === 'phrase' || act === 'ethPhrase') {
-        let phrase = null;
-        const r = await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
+        await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
           note: 'Anyone who sees these words owns the wallet. Make sure no one is watching the screen.',
-          check: async ({ pass }) => { phrase = await host('reveal', w.id, pass, act); } });
-        if (r.ok && phrase) await ask({ title: `${w.name}: ${act === 'phrase' ? 'seed phrase' : 'Ethereum seed phrase'}`, html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, yes: 'Done', no: null });
+          check: async ({ pass }) => {
+            const phrase = await host('reveal', w.id, pass, act);
+            if (!phrase) throw new Error('no phrase is kept for this wallet');
+            return { title: `${w.name}: ${act === 'phrase' ? 'seed phrase' : 'Ethereum seed phrase'}`, html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` };
+          } });
       }
       if (act === 'ethKey') {
         const a2 = w.accounts.find((x) => x.i === (st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];
-        let key = null;
-        const r = await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', note: `${a2.address}. Whoever has the key controls this account; import it only into a wallet you trust.`,
-          check: async ({ pass }) => { key = await host('reveal', w.id, pass, 'ethKey', a2.i); } });
-        if (r.ok && key) await ask({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(key)}</div>`, yes: 'Done', no: null });
+        await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', note: `${a2.address}. Whoever has the key controls this account; import it only into a wallet you trust.`,
+          check: async ({ pass }) => ({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(await host('reveal', w.id, pass, 'ethKey', a2.i))}</div>` }) });
       }
       if (act === 'backup') {
-        let out = null, pass = '';
+        let out = null;
+        // the file's password, if it is not the wallet's, in the same dialog; then the file, saved by the service
+        // worker (Chrome's download bubble takes the focus and may close the popup: the file is saved anyway)
         const r = await ask({ title: `Back up ${w.name}`, password: true, yes: 'Save the file',
           note: 'Saves the Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Opening it later is instant, unlike a seed restore.',
-          check: async (x) => { out = await host('exportBeam', w.id, x.pass); pass = x.pass; } });
+          check: async (x) => {
+            out = await host('exportBeam', w.id, x.pass);
+            if (out.samePassword) return null;
+            const dbp = await host('reveal', w.id, x.pass, 'beamPass');
+            return { title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, yes: 'Save the file', note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.' };
+          } });
         if (!r.ok || !out) return;
-        // the file's password first (the popup may close once the download starts: Chrome's download bubble
-        // takes the focus), then the file, saved by the service worker, which a closed popup does not stop
-        if (!out.samePassword) {
-          const dbp = await host('reveal', w.id, pass, 'beamPass');
-          await ask({ title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file. The file is saved when you close this.', yes: 'Save the file', no: null });
-        }
         const name = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
         const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
         if (r2 && r2.error) await ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
@@ -1214,8 +1258,9 @@
         if (r.ok) { await load(); if (st.phase === 'unlocked' && st.wallets.length) settingsOpen(); else route(); }
       }
     } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
-  };
+  }
   $('chPass').onclick = async () => {
+    if (inTabOr('chPass')) return;
     let old = '';
     const r1 = await ask({ title: 'Change the password', password: true, yes: 'Next', check: async ({ pass }) => { old = pass; await host('verify', pass); } });
     if (!r1.ok) return;
@@ -1302,6 +1347,7 @@
       }
       await route();
       if (inTab && location.hash === '#import' && st && (st.phase === 'new' || st.phase === 'unlocked')) go('import');
+      tabAct();
     } catch (e) { note('bootErr', 'bad', msg(e)); }
   })();
 })();
