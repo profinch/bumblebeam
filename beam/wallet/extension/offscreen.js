@@ -81,12 +81,70 @@
   const nodeList = () => [...new Set([node, ...(settings.backupNodes || DEFAULT_BACKUPS)].filter(Boolean))];
   const PENDING = new Set([0, 1, 5]);                  // tx statuses: pending, in progress, registering
 
+  // ---------- a second copy of each Beam database, outside IndexedDB ----------
+  // On 2026-11-06 Chrome recreated the extension's IndexedDB empty (most likely after the extension was
+  // killed in the middle of a write): every Beam database was gone, the vault (chrome.storage) was not.
+  // So each wallet's database is also kept in the origin private file system (OPFS), another storage:
+  // db-copies/<id>.db and the one before it, <id>.prev.db (a copy read while Beam writes could be torn;
+  // the older one then opens). A file is replaced only once fully written (createWritable commits on close).
+  // The database is encrypted by Beam; its password is in the vault. ~1-2 MB a wallet; written 30 s after a
+  // transfer or a change of coins, else at most every 10 min and only if it changed.
+  const copies = { last: new Map(), timers: new Map() };          // id -> sha-256 of the last copy; pending timers
+  const copyDir = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('db-copies', { create: true });
+  const copyName = (id, prev) => `${id}${prev ? '.prev' : ''}.db`;
+  async function copyRead(id, prev = false) {
+    try { return new Uint8Array(await (await (await (await copyDir()).getFileHandle(copyName(id, prev))).getFile()).arrayBuffer()); }
+    catch { return null; }
+  }
+  async function copyWrite(id, name, bytes) {
+    const w = await (await (await copyDir()).getFileHandle(name, { create: true })).createWritable();
+    await w.write(bytes); await w.close();
+  }
+  async function saveCopy(id) {
+    const x = engines.get(id);
+    if (!x || x.e.dead) return;
+    const bytes = await x.e.rpc('readDb', [x.cfg.db], 60000);
+    if (!bytes || bytes.length < 1024) return;                     // nothing sensible to keep
+    const hash = Vault.b64(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+    if (copies.last.get(id) === hash) return;
+    const cur = await copyRead(id);
+    if (cur) await copyWrite(id, copyName(id, true), cur);           // the one before stays as .prev
+    await copyWrite(id, copyName(id), bytes);
+    copies.last.set(id, hash);
+  }
+  function copySoon(id, ms = 30000) {
+    clearTimeout(copies.timers.get(id));
+    copies.timers.set(id, setTimeout(() => { copies.timers.delete(id); saveCopy(id).catch((e) => console.warn(`copy of ${id}: ${e.message}`)); }, ms));
+  }
+  async function dropCopies(id) {
+    const d = await copyDir();
+    for (const prev of [false, true]) await d.removeEntry(copyName(id, prev)).catch(() => {});
+  }
+  setInterval(() => { for (const id of engines.keys()) saveCopy(id).catch(() => {}); }, 10 * 60000);
+
+  // a wallet whose database is gone: from its copy (the newest that opens with its password); false: none
+  async function restoreFromCopy(e, id, cfg) {
+    for (const prev of [false, true]) {
+      const bytes = await copyRead(id, prev);
+      if (!bytes) continue;
+      try {
+        await e.rpc('importDb', [cfg.db, bytes, cfg.pass]);
+        console.warn(`Beam database of ${id} was gone: restored from its ${prev ? 'previous ' : ''}copy`);
+        broadcast({ type: 'event', method: 'bb_error', result: `a Beam database was missing; restored from its copy in this browser` });
+        return true;
+      } catch (err) { console.warn(`copy ${copyName(id, prev)} of ${id}: ${err.message}`); }
+    }
+    return false;
+  }
+  const missing = new Set();                                         // wallets with neither a database nor a copy
+
   function wire(e, id) {
     e.on.consent = askConsent;
     e.on.progress = onProgress;
     e.on.event = (m) => {
       broadcast({ type: 'event', method: m.method, result: m.result, wallet: id });
       if (m.method === 'ev_txs_changed') setTimeout(badge, 3000);
+      if (m.method === 'ev_txs_changed' || m.method === 'ev_utxos_changed') copySoon(id);
     };
     e.on.ws = () => broadcast({ type: 'event', method: 'bb_net', wallet: id });
     e.on.crash = (msg) => {
@@ -102,6 +160,8 @@
     await e.call('ev_subunsub', { ev_sync_progress: true, ev_system_state: true, ev_txs_changed: true, ev_utxos_changed: true, ev_connection_changed: true }).catch(() => {});
     broadcast({ type: 'event', method: 'bb_changed' });
     ownAddress(id).catch(() => {});
+    missing.delete(id);
+    copySoon(id, 60000);                                             // a copy soon after every start
   }
 
   async function startEngine(id, cfg, nodeIx = 0) {
@@ -109,8 +169,14 @@
     const list = nodeList(), n = list[nodeIx % list.length];
     const e = await Engines.fresh(id);
     wire(e, id);
-    try { await e.rpc('open', [cfg.db, cfg.pass, n]); }
-    catch (err) { e.drop(); throw err; }
+    try {
+      // the database gone from IndexedDB: back from its copy; neither: the popup offers the seed restore
+      if (cfg.db.startsWith('/bw_') && !(await e.rpc('exists', [cfg.db])) && !(await restoreFromCopy(e, id, cfg))) {
+        missing.add(id);
+        throw new Error('this Beam wallet has no database in this browser');
+      }
+      await e.rpc('open', [cfg.db, cfg.pass, n]);
+    } catch (err) { e.drop(); throw err; }
     await register(id, e, cfg, n, nodeIx % list.length);
     return e;
   }
@@ -409,6 +475,7 @@
         active: settings.active, activeEth: settings.activeEth, tokens: settings.tokens, ethRpc: settings.ethRpc,
         // each Beam wallet's engine: running, connected to its node (the WebSocket open), which node
         engines: Object.fromEntries([...engines].map(([id, x]) => [id, { running: !x.e.dead, connected: x.e.ws.open > 0, node: x.node }])),
+        beamMissing: [...missing],
         nodes: nodeList(),
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
@@ -561,6 +628,7 @@
       await mutate((d) => { d.wallets = d.wallets.filter((x) => x.id !== id); });
       await stopEngine(id);
       if (w.beam && w.beam.db.startsWith('/bw_')) await Engines.dropStore(id);   // a file left in the old shared folder stays
+      await dropCopies(id).catch(() => {});
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
       delete settings.activeEth[id]; delete settings.beamAddr[id];
       await saveSettings();

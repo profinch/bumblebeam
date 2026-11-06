@@ -101,6 +101,7 @@ html.popup .seed { columns: 2; }
 #beamMeta .l2 { font-size: 10px; color: var(--muted); }
 #beamMeta .l2.warn { color: var(--color-yellow); }
 #beamMeta .l2.bad { color: var(--color-red); }
+#beamMeta .l2 .text-link { font-size: inherit; color: inherit; }
 #beamMeta .warn { color: var(--color-yellow); }
 /* before the first balance: no "— BEAM", the line keeps its height */
 #beamCard.nodata .bigamt > * { visibility: hidden; }

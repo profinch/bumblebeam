@@ -480,6 +480,15 @@
       // the engine is starting: asked again every 2 s (its start is announced, but a state read before it
       // came would leave this line as it is); after 2 min it is not starting, it failed
       startedAt ||= Date.now();
+      // its database is gone and there is no copy: say so, with the way back (Settings → restore Beam)
+      if ((st.beamMissing || []).includes(w.id)) {
+        beamMeta('', 'database missing · <a href="#" class="text-link" id="goRestore">restore</a>', 'bad');
+        netDot('beamDot', 'down', '');
+        $('goRestore').onclick = (ev) => { ev.preventDefault(); tab('settings'); };
+        clearTimeout(startPoll);
+        startPoll = setTimeout(() => load().then(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }).catch(() => {}), 5000);
+        return;
+      }
       const long = Date.now() - startedAt > 120000;
       beamMeta(long ? '' : '<span class="warn">starting…</span>', long ? 'not running' : '', 'bad');
       netDot('beamDot', long ? 'down' : 'warn', '');
