@@ -443,7 +443,7 @@
           const { done, total } = m.result;
           if (total && done < total) {
             pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`);
-            beamMeta('warn', `syncing ${Math.floor((done / total) * 100)}%`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
+            beamMeta(`syncing ${Math.floor((done / total) * 100)}%`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
           }
         }
         break;
@@ -454,9 +454,15 @@
   // a network's state on its card: the dot by its name (its colour: live; yellow: starting, syncing,
   // reconnecting; red: no node / no RPC) with the state in its tip, and for Beam the line on the right
   function netDot(id, state, tip) { const d = $(id); d.classList.toggle('warn', state === 'warn'); d.classList.toggle('down', state === 'down'); d.title = tip || ''; }
-  function beamMeta(cls, html, tip) { const m = $('beamMeta'); m.className = `panel-meta${cls ? ' ' + cls : ''}`; m.innerHTML = html ? `<span>${html}</span>` : ''; m.title = tip || ''; }
+  // Beam's line on the right: what (block: N, starting…, syncing 42%) and under it, if any, how (backup,
+  // reconnecting, disconnected) in its colour
+  function beamMeta(html, sub, subCls, tip) {
+    const m = $('beamMeta');
+    m.innerHTML = `${html ? `<span class="l1">${html}</span>` : ''}${sub ? `<span class="l2 ${subCls || ''}">${sub}</span>` : ''}`;
+    m.title = tip || '';
+  }
   const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
-  let beamHeight = 0, beamLostAt = 0;          // beamLostAt: when the node stopped answering (0: it answers)
+  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
   function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
 
   // ---------- Wallet tab: Beam ----------
@@ -464,13 +470,25 @@
     const w = W();
     $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
     if (!w || !w.beam) {
-      beamStatus = null; total(); beamMeta('', ''); netDot('beamDot', '', '');
+      beamStatus = null; total(); beamMeta(''); netDot('beamDot', '', '');
       const n = st && st.engines ? Object.values(st.engines).filter((x) => x.running).length : 0;
       pill('beamPill', n ? '' : 'off', n ? `Beam: ${n} wallet${n > 1 ? 's' : ''} online` : 'Beam off');
       $('beamPill').title = 'This wallet has no Beam part; the Beam parts of your other wallets run and receive';
       return;
     }
-    if (!beamHere()) { beamMeta('warn', 'starting…'); netDot('beamDot', 'warn', 'Beam: the wallet is starting'); pill('beamPill', 'demo', 'Beam starting…'); return; }
+    if (!beamHere()) {
+      // the engine is starting: asked again every 2 s (its start is announced, but a state read before it
+      // came would leave this line as it is); after 2 min it is not starting, it failed
+      startedAt ||= Date.now();
+      const long = Date.now() - startedAt > 120000;
+      beamMeta(long ? '' : 'starting…', long ? 'not running' : '', 'bad', long ? 'The Beam part of this wallet did not start: Settings → Networks, or lock and unlock' : '');
+      netDot('beamDot', long ? 'down' : 'warn', long ? 'Beam: not running' : 'Beam: the wallet is starting');
+      pill('beamPill', 'demo', 'Beam starting…');
+      clearTimeout(startPoll);
+      startPoll = setTimeout(() => load().then(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }).catch(() => {}), 2000);
+      return;
+    }
+    startedAt = 0;
     try {
       // The balance is BEAM's line of `totals` (asset 0): its sums count regular coins and those of the
       // shielded pool (offline, public, max privacy). The top-level fields count regular coins only, so
@@ -480,6 +498,7 @@
       const s = t ? { ...raw, available: t.available, receiving: t.receiving, sending: t.sending, maturing: t.maturing,
         maturing_mp: t.maturing_mp || 0, maturing_regular: t.maturing_regular || 0, available_mp: t.available_mp || 0 } : raw;
       beamStatus = s;
+      $('beamCard').classList.remove('nodata');
       $('beamAvail').textContent = amt(s.available || 0);
       $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
       // what is not spendable yet, as chips in the explorer's way: one colour per state
@@ -498,18 +517,19 @@
       const node = x ? x.node : st.node, backup = !!(x && x.node !== st.node);
       beamHeight = s.current_height || beamHeight;
       // no node: reconnecting (yellow) for the first minute, then no node (red); the last block seen stays
-      if (x && !x.connected) beamLostAt ||= Date.now(); else beamLostAt = 0;
-      if (beamLostAt && Date.now() - beamLostAt > 60000) { beamMeta('bad', `no node · ${blockAt(beamHeight)}`, `No Beam node answers (${node} and the backups): the balance is as of block ${beamHeight.toLocaleString('en-US')}. Settings → Networks`); netDot('beamDot', 'down', 'Beam: no node answers'); }
-      else if (beamLostAt) { beamMeta('warn', `reconnecting · ${blockAt(beamHeight)}`, `No answer from ${node}: trying again, then the next node`); netDot('beamDot', 'warn', 'Beam: reconnecting'); }
-      else if (!synced) { beamMeta('warn', `syncing · ${blockAt(beamHeight)}`, `Catching up with the chain through ${node}`); netDot('beamDot', 'warn', 'Beam: syncing'); }
+      if (x && !x.connected) beamLostAt ||= Date.now(); else { beamLostAt = 0; beamSeen = true; }
+      if (beamLostAt && Date.now() - beamLostAt > 60000) { beamMeta(blockAt(beamHeight), 'disconnected', 'bad', `No Beam node answers (${node} and the backups): the balance is as of block ${beamHeight.toLocaleString('en-US')}. Settings → Networks`); netDot('beamDot', 'down', 'Beam: disconnected'); }
+      else if (beamLostAt && !beamSeen) { beamMeta(blockAt(beamHeight), 'connecting', 'warn', `Connecting to ${node}`); netDot('beamDot', 'warn', 'Beam: connecting'); }
+      else if (beamLostAt) { beamMeta(blockAt(beamHeight), 'reconnecting', 'warn', `No answer from ${node}: trying again, then the next node`); netDot('beamDot', 'warn', 'Beam: reconnecting'); }
+      else if (!synced) { beamMeta(blockAt(beamHeight), 'syncing', 'warn', `Catching up with the chain through ${node}`); netDot('beamDot', 'warn', 'Beam: syncing'); }
       else {
-        beamMeta('', `${blockAt(beamHeight)}${backup ? ' · backup' : ''}`, `The chain's last block, from ${node}${backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
+        beamMeta(blockAt(beamHeight), backup ? 'backup' : '', '', `The chain's last block, from ${node}${backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
         netDot('beamDot', '', `Beam: online through ${node}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online`);
       }
       if (x && !x.connected) pill('beamPill', 'demo', 'Beam: reconnecting…');
       else if (!$('beamPill').textContent.includes('syncing') || synced) pill('beamPill', '', `Beam live → ${(s.current_height || 0).toLocaleString('en-US')}`);
       $('beamPill').title = `Beam node ${x ? x.node : st.node}${x && x.node !== st.node ? ' (a backup: the main one did not answer)' : ''}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online.`;
-    } catch (e) { beamMeta('bad', `no node${beamHeight ? ` · ${blockAt(beamHeight)}` : ''}`, msg(e)); netDot('beamDot', 'down', `Beam: no node answers (${msg(e)})`); pill('beamPill', 'off', 'Beam: no node'); }
+    } catch (e) { beamMeta(beamHeight ? blockAt(beamHeight) : '', 'disconnected', 'bad', msg(e)); netDot('beamDot', 'down', `Beam: disconnected (${msg(e)})`); pill('beamPill', 'off', 'Beam: no node'); }
     total();
   }
 
@@ -543,7 +563,7 @@
   $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
 
   function total() {
-    if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }
+    if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').hidden = $('total24').hidden = true; return; }
     // t: now; t0: the same holdings at the prices of 24 h ago (an asset with no 24 h change counts unchanged)
     let t = 0, t0 = 0;
     const ch = rates.ch || {};
@@ -562,7 +582,9 @@
     $('totalUsd').textContent = usd(t);
     // the 24 h change of the total, as wallets show it: +$12.34 (+1.02%) 24h; none without prices or a balance
     const d = t - t0, pc = t0 > 0 ? (d / t0) * 100 : 0;
-    $('totalCh').textContent = rates.ch && t >= 0.01 ? `${d < 0 ? '−' : '+'}${usd(Math.abs(d))} (${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}%) 24h` : '';
+    const showCh = !!(rates.ch && t >= 0.01);
+    $('totalCh').hidden = $('total24').hidden = !showCh;
+    if (showCh) { $('totalPc').textContent = `${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}%`; $('totalD').textContent = `${d < 0 ? '−' : '+'}${usd(Math.abs(d))}`; }
   }
   async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
 

@@ -128,13 +128,13 @@ while the wallet is locked.</p>
   <section id="t-home" class="screen tab" hidden>
     <div class="total">
       <div class="caps">Total</div>
-      <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh"></span></div>
+      <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh" hidden><span id="totalPc"></span><span id="totalD"></span></span><span class="total-24" id="total24" hidden>24h</span></div>
     </div>
 
-    <div class="panel net beam" id="beamCard">
+    <div class="panel net beam nodata" id="beamCard">
       <div class="panel-head"><h3 class="panel-title"><i class="chain beam" id="beamDot"></i>Beam</h3><span class="panel-meta" id="beamMeta"></span></div>
       <div id="beamBody">
-        <div class="bigamt"><span class="amt" id="beamAvail">—</span><span class="unit">BEAM</span><span class="usd" id="beamUsd"></span></div>
+        <div class="bigamt"><span class="amt" id="beamAvail"></span><span class="unit">BEAM</span><span class="usd" id="beamUsd"></span></div>
         <div class="minor" id="beamMinor"></div>
         <div class="acts"><button class="btn" data-sheet="beamRecv">Receive</button><button class="btn" data-sheet="beamSend">Send</button><button class="btn ghost" data-bridge="toEth" title="BEAM → WBEAM on Ethereum">Bridge</button></div>
       </div>
