@@ -373,7 +373,7 @@
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
     try { await host('switchWallet', v); } catch (e) { return ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }); }
-    await load(); renderBeam(); renderEth(); beamRefresh(); ethRefresh();
+    await load(); tab('home');                      // a chosen wallet always opens on its Wallet tab
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
