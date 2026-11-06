@@ -96,9 +96,13 @@
     qa('.screen').forEach((s) => { s.hidden = s.id !== id; });
     const inside = id.startsWith('t-') || id.startsWith('x-');
     $('tabs').hidden = !inside;
-    $('setBtn').hidden = !inside;
+    // adding a wallet from an open one: the way back and Settings beside the lock
+    const adding = id === 's-welcome' && !!(st && st.phase === 'unlocked');
+    $('setBtn').hidden = !inside && !adding;
+    $('backBtn').hidden = !adding;
+    $('setBtn').classList.toggle('on', id === 't-settings');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
-    $('foot').hidden = !inside && id !== 's-unlock';      // the copyright line: in the wallet and under the lock
+    $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
     $('lockBtn').hidden = !(st && st.phase === 'unlocked');
     window.scrollTo(0, 0); document.querySelector('main').scrollTop = 0;
@@ -106,7 +110,6 @@
   function tab(name) {
     curTab = name;
     qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
-    $('setBtn').classList.toggle('on', name === 'settings');
     show(`t-${name}`);
     if (name === 'home') { beamRefresh(); ethRefresh(); }
     if (name === 'bridge') bridgeOpen();
@@ -121,6 +124,7 @@
     const b = e.target.closest('[data-bridge]'); if (b) { tab('bridge'); setDir(b.dataset.bridge); }
   });
   $('lockBtn').onclick = async () => { await host('lock'); };
+  $('backBtn').onclick = () => tab(curTab === 'settings' ? 'settings' : 'home');
   $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? 'home' : 'settings');
 
   // ---------- the dialog: confirm, password, one input ----------
@@ -227,7 +231,7 @@
   // ---------- start: welcome / add ----------
   function welcome() {
     pwFields();
-    $('addBack').hidden = !(st && st.phase === 'unlocked');
+    $('welcomeTitle').textContent = st && st.phase === 'unlocked' ? 'Add a wallet' : 'Welcome';
     show('s-welcome');
   }
   qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });

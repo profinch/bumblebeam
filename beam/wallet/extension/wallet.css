@@ -31,7 +31,7 @@ html.popup .wtop { padding: 0 12px; }
 .ibtn:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
 .ibtn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
 .ibtn svg, .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.wfoot { padding: 3px 12px 4px; gap: 0; }      /* the letters 5 px from the top and the bottom (measured: the line box adds 2 and 1) */
+.wfoot { padding: 1px 12px 4px; gap: 0; }      /* the letters 5 px from the top and the bottom, as measured in Chrome on Windows */
 .wfoot .foot-copy { margin: 0; font-size: 10px; line-height: 14px; }
 .wfoot .foot-copy .fp { display: block; }
 .wfoot .foot-copy a { font-size: 10px; }
@@ -39,13 +39,13 @@ html.popup .wtop { padding-bottom: 5px; }      /* the fixed header ends 5 px und
 
 /* ---- start screens ---- */
 .hero { text-align: center; padding: 18px 0 6px; }
-.lock-hero { padding-top: 24px; }
+.lock-hero { padding-top: 22px; }      /* the logo to the emoji: 33 px (the header ends 5 px under its row) */
 .lock-emoji { font-size: 48px; line-height: 1; }
 #unlockForm { padding-top: 15px; }      /* the text to the password as far as the logo to the lock: 33 px */
 .hero-title { margin: 10px 0 6px; font-size: var(--fs-xl); font-weight: 700; }
 .hero-title .word b { background: var(--gradient-accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero-lead { margin: 0 auto; max-width: 340px; white-space: pre-line; color: var(--text-dim); font-size: var(--fs-base); line-height: 1.55; }
-.choices { display: grid; gap: 10px; margin: 22px auto 0; max-width: 340px; }
+.choices { display: grid; gap: 10px; margin: 0 auto; padding-top: 27px; max-width: 340px; }      /* the text to the buttons as on the lock screen: 33 px */
 .btn.wide { width: 100%; justify-content: center; padding: 11px 14px; }
 .screen-title { margin: 14px 0 6px; font: 700 var(--fs-base) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; }
 .sheet-head { display: flex; align-items: center; gap: 12px; margin: 8px 0 10px; }
