@@ -352,7 +352,7 @@
     $('unlockMsg').textContent = '';
     if (!$('uPass').value) { $('unlockMsg').textContent = 'type the password'; return $('uPass').focus(); }
     $('doUnlock').disabled = true;
-    try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); tabAct(); }
+    try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); }
     catch (e) { $('unlockMsg').textContent = unlockText(e); $('uPass').select(); }
     $('doUnlock').disabled = false;
   }
@@ -377,7 +377,7 @@
     try {
       if (v === '__add') await host('addEthAccount', w.id);
       else if (v === '__import') { if (!(await importAccount(w))) return load(); }
-      else if (v === '__remove') { if (inTabOr('removeAccount', w.id)) return; await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
+      else if (v === '__remove') { await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
       else await host('setActiveEth', w.id, Number(v));
     } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
     await load(); renderEth(); ethRefresh();
@@ -1169,37 +1169,12 @@
     host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
   }
   $('addWallet').onclick = () => welcome();
-  // in a tab opened for an action (#act=…&w=…): run it once the wallet is unlocked here
-  async function tabAct() {
-    const h = new URLSearchParams(location.hash.slice(1)), act = h.get('act');
-    if (!inTab || !act || !TAB_ACTS.has(act)) return;
-    if (!st || st.phase !== 'unlocked') return;                                           // unlock() runs it after
-    history.replaceState(null, '', location.pathname + location.search);                    // once
-    const w = st.wallets.find((x) => x.id === h.get('w')) || W();
-    if (!w) return;
-    tab('settings');
-    if (act === 'chPass') return $('chPass').click();
-    if (act === 'removeAccount') { await removeAccount(w); await load(); return settingsOpen(); }
-    await walletAct(w, act);
-  }
-  // What asks for the password and then shows a secret or runs long is done in a tab, not in the popup:
-  // Chrome closes a popup the moment anything else takes the focus (another program, a password manager,
-  // a dialog), and whatever was shown or typed is gone. A tab stays. The popup opens the tab with the action
-  // and closes; the tab, already unlocked (the host holds the vault), runs it at once.
-  const TAB_ACTS = new Set(['phrase', 'ethPhrase', 'ethKey', 'backup', 'restoreBeam', 'remove', 'chPass', 'removeAccount']);
-  function inTabOr(act, walletId) {
-    if (inTab || !TAB_ACTS.has(act)) return false;
-    chrome.tabs.create({ url: chrome.runtime.getURL(`popup.html?tab=1#act=${act}${walletId ? `&w=${walletId}` : ''}`) });
-    window.close();
-    return true;
-  }
   $('wList').onclick = (e) => {
     const a = e.target.closest('[data-a]');
     if (!a) return;
     e.preventDefault();
     const w = st.wallets.find((x) => x.id === a.closest('[data-w]').dataset.w);
     const act = a.dataset.a;
-    if (inTabOr(act, w.id)) return;
     walletAct(w, act);
   };
   async function walletAct(w, act) {
@@ -1260,7 +1235,6 @@
     } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
   }
   $('chPass').onclick = async () => {
-    if (inTabOr('chPass')) return;
     let old = '';
     const r1 = await ask({ title: 'Change the password', password: true, yes: 'Next', check: async ({ pass }) => { old = pass; await host('verify', pass); } });
     if (!r1.ok) return;
@@ -1347,7 +1321,6 @@
       }
       await route();
       if (inTab && location.hash === '#import' && st && (st.phase === 'new' || st.phase === 'unlocked')) go('import');
-      tabAct();
     } catch (e) { note('bootErr', 'bad', msg(e)); }
   })();
 })();
