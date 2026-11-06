@@ -23,42 +23,24 @@ const OPS = {
   set: (m) => chrome.storage.local.set({ [m.key]: m.value }),
   // the toolbar icon's badge: bridge messages waiting to be claimed
   badge: (m) => Promise.all([chrome.action.setBadgeText({ text: m.text || '' }), chrome.action.setBadgeBackgroundColor({ color: '#00f6d2' })]),
-  // the toolbar icon: the bee, or the bee with a lock in a round badge at its lower right while locked
+  // the toolbar icon: the bee, or the bee in grey while locked
   icon: (m) => (m.locked ? lockedIcon().then((imageData) => chrome.action.setIcon({ imageData })) : chrome.action.setIcon({ path: ICONS })),
 };
 
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
 let lockedImages = null;
-// the badge, pixel by pixel on a 16-px icon (doubled for 32): a light disc 9 px across in the lower left
-// corner, a dark padlock on it. L light, h light at half, S the shackle, D the body, G its lower edge
-const BADGE = [
-  '..hLLLh..',
-  '.hLSSSLh.',
-  'hLLSLSLLh',
-  'LLLSLSLLL',
-  'LLDDDDDLL',
-  'LLDDDDDLL',
-  'hLDDDDDLh',
-  '.hGGGGGh.',
-  '..hLLLh..',
-];
-const INK = { L: [243, 244, 245, 255], h: [243, 244, 245, 140], S: [74, 84, 104, 255], D: [62, 73, 94, 255], G: [110, 119, 134, 255] };
-// on the bee itself (icon-128 scaled down)
+// locked: the same bee, grey and dimmed (asleep); nothing drawn over it
 async function lockedIcon() {
   if (lockedImages) return lockedImages;
   const bee = await createImageBitmap(await (await fetch(chrome.runtime.getURL('icons/icon-128.png'))).blob());
   const out = {};
   for (const n of [16, 32]) {
-    const c = new OffscreenCanvas(n, n), g = c.getContext('2d');
+    const g = new OffscreenCanvas(n, n).getContext('2d');
     g.imageSmoothingQuality = 'high';
     g.drawImage(bee, 0, 0, n, n);
-    const u = n / 16;
-    BADGE.forEach((row, y) => [...row].forEach((k, x) => {
-      const ink = INK[k]; if (!ink) return;
-      g.fillStyle = `rgba(${ink[0]}, ${ink[1]}, ${ink[2]}, ${ink[3] / 255})`;
-      g.fillRect(x * u, (7 + y) * u, u, u);
-    }));
-    out[n] = g.getImageData(0, 0, n, n);
+    const img = g.getImageData(0, 0, n, n), d = img.data;
+    for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.round((0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) * 0.55);
+    out[n] = img;
   }
   return (lockedImages = out);
 }
