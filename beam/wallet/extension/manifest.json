@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "description": "A wallet for Beam and Ethereum: BEAM, ETH, WBEAM and tokens, several wallets, and the official Beam bridge between the two in both directions.",
   "action": {
-    "default_title": "BumbleBeam Wallet",
+    "default_title": "BumbleBeam",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
