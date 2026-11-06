@@ -24,10 +24,22 @@ const OPS = {
   // the toolbar icon's badge: bridge messages waiting to be claimed
   badge: (m) => Promise.all([chrome.action.setBadgeText({ text: m.text || '' }), chrome.action.setBadgeBackgroundColor({ color: '#00f6d2' })]),
   // the toolbar icon: the bee, or the bee in grey while locked
-  icon: (m) => (m.locked ? lockedIcon().then((imageData) => chrome.action.setIcon({ imageData })) : chrome.action.setIcon({ path: ICONS })),
+  icon: (m) => { wantLocked = !!m.locked; return applyIcon(); },
 };
 
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
+// Chrome closes the action popup when the icon under it changes: while the popup is open the change waits,
+// and is made once it is closed (checked each second)
+let wantLocked = null, shownLocked = null, waiting = 0;
+const popupOpen = async () => (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).length > 0;
+async function applyIcon() {
+  if (wantLocked === null || wantLocked === shownLocked) return;
+  if (await popupOpen()) { waiting ||= setInterval(() => applyIcon().catch(() => {}), 1000); return; }
+  clearInterval(waiting); waiting = 0;
+  const locked = wantLocked;
+  await (locked ? lockedIcon().then((imageData) => chrome.action.setIcon({ imageData })) : chrome.action.setIcon({ path: ICONS }));
+  shownLocked = locked;
+}
 let lockedImages = null;
 // locked: the same bee, grey and dimmed (asleep); nothing drawn over it
 async function lockedIcon() {
