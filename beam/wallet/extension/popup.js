@@ -411,16 +411,24 @@
     }
     if (!beamHere()) { $('beamMeta').textContent = 'starting…'; pill('beamPill', 'demo', 'Beam starting…'); return; }
     try {
-      const s = await host('beam', W().id, 'wallet_status');
+      // The balance is BEAM's line of `totals` (asset 0): its sums count regular coins and those of the
+      // shielded pool (offline, public, max privacy). The top-level fields count regular coins only, so
+      // coins received through the pool did not show at all.
+      const raw = await host('beam', W().id, 'wallet_status');
+      const t = (raw.totals || []).find((x) => Number(x.asset_id) === 0);
+      const s = t ? { ...raw, available: t.available, receiving: t.receiving, sending: t.sending, maturing: t.maturing,
+        maturing_mp: t.maturing_mp || 0, maturing_regular: t.maturing_regular || 0, available_mp: t.available_mp || 0 } : raw;
       beamStatus = s;
       $('beamAvail').textContent = amt(s.available || 0);
       $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
       const minor = [];
       if (s.receiving) minor.push(`+${amt(s.receiving)} incoming`);
       if (s.sending) minor.push(`−${amt(s.sending)} outgoing`);
-      if (s.maturing) minor.push(`${amt(s.maturing)} maturing`);
-      if (s.shielded) minor.push(`${amt(s.shielded)} shielded`);
-      $('beamMinor').textContent = minor.join(' · ');
+      if (s.maturing_regular) minor.push(`${amt(s.maturing_regular)} maturing`);
+      // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
+      if (s.maturing_mp) minor.push(`<span class="tipped" title="Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest">${amt(s.maturing_mp)} maturing (max privacy, up to 72 h)</span>`);
+      else if (s.maturing && !s.maturing_regular) minor.push(`${amt(s.maturing)} maturing`);
+      $('beamMinor').innerHTML = minor.join(' · ');
       const synced = s.current_height && s.is_in_sync !== false;
       $('beamMeta').innerHTML = `<span class="dot${synced ? '' : ' off'}"></span> ${esc((s.current_height || 0).toLocaleString('en-US'))}`;
       const x = engineOf(W());
@@ -460,7 +468,8 @@
     if (!rates) { $('totalUsd').textContent = '—'; return; }
     let t = 0;
     const parts = [];
-    if (beamStatus) { const b = (beamStatus.available || 0) / GROTH; t += b * rates.beam; parts.push(`${num(b, 2)} BEAM`); }
+    // BEAM: available and maturing (still the wallet's own: max privacy coins unlock within 72 h)
+    if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; t += b * rates.beam; parts.push(`${num(b, 2)} BEAM`); }
     if (ethData) {
       const e = units(ethData.eth, 18); t += e * rates.eth; parts.push(`${num(e, 4)} ETH`);
       for (const x of ethData.tokens) {
