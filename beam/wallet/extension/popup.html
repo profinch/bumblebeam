@@ -17,12 +17,12 @@
   <div class="wrow">
     <span class="brand" id="brand"><bb-logo size="30"></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Wallet</i></span></span>
     <div class="dd compact" id="walletDd" hidden>
-      <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Your wallets: each has its Beam and Ethereum part"></button>
+      <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
       <ul class="dd-list" role="listbox" tabindex="-1" hidden></ul>
     </div>
     <button class="ibtn" id="lockBtn" title="Lock: the password opens it again. Beam goes offline once its transfers in progress are done" hidden>
       <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
-    <button class="ibtn" id="setBtn" title="Settings" hidden>
+    <button class="ibtn" id="setBtn" aria-label="Settings" hidden>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
   <nav class="main-nav wnav" id="tabs" hidden>
@@ -314,8 +314,11 @@ while the wallet is locked.</p>
 </main>
 
 <footer class="foot wfoot" id="foot" hidden>
-  <span class="pill-status off" id="beamPill" title="The Beam node this wallet talks to"><i></i><span>Beam</span></span>
-  <span class="pill-status off" id="ethPill" title="Ethereum, through public RPCs"><i></i><span>Ethereum</span></span>
+  <!-- the networks' state stays in the cards (Beam's dot and height); these pills are kept for the code, not shown -->
+  <span class="pill-status off" id="beamPill" hidden><i></i><span>Beam</span></span>
+  <span class="pill-status off" id="ethPill" hidden><i></i><span>Ethereum</span></span>
+  <p class="foot-copy"><span class="fp"><a href="https://bumblebeam.org/" target="_blank" rel="noopener">© 2026 BumbleBeam</a> · a community <a href="https://beam.mw/" target="_blank" rel="noopener">Beam (BEAM)</a> wallet</span>
+    <span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">GitHub</a></span></p>
 </footer>
 
 <dialog id="dlg">

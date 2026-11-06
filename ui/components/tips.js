@@ -32,6 +32,7 @@
   function place(el) {
     const r = el.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
+    tip.style.left = '0px';      // measured at the left edge: near the right one a fixed box shrinks to the room left
     const w = tip.offsetWidth;
     const h = tip.offsetHeight;
     const gap = 8;
