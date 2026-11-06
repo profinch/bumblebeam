@@ -25,8 +25,8 @@ html.popup .wtop { padding: 0 12px; }
 
 /* ---- start screens ---- */
 .hero { text-align: center; padding: 18px 0 6px; }
-.lock-hero { padding-top: 34px; }
-.lock-emoji { font-size: 0.9em; }
+.lock-hero { padding-top: 24px; }
+.lock-emoji { font-size: 48px; line-height: 1; }
 .hero-title { margin: 10px 0 6px; font-size: var(--fs-xl); font-weight: 700; }
 .hero-title .word b { background: var(--gradient-accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero-lead { margin: 0 auto; max-width: 340px; color: var(--text-dim); font-size: var(--fs-base); line-height: 1.55; }

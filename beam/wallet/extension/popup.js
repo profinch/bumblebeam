@@ -316,8 +316,15 @@
     if (!$('uPass').value) { $('unlockMsg').textContent = 'type the password'; return $('uPass').focus(); }
     $('doUnlock').disabled = true;
     try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); }
-    catch (e) { $('unlockMsg').textContent = msg(e); $('uPass').select(); }
+    catch (e) { $('unlockMsg').textContent = unlockText(e); $('uPass').select(); }
     $('doUnlock').disabled = false;
+  }
+  // what the person can act on: a wrong password as it is; the two rare technical failures in plain words
+  function unlockText(e) {
+    const m = msg(e);
+    if (/went away|not answer|no answer/i.test(m)) return 'the wallet was restarting: try again';
+    if (/^storage/i.test(m)) return 'the browser could not read the wallet\'s data: close and reopen the browser, then try again';
+    return m;
   }
   $('unlockForm').onsubmit = (e) => { e.preventDefault(); unlock(); };
 
