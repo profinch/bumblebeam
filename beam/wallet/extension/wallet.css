@@ -31,7 +31,7 @@ html.popup .wtop { padding: 0 12px; }
 .ibtn:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
 .ibtn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
 .ibtn svg, .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.wfoot { padding: 1px 12px 4px; gap: 0; }      /* the letters 5 px from the top and the bottom, as measured in Chrome on Windows */
+.wfoot { padding: 5px 12px; gap: 0; }
 .wfoot .foot-copy { margin: 0; font-size: 10px; line-height: 14px; }
 .wfoot .foot-copy .fp { display: block; }
 .wfoot .foot-copy a { font-size: 10px; }
