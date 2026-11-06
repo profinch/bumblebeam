@@ -21,6 +21,7 @@ html.popup .wtop { padding: 0 12px; }
 /* the brand as in the pool's and the explorer's header (ui .brand: 19px, the logo 11px from the word), on the start
    and lock screens; inside the wallet the picker takes its place on the left, the lock on the right */
 .wrow .brand { margin-right: auto; flex: none; }
+.wrow .ibtn { align-self: flex-start; }      /* at the top of the row: the same place beside the taller brand as in the wallet */
 .wrow .dd.compact { min-width: 84px; flex: 0 1 200px; margin-right: auto; }
 .wnav { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-between; gap: 0; }
 .wnav a { flex: 1; text-align: center; padding: 8px 4px; }
