@@ -354,17 +354,18 @@
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
-    await host('switchWallet', v).catch((e) => ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }));
+    try { await host('switchWallet', v); } catch (e) { return ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }); }
+    await load(); renderBeam(); renderEth(); beamRefresh(); ethRefresh();
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
     try {
       if (v === '__add') await host('addEthAccount', w.id);
       else if (v === '__import') { if (!(await importAccount(w))) return load(); }
-      else if (v === '__remove') { await removeAccount(w); return load().then(ethRefresh); }
+      else if (v === '__remove') { await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
       else await host('setActiveEth', w.id, Number(v));
     } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
-    await load(); ethRefresh();
+    await load(); renderEth(); ethRefresh();
   });
   // an account from another phrase or a private key, into this wallet
   async function importAccount(w) {
@@ -439,9 +440,15 @@
         else if (!$('tabs').hidden) load().then(() => (st.phase === 'unlocked' ? (curTab && !$(`t-${curTab}`).hidden ? paint(curTab) : null) : route()));
         else if (!$('s-boot').hidden || !$('s-unlock').hidden) route();
         break;
-      case 'bb_wallet': case 'bb_net':                // a wallet's Beam part changed status, or its node connection
-        if (st && st.phase === 'unlocked') load().then(() => { if (m.wallet === st.active) { renderBeam(); if (curTab === 'home') beamSoon(); } if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen(); });
+      case 'bb_wallet': case 'bb_net': {              // a wallet's Beam part changed status, or its node; or a switch
+        const before = st && st.active, acctBefore = acct() && acct().address;
+        if (st && st.phase === 'unlocked') load().then(() => {
+          const switched = st.active !== before || (acct() && acct().address) !== acctBefore;
+          if (switched || m.wallet === st.active) { renderBeam(); renderEth(); if (curTab === 'home') { beamSoon(); if (switched) ethRefresh(); } }
+          if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen();
+        });
         break;
+      }
       case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
       case 'bb_locked': st = null; route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
@@ -548,25 +555,31 @@
   }
 
   // ---------- Wallet tab: Ethereum ----------
+  // Per address: its last balances and whether the last read failed; the card shows only the shown account's
+  // own (nothing of another account or wallet), or "syncing…" until they come.
+  const ethView = new Map();                          // address -> { d, err, seq }
+  const eview = (addr) => { if (!ethView.has(addr)) ethView.set(addr, { d: null, err: '', seq: 0 }); return ethView.get(addr); };
   let ethFor = null;
   async function ethRefresh() {
     const a = acct();
+    renderEth();
+    if (!a) return;
+    const v = eview(a.address), seq = ++v.seq;
+    try { const d = await host('ethBalances', a.address); if (seq !== v.seq) return; v.d = d; v.err = ''; }
+    catch (e) { if (seq !== v.seq) return; v.err = msg(e); }
+    renderEth();
+  }
+  function renderEth() {
+    const a = acct();
     $('ethBody').hidden = !a; $('ethNone').hidden = !!a; $('acctDd').hidden = !a;
-    if (!a) { ethData = null; total(); return; }
-    $('ethAddr').textContent = a.address;
-    if (ethFor !== a.address) { ethData = null; $('ethAssets').innerHTML = '<div class="empty">loading…</div>'; total(); }
-    ethFor = a.address;
-    try {
-      const d = await host('ethBalances', a.address);
-      if (ethFor !== a.address) return;
-      ethData = d;
-      ethRows();
-      netDot('ethDot', '', 'Ethereum: online through public RPCs');
-    } catch (e) {
-      // the last balances stay, marked as not current; none yet: the reason
-      if (ethFor !== a.address) return;
-      if (!ethData) $('ethAssets').innerHTML = `<div class="empty">no Ethereum RPC answers: ${esc(msg(e))}</div>`;
-      netDot('ethDot', 'down', `Ethereum: no RPC answers (${msg(e)}); the balances shown may be old`);
+    ethFor = a ? a.address : null;
+    const v = a ? eview(a.address) : null;
+    ethData = v && v.d ? v.d : null;
+    if (a) {
+      $('ethAddr').textContent = a.address;
+      if (ethData) ethRows();
+      else $('ethAssets').innerHTML = v.err ? `<div class="empty">no Ethereum RPC answers: ${esc(v.err)}</div>` : '<div class="empty">syncing…</div>';
+      netDot('ethDot', v.err ? 'down' : '', v.err ? `Ethereum: no RPC answers (${v.err})${ethData ? '; the balances shown may be old' : ''}` : '');
     }
     total();
   }
