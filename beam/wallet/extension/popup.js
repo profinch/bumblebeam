@@ -96,6 +96,7 @@
     qa('.screen').forEach((s) => { s.hidden = s.id !== id; });
     const inside = id.startsWith('t-') || id.startsWith('x-');
     $('tabs').hidden = !inside;
+    $('setBtn').hidden = !inside;
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside;
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
@@ -105,6 +106,7 @@
   function tab(name) {
     curTab = name;
     qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
+    $('setBtn').classList.toggle('on', name === 'settings');
     show(`t-${name}`);
     if (name === 'home') { beamRefresh(); ethRefresh(); }
     if (name === 'bridge') bridgeOpen();
@@ -119,6 +121,7 @@
     const b = e.target.closest('[data-bridge]'); if (b) { tab('bridge'); setDir(b.dataset.bridge); }
   });
   $('lockBtn').onclick = async () => { await host('lock'); };
+  $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? 'home' : 'settings');
 
   // ---------- the dialog: confirm, password, one input ----------
   let dlgBusy = Promise.resolve();

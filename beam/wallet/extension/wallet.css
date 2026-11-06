@@ -29,6 +29,7 @@ html.popup .wtop { padding: 0 12px; }
   color: var(--text-dim); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-m);
 }
 .ibtn:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
+.ibtn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
 .ibtn svg, .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .wfoot { padding: 6px 12px 10px; gap: 8px; }
 .wfoot .pill-status { font-size: var(--fs-s); }
