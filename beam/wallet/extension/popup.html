@@ -15,7 +15,7 @@
 <body>
 <header class="top wtop">
   <div class="wrow">
-    <span class="brand"><bb-logo size="30"></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Wallet</i></span></span>
+    <span class="brand"><span class="word">Bumble<b>Beam</b> <i class="sub-word">Wallet</i></span></span>
     <div class="dd compact" id="walletDd" hidden>
       <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Your wallets: each has its Beam and Ethereum part"></button>
       <ul class="dd-list" role="listbox" tabindex="-1" hidden></ul>
@@ -129,7 +129,7 @@ while the wallet is locked.</p>
     <div class="panel net beam" id="beamCard">
       <div class="panel-head"><h3 class="panel-title"><i class="chain beam"></i>Beam</h3><span class="panel-meta" id="beamMeta"></span></div>
       <div id="beamBody">
-        <div class="asset big"><span class="sym">BEAM</span><span class="amt" id="beamAvail">—</span><span class="usd" id="beamUsd"></span></div>
+        <div class="bigamt"><span class="amt" id="beamAvail">—</span><span class="unit">BEAM</span><span class="usd" id="beamUsd"></span></div>
         <div class="minor" id="beamMinor"></div>
         <div class="acts"><button class="btn" data-sheet="beamRecv">Receive</button><button class="btn" data-sheet="beamSend">Send</button><button class="btn ghost" data-bridge="toEth" title="BEAM → WBEAM on Ethereum">Bridge</button></div>
       </div>

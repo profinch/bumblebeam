@@ -99,7 +99,7 @@
     $('foot').hidden = !inside;
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
     $('lockBtn').hidden = !(st && st.phase === 'unlocked');
-    window.scrollTo(0, 0);
+    window.scrollTo(0, 0); document.querySelector('main').scrollTop = 0;
   }
   function tab(name) {
     curTab = name;

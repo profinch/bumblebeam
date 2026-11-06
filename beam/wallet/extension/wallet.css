@@ -4,24 +4,32 @@
 
 /* ---- the page ---- */
 [hidden] { display: none !important; }      /* the class display rules must not show hidden parts */
-html.popup body { width: 400px; min-height: 600px; }
+/* the popup is one 600 px frame: the header and the status line stay, only what is between them scrolls
+   (on the wallet tab nothing does: just a long token list, inside its card) */
+html.popup, html.popup body { height: 600px; overflow: hidden; }
+html.popup body { width: 400px; min-height: 0; display: flex; flex-direction: column; }
+html.popup main { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+html.popup #t-home { display: flex; flex-direction: column; height: 100%; }
+html.popup #ethCard { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+html.popup #ethBody { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html.popup #ethAssets { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 main { max-width: 640px; padding: 4px 16px 20px; }
 html.popup main { padding: 4px 12px 14px; }
 .wtop { padding: 0 16px; }
 html.popup .wtop { padding: 0 12px; }
-.wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 0 4px; }
-/* the brand as in the pool's and the explorer's header (ui .brand: 19px, the logo 11px from the word) */
+.wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; }
+/* the brand as in the pool's and the explorer's header (ui .brand: 19px), without the logo: the word only */
 .wrow .brand { margin-right: auto; flex: none; }
 .wrow .dd.compact { min-width: 84px; flex: 0 1 132px; }
 .wnav { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-between; gap: 0; }
-.wnav a { flex: 1; text-align: center; padding: 9px 4px; }
+.wnav a { flex: 1; text-align: center; padding: 8px 4px; }
 .ibtn {
   flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer;
   color: var(--text-dim); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-m);
 }
 .ibtn:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
 .ibtn svg, .ic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.wfoot { padding: 6px 12px 14px; gap: 8px; }
+.wfoot { padding: 6px 12px 10px; gap: 8px; }
 .wfoot .pill-status { font-size: var(--fs-s); }
 
 /* ---- start screens ---- */
@@ -61,27 +69,31 @@ html.popup .seed { columns: 2; }
 .progress .bar > i { width: 0; transition: width .3s; }
 
 /* ---- the wallet tab ---- */
-.total { padding: 14px 4px 12px; }
-.total-v { font: 700 30px var(--font-mono); margin-top: 4px; font-variant-numeric: tabular-nums; }
-.total-s { font: var(--fs-s) var(--font-mono); color: var(--muted); margin-top: 4px; }
-.panel.net { padding: 14px; margin-bottom: 12px; }
-.panel.net .panel-head { margin-bottom: 8px; flex-wrap: nowrap; }
+.total { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 2px 12px; padding: 12px 2px 12px; }
+.total .caps { grid-column: 1 / -1; }
+.total-v { font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
+.total-s { font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel.net { padding: 12px 14px; margin-bottom: 10px; }
+.panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
+/* Beam's balance: one big line, the amount, the unit, its dollars */
+.bigamt { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-family: var(--font-mono); }
+.bigamt .amt { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bigamt .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
+.bigamt .usd { margin-left: auto; font-size: var(--fs-s); color: var(--muted); }
 .panel-head .panel-meta { margin-left: auto; }
 .panel-title .chain, .ep .chain { margin-right: 8px; }
 .chain { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; }
 .chain.beam { background: var(--color-green); box-shadow: 0 0 6px var(--color-green); }
 .chain.eth { background: #8c9eff; box-shadow: 0 0 6px #8c9eff; }
 .panel-meta .dot { width: 6px; height: 6px; vertical-align: 1px; }
-.asset { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "sym amt" "sym usd"; align-items: baseline; column-gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-dim); }
+.asset { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; grid-template-areas: "sym amt usd"; align-items: baseline; column-gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
 .asset:last-child { border-bottom: 0; }
-.asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); align-self: center; }
-.asset .amt { grid-area: amt; font: 700 15px var(--font-mono); text-align: right; }
+.asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset .amt { grid-area: amt; font: 700 14px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
 .asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; }
-.asset.big { border: 0; padding: 2px 0 4px; }
-.asset.big .amt { font-size: var(--fs-xl); }
 .minor { font: var(--fs-s) var(--font-mono); color: var(--muted); min-height: 0; }
-.acts { display: flex; gap: 8px; margin-top: 12px; }
-.acts .btn { flex: 1; justify-content: center; }
+.acts { display: flex; gap: 8px; margin-top: 10px; }
+.acts .btn { flex: 1; justify-content: center; padding: 7px 10px; }
 .dd.acct { min-width: 0; width: 200px; margin-left: auto; }
 .addr-line { margin: -2px 0 4px; display: flex; align-items: center; gap: 6px; }
 .ibtn.sm { width: 22px; height: 22px; border-color: transparent; }
