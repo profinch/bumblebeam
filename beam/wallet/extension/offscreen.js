@@ -30,11 +30,7 @@
   let settings = { autoLock: 60, active: null, activeEth: {}, tokens: [], ethRpc: '', beamAddr: {} };
   let lastActive = Date.now();
   const ports = new Set();
-  const broadcast = (msg) => {
-    if (msg && msg.method === 'bb_error') { errLog.unshift({ t: Date.now(), m: String(msg.result) }); errLog.length = Math.min(errLog.length, 20); }
-    for (const p of ports) { try { p.postMessage(msg); } catch {} }
-  };
-  const errLog = [];                         // the last 20 errors told to the popup, newest first, for Settings
+  const broadcast = (msg) => { for (const p of ports) { try { p.postMessage(msg); } catch {} } };
 
   // chrome.storage through the service worker (an offscreen document has chrome.runtime only)
   const kv = {
@@ -108,36 +104,15 @@
     ownAddress(id).catch(() => {});
   }
 
-  // one start per wallet at a time: startAll's queue and a switch to a wallet still in it share it
-  const starting = new Map();
-  // why a wallet's Beam part did not start (the last failure; cleared when it starts), for Settings
-  const startErr = new Map();
-  const queued = new Set();                  // wallets startAll has still to start
-  function startEngine(id, cfg, nodeIx = 0) {
-    if (engines.has(id)) return Promise.resolve(engines.get(id).e);
-    if (!starting.has(id)) {
-      starting.set(id, startEngine1(id, cfg, nodeIx)
-        .then((e) => { startErr.delete(id); return e; }, (err) => { startErr.set(id, String(err && err.message || err)); throw err; })
-        .finally(() => starting.delete(id)));
-    }
-    return starting.get(id);
-  }
-  // the step a starting wallet is at, and since when, for Settings: a start that hangs shows where
-  const stage = new Map();
-  async function startEngine1(id, cfg, nodeIx) {
+  async function startEngine(id, cfg, nodeIx = 0) {
+    if (engines.has(id)) return engines.get(id).e;
     const list = nodeList(), n = list[nodeIx % list.length];
-    const at = (what) => stage.set(id, { what, since: Date.now() });
-    try {
-      at('loading the Beam engine');
-      const e = await Engines.fresh(id, false, () => at('reading its database'));
-      wire(e, id);
-      at(`opening the wallet (node ${n})`);
-      try { await e.rpc('open', [cfg.db, cfg.pass, n]); }
-      catch (err) { e.drop(); throw err; }
-      at('subscribing to its events');
-      await register(id, e, cfg, n, nodeIx % list.length);
-      return e;
-    } finally { stage.delete(id); }
+    const e = await Engines.fresh(id);
+    wire(e, id);
+    try { await e.rpc('open', [cfg.db, cfg.pass, n]); }
+    catch (err) { e.drop(); throw err; }
+    await register(id, e, cfg, n, nodeIx % list.length);
+    return e;
   }
 
   async function stopEngine(id) {
@@ -165,11 +140,7 @@
   // the wallets' Beam parts, all of them (one after another: each loads a wasm engine)
   async function startAll() {
     if (!data) return;
-    // the open wallet first: the popup shows it, and a slow or stuck start of another must not hold it
-    const order = [...data.wallets].sort((a, b) => (b.id === settings.active) - (a.id === settings.active));
-    for (const w of order) if (w.beam && !engines.has(w.id)) queued.add(w.id);
-    for (const w of order) {
-      queued.delete(w.id);
+    for (const w of data.wallets) {
       if (!w.beam || engines.has(w.id)) { if (engines.has(w.id)) engines.get(w.id).lingering = false; continue; }
       try { await startEngine(w.id, { db: w.beam.db, pass: w.beam.pass }); }
       catch (err) { broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }); }
@@ -438,13 +409,6 @@
         active: settings.active, activeEth: settings.activeEth, tokens: settings.tokens, ethRpc: settings.ethRpc,
         // each Beam wallet's engine: running, connected to its node (the WebSocket open), which node
         engines: Object.fromEntries([...engines].map(([id, x]) => [id, { running: !x.e.dead, connected: x.e.ws.open > 0, node: x.node }])),
-        // the wallets whose Beam part is not running: starting now, or why it failed
-        beamDown: Object.fromEntries((data ? data.wallets : []).filter((w) => w.beam && !engines.has(w.id)).map((w) => {
-          const g = stage.get(w.id);
-          return [w.id, starting.has(w.id) ? { starting: g ? `${g.what}, ${Math.round((Date.now() - g.since) / 1000)} s` : 'waiting for its turn' }
-            : queued.has(w.id) && !startErr.has(w.id) ? { starting: 'waiting for its turn' } : { err: startErr.get(w.id) || 'not started' }];
-        })),
-        errors: errLog.slice(0, 10),
         nodes: nodeList(),
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
@@ -557,11 +521,7 @@
     }),
 
     // every Beam wallet runs already: switching only changes what the popup shows
-    switchWallet: async (id) => {
-      const w = wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' });
-      // a wallet whose Beam part has not started yet (startAll still busy with others) starts now
-      if (w.beam && !engines.has(id)) startEngine(id, { db: w.beam.db, pass: w.beam.pass }).catch((err) => broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }));
-    },
+    switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' }); },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
     removeWallet: (id, pass) => serial(async () => {
       await verify(pass);

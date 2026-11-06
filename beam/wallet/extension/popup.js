@@ -462,14 +462,12 @@
     m.title = tip || '';
   }
   const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
-  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false, beamFor = null;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
+  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
   function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
 
   // ---------- Wallet tab: Beam ----------
   async function beamRefresh() {
     const w = W();
-    // another wallet: its own block, connection and balance, nothing kept from the one before
-    if (w && w.id !== beamFor) { beamFor = w.id; beamHeight = 0; beamLostAt = 0; beamSeen = false; startedAt = 0; $('beamCard').classList.add('nodata'); beamMeta(''); }
     $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
     if (!w || !w.beam) {
       beamStatus = null; total(); beamMeta(''); netDot('beamDot', '', '');
@@ -1101,7 +1099,6 @@
     $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
       <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
         ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
-      ${st.beamDown && st.beamDown[w.id] ? (st.beamDown[w.id].err ? `<p class="hint werr">Beam did not start: ${esc(st.beamDown[w.id].err)}</p>` : `<p class="hint">Beam starting: ${esc(st.beamDown[w.id].starting)}</p>`) : ''}
       <div class="wacts">
         ${w.id !== st.active ? '<a href="#" class="text-link" data-a="use">use</a>' : ''}
         <a href="#" class="text-link" data-a="rename">rename</a>
@@ -1111,7 +1108,6 @@
         ${w.beam ? '<a href="#" class="text-link" data-a="backup">Beam backup</a>' : ''}
         <a href="#" class="text-link danger" data-a="remove">remove</a>
       </div></div>`).join('');
-    $('errLog').innerHTML = (st.errors || []).map((x) => `<div>${esc(fdt(x.t))} · ${esc(x.m)}</div>`).join('') || 'none';
     $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
       || '<div class="empty">no tokens added</div>';
     host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
