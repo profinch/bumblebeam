@@ -472,13 +472,14 @@
       $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
       // what is not spendable yet, as chips in the explorer's way: one colour per state
       const chip = (cls, text, tip) => `<span class="badge ${cls} chip"${tip ? ` title="${esc(tip)}"` : ''}>${text}</span>`;
+      const MATURING = 'Not spendable yet: mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
       const minor = [];
-      if (s.receiving) minor.push(chip('ok', `+${amt(s.receiving)} incoming`));
-      if (s.sending) minor.push(chip('pending', `−${amt(s.sending)} outgoing`));
-      if (s.maturing_regular) minor.push(chip('info', `${amt(s.maturing_regular)} maturing`));
+      if (s.receiving) minor.push(chip('ok', `+${amt(s.receiving)} incoming`, 'Coming to this wallet: a transfer still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay unlocked until then'));
+      if (s.sending) minor.push(chip('pending', `−${amt(s.sending)} outgoing`, 'Leaving this wallet: a transfer not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
+      if (s.maturing_regular) minor.push(chip('info', `${amt(s.maturing_regular)} maturing`, MATURING));
       // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
       if (s.maturing_mp) minor.push(chip('solo', `${amt(s.maturing_mp)} max privacy ≤72 h`, 'Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
-      else if (s.maturing && !s.maturing_regular) minor.push(chip('info', `${amt(s.maturing)} maturing`));
+      else if (s.maturing && !s.maturing_regular) minor.push(chip('info', `${amt(s.maturing)} maturing`, MATURING));
       $('beamMinor').innerHTML = minor.join('');
       const synced = s.current_height && s.is_in_sync !== false;
       $('beamMeta').innerHTML = `<span class="dot${synced ? '' : ' off'}"></span> ${esc((s.current_height || 0).toLocaleString('en-US'))}`;
