@@ -74,6 +74,7 @@ Each acts only through its own class, so pages that do not use it do not change.
 | `.page-lead` | a lead paragraph under the page title | pool connect page |
 | `.howto` | an `<ol>`/`<ul>` of instructions in running text; its `<code>` is a small chip | pool connect page |
 | `.faq` | questions that open in place: `<div class="faq"><details><summary>Q</summary><div>A</div></details>…</div>` | pool connect page |
+| `.msg` (`.msg.bad`) | a short message in running text, a result or an error: mono, yellow (red), no frame; empty = hidden | wallet (3BMiner's style) |
 
 ## Status (2026-11-02)
 

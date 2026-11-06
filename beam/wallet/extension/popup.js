@@ -36,7 +36,7 @@
   const norm = (p) => String(p).trim().toLowerCase().split(/[\s;,]+/).filter(Boolean).join(' ');   // as Eth.normPhrase
   // the error and ok notes of a screen: the .note.bad / .note.ok inside it
   const note = (scope, kind, text, html) => {
-    const el = typeof scope === 'string' ? ($(scope).classList.contains('note') ? $(scope) : $(scope).querySelector(`.note.${kind}`)) : scope;
+    const el = typeof scope === 'string' ? (/\b(note|msg)\b/.test($(scope).className) ? $(scope) : $(scope).querySelector(`.note.${kind}`)) : scope;
     if (!el) return;
     if (html) el.innerHTML = text || ''; else el.textContent = text || '';
     el.hidden = !text;
@@ -117,8 +117,6 @@
     if (e.target.closest('[data-close]')) return tab('home');
     const b = e.target.closest('[data-bridge]'); if (b) { tab('bridge'); setDir(b.dataset.bridge); }
   });
-  $('expand').onclick = () => { chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?tab=1') }); if (!inTab) window.close(); };
-  $('expand').hidden = inTab;
   $('lockBtn').onclick = async () => { await host('lock'); };
 
   // ---------- the dialog: confirm, password, one input ----------
@@ -230,6 +228,9 @@
   }
   qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
   async function go(what) {
+    // choosing a file can close Chrome's popup (it loses focus to the file dialog): the backup file is
+    // opened in a tab, the one step that needs it
+    if (what === 'import' && !inTab) { chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?tab=1#import') }); return window.close(); }
     pwFields();
     if (what === 'create') return showPhrase(await host('newPhrase'));
     clearNotes(`s-${what}`);
@@ -309,15 +310,16 @@
   });
 
   // ---------- unlock ----------
+  // a form: Enter in the field or the button unlocks; the message under it is plain yellow text
   async function unlock() {
-    clearNotes('s-unlock');
+    $('unlockMsg').textContent = '';
+    if (!$('uPass').value) { $('unlockMsg').textContent = 'type the password'; return $('uPass').focus(); }
     $('doUnlock').disabled = true;
     try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); }
-    catch (e) { note('s-unlock', 'bad', msg(e)); }
+    catch (e) { $('unlockMsg').textContent = msg(e); $('uPass').select(); }
     $('doUnlock').disabled = false;
   }
-  $('doUnlock').onclick = unlock;
-  $('uPass').onkeydown = (e) => { if (e.key === 'Enter') unlock(); };
+  $('unlockForm').onsubmit = (e) => { e.preventDefault(); unlock(); };
 
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
@@ -1134,7 +1136,7 @@
     if (st.phase === 'new') return welcome();
     $('unlockLead').textContent = st.phase === 'legacy'
       ? 'Version 0.2: one password now opens all your wallets. Type the password of your Beam wallet: it becomes this password.'
-      : st.beamRunning ? 'Locked. Beam finishes the transfers still being made, then goes offline until you unlock.' : 'Beam is offline while the wallet is locked: unlock to receive to regular addresses.';
+      : st.beamRunning ? 'Your regular Beam addresses go offline once the transfers in progress are done.' : 'Your regular Beam addresses are offline while the wallet is locked.';
     show('s-unlock');
     $('uPass').focus();
   }
@@ -1166,6 +1168,7 @@
         catch (e) { if (i >= 40 || !/went away/.test(e.message)) throw e; await new Promise((res) => setTimeout(res, 250)); }
       }
       await route();
+      if (inTab && location.hash === '#import' && st && (st.phase === 'new' || st.phase === 'unlocked')) go('import');
     } catch (e) { note('bootErr', 'bad', msg(e)); }
   })();
 })();

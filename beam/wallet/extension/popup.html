@@ -22,8 +22,6 @@
     </div>
     <button class="ibtn" id="lockBtn" title="Lock: the password opens it again. Beam goes offline once its transfers in progress are done" hidden>
       <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
-    <button class="ibtn" id="expand" title="Open in a tab">
-      <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg></button>
   </div>
   <nav class="main-nav wnav" id="tabs" hidden>
     <a href="#" data-tab="home" class="active">Wallet</a>
@@ -81,7 +79,7 @@
 
   <section id="s-import" class="screen" hidden>
     <h2 class="screen-title">Open a Beam backup file</h2>
-    <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved; the history comes with it. Choosing a file can close the popup: open the wallet in a tab for this (⤢ above).</p>
+    <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved; the history comes with it.</p>
     <label class="field">Backup file<input type="file" id="iFile" accept=".db,application/octet-stream"></label>
     <label class="field">Password of that file<input type="password" id="iPass"></label>
     <div class="pw-new"></div>
@@ -108,14 +106,15 @@
   </section>
 
   <section id="s-unlock" class="screen" hidden>
-    <div class="hero">
-      <bb-logo size="64"></bb-logo>
-      <h1 class="hero-title">Unlock</h1>
-      <p class="hero-lead" id="unlockLead">Beam is offline while the wallet is locked.</p>
+    <div class="hero lock-hero">
+      <h1 class="hero-title"><span class="lock-emoji" aria-hidden="true">🔒</span> Locked</h1>
+      <p class="hero-lead" id="unlockLead">Your regular Beam addresses are offline while the wallet is locked.</p>
     </div>
-    <label class="field">Wallet password<input type="password" id="uPass" autocomplete="current-password"></label>
-    <div class="row"><button class="btn solid wide" id="doUnlock">Unlock</button></div>
-    <p class="note bad" hidden></p>
+    <form id="unlockForm" autocomplete="on">
+      <label class="field">Wallet password<input type="password" id="uPass" autocomplete="current-password" enterkeyhint="go"></label>
+      <div class="row"><button type="submit" class="btn solid wide" id="doUnlock">Unlock</button></div>
+      <p class="msg" id="unlockMsg" role="alert"></p>
+    </form>
   </section>
 
   <!-- ================= wallet ================= -->
