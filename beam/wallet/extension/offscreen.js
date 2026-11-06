@@ -104,8 +104,14 @@
     ownAddress(id).catch(() => {});
   }
 
-  async function startEngine(id, cfg, nodeIx = 0) {
-    if (engines.has(id)) return engines.get(id).e;
+  // one start per wallet at a time: startAll's queue and a switch to a wallet still in it share it
+  const starting = new Map();
+  function startEngine(id, cfg, nodeIx = 0) {
+    if (engines.has(id)) return Promise.resolve(engines.get(id).e);
+    if (!starting.has(id)) starting.set(id, startEngine1(id, cfg, nodeIx).finally(() => starting.delete(id)));
+    return starting.get(id);
+  }
+  async function startEngine1(id, cfg, nodeIx) {
     const list = nodeList(), n = list[nodeIx % list.length];
     const e = await Engines.fresh(id);
     wire(e, id);
@@ -140,7 +146,9 @@
   // the wallets' Beam parts, all of them (one after another: each loads a wasm engine)
   async function startAll() {
     if (!data) return;
-    for (const w of data.wallets) {
+    // the open wallet first: the popup shows it, and a slow or stuck start of another must not hold it
+    const order = [...data.wallets].sort((a, b) => (b.id === settings.active) - (a.id === settings.active));
+    for (const w of order) {
       if (!w.beam || engines.has(w.id)) { if (engines.has(w.id)) engines.get(w.id).lingering = false; continue; }
       try { await startEngine(w.id, { db: w.beam.db, pass: w.beam.pass }); }
       catch (err) { broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }); }
@@ -521,7 +529,11 @@
     }),
 
     // every Beam wallet runs already: switching only changes what the popup shows
-    switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' }); },
+    switchWallet: async (id) => {
+      const w = wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' });
+      // a wallet whose Beam part has not started yet (startAll still busy with others) starts now
+      if (w.beam && !engines.has(id)) startEngine(id, { db: w.beam.db, pass: w.beam.pass }).catch((err) => broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }));
+    },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
     removeWallet: (id, pass) => serial(async () => {
       await verify(pass);

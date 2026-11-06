@@ -462,12 +462,14 @@
     m.title = tip || '';
   }
   const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
-  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
+  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false, beamFor = null;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
   function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
 
   // ---------- Wallet tab: Beam ----------
   async function beamRefresh() {
     const w = W();
+    // another wallet: its own block, connection and balance, nothing kept from the one before
+    if (w && w.id !== beamFor) { beamFor = w.id; beamHeight = 0; beamLostAt = 0; beamSeen = false; startedAt = 0; $('beamCard').classList.add('nodata'); beamMeta(''); }
     $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
     if (!w || !w.beam) {
       beamStatus = null; total(); beamMeta(''); netDot('beamDot', '', '');
@@ -481,7 +483,7 @@
       // came would leave this line as it is); after 2 min it is not starting, it failed
       startedAt ||= Date.now();
       const long = Date.now() - startedAt > 120000;
-      beamMeta(long ? '' : 'starting…', long ? 'not running' : '', 'bad', long ? 'The Beam part of this wallet did not start: Settings → Networks, or lock and unlock' : '');
+      beamMeta(long ? '' : '<span class="warn">starting…</span>', long ? 'not running' : '', 'bad', long ? 'The Beam part of this wallet did not start: Settings → Networks, or lock and unlock' : '');
       netDot('beamDot', long ? 'down' : 'warn', long ? 'Beam: not running' : 'Beam: the wallet is starting');
       pill('beamPill', 'demo', 'Beam starting…');
       clearTimeout(startPoll);
