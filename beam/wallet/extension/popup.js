@@ -329,6 +329,7 @@
     try {
       if (v === '__add') await host('addEthAccount', w.id);
       else if (v === '__import') { if (!(await importAccount(w))) return load(); }
+      else if (v === '__remove') { await removeAccount(w); return load().then(ethRefresh); }
       else await host('setActiveEth', w.id, Number(v));
     } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
     await load(); ethRefresh();
@@ -344,6 +345,25 @@
       } });
     return r.ok;
   }
+  // remove the account shown: a phrase account comes back with "+ Add an account", an imported one only
+  // from its own key or phrase; a balance on it is said first
+  async function removeAccount(w) {
+    const a = acct();
+    if (!a) return;
+    if (w.accounts.length < 2) return ask({ title: 'The last account stays', note: 'A wallet keeps at least one Ethereum account. To remove the whole wallet: Settings → Wallets → remove.', yes: 'OK', no: null });
+    const rows = [['Account', `${a.name} ${a.address}`]];
+    if (ethData && ethFor === a.address) {
+      const held = [`${num(units(ethData.eth, 18), 6)} ETH`, ...ethData.tokens.filter((t) => units(t.balance, t.decimals) > 0).map((t) => `${num(units(t.balance, t.decimals), 4)} ${t.symbol}`)].filter((x) => !/^0 ETH$/.test(x));
+      if (held.length) rows.push(['On it now', held.join(', ')]);
+    }
+    const imported = a.kind === 'key' || a.kind === 'phrase';
+    await ask({ title: 'Remove this account', rows, password: true, yes: 'Remove',
+      note: imported
+        ? 'Imported: its key is deleted from this extension. Only your own copy of the key or phrase brings it back, and whatever is on the address stays there on Ethereum.'
+        : 'From this wallet\'s phrase: it only leaves the list. "+ Add an account" brings the same address back; whatever is on it stays there on Ethereum.',
+      check: async ({ pass }) => { await host('removeEthAccount', w.id, a.i, pass); } });
+  }
+
   // rename the account shown
   async function renameAccount() {
     const w = W(), a = acct();
@@ -363,7 +383,8 @@
     if (w && w.accounts.length) {
       const a = acct();
       acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} · ${short(x.address)}` })),
-        { group: ' ' }, ...(w.hd ? [{ v: '__add', label: '+ Add an account' }] : []), { v: '__import', label: '+ Import an account' }], String(a.i));
+        { group: ' ' }, ...(w.hd ? [{ v: '__add', label: '+ Add an account' }] : []), { v: '__import', label: '+ Import an account' },
+        ...(w.accounts.length > 1 ? [{ v: '__remove', label: '− Remove this account' }] : [])], String(a.i));
     }
     return st;
   }

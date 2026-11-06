@@ -300,6 +300,9 @@
   const util = () => Engines.util();
   let legacyDb = false;                                // a 0.1 wallet.db in the old shared folder, no vault yet
 
+  // An account's key: its own (imported by key or by another phrase) or the wallet's phrase at index i.
+  // Imported accounts take ids from 1000 up, so the phrase's own indices stay 0, 1, 2, …
+  const IMPORTED = 1000;
   const ethSecret = (w, i) => {
     if (!w.eth) throw new Error('this wallet has no Ethereum part');
     const a = w.eth.accounts.find((x) => x.i === i);
@@ -572,6 +575,9 @@
       const a = (wallet(id, d).eth || { accounts: [] }).accounts.find((x) => x.i === i);
       if (a) a.name = String(name).trim().slice(0, 32) || a.name;
     }),
+    // off the list (a phrase account: "+ Add an account" brings the same one back; an imported one: its key
+    // is gone from here). The password again, and never the last account of a wallet.
+    removeEthAccount: async (id, i, pass) => { await verify(pass); return api.hideEthAccount(id, i); },
     hideEthAccount: (id, i) => mutate((d) => {
       const w = wallet(id, d);
       if (!w.eth || w.eth.accounts.length < 2) throw new Error('the last account stays');
