@@ -205,3 +205,8 @@ dialog .row { margin-top: 14px; }
 .li.addr { grid-template-columns: auto minmax(0, 1fr) auto; cursor: pointer; }
 .li.addr:hover { background: rgba(255, 255, 255, 0.03); }
 .li.addr.on .what { color: var(--accent); }
+
+/* Secret fields (passwords, keys) are text fields shown as dots, not type=password: Chrome's password manager
+   takes a type=password that is filled and then goes away (a dialog closing, a screen changing) for a login
+   and offers to save it, and its bubble closes the extension's popup. */
+.secret { -webkit-text-security: disc; }

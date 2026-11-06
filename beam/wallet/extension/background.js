@@ -23,6 +23,12 @@ const OPS = {
   set: (m) => chrome.storage.local.set({ [m.key]: m.value }),
   // the toolbar icon's badge: bridge messages waiting to be claimed
   badge: (m) => Promise.all([chrome.action.setBadgeText({ text: m.text || '' }), chrome.action.setBadgeBackgroundColor({ color: '#00f6d2' })]),
+  // a Beam backup file from the popup: saved here, so it completes even if the popup closes (Chrome's
+  // download bubble takes the focus from the popup)
+  download: (m) => {
+    if (!/^[\w.-]{1,120}$/.test(String(m.name)) || typeof m.b64 !== 'string') return Promise.reject(new Error('bad file'));
+    return chrome.downloads.download({ url: `data:application/octet-stream;base64,${m.b64}`, filename: m.name, saveAs: false });
+  },
   // the toolbar icon: the bee, or the bee in grey while locked
   icon: (m) => { wantLocked = !!m.locked; return applyIcon(); },
 };

@@ -150,7 +150,7 @@
       $('dPassBox').hidden = !password; $('dPass').value = ''; $('dPassLabel').textContent = passLabel;
       $('dInputBox').hidden = !input; $('dInput').value = input ? input.value || '' : '';
       $('dInputLabel').textContent = input ? input.label : '';
-      $('dInput').type = input && input.secret ? 'password' : 'text';
+      $('dInput').classList.toggle('secret', !!(input && input.secret));
       note('dErr', 'bad', '');
       $('dYes').textContent = yes; $('dNo').textContent = no; $('dNo').hidden = !no;
       $('dlg').showModal();
@@ -203,8 +203,8 @@
     const first = !st || st.phase === 'new';
     qa('.pw-new').forEach((d) => {
       d.innerHTML = first
-        ? '<label class="field">New wallet password<input type="password" class="p1" autocomplete="new-password"></label><label class="field">Repeat it<input type="password" class="p2" autocomplete="new-password"></label><p class="hint">It opens this extension and encrypts the seeds and keys in it. At least 8 characters.</p>'
-        : '<label class="field">Your wallet password<input type="password" class="p1" autocomplete="current-password"></label>';
+        ? '<label class="field">New wallet password<input type="text" class="secret p1" autocomplete="off" autocapitalize="off" spellcheck="false"></label><label class="field">Repeat it<input type="text" class="secret p2" autocomplete="off" autocapitalize="off" spellcheck="false"></label><p class="hint">It opens this extension and encrypts the seeds and keys in it. At least 8 characters.</p>'
+        : '<label class="field">Your wallet password<input type="text" class="secret p1" autocomplete="off" autocapitalize="off" spellcheck="false"></label>';
     });
   }
   function readPw(screen) {
@@ -1184,15 +1184,15 @@
           note: 'Saves the Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Opening it later is instant, unlike a seed restore.',
           check: async (x) => { out = await host('exportBeam', w.id, x.pass); pass = x.pass; } });
         if (!r.ok || !out) return;
-        const el = document.createElement('a');
-        el.href = URL.createObjectURL(new Blob([Uint8Array.from(atob(out.b64), (c) => c.charCodeAt(0))], { type: 'application/octet-stream' }));
-        el.download = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
-        el.click();
-        setTimeout(() => URL.revokeObjectURL(el.href), 10000);
+        // the file's password first (the popup may close once the download starts: Chrome's download bubble
+        // takes the focus), then the file, saved by the service worker, which a closed popup does not stop
         if (!out.samePassword) {
           const dbp = await host('reveal', w.id, pass, 'beamPass');
-          await ask({ title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.', yes: 'Done', no: null });
+          await ask({ title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file. The file is saved when you close this.', yes: 'Save the file', no: null });
         }
+        const name = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
+        const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
+        if (r2 && r2.error) await ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
       }
       if (act === 'remove') {
         const r = await ask({ title: `Remove ${w.name}`, password: true, yes: 'Remove', rows: [['Parts', [w.beam && 'Beam', w.eth && 'Ethereum'].filter(Boolean).join(' + ')]],

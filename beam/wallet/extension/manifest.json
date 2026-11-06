@@ -26,7 +26,8 @@
   "permissions": [
     "storage",
     "unlimitedStorage",
-    "offscreen"
+    "offscreen",
+    "downloads"
   ],
   "host_permissions": [
     "https://mobile-restore.beam.mw/*",

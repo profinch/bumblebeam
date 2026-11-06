@@ -85,7 +85,7 @@
     <h2 class="screen-title">Open a Beam backup file</h2>
     <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved; the history comes with it.</p>
     <label class="field">Backup file<input type="file" id="iFile" accept=".db,application/octet-stream"></label>
-    <label class="field">Password of that file<input type="password" id="iPass"></label>
+    <label class="field">Password of that file<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="iPass"></label>
     <div class="pw-new"></div>
     <label class="field">Wallet name<input id="iName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doImport">Open</button></div>
@@ -95,7 +95,7 @@
   <section id="s-ethkey" class="screen" hidden>
     <h2 class="screen-title">Import an Ethereum private key</h2>
     <p class="hint">One Ethereum account, from a key exported from another wallet (64 hex characters). The key is kept encrypted in this extension.</p>
-    <label class="field">Private key<input type="password" id="kKey" autocomplete="off" spellcheck="false"></label>
+    <label class="field">Private key<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="kKey"></label>
     <div class="pw-new"></div>
     <label class="field">Wallet name<input id="kName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doEthKey">Import</button></div>
@@ -118,7 +118,7 @@ while the wallet is locked.</p>
     </div>
     <!-- not a <form>: a submitted form makes Chrome offer to save the password, and that bubble closes the popup -->
     <div id="unlockForm">
-      <label class="field">Wallet password<input type="password" id="uPass" autocomplete="current-password" enterkeyhint="go"></label>
+      <label class="field">Wallet password<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="uPass" enterkeyhint="go"></label>
       <div class="row"><button type="button" class="btn solid wide" id="doUnlock">Unlock</button></div>
       <p class="msg" id="unlockMsg" role="alert"></p>
     </div>
@@ -333,7 +333,7 @@ while the wallet is locked.</p>
   <h3 class="panel-title" id="dTitle">Confirm</h3>
   <div class="dbody" id="dBody"></div>
   <p class="hint" id="dNote"></p>
-  <label class="field" id="dPassBox" hidden><span id="dPassLabel">Wallet password</span><input type="password" id="dPass" autocomplete="current-password"></label>
+  <label class="field" id="dPassBox" hidden><span id="dPassLabel">Wallet password</span><input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="dPass"></label>
   <label class="field" id="dInputBox" hidden><span id="dInputLabel"></span><input id="dInput" autocomplete="off" spellcheck="false"></label>
   <p class="note bad" id="dErr" hidden></p>
   <div class="row end"><button class="btn ghost" id="dNo">Cancel</button><button class="btn solid" id="dYes">Confirm</button></div>
