@@ -290,6 +290,14 @@ while the wallet is locked.</p>
       <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
     </div>
     <div class="panel">
+      <div class="panel-head"><h3 class="panel-title">Display</h3></div>
+      <label class="field">Time format
+        <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <ul class="dd-list" role="listbox" tabindex="-1" hidden>
+            <li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></label>
+      <p class="hint">Dates are always day.month.year (06.11.2026).</p>
+    </div>
+    <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Networks</h3></div>
       <label class="field">Beam node (wss, host:port)<span class="inline"><input id="node" spellcheck="false"><button class="btn ghost small" id="saveNode">Save</button></span></label>
       <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>

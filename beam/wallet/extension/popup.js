@@ -22,7 +22,16 @@
   const num = (x, max = 4) => (x == null || !isFinite(x) ? '—' : x.toLocaleString('en-US', { maximumFractionDigits: x !== 0 && Math.abs(x) < 1 ? Math.max(max, 6) : max }));
   const usd = (x) => (x == null || !isFinite(x) ? '' : `$${x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const short = (a) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
-  const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : new Date(t).toLocaleDateString(); };
+  // dates as dd.mm.yyyy everywhere; the time in 24 or 12 hours, as chosen in Settings (kept in this browser)
+  const pad = (n) => String(n).padStart(2, '0');
+  let time12 = false;
+  const fdate = (t) => { const d = new Date(t); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const ftime = (t) => {
+    const d = new Date(t), h = d.getHours();
+    return time12 ? `${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}` : `${pad(h)}:${pad(d.getMinutes())}`;
+  };
+  const fdt = (t) => `${fdate(t)} ${ftime(t)}`;
+  const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : fdate(t); };
   const msg = (e) => (e && e.message ? e.message : String(e));
   const toGroth = (x) => {
     const t = String(x).trim().replace(',', '.');
@@ -585,8 +594,8 @@
     renderAddrs();
   }
   const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
-  const ago2 = (sec) => (sec ? new Date(sec * 1000).toLocaleDateString() : '');
-  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'no expiry' : `until ${new Date((x.create_time + x.duration) * 1000).toLocaleDateString()}`);
+  const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
+  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'no expiry' : `until ${fdate((x.create_time + x.duration) * 1000)}`);
   function renderAddrs() {
     $('addrCount').textContent = `${addrs.length}`;
     $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}" data-k="${k}">
@@ -958,7 +967,7 @@
     const IN = { approving: ['pending', 'approving'], sending: ['pending', 'sending'], sent: ['pending', 'mining'], unconfirmed: ['warn', 'not mined yet'], confirmed: ['ok', 'sent to Beam'], failed: ['bad', 'failed'] };
     const rows = [
       ...out.msgs.map((m) => ({ t: m.eth ? Date.parse(m.eth.time) : Infinity, html: `<div class="li"><span class="ic out">${SVG_BRIDGE}</span>
-        <span class="what">BEAM → WBEAM #${m.id}<span class="sub">to ${esc(short(m.receiver))} · fee ${amt(m.fee, 2)}${m.eth ? ` · <a href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(new Date(m.eth.time).toLocaleString())}</a>` : ''}</span></span>
+        <span class="what">BEAM → WBEAM #${m.id}<span class="sub">to ${esc(short(m.receiver))} · fee ${amt(m.fee, 2)}${m.eth ? ` · <a href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(fdt(m.eth.time))}</a>` : ''}</span></span>
         <span class="amt">${amt(m.amount)}</span><span class="badge ${OUT[m.state][0]}">${OUT[m.state][1]}</span></div>` })),
       ...ins.map((r) => ({ t: r.time, html: `<div class="li"><span class="ic in">${SVG_BRIDGE}</span>
         <span class="what">WBEAM → BEAM<span class="sub">from ${esc(short(r.from))} · ${esc(ago(r.time))}${r.hash ? ` · <a href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener">tx</a>` : ''}${r.error ? ` · ${esc(r.error)}` : ''}</span></span>
@@ -999,7 +1008,7 @@
           const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
           const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? ` · <a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
           return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
-            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? new Date(t.create_time * 1000).toLocaleString() : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}</span></span>
+            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}</span></span>
             <span class="amt ${t.income ? 'pos' : ''}">${t.value ? `${t.income ? '+' : '−'}${amt(t.value)}` : ''}</span><span class="badge ${cls}">${esc(t.status_string || label)}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
       } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
@@ -1014,7 +1023,7 @@
           const what = t.method && !t.token ? t.method : t.out ? 'Sent' : 'Received';
           const other = t.out ? t.to : t.from;
           return `<div class="li"><span class="ic ${t.out ? 'out' : 'in'}">${t.out ? SVG_OUT : SVG_IN}</span>
-            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? new Date(t.time).toLocaleString() : 'pending')}</a></span></span>
+            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? fdt(t.time) : 'pending')}</a></span></span>
             <span class="amt ${t.out ? '' : 'pos'}">${v ? `${t.out ? '−' : '+'}${esc(v)}` : ''}</span><span class="badge ${t.pending ? 'pending' : t.ok ? 'ok' : 'bad'}">${t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
       } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
@@ -1030,11 +1039,14 @@
 
   // ---------- Settings ----------
   const autoLockDd = BB.dropdown($('autoLock'), (v) => host('setAutoLock', Number(v)));
+  const timeDd = BB.dropdown($('timeFmt'), (v) => { time12 = v === '12'; chrome.storage.local.set({ time12 }).catch(() => {}); });
+  chrome.storage.local.get('time12').then((v) => { time12 = !!v.time12; }).catch(() => {});
   async function settingsOpen() {
     $('ver').textContent = chrome.runtime.getManifest().version;
     $('node').value = st.node; $('ethRpc').value = st.ethRpc || '';
     $('backupNodes').value = (st.nodes || []).filter((n) => n !== st.node).join(', ');
     autoLockDd.set(String(st.autoLock));
+    timeDd.set(time12 ? '12' : '24');
     $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
       <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
         ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
