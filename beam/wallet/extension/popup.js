@@ -1,31 +1,59 @@
 // BumbleBeam Wallet: the popup under the toolbar icon (and the same page in a tab, ⤢). Only a view:
-// the wallet runs in the host (offscreen.js) and every action is a message to it. Screens for creating,
-// restoring and unlocking, then tabs for the wallet, both bridge directions and settings. Every string
+// the wallets run in the host (offscreen.js) and every action is a message to it. Start screens (create,
+// restore, backup file, Ethereum key, unlock), then four tabs: Wallet (both networks, send and receive),
+// Bridge (both directions, this wallet's own accounts at both ends), Activity and Settings. Every string
 // from the wallet, the contract or the network goes through esc() before it is put into HTML.
 'use strict';
 
 (() => {
-  const ETH_PAGE = 'http://127.0.0.1:8771/';                  // beam/wallet/web, served locally: Rabby does not inject into extension pages
   const GROTH = 1e8;
   const inTab = new URLSearchParams(location.search).has('tab');
   if (!inTab) document.documentElement.classList.add('popup');
 
+  // ---------- small things ----------
   const $ = (id) => document.getElementById(id);
+  const qa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const amt = (groth, d = 4) => (groth == null || !isFinite(groth) ? '—'
     : (groth / GROTH).toLocaleString('en-US', { minimumFractionDigits: Math.min(2, d), maximumFractionDigits: d }));
-  const fail = (id) => (e) => { $(id).textContent = e && e.message ? e.message : String(e); };
+  // a decimal string of smallest units, as a number for display (exact enough for display), and exactly
+  const units = (s, dec) => { try { const v = BigInt(s || 0); const p = 10n ** BigInt(dec); return Number(v / p) + Number(v % p) / Number(p); } catch { return NaN; } };
+  const exact = (s, dec) => { const v = BigInt(s || 0), p = 10n ** BigInt(dec); const f = (v % p).toString().padStart(dec, '0').replace(/0+$/, ''); return `${v / p}${f ? '.' + f : ''}`; };
+  const num = (x, max = 4) => (x == null || !isFinite(x) ? '—' : x.toLocaleString('en-US', { maximumFractionDigits: x !== 0 && Math.abs(x) < 1 ? Math.max(max, 6) : max }));
+  const usd = (x) => (x == null || !isFinite(x) ? '' : `$${x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  const short = (a) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
+  const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : new Date(t).toLocaleDateString(); };
+  const msg = (e) => (e && e.message ? e.message : String(e));
   const toGroth = (x) => {
-    const v = Math.round(parseFloat(String(x).replace(',', '.')) * GROTH);
+    const t = String(x).trim().replace(',', '.');
+    if (!/^\d*\.?\d{0,8}$/.test(t) || t === '' || t === '.') throw new Error('an amount with at most 8 decimals');
+    const [i, f = ''] = t.split('.');
+    const v = Number(i || 0) * GROTH + Number((f + '00000000').slice(0, 8));
     if (!(v > 0)) throw new Error('the amount must be above zero');
     return v;
   };
   const isEthAddress = (a) => /^0x[0-9a-fA-F]{40}$/.test(a);
+  const norm = (p) => String(p).trim().toLowerCase().split(/[\s;,]+/).filter(Boolean).join(' ');   // as Eth.normPhrase
+  // the error and ok notes of a screen: the .note.bad / .note.ok inside it
+  const note = (scope, kind, text, html) => {
+    const el = typeof scope === 'string' ? ($(scope).classList.contains('note') ? $(scope) : $(scope).querySelector(`.note.${kind}`)) : scope;
+    if (!el) return;
+    if (html) el.innerHTML = text || ''; else el.textContent = text || '';
+    el.hidden = !text;
+  };
+  const clearNotes = (id) => qa('.note', $(id)).forEach((n) => { n.hidden = true; n.textContent = ''; });
+  const copy = async (btn, text) => {
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch { btn.textContent = 'Failed'; }
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
+  };
+  const SVG_IN = '<svg viewBox="0 0 24 24"><path d="M12 4v14M6 12l6 6 6-6"/></svg>';
+  const SVG_OUT = '<svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>';
+  const SVG_BRIDGE = '<svg viewBox="0 0 24 24"><path d="M4 9h14l-4-4M20 15H6l4 4"/></svg>';
 
   // ---------- the host ----------
   let port = null, rpcNext = 1;
   const rpcWait = new Map();
-  const handlers = { event: () => {}, progress: () => {}, consent: () => {} };
+  const handlers = { event: () => {}, progress: () => {}, consent: () => {}, consentDone: () => {} };
   function connect() {
     port = chrome.runtime.connect({ name: 'wallet-ui' });
     port.onMessage.addListener((m) => {
@@ -48,37 +76,95 @@
     port.postMessage({ id, op, args });
   });
 
-  let node = '', avail = 0;
+  // ---------- state ----------
+  let st = null, rates = null, beamStatus = null, ethData = null, feeData = null;
+  const W = () => st && st.wallets && st.wallets.find((w) => w.id === st.active);
+  const acct = () => {
+    const w = W();
+    if (!w || !w.accounts.length) return null;
+    const i = st.activeEth[w.id];
+    return w.accounts.find((a) => a.i === i) || w.accounts[0];
+  };
+  const allAccounts = () => (st && st.wallets ? st.wallets.flatMap((w) => w.accounts.map((a) => ({ ...a, wallet: w }))) : []);
+  // this wallet's Beam engine: running (all of them run while unlocked), and connected to its node
+  const engineOf = (w) => (w && st && st.engines ? st.engines[w.id] : null);
+  const beamHere = () => { const w = W(); const x = engineOf(w); return !!(w && w.beam && x && x.running); };
 
-  // ---------- screens ----------
+  // ---------- screens, tabs, sheets ----------
+  let curTab = 'home';
   function show(id) {
-    document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== id; });
-    $('tabs').hidden = !id.startsWith('t-');
+    qa('.screen').forEach((s) => { s.hidden = s.id !== id; });
+    const inside = id.startsWith('t-') || id.startsWith('x-');
+    $('tabs').hidden = !inside;
+    $('foot').hidden = !inside;
+    $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
+    $('lockBtn').hidden = !(st && st.phase === 'unlocked');
+    window.scrollTo(0, 0);
   }
   function tab(name) {
-    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+    curTab = name;
+    qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
     show(`t-${name}`);
-    if (name === 'toeth') { fee(); outgoing(); }
-    if (name === 'frometh') { beamKey(); incoming(); }
+    if (name === 'home') { beamRefresh(); ethRefresh(); }
+    if (name === 'bridge') bridgeOpen();
+    if (name === 'activity') activity();
+    if (name === 'settings') settingsOpen();
   }
-  $('tabs').onclick = (e) => { if (e.target.dataset.tab) tab(e.target.dataset.tab); };
-  document.querySelectorAll('.back').forEach((b) => { b.onclick = () => { host('dropPhrase'); show('s-welcome'); }; });
+  $('tabs').onclick = (e) => { const a = e.target.closest('a[data-tab]'); if (a) { e.preventDefault(); tab(a.dataset.tab); } };
+  function sheet(name) { show(`x-${name}`); clearNotes(`x-${name}`); SHEETS[name] && SHEETS[name](); }
+  document.addEventListener('click', (e) => {
+    const s = e.target.closest('[data-sheet]'); if (s) return sheet(s.dataset.sheet);
+    if (e.target.closest('[data-close]')) return tab('home');
+    const b = e.target.closest('[data-bridge]'); if (b) { tab('bridge'); setDir(b.dataset.bridge); }
+  });
   $('expand').onclick = () => { chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?tab=1') }); if (!inTab) window.close(); };
   $('expand').hidden = inTab;
+  $('lockBtn').onclick = async () => { await host('lock'); };
 
-  function confirmBox(title, rows, note) {
-    $('cTitle').textContent = title;
-    $('cBody').innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
-    $('cNote').textContent = note || '';
-    $('confirm').showModal();
-    return new Promise((resolve) => {
-      $('cYes').onclick = () => { $('confirm').close(); resolve(true); };
-      $('cNo').onclick = () => { $('confirm').close(); resolve(false); };
+  // ---------- the dialog: confirm, password, one input ----------
+  let dlgBusy = Promise.resolve();
+  function ask({ title, before = null, rows = [], note: n = '', password = false, passLabel = 'Wallet password', input = null, yes = 'Confirm', no = 'Cancel', html = null, check = null }) {
+    const run = () => new Promise((resolve) => {
+      if (before && !before()) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
+      $('dTitle').textContent = title;
+      $('dBody').innerHTML = html != null ? html : rows.length ? `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '';
+      $('dNote').textContent = n; $('dNote').hidden = !n;
+      $('dPassBox').hidden = !password; $('dPass').value = ''; $('dPassLabel').textContent = passLabel;
+      $('dInputBox').hidden = !input; $('dInput').value = input ? input.value || '' : '';
+      $('dInputLabel').textContent = input ? input.label : '';
+      $('dInput').type = input && input.secret ? 'password' : 'text';
+      note('dErr', 'bad', '');
+      $('dYes').textContent = yes; $('dNo').textContent = no; $('dNo').hidden = !no;
+      $('dlg').showModal();
+      (password ? $('dPass') : input ? $('dInput') : $('dYes')).focus();
+      const inVal = () => (input && input.secret ? $('dInput').value : $('dInput').value.trim());
+      const done = (ok) => { dlgCancel = null; $('dlg').close(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
+      dlgCancel = () => done(false);
+      $('dYes').onclick = async () => {
+        if (check) {
+          $('dYes').disabled = true;
+          try { await check({ pass: $('dPass').value, input: inVal() }); }
+          catch (e) { note('dErr', 'bad', msg(e)); $('dYes').disabled = false; return; }
+          $('dYes').disabled = false;
+        }
+        done(true);
+      };
+      $('dNo').onclick = () => done(false);
+      $('dlg').oncancel = (e) => { e.preventDefault(); done(false); };
+      $('dPass').onkeydown = $('dInput').onkeydown = (e) => { if (e.key === 'Enter') $('dYes').click(); };
     });
+    const p = dlgBusy.then(run);
+    dlgBusy = p.catch(() => {});
+    return p;
   }
+  const confirmBox = async (title, rows, n) => (await ask({ title, rows, note: n })).ok;
 
   // The wallet asks for consent on every contract transaction with what it computed itself:
   // the amounts it moves and the fee. The bridge context (address, relayer fee) goes on top.
+  // a box answered in another popup, or expired in the host (5 min), closes here too
+  const consentGone = new Set();
+  let consentShown = null, dlgCancel = null;
+  handlers.consentDone = ({ id }) => { consentGone.add(id); if (consentShown === id && dlgCancel) dlgCancel(); };
   handlers.consent = async ({ id, info, amounts, ctx }) => {
     const c = ctx || { title: 'Contract transaction', rows: [], note: 'Not started by this wallet: reject it unless you know what it is.' };
     const rows = [...(c.rows || [])];
@@ -88,30 +174,69 @@
     }
     if (info && info.fee != null) rows.push(['Beam network fee', `${amt(Number(info.fee), 8)} BEAM`]);
     if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
-    const ok = await confirmBox(c.title, rows, c.note);
-    port && port.postMessage({ type: 'consent', id, ok });
+    const r = await ask({ title: c.title, rows, note: c.note, before: () => { consentShown = id; return !consentGone.has(id); } });
+    consentShown = null;
+    if (!consentGone.has(id)) port && port.postMessage({ type: 'consent', id, ok: r.ok });
   };
 
-  const passwordPair = (a, b) => {
-    const p = $(a).value;
-    if (p.length < 8) throw new Error('use a password of 8 characters or more');
-    if (p !== $(b).value) throw new Error('the passwords differ');
+  // ---------- passwords on the start screens ----------
+  // the first wallet sets the password (two fields); a further one asks for it again (one field)
+  function pwFields() {
+    const first = !st || st.phase === 'new';
+    qa('.pw-new').forEach((d) => {
+      d.innerHTML = first
+        ? '<label class="field">New wallet password<input type="password" class="p1" autocomplete="new-password"></label><label class="field">Repeat it<input type="password" class="p2" autocomplete="new-password"></label><p class="hint">It opens this extension and encrypts the seeds and keys in it. At least 8 characters.</p>'
+        : '<label class="field">Your wallet password<input type="password" class="p1" autocomplete="current-password"></label>';
+    });
+  }
+  function readPw(screen) {
+    const d = $(screen).querySelector('.pw-new');
+    const p = d.querySelector('.p1').value, p2 = d.querySelector('.p2');
+    if (p2) {
+      if (p.length < 8) throw new Error('use a password of 8 characters or more');
+      if (p !== p2.value) throw new Error('the passwords differ');
+    } else if (!p) throw new Error('type your wallet password');
     return p;
-  };
+  }
+  const clearPw = () => qa('.pw-new input').forEach((i) => { i.value = ''; });
+  // addWallet's arguments: the first wallet sets the password, a further one proves it
+  const addArgs = (o, p) => (st.phase === 'new' ? [o, p] : [{ ...o, dbPass: p }, null]);
 
-  // snapshot download and import, shown on whichever screen started it
-  let progressBar = null;
+  let progressScreen = null;
   handlers.progress = ({ step, done, total }) => {
-    if (!progressBar) return;
-    const [bar, text] = progressBar;
+    if (!progressScreen) return;
+    const box = $(progressScreen).querySelector('.progress');
+    box.hidden = false;
     const pc = total ? Math.floor((done / total) * 100) : 0;
-    $(bar).style.width = `${pc}%`;
-    $(text).textContent = step === 'download'
+    box.querySelector('i').style.width = `${pc}%`;
+    box.querySelector('span').textContent = step === 'download'
       ? `downloading Beam's snapshot ${pc}% (${(done / 2 ** 20).toFixed(0)} of ${(total / 2 ** 20).toFixed(0)} MB)`
-      : `importing it ${pc}%`;
+      : step === 'cached' ? 'Beam snapshot: the one downloaded lately' : `importing it ${pc}%`;
   };
+  async function longOp(screen, btn, fn) {
+    clearNotes(screen);
+    $(btn).disabled = true;
+    progressScreen = screen;
+    try { await fn(); }
+    catch (e) { note(screen, 'bad', msg(e)); }
+    finally { $(btn).disabled = false; progressScreen = null; const pb = $(screen).querySelector('.progress'); if (pb) pb.hidden = true; }
+  }
 
-  // ---------- create ----------
+  // ---------- start: welcome / add ----------
+  function welcome() {
+    pwFields();
+    $('addBack').hidden = !(st && st.phase === 'unlocked');
+    show('s-welcome');
+  }
+  qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
+  async function go(what) {
+    pwFields();
+    if (what === 'create') return showPhrase(await host('newPhrase'));
+    clearNotes(`s-${what}`);
+    show(`s-${what}`);
+  }
+  qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); if (st && st.phase === 'unlocked') tab(curTab === 'settings' ? 'settings' : 'home'); else welcome(); }; });
+
   let checks = [];
   function showPhrase(phrase) {
     const w = phrase.split(' ');
@@ -120,182 +245,569 @@
     while (checks.length < 3) { const i = Math.floor(Math.random() * w.length); if (!checks.includes(i)) checks.push(i); }
     checks.sort((a, b) => a - b);
     $('checkIdx').textContent = checks.map((i) => `#${i + 1}`).join(', ');
-    $('seedCheck').value = ''; $('createErr').textContent = '';
+    $('seedCheck').value = '';
+    clearNotes('s-create');
     show('s-create');
   }
-  $('goCreate').onclick = async () => showPhrase(await host('newPhrase'));
-  $('doCreate').onclick = async () => {
-    $('createErr').textContent = '';
-    try {
-      const w = (await host('phrase') || '').split(' ');
-      const typed = $('seedCheck').value.trim().toLowerCase().split(/\s+/);
-      if (typed.join(' ') !== checks.map((i) => w[i]).join(' ')) throw new Error('the check words do not match: look at the list again');
-      const p = passwordPair('cPass', 'cPass2');
-      $('doCreate').disabled = true; $('cProg').hidden = false; progressBar = ['cBar', 'cText'];
-      await host('create', null, p);
-      $('seedWords').innerHTML = '';
-      started();
-    } catch (e) { fail('createErr')(e); }
-    $('doCreate').disabled = false;
-  };
+  $('copySeed').onclick = async () => copy($('copySeed'), (await host('phrase')) || '');
+  $('doCreate').onclick = () => longOp('s-create', 'doCreate', async () => {
+    const w = ((await host('phrase')) || '').split(' ');
+    const typed = $('seedCheck').value.trim().toLowerCase().split(/\s+/);
+    if (typed.join(' ') !== checks.map((i) => w[i]).join(' ')) throw new Error('the check words do not match: look at the list again');
+    const p = readPw('s-create');
+    await host('addWallet', ...addArgs({ kind: 'new', name: $('cName').value }, p));
+    $('seedWords').innerHTML = ''; $('cName').value = ''; clearPw();
+    curTab = 'home'; await enter();
+  });
 
-  // ---------- restore ----------
-  $('goRestore').onclick = () => { $('restoreErr').textContent = ''; show('s-restore'); };
-  $('doRestore').onclick = async () => {
-    $('restoreErr').textContent = '';
-    try {
-      const seed = $('rSeed').value;
-      const words = seed.trim().toLowerCase().split(/[\s;,]+/).filter(Boolean);
+  // restore: what kind of phrase it is, as it is typed
+  let kindTimer = 0;
+  $('rSeed').oninput = () => {
+    clearTimeout(kindTimer);
+    kindTimer = setTimeout(async () => {
+      const p = norm($('rSeed').value);
+      if (!p) { $('rKind').textContent = ''; return; }
+      const k = await host('checkPhrase', p);
+      $('rBeamBox').hidden = !k.beam;
+      $('rKind').textContent = k.beam && k.eth ? 'A 12-word phrase: Beam and Ethereum.'
+        : k.eth ? `An Ethereum phrase (${k.words} words): the Ethereum part only; Beam phrases are 12 words.`
+        : k.beam ? 'A Beam phrase: Beam only.' : k.words >= 12 ? 'Not a valid phrase yet: check the words and their order.' : `${k.words} words…`;
+    }, 250);
+  };
+  $('doRestore').onclick = () => longOp('s-restore', 'doRestore', async () => {
+    const words = norm($('rSeed').value).split(' ').filter(Boolean);
+    const k = await host('checkPhrase', words.join(' '));
+    if (!k.beam && !k.eth) {
       const bad = [];
       for (const x of words) if (!(await host('isAllowedWord', x))) bad.push(x);
-      if (bad.length) throw new Error(`not seed words: ${bad.join(', ')}`);
-      if (!(await host('isValidPhrase', words.join(' ')))) throw new Error('this is not a valid 12-word Beam seed phrase');
-      const p = passwordPair('rPass', 'rPass2');
-      $('doRestore').disabled = true; $('rProg').hidden = false; progressBar = ['rBar', 'rText'];
-      await host('create', words.join(' '), p);
-      $('rSeed').value = '';
-      started();
-    } catch (e) { fail('restoreErr')(e); }
-    $('doRestore').disabled = false;
-  };
+      throw new Error(bad.length ? `not seed words: ${bad.join(', ')}` : 'this is not a valid seed phrase (a word or the order is wrong)');
+    }
+    const p = readPw('s-restore');
+    await host('addWallet', ...addArgs({ kind: 'restore', phrase: words.join(' '), beam: k.beam && $('rBeam').checked, name: $('rName').value }, p));
+    $('rSeed').value = ''; $('rName').value = ''; $('rKind').textContent = ''; clearPw();
+    curTab = 'home'; await enter();
+  });
 
-  // ---------- backup file ----------
-  $('goImport').onclick = () => { $('importErr').textContent = ''; show('s-import'); };
-  $('doImport').onclick = async () => {
-    $('importErr').textContent = '';
-    try {
-      const f = $('iFile').files[0];
-      if (!f) throw new Error('choose the backup file');
-      const u8 = new Uint8Array(await f.arrayBuffer());
-      let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
-      await host('importDb', btoa(s), $('iPass').value);
-      $('iPass').value = '';
-      started();
-    } catch (e) { fail('importErr')(e); }
-  };
+  $('doImport').onclick = () => longOp('s-import', 'doImport', async () => {
+    const f = $('iFile').files[0];
+    if (!f) throw new Error('choose the backup file');
+    const p = readPw('s-import');
+    const u8 = new Uint8Array(await f.arrayBuffer());
+    let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+    await host('addWallet', ...addArgs({ kind: 'backup', b64: btoa(s), pass: $('iPass').value, name: $('iName').value }, p));
+    $('iPass').value = ''; $('iName').value = ''; $('iFile').value = ''; clearPw();
+    curTab = 'home'; await enter();
+  });
+
+  $('doEthKey').onclick = () => longOp('s-ethkey', 'doEthKey', async () => {
+    const key = $('kKey').value.trim();
+    if (!(await host('isEthKey', key))) throw new Error('a private key is 64 hex characters (0x optional)');
+    const p = readPw('s-ethkey');
+    await host('addWallet', ...addArgs({ kind: 'ethkey', key, name: $('kName').value }, p));
+    $('kKey').value = ''; $('kName').value = ''; clearPw();
+    curTab = 'home'; await enter();
+  });
 
   // ---------- unlock ----------
   async function unlock() {
-    $('unlockErr').textContent = '';
-    try { await host('open', $('uPass').value); $('uPass').value = ''; started(); } catch (e) { fail('unlockErr')(e); }
+    clearNotes('s-unlock');
+    $('doUnlock').disabled = true;
+    try { await host('unlock', $('uPass').value); $('uPass').value = ''; await enter(); }
+    catch (e) { note('s-unlock', 'bad', msg(e)); }
+    $('doUnlock').disabled = false;
   }
   $('doUnlock').onclick = unlock;
   $('uPass').onkeydown = (e) => { if (e.key === 'Enter') unlock(); };
 
-  // ---------- running wallet ----------
-  function started() {
-    for (const id of ['cPass', 'cPass2', 'rPass', 'rPass2']) $(id).value = '';
-    progressBar = null;
-    tab('wallet');
-    status(); txs();
+  // ---------- the running wallet ----------
+  const walletDd = BB.dropdown($('walletDd'), async (v) => {
+    if (v === '__add') { walletDd.set(st.active); return welcome(); }
+    await host('switchWallet', v).catch((e) => alert(msg(e)));
+  });
+  const acctDd = BB.dropdown($('acctDd'), async (v) => {
+    const w = W();
+    try {
+      if (v === '__add') await host('addEthAccount', w.id);
+      else if (v === '__import') { if (!(await importAccount(w))) return load(); }
+      else await host('setActiveEth', w.id, Number(v));
+    } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
+    await load(); ethRefresh();
+  });
+  // an account from another phrase or a private key, into this wallet
+  async function importAccount(w) {
+    const r = await ask({ title: `Import an account into ${w.name}`, input: { label: 'A private key (64 hex) or a seed phrase (its first account)', secret: true }, yes: 'Import',
+      note: 'For an account you already have in MetaMask, Rabby or another wallet. It is kept encrypted here like the rest.',
+      check: async ({ input }) => {
+        const isKey = await host('isEthKey', input);
+        if (!isKey && !(await host('checkPhrase', input)).eth) throw new Error('neither a BIP-39 phrase nor a 64-hex private key');
+        await host('importEthAccount', w.id, isKey ? { key: input } : { phrase: input });
+      } });
+    return r.ok;
+  }
+  // rename the account shown
+  async function renameAccount() {
+    const w = W(), a = acct();
+    if (!a) return;
+    const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name }, yes: 'Save' });
+    if (!r.ok || !r.input) return;
+    try { await host('renameEthAccount', w.id, a.i, r.input); } catch (e) { return ask({ title: 'Not renamed', note: msg(e), yes: 'OK', no: null }); }
+    await load(); ethRefresh();
   }
 
-  handlers.event = (msg) => {
-    if (msg.method === 'bb_started') { if ($('tabs').hidden) started(); return; }
-    if (msg.method === 'ev_sync_progress' && msg.result) {
-      const { done, total } = msg.result;
-      $('sync').textContent = total && done < total ? `syncing ${Math.floor((done / total) * 100)}%` : '';
+  async function load() {
+    st = await host('state');
+    if (st.phase !== 'unlocked') return st;
+    walletDd.options([...st.wallets.map((w) => ({ v: w.id, label: w.name })), { group: ' ' }, { v: '__add', label: '+ Add a wallet' }], st.active);
+    const w = W();
+    $('teFrom').textContent = $('feTo').textContent = w ? w.name : 'Beam';
+    if (w && w.accounts.length) {
+      const a = acct();
+      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} · ${short(x.address)}` })),
+        { group: ' ' }, ...(w.hd ? [{ v: '__add', label: '+ Add an account' }] : []), { v: '__import', label: '+ Import an account' }], String(a.i));
     }
-    if (msg.method === 'ev_system_state' || msg.method === 'ev_utxos_changed') status();
-    if (msg.method === 'ev_txs_changed') txs();
-  };
-
-  async function status() {
-    try {
-      const w = await host('wallet', 'wallet_status');
-      avail = w.available || 0;
-      $('avail').textContent = amt(avail);
-      $('pend').textContent = `${amt(w.receiving || 0, 2)} / ${amt(w.sending || 0, 2)} / ${amt(w.maturing || 0, 2)}`;
-      $('height').textContent = w.current_height ?? '—';
-      if (!$('sync').textContent.startsWith('syncing')) { $('sync').textContent = `● ${w.current_height ?? '?'}`; $('sync').title = `node ${node}`; }
-    } catch (e) { $('sync').textContent = e.message; }
+    return st;
   }
 
-  async function txs() {
+  async function enter() {
+    await load();
+    if (st.phase !== 'unlocked') return route();
+    tab(curTab);
+    priceTick();
+  }
+
+  handlers.event = (m) => {
+    const here = st && st.active && m.wallet === st.active;
+    switch (m.method) {
+      case 'bb_changed':
+        if (progressScreen === 's-progress') { progressScreen = null; route(); }
+        else if (progressScreen) break;
+        else if (!$('tabs').hidden) load().then(() => (st.phase === 'unlocked' ? tab(curTab) : route()));
+        else if (!$('s-boot').hidden || !$('s-unlock').hidden) route();
+        break;
+      case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
+      case 'bb_locked': st = null; route(); break;
+      case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
+      case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
+      case 'bb_net': if (st && st.phase === 'unlocked') load().then(() => { if (curTab === 'home') beamRefresh(); }); break;
+      case 'ev_sync_progress':
+        if (here && m.result) { const { done, total } = m.result; if (total && done < total) pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`); }
+        break;
+      case 'ev_system_state': case 'ev_utxos_changed': if (here) beamRefresh(); break;
+      case 'ev_txs_changed': if (here) { beamRefresh(); if (curTab === 'activity') activity(); } break;
+    }
+  };
+  function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
+
+  // ---------- Wallet tab: Beam ----------
+  async function beamRefresh() {
+    const w = W();
+    $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
+    if (!w || !w.beam) {
+      beamStatus = null; total(); $('beamMeta').textContent = '';
+      const n = st && st.engines ? Object.values(st.engines).filter((x) => x.running).length : 0;
+      pill('beamPill', n ? '' : 'off', n ? `Beam: ${n} wallet${n > 1 ? 's' : ''} online` : 'Beam off');
+      $('beamPill').title = 'This wallet has no Beam part; the Beam parts of your other wallets run and receive';
+      return;
+    }
+    if (!beamHere()) { $('beamMeta').textContent = 'starting…'; pill('beamPill', 'demo', 'Beam starting…'); return; }
     try {
-      const list = await host('wallet', 'tx_list', { count: 30 });
-      $('txs').innerHTML = list.map((t) => {
-        const when = t.create_time ? new Date(t.create_time * 1000).toLocaleString() : '';
-        const what = t.tx_type_string === 'contract' ? (t.comment || 'contract') : (t.income ? 'received' : 'sent');
-        return `<tr><td>${esc(when)}</td><td>${esc(what)}</td><td class="r">${t.value ? amt(t.value) : ''}</td><td>${esc(t.status_string ?? t.status)}</td></tr>`;
-      }).join('') || '<tr><td colspan="4" class="dim">none yet</td></tr>';
+      const s = await host('beam', W().id, 'wallet_status');
+      beamStatus = s;
+      $('beamAvail').textContent = amt(s.available || 0);
+      $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
+      const minor = [];
+      if (s.receiving) minor.push(`+${amt(s.receiving)} incoming`);
+      if (s.sending) minor.push(`−${amt(s.sending)} outgoing`);
+      if (s.maturing) minor.push(`${amt(s.maturing)} maturing`);
+      if (s.shielded) minor.push(`${amt(s.shielded)} shielded`);
+      $('beamMinor').textContent = minor.join(' · ');
+      const synced = s.current_height && s.is_in_sync !== false;
+      $('beamMeta').innerHTML = `<span class="dot${synced ? '' : ' off'}"></span> ${esc((s.current_height || 0).toLocaleString('en-US'))}`;
+      const x = engineOf(W());
+      if (x && !x.connected) pill('beamPill', 'demo', 'Beam: reconnecting…');
+      else if (!$('beamPill').textContent.includes('syncing') || synced) pill('beamPill', '', `Beam live → ${(s.current_height || 0).toLocaleString('en-US')}`);
+      $('beamPill').title = `Beam node ${x ? x.node : st.node}${x && x.node !== st.node ? ' (a backup: the main one did not answer)' : ''}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online.`;
+    } catch (e) { $('beamMeta').textContent = msg(e); pill('beamPill', 'off', 'Beam: no node'); }
+    total();
+  }
+
+  // ---------- Wallet tab: Ethereum ----------
+  let ethFor = null;
+  async function ethRefresh() {
+    const a = acct();
+    $('ethBody').hidden = !a; $('ethNone').hidden = !!a; $('acctDd').hidden = !a;
+    if (!a) { ethData = null; total(); return; }
+    $('ethAddr').textContent = a.address;
+    if (ethFor !== a.address) $('ethAssets').innerHTML = '<div class="empty">loading…</div>';
+    ethFor = a.address;
+    try {
+      const d = await host('ethBalances', a.address);
+      if (ethFor !== a.address) return;
+      ethData = d;
+      const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null }]
+        .concat(d.tokens.map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals),
+          u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * rates.beam : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
+          title: t.address })));
+      $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
+      pill('ethPill', '', 'Ethereum live');
+    } catch (e) { $('ethAssets').innerHTML = `<div class="empty">${esc(msg(e))}</div>`; pill('ethPill', 'off', 'Ethereum: no RPC'); }
+    total();
+  }
+  $('acctRename').onclick = renameAccount;
+  $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
+
+  function total() {
+    if (!rates) { $('totalUsd').textContent = '—'; return; }
+    let t = 0;
+    const parts = [];
+    if (beamStatus) { const b = (beamStatus.available || 0) / GROTH; t += b * rates.beam; parts.push(`${num(b, 2)} BEAM`); }
+    if (ethData) {
+      const e = units(ethData.eth, 18); t += e * rates.eth; parts.push(`${num(e, 4)} ETH`);
+      for (const x of ethData.tokens) {
+        const v = units(x.balance, x.decimals);
+        if (!(v > 0)) continue;
+        if (x.address.toLowerCase() === st.contracts.wbeam) { t += v * rates.beam; parts.push(`${num(v, 2)} WBEAM`); }
+        else if (x.usd) { t += v * x.usd; parts.push(`${num(v, 2)} ${x.symbol}`); }
+      }
+    }
+    $('totalUsd').textContent = usd(t);
+    $('totalSub').textContent = parts.join(' · ');
+    $('totalSub').title = `BEAM ${usd(rates.beam)} · ETH ${usd(rates.eth)} (${rates.src})`;
+  }
+  async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
+
+  $('ethAddNew').onclick = async () => {
+    const w = W();
+    const r = await ask({ title: 'Create Ethereum accounts', note: 'A new Ethereum seed phrase for this wallet. It is shown once now: write it down. Settings → Wallets shows it again with the password.', yes: 'Create' });
+    if (!r.ok) return;
+    let phrase;
+    try { phrase = await host('addEthPart', w.id, { kind: 'new' }); }
+    catch (e) { return ask({ title: 'Not created', note: msg(e), yes: 'OK', no: null }); }
+    await load(); ethRefresh();
+    if (phrase) await ask({ title: 'Your Ethereum seed phrase', html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, note: 'It restores this wallet\'s Ethereum accounts here, in MetaMask or Rabby. The Beam part has its own phrase (or backup file).', yes: 'Written down', no: null });
+  };
+  $('ethAddImport').onclick = async () => {
+    const w = W();
+    const r = await ask({ title: 'Import into this wallet', input: { label: 'An Ethereum seed phrase (12 or 24 words) or a private key', secret: true }, yes: 'Import',
+      check: async ({ input }) => { if (!(await host('isEthKey', input)) && !(await host('checkPhrase', input)).eth) throw new Error('neither a BIP-39 phrase nor a 64-hex private key'); } });
+    if (!r.ok) return;
+    try {
+      const isKey = await host('isEthKey', r.input);
+      await host('addEthPart', w.id, isKey ? { kind: 'key', key: r.input } : { kind: 'phrase', phrase: r.input });
+    } catch (e) { return ask({ title: 'Not imported', note: msg(e), yes: 'OK', no: null }); }
+    await load(); ethRefresh();
+  };
+
+  // ---------- sheets ----------
+  let addrType = 'regular';
+  const ADDR_HINT = {
+    regular: 'Give it to the sender. Online while the wallet is unlocked (every Beam wallet runs then); the transfer completes while both wallets are online. The popup may be closed.',
+    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address); the sender pays 0.011 BEAM and the coins arrive shielded. For many payments use Public.',
+    max_privacy: 'One payment, maximum anonymity (the shielded pool); the coins mature over a while before they can be spent.',
+    public_offline: 'A public offline address: any number of payments, the wallet need not run (for a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM; the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
+  };
+  // Receive shows the newest address of the chosen type (made once if there is none); "New address" makes
+  // another. "My addresses" lists every address this wallet made, with the payments that came in to each
+  // (tx_list joined on the address: Beam's chain has no addresses, so the wallet's own records are all there is).
+  const TYPE_NAME = { regular: 'Regular', regular_new: 'Regular', offline: 'Offline', max_privacy: 'Max privacy', public_offline: 'Public' };
+  let addrs = [], shownAddr = null;
+  async function loadAddrs() {
+    const [list, txs] = await Promise.all([host('beam', W().id, 'addr_list', { own: true }), host('beam', W().id, 'tx_list', { count: 1000 }).catch(() => [])]);
+    const got = new Map();
+    for (const t of txs) {
+      if (!t.income) continue;
+      for (const k of [t.receiver, t.token, t.address, t.receiver_identity]) {
+        if (!k) continue;
+        const g = got.get(k) || { n: 0, sum: 0 };
+        if (t.status === 3) { g.n++; g.sum += t.value || 0; }
+        got.set(k, g);
+      }
+    }
+    const txText = txs.map((t) => JSON.stringify(t));
+    addrs = list.map((x) => {
+      const g = got.get(x.address) || (x.identity && got.get(x.identity)) || { n: 0, sum: 0 };
+      // any transaction at all (in or out, finished or not) that names this address or its identity
+      const touched = txText.some((j) => j.includes(x.address) || (x.identity && j.includes(x.identity)));
+      return { ...x, n: g.n, sum: g.sum, touched: touched || g.n > 0 };
+    }).sort((p1, p2) => (p2.create_time || 0) - (p1.create_time || 0));
+    renderAddrs();
+  }
+  const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
+  const ago2 = (sec) => (sec ? new Date(sec * 1000).toLocaleDateString() : '');
+  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'no expiry' : `until ${new Date((x.create_time + x.duration) * 1000).toLocaleDateString()}`);
+  function renderAddrs() {
+    $('addrCount').textContent = `${addrs.length}`;
+    $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}" data-k="${k}">
+      <span class="badge ${x.expired ? 'bad' : 'ok'}">${esc(TYPE_NAME[x.type] || x.type)}</span>
+      <span class="what">${esc(x.comment || short(x.address))}<span class="sub">${x.comment ? esc(short(x.address)) + ' · ' : ''}${esc(ago2(x.create_time))} · ${esc(expiry(x))}</span></span>
+      <span class="amt ${x.n ? 'pos' : ''}">${x.n ? `${x.n} in · ${amt(x.sum, 2)}` : 'unused'}</span></div>`).join('') || '<div class="empty">none yet</div>';
+  }
+  function showAddr(x) {
+    shownAddr = x.address;
+    $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
+    $('beamAddrMeta').innerHTML = `<b>${esc(x.comment || 'no name')}</b> · ${esc(TYPE_NAME[x.type] || x.type)} · ${esc(expiry(x))}${x.n ? ` · ${x.n} payment(s) in` : ''}`;
+    $('beamQr').innerHTML = '';
+    new QRCode($('beamQr'), { text: x.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.L });
+    renderAddrs();
+  }
+  async function newAddress(type) {
+    const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
+    await loadAddrs();
+    showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0, n: 0 });
+  }
+  async function showType(type, fresh = false) {
+    note('x-beamRecv', 'bad', '');
+    $('addrHint').textContent = ADDR_HINT[type];
+    try {
+      if (!fresh) {
+        await loadAddrs();
+        const have = addrs.find((x) => sameType(x, type) && !x.expired);
+        if (have) return showAddr(have);
+      }
+      await newAddress(type);
+    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+  }
+  $('addrType').onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    qa('#addrType button').forEach((x) => x.classList.toggle('on', x === b));
+    addrType = b.dataset.t; showType(addrType);
+  };
+  $('newBeamAddr').onclick = () => showType(addrType, true);
+  $('nameBeamAddr').onclick = async () => {
+    const x = addrs.find((y) => y.address === shownAddr);
+    if (!x) return;
+    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save' });
+    if (!r.ok) return;
+    try { await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input }); await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x); }
+    catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+  };
+  // Remove unused: only addresses with no transaction of any kind, no name, and not the one the other
+  // wallets send to. A removed address stops taking payments, so the dialog says how many go and stay.
+  $('addrClean').onclick = async () => {
+    note('x-beamRecv', 'bad', '');
+    try {
+      await loadAddrs();
+      const own = (W() && W().beamAddress) || '';
+      // a name you gave, not one the wallet wrote itself ("regular 2026-11-05", "wallet offline", "default",
+      // "for my other wallets", "probe")
+      const AUTO = /^(?:(?:regular|offline|max_privacy|public_offline) \d{4}-\d{2}-\d{2}|wallet (?:regular|offline)|default|for my other wallets|probe)?$/;
+      const named = (x) => !AUTO.test(String(x.comment || '').trim());
+      const keep = (x) => x.touched || named(x) || x.address === own;
+      const gone = addrs.filter((x) => !keep(x));
+      if (!gone.length) return ask({ title: 'Nothing to remove', note: 'Every address here has a transaction, a name, or is the one your other wallets send to.', yes: 'OK', no: null });
+      const ok = await confirmBox('Remove unused addresses', [['Removed', String(gone.length)], ['Kept', `${addrs.length - gone.length} (with a transaction, a name, or for your other wallets)`]],
+        'A removed address stops taking payments. If you gave one of these to someone and still expect coins on it, name it first (Name it): named ones stay. Coins already received are not affected.');
+      if (!ok) return;
+      let n = 0;
+      for (const x of gone) { try { await host('beam', W().id, 'delete_address', { address: x.address }); n++; } catch {} }
+      if (gone.some((x) => x.address === shownAddr)) shownAddr = null;
+      await loadAddrs();
+      if (!shownAddr) await showType(addrType); else renderAddrs();
+      await ask({ title: 'Done', note: `${n} removed, ${addrs.length} left.`, yes: 'OK', no: null });
+    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+  };
+  $('addrList').onclick = (e) => {
+    const row = e.target.closest('[data-k]'); if (!row) return;
+    const x = addrs[Number(row.dataset.k)];
+    if (!x) return;
+    addrType = Object.keys(ADDR_HINT).find((t) => sameType(x, t)) || addrType;
+    qa('#addrType button').forEach((b) => b.classList.toggle('on', b.dataset.t === addrType));
+    $('addrHint').textContent = ADDR_HINT[addrType] || '';
+    showAddr(x);
+    $('beamQrWrap').scrollIntoView({ block: 'nearest' });
+  };
+  $('copyBeamAddr').onclick = () => copy($('copyBeamAddr'), $('beamAddr').textContent);
+
+  // my other Beam wallets as receivers: the offline address each keeps for this (made once it has run)
+  const bsOwn = BB.dropdown($('bsOwn'), (v) => { if (v) { $('bsAddr').value = v; $('bsAddr').oninput(); } });
+  function bsOwnFill() {
+    const others = st.wallets.filter((w) => w.beam && w.id !== st.active);
+    const ready = others.filter((w) => w.beamAddress);
+    bsOwn.options([{ v: '', label: 'My wallets…' }, ...ready.map((w) => ({ v: w.beamAddress, label: w.name }))], '');
+    $('bsOwn').hidden = $('bsOwnL').hidden = !ready.length;
+    const missing = others.filter((w) => !w.beamAddress).map((w) => w.name);
+    $('bsOwnHint').textContent = missing.length ? `${missing.join(', ')}: shown here once opened (switched to) once — a wallet makes its address while it runs.` : '';
+  }
+  let bsType = null;
+  $('bsAddr').oninput = async () => {
+    const a = $('bsAddr').value.trim();
+    bsType = null; $('bsKind').textContent = '';
+    if (!a || !beamHere()) return;
+    // Beam's validate_address calls almost any word a valid token, so the shape is checked first: an SBBS
+    // address is 60-70 hex characters, a token (offline, max privacy, the new regular) a long base58 string
+    if (!/^[0-9a-fA-F]{60,70}$/.test(a) && !/^[1-9A-HJ-NP-Za-km-z]{80,}$/.test(a)) { $('bsKind').textContent = 'not a Beam address'; return; }
+    try {
+      const v = await host('beam', W().id, 'validate_address', { address: a });
+      if ($('bsAddr').value.trim() !== a) return;          // an older answer for an address since changed
+      if (!v.is_valid) { $('bsKind').textContent = 'not a valid Beam address'; return; }
+      bsType = v.type;
+      $('bsKind').textContent = `${({ max_privacy: 'max-privacy', regular_new: 'regular', public_offline: 'public offline' })[v.type] || v.type || 'regular'} address${v.is_mine ? ', one of this wallet\'s own' : ''}${v.payments != null ? ` · ${v.payments} payment(s) left` : ''}`;
     } catch {}
-  }
-
-  // receive / send
-  async function mkAddress(type) {
-    $('addrErr').textContent = '';
+  };
+  const beamFee = () => (bsType === 'offline' || bsType === 'max_privacy' || bsType === 'public_offline' ? 1100000 : 100000);
+  $('bsMax').onclick = () => { const a = (beamStatus && beamStatus.available) || 0; $('bsAmt').value = Math.max(0, (a - beamFee()) / GROTH).toFixed(8).replace(/\.?0+$/, ''); };
+  $('doBeamSend').onclick = async () => {
+    clearNotes('x-beamSend');
+    if ($('doBeamSend').disabled) return;
+    $('doBeamSend').disabled = true;
     try {
-      const a = await host('wallet', 'create_address', { type, expiration: 'auto', comment: `wallet ${type}` });
-      $('addr').textContent = a; $('addrBox').hidden = false;
-      $('qr').innerHTML = '';
-      new QRCode($('qr'), { text: a, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L });
-    } catch (e) { fail('addrErr')(e); }
-  }
-  $('mkRegular').onclick = () => mkAddress('regular');
-  $('mkOffline').onclick = () => mkAddress('offline');
-  $('copyAddr').onclick = () => navigator.clipboard.writeText($('addr').textContent);
-
-  $('doSend').onclick = async () => {
-    $('sendErr').textContent = $('sendOk').textContent = '';
-    try {
-      const address = $('sAddr').value.trim();
-      const value = toGroth($('sAmt').value);
-      if (!(await confirmBox('Send BEAM', [['Amount', `${amt(value, 8)} BEAM`], ['To', address]], 'Plus the Beam network fee.'))) return;
-      const r = await host('wallet', 'tx_send', { value, address, asset_id: 0 });
-      $('sendOk').textContent = `sent, transaction ${r.txId}`;
-      txs();
-    } catch (e) { fail('sendErr')(e); }
+      const address = $('bsAddr').value.trim();
+      if (!address) throw new Error('paste the address');
+      await $('bsAddr').oninput();
+      if (bsType === null) throw new Error('not a valid Beam address');
+      const value = toGroth($('bsAmt').value), fee = beamFee();
+      if (value + fee > ((beamStatus && beamStatus.available) || 0)) throw new Error(`not enough: ${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
+      if (!(await confirmBox('Send BEAM', [['From wallet', W().name], ['Amount', `${amt(value, 8)} BEAM`], ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', bsType || 'regular']],
+        bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : ''))) return;
+      const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: 0, comment: $('bsNote').value.trim() || undefined });
+      note('x-beamSend', 'ok', `Sent: transaction ${r.txId}. It shows under Activity.`);
+      $('bsAmt').value = ''; $('bsNote').value = '';
+      beamRefresh();
+    } catch (e) { note('x-beamSend', 'bad', msg(e)); }
+    finally { $('doBeamSend').disabled = false; }
   };
 
-  // ---------- BEAM -> WBEAM ----------
-  let feeData = null;
-  // The relayer takes a message once 120000 gas x (2 base fee + tip) x ETH/BEAM is at most its fee.
-  // Each choice shows the base fee it covers and how much of the last 24 h it would have been enough.
-  const covers = (feeBeam) => feeData ? ((feeBeam * feeData.rate.beam / feeData.rate.eth) * 1e18 / 120000 - feeData.tip * 1e9) / 2 / 1e9 : null;
+  const esAsset = BB.dropdown($('esAsset'), () => esAvail());
+  function esTokens() {
+    const list = [{ v: 'ETH', label: 'ETH', dec: 18, bal: ethData ? ethData.eth : '0', token: null }];
+    for (const t of (ethData ? ethData.tokens : [])) list.push({ v: t.address, label: t.symbol, dec: t.decimals, bal: t.balance || '0', token: { address: t.address, decimals: t.decimals, symbol: t.symbol } });
+    return list;
+  }
+  const esCur = () => esTokens().find((x) => x.v === esAsset.value()) || esTokens()[0];
+  function esAvail() { const c = esCur(); $('esAvail').textContent = `Available ${num(units(c.bal, c.dec), 8)} ${c.label}${c.token ? ' · gas is paid in ETH' : ' · keep some ETH for gas'}`; }
+  $('esMax').onclick = () => {
+    const c = esCur();
+    if (c.token) $('esAmt').value = exact(c.bal, c.dec);
+    else { const keepWei = 2n * 10n ** 15n; const v = BigInt(c.bal) > keepWei ? BigInt(c.bal) - keepWei : 0n; $('esAmt').value = exact(v.toString(), 18); }
+  };
+  // my own accounts as receivers (every wallet's, but the sender)
+  const esOwn = BB.dropdown($('esOwn'), (v) => { if (v) { $('esTo').value = v; $('esTo').oninput(); } });
+  function esOwnFill() {
+    const me = acct();
+    const opts = [{ v: '', label: 'My accounts…' }];
+    for (const w of st.wallets) {
+      const list = w.accounts.filter((a) => !me || a.address.toLowerCase() !== me.address.toLowerCase());
+      if (!list.length) continue;
+      opts.push({ group: w.name });
+      for (const a of list) opts.push({ v: a.address, label: `${a.name} · ${short(a.address)}` });
+    }
+    esOwn.options(opts, '');
+    $('esOwn').hidden = $('esOwnL').hidden = opts.length < 2;
+  }
+  $('esTo').oninput = () => {
+    const t = $('esTo').value.trim();
+    const own = allAccounts().find((a) => a.address.toLowerCase() === t.toLowerCase());
+    $('esToHint').textContent = !t ? '' : !isEthAddress(t) ? '0x and 40 hex characters' : own ? `your own: ${own.wallet.name} · ${own.name}` : Object.values(st.contracts).includes(t.toLowerCase()) ? 'a contract, not a person: tokens sent to it are lost. For the bridge use the Bridge tab' : '';
+  };
+  $('doEthSend').onclick = async () => {
+    clearNotes('x-ethSend');
+    $('doEthSend').disabled = true;
+    try {
+      const c = esCur(), a = acct(), to = $('esTo').value.trim();
+      if (!isEthAddress(to)) throw new Error('the address must be 0x and 40 hex characters');
+      if (Object.values(st.contracts).includes(to.toLowerCase())) throw new Error('that is the WBEAM token or the bridge contract: tokens sent there are lost. Use the Bridge tab');
+      const p = await host('ethPrepare', { from: a.address, to, amount: $('esAmt').value, token: c.token });
+      const feeNow = units(p.feeNow, 18), feeMax = units(p.feeMax, 18);
+      const ok = await confirmBox(`Send ${p.symbol}`, [
+        ['Amount', `${p.amountExact} ${p.symbol}`], ['From', `${a.name} ${short(a.address)}`], ['To', p.to],
+        ['Network fee', `≈ ${num(feeNow, 6)} ETH ${rates ? usd(feeNow * rates.eth) : ''} (at most ${num(feeMax, 6)})`],
+        ['Gas', `${Number(p.gasLimit).toLocaleString('en-US')} limit · base ${p.baseGwei.toFixed(2)} gwei`]],
+        'Signed here and sent through a public Ethereum RPC. It cannot be undone.');
+      if (!ok) return;
+      const hash = await host('ethSend', p.id);
+      note('x-ethSend', 'ok', `Sent: <a href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(short(hash))}</a>. It shows under Activity once mined.`, true);
+      $('esAmt').value = '';
+      setTimeout(ethRefresh, 15000);
+    } catch (e) { note('x-ethSend', 'bad', msg(e)); }
+    finally { $('doEthSend').disabled = false; }
+  };
+
+  const SHEETS = {
+    beamRecv: () => { qa('#addrType button').forEach((x) => x.classList.toggle('on', x.dataset.t === addrType)); showType(addrType); },
+    beamSend: () => { bsOwnFill(); $('bsAvail').textContent = `${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM`; },
+    ethRecv: () => {
+      const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethQr').innerHTML = '';
+      new QRCode($('ethQr'), { text: a.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    },
+    ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
+  };
+  $('copyEthAddr').onclick = () => copy($('copyEthAddr'), $('ethRecvAddr').textContent);
+
+  // ---------- Bridge ----------
+  let dir = 'toEth';
+  function setDir(d) {
+    dir = d;
+    qa('#bridgeDir button').forEach((b) => b.classList.toggle('on', b.dataset.d === d));
+    $('b-toEth').hidden = d !== 'toEth'; $('b-fromEth').hidden = d !== 'fromEth';
+    if (d === 'toEth') fee(); else fromEthOpen();
+  }
+  $('bridgeDir').onclick = (e) => { const b = e.target.closest('button'); if (b) setDir(b.dataset.d); };
+
+  const accountOptions = (extra) => {
+    const out = [];
+    for (const w of st.wallets) {
+      if (!w.accounts.length) continue;
+      out.push({ group: w.name });
+      for (const a of w.accounts) out.push({ v: a.address, label: `${a.name} · ${short(a.address)}` });
+    }
+    if (extra) out.push({ group: ' ' }, { v: '__other', label: 'Another address…' });
+    return out;
+  };
+  const teTo = BB.dropdown($('teTo'), (v) => { $('teOtherBox').hidden = v !== '__other'; });
+  const feFrom = BB.dropdown($('feFrom'), () => feBal());
+
+  function bridgeOpen() {
+    const w = W();
+    const a = acct();
+    teTo.options(accountOptions(true), teTo.value() && teTo.value() !== '' ? teTo.value() : a ? a.address : '__other');
+    $('teOtherBox').hidden = teTo.value() !== '__other';
+    feFrom.options(accountOptions(false), feFrom.value() || (a ? a.address : ''));
+    $('teFromBal').textContent = beamStatus ? `${amt(beamStatus.available || 0)} BEAM available` : w && w.beam ? '' : 'no Beam part';
+    setDir(dir);
+    bridgeLists();
+  }
+
+  // BEAM -> WBEAM: the relayer takes a message once relayGas (120000) x (2 base fee + tip) x ETH/BEAM is at most
+  // its fee. Each choice shows the base fee it covers and how much of the last 24 h it would have been enough.
+  const covers = (feeBeam) => feeData ? ((feeBeam * feeData.rate.beam / feeData.rate.eth) * 1e18 / feeData.relayGas - feeData.tip * 1e9) / 2 / 1e9 : null;   // bridge.js coversBase, with its numbers
   const shareOf = (gwei) => feeData && feeData.dayBase.length ? feeData.dayBase.filter((b) => b / 1e9 <= gwei).length / feeData.dayBase.length : null;
   const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
   const NAMES = { cheap: 'Cheap', normal: 'Normal', safe: 'Safe' };
-
   function feeInfo() {
-    const f = parseFloat(String($('eFee').value).replace(',', '.'));
-    document.querySelectorAll('#eOpts button').forEach((b) => b.classList.toggle('on', Math.abs(+b.dataset.fee - f) < 0.005));
-    if (!feeData || !(f > 0)) { $('eFeeInfo').textContent = ''; return; }
+    const f = parseFloat(String($('teFee').value).replace(',', '.'));
+    qa('#teOpts button').forEach((b) => b.classList.toggle('on', Math.abs(+b.dataset.fee - f) < 0.005));
+    if (!feeData || !(f > 0)) { $('teFeeInfo').textContent = ''; return; }
     const up = covers(f);
-    $('eFeeInfo').textContent = f < feeData.min
+    $('teFeeInfo').textContent = f < feeData.min
       ? `Below the relayer's minimum now (${feeData.min.toFixed(2)} BEAM): it would wait until the base fee drops to ${up > 0 ? up.toFixed(3) : '—'} gwei (${pct(shareOf(up))} of the last 24 h).`
-      : `Enough while the base fee is at most ${up.toFixed(3)} gwei: ${pct(shareOf(up))} of the last 24 h. ≈ $${(f * feeData.rate.beam).toFixed(2)}. Paying more does not speed it up (the relayer takes ~1 h either way), it only covers gas rising meanwhile. The fee is fixed for good: under the minimum the relayer waits; nothing can top it up.`;
+      : `Enough while the base fee is at most ${up.toFixed(3)} gwei: ${pct(shareOf(up))} of the last 24 h. ≈ ${usd(f * feeData.rate.beam)}. Paying more does not speed it up (the relayer takes ~1 h either way); it only covers gas rising meanwhile. The fee is fixed for good.`;
   }
-
   async function fee() {
     try {
       feeData = await host('relayerFee');
       const d = feeData.day;
-      const word = { cheap: 'cheap', usual: 'usual', expensive: 'expensive' }[feeData.level];
-      $('eGas').innerHTML = `Gas now <b class="${esc(feeData.level)}">${feeData.base.toFixed(3)} gwei, ${word}</b> · last 24 h: median ${d.p50.toFixed(2)}, 9 of 10 under ${d.p90.toFixed(2)} gwei · minimum now <b>${feeData.min.toFixed(2)} BEAM</b> ($${(feeData.min * feeData.rate.beam).toFixed(2)})`;
-      $('eOpts').innerHTML = feeData.options.map((o) => `<button data-fee="${o.fee}"><div class="t">${NAMES[o.key]}</div><div class="f">${o.fee.toFixed(2)}</div><div class="s">gas ≤ ${o.upTo.toFixed(2)} · ${pct(o.share)} of 24 h</div></button>`).join('');
-      if (!$('eFee').dataset.touched) $('eFee').value = feeData.fee;
+      $('teGas').innerHTML = `Gas now <b class="${esc(feeData.level)}">${feeData.base.toFixed(3)} gwei, ${esc(feeData.level)}</b> · 24 h median ${d.p50.toFixed(2)}, 9 in 10 under ${d.p90.toFixed(2)} · minimum now <b>${feeData.min.toFixed(2)} BEAM</b> (${usd(feeData.min * feeData.rate.beam)})`;
+      $('teOpts').innerHTML = feeData.options.map((o) => `<button class="feeopt" data-fee="${o.fee}"><span class="t">${NAMES[o.key]}</span><span class="f">${o.fee.toFixed(2)}</span><span class="s">gas ≤ ${o.upTo.toFixed(2)} · ${pct(o.share)} of 24 h</span></button>`).join('');
+      if (!$('teFee').dataset.touched) $('teFee').value = feeData.fee;
       feeInfo();
-    } catch (e) { $('eGas').textContent = `could not price the relayer fee: ${e.message}`; }
+    } catch (e) { $('teGas').textContent = `could not price the relayer fee: ${msg(e)}`; }
   }
-  $('eOpts').onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    $('eFee').value = b.dataset.fee; $('eFee').dataset.touched = 1; feeInfo();
+  $('teOpts').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; $('teFee').value = b.dataset.fee; $('teFee').dataset.touched = 1; feeInfo(); };
+  $('teFee').oninput = () => { $('teFee').dataset.touched = 1; feeInfo(); };
+  $('teMax').onclick = () => {
+    const f = parseFloat($('teFee').value) || 0, av = ((beamStatus && beamStatus.available) || 0) / GROTH;
+    $('teAmt').value = Math.max(0, Math.floor((av - f - 0.02) * 1e4) / 1e4);
   };
-  $('eFee').oninput = () => { $('eFee').dataset.touched = 1; feeInfo(); };
-  $('eMax').onclick = () => {
-    const f = parseFloat($('eFee').value) || 0;
-    $('eAmt').value = Math.max(0, Math.floor((avail / GROTH - f - 0.02) * 1e4) / 1e4);
-  };
-  $('eRcv').oninput = () => { chrome.storage.local.set({ ethAddress: $('eRcv').value.trim() }); outgoing(); };
-
-  $('eSend').onclick = async () => {
-    $('eErr').textContent = $('eOk').textContent = '';
+  $('doToEth').onclick = async () => {
+    clearNotes('b-toEth');
+    if ($('doToEth').disabled) return;
+    $('doToEth').disabled = true;
     try {
-      const rcv = $('eRcv').value.trim();
+      if (!beamHere()) throw new Error('this wallet has no running Beam part');
+      const rcv = teTo.value() === '__other' ? $('teOther').value.trim() : teTo.value();
       if (!isEthAddress(rcv)) throw new Error('the Ethereum address must be 0x and 40 hex characters');
-      const a = toGroth($('eAmt').value), f = toGroth($('eFee').value);
+      const own = allAccounts().find((a) => a.address.toLowerCase() === rcv.toLowerCase());
+      const a = toGroth($('teAmt').value), f = toGroth($('teFee').value);
       const fd = feeData || await host('relayerFee');
       if (f < Math.round(fd.min * GROTH)) {
         const up = covers(f / GROTH);
@@ -304,111 +816,326 @@
           'The relayer keeps the message and takes it when gas gets that cheap. If it never does, the BEAM stay locked: nothing can raise the fee later.');
         if (!ok) return;
       }
-      if (a + f + 2e6 > avail) throw new Error(`not enough: ${amt(avail, 8)} BEAM available, needed amount + fee + ~0.02`);
-      const txid = await host('sendToEth', {
-        title: 'Send to Ethereum',
+      const av = (beamStatus && beamStatus.available) || 0;
+      if (a + f + 2e6 > av) throw new Error(`not enough: ${amt(av, 8)} BEAM available, needed amount + fee + ~0.02`);
+      const txid = await host('sendToEth', W().id, {
+        title: 'Bridge BEAM → WBEAM',
         rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`],
-          ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? 0).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); now ×${(f / GROTH / fd.min).toFixed(1)} the minimum`],
-          ['Ethereum address', rcv]],
-        note: 'The official bridge pipe on Beam, released by its relayer on Ethereum. It cannot be undone.',
+          ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? 0).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); ×${(f / GROTH / fd.min).toFixed(1)} today's minimum`],
+          ['To', own ? `${own.wallet.name} · ${own.name} ${rcv}` : `${rcv} (not one of this wallet's accounts)`]],
+        note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour. It cannot be undone.',
       }, a, rcv, f);
-      $('eOk').textContent = `sent, Beam transaction ${txid}. It shows up below once a block confirms it.`;
-      txs(); setTimeout(outgoing, 90000);
-    } catch (e) { fail('eErr')(e); }
+      note('b-toEth', 'ok', `Sent: Beam transaction ${txid}. It shows under Transfers once a block confirms it.`);
+      $('teAmt').value = '';
+      beamRefresh(); setTimeout(bridgeLists, 90000);
+    } catch (e) { note('b-toEth', 'bad', msg(e)); }
+    finally { $('doToEth').disabled = false; }
   };
 
-  async function outgoing() {
-    const rcv = $('eRcv').value.trim();
-    if (!isEthAddress(rcv)) return;
-    $('eMsgErr').textContent = '';
+  // WBEAM -> BEAM
+  let feBalData = null;
+  async function feBal() {
+    const from = feFrom.value();
+    $('feFromBal').textContent = '';
+    feBalData = null;
+    if (!isEthAddress(from)) return;
     try {
-      const d = await host('outgoing', rcv);
-      const names = { done: 'arrived', waiting: 'waiting for the relayer', failed: 'failed on Ethereum' };
-      $('eMsgs').innerHTML = d.msgs.map((m) => `<tr><td>${m.id}</td><td class="r">${amt(m.amount)}</td><td class="r">${amt(m.fee, 2)}</td>
-        <td><span class="pill ${esc(m.state)}">${names[m.state]}</span></td>
-        <td>${m.eth ? `<a href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(new Date(m.eth.time).toLocaleString())}</a>` : ''}</td></tr>`).join('')
-        || `<tr><td colspan="5" class="dim">none to this address among the last 40 bridge messages (${d.count} in all)</td></tr>`;
-    } catch (e) { fail('eMsgErr')(e); }
+      const d = await host('ethBalances', from);
+      const wb = d.tokens.find((t) => t.address.toLowerCase() === st.contracts.wbeam);
+      feBalData = { wbeam: wb ? wb.balance : '0', eth: d.eth };
+      $('feFromBal').textContent = `${num(units(feBalData.wbeam, 8), 4)} WBEAM · ${num(units(d.eth, 18), 5)} ETH for gas`;
+    } catch (e) { $('feFromBal').textContent = msg(e); }
   }
+  async function fromEthOpen() {
+    feBal();
+    $('feKey').textContent = 'bridge key …';
+    if (!beamHere()) { $('feKey').textContent = 'no running Beam part'; return; }
+    try { const k = await host('beamKey', W().id); $('feKey').textContent = `key ${k.slice(0, 8)}…${k.slice(-6)}`; $('feKey').dataset.tip = `The bridge key of this wallet's Beam part: ${k}`; }
+    catch (e) { $('feKey').textContent = msg(e); }
+  }
+  $('feMax').onclick = () => {
+    if (!feBalData) return;
+    const f = BigInt(Math.round((parseFloat($('feFee').value) || 0) * 1e8));
+    const v = BigInt(feBalData.wbeam) - f;
+    $('feAmt').value = v > 0n ? exact(v.toString(), 8) : '0';
+  };
+  $('doFromEth').onclick = async () => {
+    clearNotes('b-fromEth');
+    $('doFromEth').disabled = true;
+    try {
+      if (!beamHere()) throw new Error('this wallet has no running Beam part to receive');
+      const from = feFrom.value();
+      if (!isEthAddress(from)) throw new Error('choose the Ethereum account');
+      const p = await host('fromEthPrepare', { from, wallet: W().id, amount: $('feAmt').value, fee: $('feFee').value });
+      const fn = units(p.feeNow, 18), fm = units(p.feeMax, 18);
+      if (!p.enoughGas) throw new Error(`not enough ETH for gas on ${short(from)}: up to ${num(fm, 6)} ETH needed, ${num(units(p.ethBalance, 18), 6)} there`);
+      const acc = allAccounts().find((a) => a.address.toLowerCase() === from.toLowerCase());
+      const ok = await confirmBox('Bridge WBEAM → BEAM', [
+        ['BEAM to receive', exact(p.value, 8)], ['Relayer fee', `${exact(p.fee, 8)} WBEAM`],
+        ['From', `${acc ? `${acc.wallet.name} · ${acc.name} ` : ''}${p.from}`], ['To', `${p.beamWallet}: Beam bridge key ${p.key.slice(0, 10)}…`],
+        ['Ethereum transactions', p.approve ? '2: approve WBEAM to the bridge, then send' : '1: send'],
+        ['Gas', `≈ ${num(fn, 6)} ETH ${rates ? usd(fn * rates.eth) : ''} (at most ${num(fm, 6)})`]],
+        'The approval is for exactly this amount. Once the relayer has brought it to Beam (usually under an hour), claim it under "Arrived on Beam".');
+      if (!ok) return;
+      note('b-fromEth', 'ok', p.approve ? 'Approving WBEAM… then sending (the popup may be closed: it goes on).' : 'Sending…');
+      const rec = await host('fromEthSend', p.id);
+      note('b-fromEth', 'ok', `Confirmed on Ethereum: <a href="https://etherscan.io/tx/${esc(rec.hash)}" target="_blank" rel="noopener">${esc(short(rec.hash))}</a>. The relayer brings it to Beam; then claim it below.`, true);
+      $('feAmt').value = '';
+      feBal(); bridgeLists();
+    } catch (e) { note('b-fromEth', 'bad', msg(e)); }
+    finally { $('doFromEth').disabled = false; }
+  };
 
-  // ---------- WBEAM -> BEAM ----------
-  async function beamKey() {
-    try {
-      const k = await host('beamKey');
-      $('bKey').textContent = k;
-      $('ethPage').href = `${ETH_PAGE}#key=${encodeURIComponent(k)}`;
-    } catch (e) { $('bKey').textContent = e.message; }
-  }
-  $('copyKey').onclick = () => navigator.clipboard.writeText($('bKey').textContent);
+  // the lists: what arrived to claim, and both directions' transfers
+  async function bridgeLists() {
+    note('inErr', 'bad', ''); note('bErr', 'bad', '');
+    if (beamHere()) {
+      host('incoming', W().id).then((list) => {
+        $('inList').innerHTML = list.map((m) => `<div class="li"><span class="ic in">${SVG_IN}</span><span class="what">Message #${esc(m.MsgId)}<span class="sub">from Ethereum</span></span>
+          <span class="amt pos">${amt(Number(m.amount))} BEAM</span><button class="btn solid small" data-msg="${esc(m.MsgId)}" data-amount="${esc(m.amount)}">Claim</button></div>`).join('')
+          || '<div class="empty">nothing waiting</div>';
+      }).catch((e) => note('inErr', 'bad', msg(e)));
+    } else $('inList').innerHTML = '<div class="empty">this wallet has no running Beam part</div>';
 
-  async function incoming() {
-    $('inErr').textContent = '';
-    try {
-      const list = await host('incoming');
-      $('inMsgs').innerHTML = list.map((m) => `<tr><td>${esc(m.MsgId)}</td><td class="r">${amt(m.amount)}</td>
-        <td class="r"><button class="small" data-msg="${esc(m.MsgId)}">Receive</button></td></tr>`).join('')
-        || '<tr><td colspan="3" class="dim">nothing yet</td></tr>';
-    } catch (e) { fail('inErr')(e); }
+    const extra = teTo.value() === '__other' ? $('teOther').value.trim() : '';
+    const [out, ins] = await Promise.all([
+      Object.keys(st.engines || {}).length ? host('outgoing', extra).catch((e) => { note('bErr', 'bad', msg(e)); return { msgs: [] }; }) : { msgs: [] },
+      host('bridgeIn').catch(() => []),
+    ]);
+    const OUT = { done: ['ok', 'arrived'], waiting: ['pending', 'waiting for the relayer'], failed: ['bad', 'failed on Ethereum'], unknown: ['warn', 'see the bridge monitor'] };
+    const IN = { approving: ['pending', 'approving'], sending: ['pending', 'sending'], sent: ['pending', 'mining'], unconfirmed: ['warn', 'not mined yet'], confirmed: ['ok', 'sent to Beam'], failed: ['bad', 'failed'] };
+    const rows = [
+      ...out.msgs.map((m) => ({ t: m.eth ? Date.parse(m.eth.time) : Infinity, html: `<div class="li"><span class="ic out">${SVG_BRIDGE}</span>
+        <span class="what">BEAM → WBEAM #${m.id}<span class="sub">to ${esc(short(m.receiver))} · fee ${amt(m.fee, 2)}${m.eth ? ` · <a href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(new Date(m.eth.time).toLocaleString())}</a>` : ''}</span></span>
+        <span class="amt">${amt(m.amount)}</span><span class="badge ${OUT[m.state][0]}">${OUT[m.state][1]}</span></div>` })),
+      ...ins.map((r) => ({ t: r.time, html: `<div class="li"><span class="ic in">${SVG_BRIDGE}</span>
+        <span class="what">WBEAM → BEAM<span class="sub">from ${esc(short(r.from))} · ${esc(ago(r.time))}${r.hash ? ` · <a href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener">tx</a>` : ''}${r.error ? ` · ${esc(r.error)}` : ''}</span></span>
+        <span class="amt">${num(units(r.value, 8), 4)}</span><span class="badge ${(IN[r.state] || IN.sent)[0]}">${(IN[r.state] || IN.sent)[1]}</span></div>` })),
+    ].sort((a, b) => b.t - a.t);
+    $('bList').innerHTML = rows.map((r) => r.html).join('') || '<div class="empty">none yet</div>';
   }
-  $('inMsgs').onclick = async (e) => {
-    const id = e.target.dataset && e.target.dataset.msg;
-    if (!id) return;
-    $('inErr').textContent = $('inOk').textContent = '';
-    e.target.disabled = true;
+  $('inRefresh').onclick = (e) => { e.preventDefault(); bridgeLists(); };
+  $('inList').onclick = async (e) => {
+    const b = e.target.closest('button[data-msg]');
+    if (!b) return;
+    note('inErr', 'bad', '');
+    b.disabled = true;
     try {
-      const txid = await host('receive', {
-        title: 'Receive from Ethereum', rows: [['Bridge message', `#${id}`]],
+      const txid = await host('receive', W().id, {
+        title: 'Claim from the bridge', rows: [['Bridge message', `#${b.dataset.msg}`], ['BEAM', amt(Number(b.dataset.amount), 8)]],
         note: 'Takes the BEAM the relayer brought over for this wallet.',
-      }, id);
-      $('inOk').textContent = `receiving message #${id}, Beam transaction ${txid}`;
-      txs();
-    } catch (err) { fail('inErr')(err); e.target.disabled = false; }
+      }, b.dataset.msg);
+      b.textContent = 'Claimed'; b.title = `Beam transaction ${txid}`;
+      beamRefresh();
+    } catch (err) { note('inErr', 'bad', msg(err)); b.disabled = false; }
   };
 
-  // ---------- settings ----------
-  $('saveNode').onclick = async () => { node = await host('setNode', $('node').value.trim()); $('node').value = node; status(); };
-  $('doBackup').onclick = async () => {
-    const b64 = await host('exportDb');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'application/octet-stream' }));
-    a.download = `bumblebeam-wallet-${new Date().toISOString().slice(0, 10)}.db`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-  };
-  $('doLock').onclick = async () => { await host('lock'); show('s-unlock'); };
-  $('doDelete').onclick = async () => {
-    const ok = await confirmBox('Delete this wallet', [['Balance', `${amt(avail, 8)} BEAM`]],
-      'The wallet file is removed from this browser. Only the seed phrase or a backup file can bring it back.');
-    if (!ok) return;
-    await host('remove'); show('s-welcome');
+  // ---------- Activity ----------
+  let actNet = 'beam';
+  $('actNet').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); activity(); };
+  const BEAM_STATUS = { 0: ['pending', 'pending'], 1: ['pending', 'in progress'], 2: ['bad', 'cancelled'], 3: ['ok', 'completed'], 4: ['bad', 'failed'], 5: ['pending', 'registering'] };
+  async function activity() {
+    const box = $('actList');
+    if (actNet === 'beam') {
+      if (!beamHere()) { box.innerHTML = '<div class="empty">this wallet has no running Beam part</div>'; return; }
+      try {
+        const list = await host('beam', W().id, 'tx_list', { count: 50 });
+        box.innerHTML = list.map((t) => {
+          const contract = t.tx_type_string === 'contract';
+          const what = contract ? (t.comment || 'contract') : t.income ? 'Received' : 'Sent';
+          const [cls, label] = BEAM_STATUS[t.status] || ['pending', t.status_string || String(t.status)];
+          const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
+          const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? ` · <a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
+          return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
+            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? new Date(t.create_time * 1000).toLocaleString() : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}</span></span>
+            <span class="amt ${t.income ? 'pos' : ''}">${t.value ? `${t.income ? '+' : '−'}${amt(t.value)}` : ''}</span><span class="badge ${cls}">${esc(t.status_string || label)}</span></div>`;
+        }).join('') || '<div class="empty">no transactions yet</div>';
+      } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
+    } else {
+      const a = acct();
+      if (!a) { box.innerHTML = '<div class="empty">this wallet has no Ethereum part</div>'; return; }
+      box.innerHTML = '<div class="empty">loading…</div>';
+      try {
+        const list = await host('ethHistory', a.address);
+        box.innerHTML = list.map((t) => {
+          const v = t.token ? `${num(units(t.token.value, t.token.decimals), 4)} ${t.token.symbol}` : units(t.value, 18) > 0 ? `${num(units(t.value, 18), 5)} ETH` : '';
+          const what = t.method && !t.token ? t.method : t.out ? 'Sent' : 'Received';
+          const other = t.out ? t.to : t.from;
+          return `<div class="li"><span class="ic ${t.out ? 'out' : 'in'}">${t.out ? SVG_OUT : SVG_IN}</span>
+            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? new Date(t.time).toLocaleString() : 'pending')}</a></span></span>
+            <span class="amt ${t.out ? '' : 'pos'}">${v ? `${t.out ? '−' : '+'}${esc(v)}` : ''}</span><span class="badge ${t.pending ? 'pending' : t.ok ? 'ok' : 'bad'}">${t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}</span></div>`;
+        }).join('') || '<div class="empty">no transactions yet</div>';
+      } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
+    }
+  }
+  $('actList').onclick = async (e) => {
+    const c = e.target.closest('[data-cancel]');
+    if (!c) return;
+    e.preventDefault();
+    if (!(await confirmBox('Cancel the transfer', [['Transaction', c.dataset.cancel]], 'Only a transfer the other wallet has not signed yet can be cancelled.'))) return;
+    try { await host('beam', W().id, 'tx_cancel', { txId: c.dataset.cancel }); activity(); } catch (err) { alert(msg(err)); }
   };
 
-  // ---------- boot ----------
+  // ---------- Settings ----------
+  const autoLockDd = BB.dropdown($('autoLock'), (v) => host('setAutoLock', Number(v)));
+  async function settingsOpen() {
+    $('ver').textContent = chrome.runtime.getManifest().version;
+    $('node').value = st.node; $('ethRpc').value = st.ethRpc || '';
+    $('backupNodes').value = (st.nodes || []).filter((n) => n !== st.node).join(', ');
+    autoLockDd.set(String(st.autoLock));
+    $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
+      <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
+        ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
+      <div class="wacts">
+        ${w.id !== st.active ? '<a href="#" class="text-link" data-a="use">use</a>' : ''}
+        <a href="#" class="text-link" data-a="rename">rename</a>
+        ${w.phraseKnown ? '<a href="#" class="text-link" data-a="phrase">seed phrase</a>' : ''}
+        ${w.ethKind === 'phrase' ? '<a href="#" class="text-link" data-a="ethPhrase">Ethereum phrase</a>' : ''}
+        ${w.eth ? '<a href="#" class="text-link" data-a="ethKey">private key</a>' : ''}
+        ${w.beam ? '<a href="#" class="text-link" data-a="backup">Beam backup</a>' : ''}
+        <a href="#" class="text-link danger" data-a="remove">remove</a>
+      </div></div>`).join('');
+    $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
+      || '<div class="empty">no tokens added</div>';
+    host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
+  }
+  $('addWallet').onclick = () => welcome();
+  $('wList').onclick = async (e) => {
+    const a = e.target.closest('[data-a]');
+    if (!a) return;
+    e.preventDefault();
+    const w = st.wallets.find((x) => x.id === a.closest('[data-w]').dataset.w);
+    const act = a.dataset.a;
+    try {
+      if (act === 'use') { await host('switchWallet', w.id); await load(); settingsOpen(); }
+      if (act === 'rename') {
+        const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name }, yes: 'Save' });
+        if (r.ok && r.input) { await host('renameWallet', w.id, r.input); await load(); settingsOpen(); }
+      }
+      if (act === 'phrase' || act === 'ethPhrase') {
+        let phrase = null;
+        const r = await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
+          note: 'Anyone who sees these words owns the wallet. Make sure no one is watching the screen.',
+          check: async ({ pass }) => { phrase = await host('reveal', w.id, pass, act); } });
+        if (r.ok && phrase) await ask({ title: `${w.name}: ${act === 'phrase' ? 'seed phrase' : 'Ethereum seed phrase'}`, html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, yes: 'Done', no: null });
+      }
+      if (act === 'ethKey') {
+        const a2 = w.accounts.find((x) => x.i === (st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];
+        let key = null;
+        const r = await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', note: `${a2.address}. Whoever has the key controls this account; import it only into a wallet you trust.`,
+          check: async ({ pass }) => { key = await host('reveal', w.id, pass, 'ethKey', a2.i); } });
+        if (r.ok && key) await ask({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(key)}</div>`, yes: 'Done', no: null });
+      }
+      if (act === 'backup') {
+        let out = null, pass = '';
+        const r = await ask({ title: `Back up ${w.name}`, password: true, yes: 'Save the file',
+          note: 'Saves the Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Opening it later is instant, unlike a seed restore.',
+          check: async (x) => { out = await host('exportBeam', w.id, x.pass); pass = x.pass; } });
+        if (!r.ok || !out) return;
+        const el = document.createElement('a');
+        el.href = URL.createObjectURL(new Blob([Uint8Array.from(atob(out.b64), (c) => c.charCodeAt(0))], { type: 'application/octet-stream' }));
+        el.download = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
+        el.click();
+        setTimeout(() => URL.revokeObjectURL(el.href), 10000);
+        if (!out.samePassword) {
+          const dbp = await host('reveal', w.id, pass, 'beamPass');
+          await ask({ title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.', yes: 'Done', no: null });
+        }
+      }
+      if (act === 'remove') {
+        const r = await ask({ title: `Remove ${w.name}`, password: true, yes: 'Remove', rows: [['Parts', [w.beam && 'Beam', w.eth && 'Ethereum'].filter(Boolean).join(' + ')]],
+          note: 'Its seeds, keys and Beam database are deleted from this browser. Only the seed phrase, a private key or a backup file can bring it back.',
+          check: async ({ pass }) => { await host('removeWallet', w.id, pass); } });
+        if (r.ok) { await load(); if (st.phase === 'unlocked' && st.wallets.length) settingsOpen(); else route(); }
+      }
+    } catch (err) { alert(msg(err)); }
+  };
+  $('chPass').onclick = async () => {
+    let old = '';
+    const r1 = await ask({ title: 'Change the password', password: true, yes: 'Next', check: async ({ pass }) => { old = pass; await host('verify', pass); } });
+    if (!r1.ok) return;
+    const r2 = await ask({ title: 'New password', input: { label: 'New password (8 characters or more)', secret: true }, password: true, passLabel: 'Repeat it', yes: 'Change',
+      note: 'Beam backup files saved before keep opening with the password they were saved with.',
+      check: async ({ input, pass }) => {
+        if (input !== pass) throw new Error('the two differ');
+        if (input !== input.trim()) throw new Error('a password that starts or ends with a space is easy to lose: leave the spaces out');
+        await host('changePassword', old, input);
+      } });
+    if (r2.ok) await ask({ title: 'Password changed', note: 'The new password opens the wallet from now on.', yes: 'OK', no: null });
+  };
+  $('saveNode').onclick = async () => { note('netErr', 'bad', ''); try { st.node = await host('setNode', $('node').value.trim()); $('node').value = st.node; } catch (e) { note('netErr', 'bad', msg(e)); } };
+  $('saveBackups').onclick = async () => {
+    note('netErr', 'bad', '');
+    try { const l = await host('setBackupNodes', $('backupNodes').value); $('backupNodes').value = l.join(', '); } catch (e) { note('netErr', 'bad', msg(e)); }
+  };
+  $('saveRpc').onclick = async () => {
+    note('netErr', 'bad', '');
+    const url = $('ethRpc').value.trim();
+    try {
+      if (url) {
+        const origin = new URL(url).origin + '/*';
+        if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('the browser did not allow that address');
+      }
+      await host('setEthRpc', url); st.ethRpc = url;
+    } catch (e) { note('netErr', 'bad', msg(e)); }
+  };
+  $('addTok').onclick = async () => {
+    note('tokErr', 'bad', '');
+    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); settingsOpen(); } catch (e) { note('tokErr', 'bad', msg(e)); }
+  };
+  $('tokList').onclick = async (e) => { const t = e.target.closest('[data-tok]'); if (!t) return; e.preventDefault(); await host('removeToken', t.dataset.tok); await load(); settingsOpen(); };
+  $('dropSnap').onclick = async (e) => { e.preventDefault(); await host('dropSnapshot'); settingsOpen(); };
+
+  // the auto-lock counts only what the user does here: a click or a key tells the host, at most every 15 s
+  let touched = 0;
+  const touch = () => { if (st && st.phase === 'unlocked' && Date.now() - touched > 15000) { touched = Date.now(); host('touch').catch(() => {}); } };
+  document.addEventListener('click', touch, true);
+  document.addEventListener('keydown', touch, true);
+
+  // ---------- boot and routing ----------
+  async function route() {
+    st = await host('state');
+    if (st.progress) {                              // a create or restore is still running in the host
+      show('s-progress'); progressScreen = 's-progress'; handlers.progress(st.progress);
+      return;
+    }
+    if (st.phrase && st.phase !== 'locked' && st.phase !== 'legacy') { pwFields(); return showPhrase(await host('phrase')); }
+    if (st.phase === 'unlocked') return enter();
+    if (st.phase === 'new') return welcome();
+    $('unlockLead').textContent = st.phase === 'legacy'
+      ? 'Version 0.2: one password now opens all your wallets. Type the password of your Beam wallet: it becomes this password.'
+      : st.beamRunning ? 'Locked. Beam finishes the transfers still being made, then goes offline until you unlock.' : 'Beam is offline while the wallet is locked: unlock to receive to regular addresses.';
+    show('s-unlock');
+    $('uPass').focus();
+  }
+
   const timers = [
-    setInterval(() => { if (!$('tabs').hidden) status(); }, 20000),
+    setInterval(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }, 20000),
     setInterval(() => {
-      if (!$('t-toeth').hidden) { fee(); outgoing(); }
-      if (!$('t-frometh').hidden) incoming();
+      if (!st || st.phase !== 'unlocked') return;
+      priceTick();
+      if (!$('t-home').hidden) ethRefresh();
+      if (!$('t-bridge').hidden) { if (dir === 'toEth') fee(); bridgeLists(); }
     }, 60000),
   ];
-  window.addEventListener('unload', () => timers.forEach(clearInterval));
+  window.addEventListener('pagehide', () => timers.forEach(clearInterval));
 
   (async () => {
     try {
-      const r = await chrome.runtime.sendMessage({ op: 'ensureHost' });
-      if (r && r.error) throw new Error(r.error);
-      const st = await host('state');
-      node = st.node; $('node').value = node;
-      $('eRcv').value = (await chrome.storage.local.get('ethAddress')).ethAddress || '';
-      if (st.running) return started();
-      if (st.progress) {                         // a create or restore is still running in the host
-        show('s-restore'); $('rProg').hidden = false; progressBar = ['rBar', 'rText'];
-        handlers.progress(st.progress);
-        return;
+      // right after the browser starts the service worker may not listen yet: a few tries
+      let r;
+      for (let i = 0; ; i++) {
+        try { r = await chrome.runtime.sendMessage({ op: 'ensureHost' }); break; }
+        catch (e) { if (i >= 5) throw e; await new Promise((res) => setTimeout(res, 300 * (i + 1))); }
       }
-      if (st.phrase) return showPhrase(await host('phrase'));
-      show(st.hasWallet ? 's-unlock' : 's-welcome');
-      if (st.hasWallet) $('uPass').focus();
-    } catch (e) { fail('bootErr')(e); }
+      if (r && r.error) throw new Error(r.error);
+      // The host document may exist but still be loading its scripts (the service worker made it at browser
+      // start): a port opened then finds no listener and closes at once. Ask until it answers (up to ~10 s).
+      for (let i = 0; ; i++) {
+        try { await host('state'); break; }
+        catch (e) { if (i >= 40 || !/went away/.test(e.message)) throw e; await new Promise((res) => setTimeout(res, 250)); }
+      }
+      await route();
+    } catch (e) { note('bootErr', 'bad', msg(e)); }
   })();
 })();

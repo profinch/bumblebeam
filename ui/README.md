@@ -85,7 +85,8 @@ Each acts only through its own class, so pages that do not use it do not change.
 | thermo (`rig/thermo/web`) | yes: tokens, base, components, `bb.js` (ecosystem bar), `tips.js`; its install script copies them; the group charts stay thermo's own (threshold lines, series toggles, a tooltip with every series) in the `--chart-*` colours |
 | NiceHash dashboard (private repo) | yes: links `/ui/` from the pool site, then the pool's `/styles.css`, and `/ui/components/tips.js` |
 | 3BMiner (`bitcoin/3bminer/web`) | tokens: yes, `data-chain="bitcoin"`; its `web/build.py` inlines only the tokens the page uses (fails on a missing one). Components: not yet (`components.css` is too big for the firmware page as is) |
-| desktop miner, wallet | not yet |
+| wallet (`beam/wallet/extension`) | yes (0.2): tokens, base, components, `bb.js`, `dd.js`, `tips.js`, copied into the extension by `beam/wallet/sync-ui.sh`; its own `wallet.css` (popup frame, asset rows, lists, the bridge's route and fee choices, the dialog) |
+| desktop miner | not yet |
 
 The pool's look is the reference: `base.css` and `components.css` are its former shared rules with the
 accent as tokens, checked against before/after screenshots of every pool and explorer page (desktop and

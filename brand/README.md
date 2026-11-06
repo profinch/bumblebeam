@@ -17,3 +17,5 @@ The logo is `beam/pool/web/favicon.svg` (animated); these are its static and soc
 | `banner-youtube-2560x1440.png` | YouTube channel art: logo+text inside the 1546×423 safe area, the honeycomb fills the TV frame | YouTube |
 
 `src/` makes the animated files (headless Chrome + ffmpeg) and the other banner sizes (`src/banner_size.py`), see `src/README.md`.
+
+App icons (16/32/48/128 px, transparent): `src/icons.py <out-dir>` draws the bee alone filling the square, with an accent edge for dark toolbars (the wallet extension); `--hex` draws the whole logo, hexagon edge to edge.

@@ -16,11 +16,13 @@ async function ensureHost() {
   await creating;
 }
 
-// ensureHost from the popup; get/set from the host, whose offscreen document has chrome.runtime only
+// ensureHost from the popup; get/set/badge from the host, whose offscreen document has chrome.runtime only
 const OPS = {
   ensureHost: () => ensureHost(),
   get: (m) => chrome.storage.local.get(m.key).then((v) => v[m.key]),
   set: (m) => chrome.storage.local.set({ [m.key]: m.value }),
+  // the toolbar icon's badge: bridge messages waiting to be claimed
+  badge: (m) => Promise.all([chrome.action.setBadgeText({ text: m.text || '' }), chrome.action.setBadgeBackgroundColor({ color: '#00f6d2' })]),
 };
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !Object.hasOwn(OPS, m?.op)) return;

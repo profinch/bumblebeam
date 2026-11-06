@@ -1,21 +1,40 @@
-// The Beam wallet: a thin promise layer over Beam's wasm-client (vendor/, built by BeamMW's CI from
-// master after HF6). Calls go through the regular Beam wallet API (sendRequest); the same calls the
-// official web wallet makes (BeamMW/web-wallet src/app/core/WasmWallet.ts).
+// The Beam wallet engine: a thin promise layer over Beam's wasm-client (vendor/, built by BeamMW's CI from
+// master after HF6), for ONE wallet. It runs inside engine.html, a frame of the host of its own (engines.js
+// in the host makes one per Beam wallet), never in the host itself:
+//  - Beam's client cannot be restarted in a page: a second WasmWalletClient throws while the first lives,
+//    and freeing the first (embind delete) blocks on its threads, which a browser's main thread may not
+//    do: the whole engine aborts (2026-11-05, after a transfer between two wallets). So an engine is
+//    started once, and "restart" means the host drops the frame and makes a new one.
+//  - Every engine has its own IndexedDB store (/bw_<wallet id>). Beam persists by syncing a whole mounted
+//    folder (FS.syncfs), which overwrites files whose time differs and deletes files it does not have:
+//    two engines on one shared folder would overwrite each other's databases. The shared /beam_wallet of
+//    version 0.1 and early 0.2 is only read (by the migration), then unmounted.
 'use strict';
 
 const Beam = (() => {
-  const DB = '/beam_wallet/wallet.db';        // IDBFS mount, persisted by wallet_db on every commit
-  const RECOVERY = '/recovery.bin';            // MEMFS, only while a seed restore runs
-  let M = null, WC = null, client = null;
+  const SHARED = '/beam_wallet';              // the old shared folder: read only, for migrating out of it
+  const RECOVERY = '/recovery.bin';           // MEMFS, only while a snapshot imports
+  let M = null, WC = null, client = null, cur = null;
   let nextId = 1;
   const pending = new Map();
   const listeners = new Set();
 
-  async function load() {
+  const syncfs = (populate) => new Promise((resolve, reject) => M.FS.syncfs(!!populate, (err) => (err ? reject(err) : resolve())));
+  const existsPath = (p) => { try { M.FS.stat(p); return true; } catch { return false; } };
+
+  // store: this engine's own folder ('/bw_<id>'), mounted on its own IndexedDB database. keepShared: the
+  // migration also reads the old shared folder; any other engine unmounts it, so its syncs never touch it.
+  async function load(store, keepShared = false) {
     if (M) return;
     M = await BeamModule();
     WC = M.WasmWalletClient;
-    await new Promise((resolve, reject) => WC.MountFS((err) => (err ? reject(err) : resolve())));
+    await new Promise((resolve, reject) => WC.MountFS((err) => (err ? reject(err) : resolve())));   // sets Beam's "mounted" flag
+    if (store) {
+      if (!existsPath(store)) M.FS.mkdir(store);
+      M.FS.mount(M.FS.filesystems.IDBFS, {}, store);
+      if (!keepShared) M.FS.unmount(SHARED);
+      await syncfs(true);
+    }
   }
 
   function onMessage(json) {
@@ -33,17 +52,22 @@ const Beam = (() => {
     for (const fn of listeners) fn(msg);
   }
 
-  function call(method, params) {
-    if (!client) return Promise.reject(new Error('wallet is not running'));
+  // every call has an answer: the wallet's, or after `ms` a timeout (nothing waits forever on a lost reply)
+  function settleLater(map, id, ms, method) {
+    setTimeout(() => { const p = map.get(id); if (p) { map.delete(id); p.reject(new Error(`Beam ${method}: no answer in ${ms / 1000} s`)); } }, ms);
+  }
+  function call(method, params, ms = 60000) {
+    if (!client) return Promise.reject(new Error('the Beam wallet is not running'));
     const id = nextId++;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
+      settleLater(pending, id, ms, method);
       client.sendRequest(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
     });
   }
 
   // words are space-separated in the UI and for GeneratePhrase/IsValidPhrase, ';' for CreateWallet
-  const words = (phrase) => phrase.trim().toLowerCase().split(/[\s;,]+/).filter(Boolean);
+  const words = (phrase) => String(phrase).trim().toLowerCase().split(/[\s;,]+/).filter(Boolean);
 
   // Contracts run only through an app API (the wallet API answers invoke_contract with "Feature is
   // not supported"), as for the official DApps. A transaction an app asks for comes back to the
@@ -66,6 +90,7 @@ const Beam = (() => {
   function appApi() {
     if (app) return app;
     app = new Promise((resolve, reject) => {
+      // the host's origin names the app (the frame has the same one): one app id for every engine
       const appid = WC.GenerateAppID(APP_NAME, location.origin);
       client.createAppAPI('current', '', appid, APP_NAME, (err, api) => {
         if (err) { app = null; return reject(new Error(String(err))); }
@@ -76,19 +101,23 @@ const Beam = (() => {
     return app;
   }
 
-  async function appCall(method, params) {
-    if (!client) throw new Error('wallet is not running');
+  async function appCall(method, params, ms = 60000) {
+    if (!client) throw new Error('the Beam wallet is not running');
     const api = await appApi();
+    if (!client) throw new Error('the Beam wallet stopped');
     const id = appNext++;
     return new Promise((resolve, reject) => {
       appPending.set(id, { resolve, reject });
+      settleLater(appPending, id, ms, method);
       api.callWalletApi(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
     });
   }
 
   // beforeStart: what has to be set on the client before startWallet (the snapshot import)
-  function start(pass, node, beforeStart) {
-    client = new WC(DB, pass, node);
+  function start(db, pass, node, beforeStart) {
+    if (client || cur) throw new Error('this engine has run a wallet already: a new engine is needed');
+    client = new WC(db, pass, node);
+    cur = { db, node };
     client.subscribe(onMessage);
     client.setApproveContractInfoHandler(async (req, info, amounts, cb) => {
       let ok = false;
@@ -102,35 +131,98 @@ const Beam = (() => {
     app = null;
   }
 
-  function stop() {
+  // The wallet stops and writes its database; the client object is left as it is (never deleted: see the
+  // top). The engine is done after this: the host drops its frame.
+  function stop(ms = 20000) {
     if (!client) return Promise.resolve();
-    app = null;
-    return new Promise((resolve) => client.stopWallet(() => { client = null; resolve(); }));
+    for (const p of [...pending.values(), ...appPending.values()]) p.reject(new Error('the Beam wallet stopped'));
+    pending.clear(); appPending.clear();
+    const c = client;
+    client = null; app = null;
+    return new Promise((resolve) => {
+      const t = setTimeout(resolve, ms);                       // a stop that never reports is not waited for forever
+      try { c.stopWallet(() => { clearTimeout(t); resolve(); }); } catch { clearTimeout(t); resolve(); }
+    }).then(() => syncfs(false).catch(() => {}));
   }
 
-  const checkPassword = (pass) => new Promise((resolve) => WC.CheckPassword(DB, pass, (ok) => resolve(!!ok)));
+  const checkPassword = (db, pass) => new Promise((resolve) => WC.CheckPassword(db, pass, (ok) => resolve(!!ok)));
 
-  // Seed restore through the published recovery snapshot (what the mobile "Automatic restore" and the
-  // web wallet use), so no node with the wallet's owner key is needed. ~320 MB, read straight into
-  // one buffer of the announced length.
-  async function downloadRecovery(url, onProgress) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`recovery snapshot: HTTP ${res.status}`);
+  // Beam's recovery snapshot (what the mobile "Automatic restore" and the web wallet use): ~320 MB,
+  // refreshed daily. It is kept in the extension's private file system (OPFS) for a few days, so a
+  // second wallet only imports it; an older one is fine too (the wallet syncs the blocks after it).
+  const SNAP = 'recovery.bin', SNAP_PART = 'recovery.part', SNAP_DAYS = 3;
+  async function snapshotDir() { try { return await navigator.storage.getDirectory(); } catch { return null; } }
+
+  async function snapshotInfo() {
+    const dir = await snapshotDir();
+    if (!dir) return null;
+    try { const f = await (await dir.getFileHandle(SNAP)).getFile(); return { size: f.size, at: f.lastModified }; } catch { return null; }
+  }
+
+  async function dropSnapshot() {
+    const dir = await snapshotDir();
+    if (!dir) return;
+    for (const n of [SNAP, SNAP_PART]) await dir.removeEntry(n).catch(() => {});
+  }
+
+  const readSnap = async (dir) => new Uint8Array(await (await (await dir.getFileHandle(SNAP)).getFile()).arrayBuffer());
+
+  async function snapshot(url, onProgress) {
+    const dir = await snapshotDir();
+    const have = await snapshotInfo();
+    if (have && Date.now() - have.at < SNAP_DAYS * 86400e3) {
+      onProgress('cached', have.size, have.size);
+      return readSnap(dir);
+    }
+    // a download that stops sending is given up after a minute without data (not left hanging forever)
+    const ctl = new AbortController();
+    let idle = setTimeout(() => ctl.abort(), 60000);
+    const alive = () => { clearTimeout(idle); idle = setTimeout(() => ctl.abort(), 60000); };
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal }).catch((e) => { throw new Error(`recovery snapshot: ${ctl.signal.aborted ? 'no data for a minute' : e.message}`); });
+    if (!res.ok) { clearTimeout(idle); throw new Error(`recovery snapshot: HTTP ${res.status}`); }
     const total = +res.headers.get('Content-Length') || 0;
-    const reader = res.body.getReader();
-    let buf = new Uint8Array(total || 64 << 20), got = 0;
+    const r0 = res.body.getReader();
+    const reader = { read: async () => { try { const x = await r0.read(); alive(); if (x.done) clearTimeout(idle); return x; } catch (e) { clearTimeout(idle); throw new Error(`recovery snapshot: ${ctl.signal.aborted ? 'no data for a minute' : e.message}`); } } };
+    let got = 0;
+    if (dir) {
+      // straight to disk, then read back once: no 320 MB buffer growing in memory while it downloads
+      const part = await dir.getFileHandle(SNAP_PART, { create: true });
+      const w = await part.createWritable();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await w.write(value);
+          got += value.length;
+          onProgress('download', got, total);
+        }
+        await w.close();
+      } catch (e) { await w.abort().catch(() => {}); throw e; }
+      if (total && got !== total) throw new Error(`recovery snapshot: ${got} of ${total} bytes`);
+      await dir.removeEntry(SNAP).catch(() => {});
+      await part.move(SNAP);
+      return readSnap(dir);
+    }
+    let buf = new Uint8Array(total || 64 << 20);
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (got + value.length > buf.length) { const b = new Uint8Array(Math.max(buf.length * 2, got + value.length)); b.set(buf); buf = b; }
       buf.set(value, got);
       got += value.length;
-      onProgress(got, total);
+      onProgress('download', got, total);
     }
     return buf.subarray(0, got);
   }
 
+  // wasm throws C++ exceptions as bare numbers: a step names where it happened
+  async function step(name, fn) {
+    try { return await fn(); }
+    catch (e) { throw new Error(`Beam ${name}: ${e && e.message ? e.message : typeof e === 'number' ? `engine exception ${e}` : String(e)}`); }
+  }
+
   return {
+    SHARED,
     load,
     call,
     appCall,
@@ -138,56 +230,80 @@ const Beam = (() => {
     onConsent: (fn) => { consent = fn; },
     on: (fn) => listeners.add(fn),
     running: () => !!client && client.isRunning(),
-    hasWallet: () => WC.IsInitialized(DB),
+    current: () => (cur ? cur.db : null),
+    exists: (db) => WC.IsInitialized(db),
     generatePhrase: () => WC.GeneratePhrase(),
     isValidPhrase: (phrase) => WC.IsValidPhrase(words(phrase).join(' ')),
     isAllowedWord: (w) => WC.IsAllowedWord(w),
     checkPassword,
+    snapshotInfo,
+    dropSnapshot,
 
     // A new wallet and a seed restore are the same: create the database from the phrase, then let
     // the wallet import the snapshot as it starts. The snapshot also carries the headers, so a new
-    // wallet does not sync ~4 M of them from genesis (an hour in a browser).
-    async create(phrase, pass, node, url, onProgress) {
-      const data = await downloadRecovery(url, (d, t) => onProgress('download', d, t));
-      if (WC.IsInitialized(DB)) WC.DeleteWallet(DB);
-      WC.CreateWallet(words(phrase).join(';'), DB, pass);
-      M.FS.writeFile(RECOVERY, data);
-      await new Promise((resolve, reject) => {
-        start(pass, node, () => client.importRecoveryFromFile(RECOVERY, (err, done, total) => {
-          if (err) return reject(err);
-          onProgress('import', done, total);
-          if (total && done === total) resolve();
-        }));
-      });
-      try { M.FS.unlink(RECOVERY); } catch {}
+    // wallet does not sync ~4 M of them from genesis (an hour in a browser). The wallet keeps running.
+    async create(db, phrase, pass, node, url, onProgress) {
+      if (WC.IsInitialized(db)) throw new Error('a wallet already exists at ' + db);
+      let data = await step('snapshot', () => snapshot(url, onProgress));
+      await step('create', () => WC.CreateWallet(words(phrase).join(';'), db, pass));
+      await step('write snapshot', () => M.FS.writeFile(RECOVERY, data));
+      data = null;                            // MEMFS has its own copy: ~310 MB less held while it imports
+      try {
+        // an import that reports nothing for 5 minutes is given up (and its snapshot dropped: it may be bad)
+        await new Promise((resolve, reject) => {
+          let quiet = setTimeout(() => reject(new Error('the snapshot import stopped (no progress for 5 min)')), 300000);
+          let last = '0/0';
+          start(db, pass, node, () => client.importRecoveryFromFile(RECOVERY, (err, done, total) => {
+            clearTimeout(quiet);
+            if (err) return reject(new Error(`the snapshot import failed at ${last}: ${typeof err === 'number' ? `engine exception ${err}` : String(err)}`));
+            last = `${done}/${total}`;
+            onProgress('import', done, total);
+            if (total && done >= total) return resolve();
+            quiet = setTimeout(() => reject(new Error('the snapshot import stopped (no progress for 5 min)')), 300000);
+          }));
+        });
+      } catch (e) {
+        await stop();
+        try { M.FS.unlink(db); } catch {}
+        await syncfs(false).catch(() => {});
+        await dropSnapshot().catch(() => {});
+        throw e;
+      } finally {
+        try { M.FS.unlink(RECOVERY); } catch {}
+      }
     },
 
-    async open(pass, node) {
-      if (!(await checkPassword(pass))) throw new Error('wrong password');
-      start(pass, node);
+    async open(db, pass, node) {
+      if (!WC.IsInitialized(db)) throw new Error('this Beam wallet has no database in this browser');
+      if (!(await checkPassword(db, pass))) throw new Error('wrong password');
+      start(db, pass, node);
     },
 
     stop,
 
-    // Backup: the wallet.db file itself (encrypted with the wallet password by Beam), read while the
-    // wallet is stopped so the file is consistent.
-    async exportDb(pass, node) {
-      await stop();
-      const bytes = M.FS.readFile(DB);
-      start(pass, node);
-      return bytes;
+    // the database file as it is on disk (a backup: read once the wallet has stopped)
+    readDb: (db) => M.FS.readFile(db),
+
+    // a backup file becomes this engine's wallet, if pass opens it
+    async importDb(db, bytes, pass) {
+      if (WC.IsInitialized(db)) throw new Error('a wallet already exists at ' + db);
+      M.FS.writeFile(db, bytes);
+      if (!(await checkPassword(db, pass))) {
+        try { M.FS.unlink(db); } catch {}
+        throw new Error('this password does not open that file (or it is not a Beam wallet.db)');
+      }
+      await syncfs(false);
     },
 
-    async importDb(bytes) {
-      await stop();
-      if (WC.IsInitialized(DB)) WC.DeleteWallet(DB);
-      M.FS.writeFile(DB, bytes);
-      await new Promise((resolve, reject) => M.FS.syncfs(false, (err) => (err ? reject(err) : resolve())));
-    },
-
-    async remove() {
-      await stop();
-      if (WC.IsInitialized(DB)) WC.DeleteWallet(DB);
+    // migration: a database of the old shared folder copied into this engine's own store, checked with its
+    // password; the old file stays where it was (a copy to fall back on), nothing is written there
+    async copyFromShared(src, db, pass) {
+      if (!existsPath(src)) throw new Error('no such file in the old folder: ' + src);
+      if (WC.IsInitialized(db)) return 'present';
+      M.FS.writeFile(db, M.FS.readFile(src));
+      if (!(await checkPassword(db, pass))) { try { M.FS.unlink(db); } catch {} throw new Error('the copy does not open with its password'); }
+      await syncfs(false);
+      return 'copied';
     },
   };
 })();
