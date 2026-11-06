@@ -1118,6 +1118,7 @@
         ${w.ethKind === 'phrase' ? '<a href="#" class="text-link" data-a="ethPhrase">Ethereum phrase</a>' : ''}
         ${w.eth ? '<a href="#" class="text-link" data-a="ethKey">private key</a>' : ''}
         ${w.beam ? '<a href="#" class="text-link" data-a="backup">Beam backup</a>' : ''}
+        ${w.beam && !(st.engines && st.engines[w.id]) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
         <a href="#" class="text-link danger" data-a="remove">remove</a>
       </div></div>`).join('');
     $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
@@ -1133,6 +1134,18 @@
     const act = a.dataset.a;
     try {
       if (act === 'use') { await host('switchWallet', w.id); await load(); settingsOpen(); }
+      if (act === 'restoreBeam') {
+        // the Beam part rebuilt from the seed phrase: the stored one, or typed for a wallet that has none
+        const r = await ask({ title: `Restore Beam: ${w.name}`, password: true, yes: 'Restore',
+          input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '' },
+          note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back; the history and address names do not. Only when its Beam database is gone.` });
+        if (!r.ok) return;
+        show('s-progress'); progressScreen = 's-progress'; clearNotes('s-progress');
+        try { await host('restoreBeam', w.id, r.pass, r.input || ''); }
+        catch (err) { note('s-progress', 'bad', msg(err)); progressScreen = null; return; }
+        progressScreen = null; await load(); tab('home');
+        return;
+      }
       if (act === 'rename') {
         const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name }, yes: 'Save' });
         if (r.ok && r.input) { await host('renameWallet', w.id, r.input); await load(); settingsOpen(); }

@@ -520,6 +520,37 @@
       return id;
     }),
 
+    // The Beam part of a wallet rebuilt from its seed phrase (the stored one, or one typed for a wallet that
+    // came without it), into the wallet's own store, through Beam's recovery snapshot: for a wallet whose
+    // database is gone (2026-11-06: Chrome recreated the extension's IndexedDB empty). The coins come back
+    // from the chain; the history and the addresses' names do not. Refused while its database is there.
+    restoreBeam: (id, pass, typed) => serial(async () => {
+      await verify(pass);
+      const w = wallet(id);
+      const p = w.phrase || Eth.normPhrase(String(typed || ''));
+      if (!p) throw new Error('type the seed phrase of this wallet');
+      if (!(await (await util()).rpc('isValidPhrase', [p]))) throw new Error('this is not a Beam seed phrase');
+      const db = Engines.dbOf(id), dbPass = (w.beam && w.beam.pass) || Vault.randomHex(24);
+      await stopEngine(id).catch(() => {});
+      const made = await Engines.fresh(id);
+      wire(made, id);
+      try {
+        if (await made.rpc('exists', [db])) throw new Error('this wallet\'s Beam database is here: nothing to restore');
+        progress = { step: 'download', done: 0, total: 0 };
+        try { await made.rpc('create', [db, p, dbPass, node, RECOVERY_URL], 40 * 60 * 1000); }
+        finally { progress = null; }
+        await mutate((d) => { const x = wallet(id, d); x.beam = { db, pass: dbPass }; if (!x.phrase) x.phrase = p; });
+      } catch (e) {
+        await made.close().catch(() => {});
+        broadcast({ type: 'event', method: 'bb_failed', result: e.message });
+        throw e;
+      }
+      lastActive = Date.now();
+      await register(id, made, { db, pass: dbPass }, node, 0);
+      broadcast({ type: 'event', method: 'bb_changed' });
+      return true;
+    }),
+
     // every Beam wallet runs already: switching only changes what the popup shows
     switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' }); },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
