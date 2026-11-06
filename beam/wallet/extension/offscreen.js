@@ -106,9 +106,15 @@
 
   // one start per wallet at a time: startAll's queue and a switch to a wallet still in it share it
   const starting = new Map();
+  // why a wallet's Beam part did not start (the last failure; cleared when it starts), for Settings
+  const startErr = new Map();
   function startEngine(id, cfg, nodeIx = 0) {
     if (engines.has(id)) return Promise.resolve(engines.get(id).e);
-    if (!starting.has(id)) starting.set(id, startEngine1(id, cfg, nodeIx).finally(() => starting.delete(id)));
+    if (!starting.has(id)) {
+      starting.set(id, startEngine1(id, cfg, nodeIx)
+        .then((e) => { startErr.delete(id); return e; }, (err) => { startErr.set(id, String(err && err.message || err)); throw err; })
+        .finally(() => starting.delete(id)));
+    }
     return starting.get(id);
   }
   async function startEngine1(id, cfg, nodeIx) {
@@ -417,6 +423,8 @@
         active: settings.active, activeEth: settings.activeEth, tokens: settings.tokens, ethRpc: settings.ethRpc,
         // each Beam wallet's engine: running, connected to its node (the WebSocket open), which node
         engines: Object.fromEntries([...engines].map(([id, x]) => [id, { running: !x.e.dead, connected: x.e.ws.open > 0, node: x.node }])),
+        // the wallets whose Beam part is not running: starting now, or why it failed
+        beamDown: Object.fromEntries((data ? data.wallets : []).filter((w) => w.beam && !engines.has(w.id)).map((w) => [w.id, starting.has(w.id) ? 'starting' : startErr.get(w.id) || 'not started'])),
         nodes: nodeList(),
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,

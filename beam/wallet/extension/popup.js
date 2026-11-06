@@ -483,8 +483,8 @@
       // came would leave this line as it is); after 2 min it is not starting, it failed
       startedAt ||= Date.now();
       const long = Date.now() - startedAt > 120000;
-      beamMeta(long ? '' : '<span class="warn">starting…</span>', long ? 'not running' : '', 'bad', long ? 'The Beam part of this wallet did not start: Settings → Networks, or lock and unlock' : '');
-      netDot('beamDot', long ? 'down' : 'warn', long ? 'Beam: not running' : 'Beam: the wallet is starting');
+      beamMeta(long ? '' : '<span class="warn">starting…</span>', long ? 'not running' : '', 'bad');
+      netDot('beamDot', long ? 'down' : 'warn', '');
       pill('beamPill', 'demo', 'Beam starting…');
       clearTimeout(startPoll);
       startPoll = setTimeout(() => load().then(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }).catch(() => {}), 2000);
@@ -1101,6 +1101,7 @@
     $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
       <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
         ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
+      ${st.beamDown && st.beamDown[w.id] && st.beamDown[w.id] !== 'starting' ? `<p class="hint werr">Beam did not start: ${esc(st.beamDown[w.id])}</p>` : ''}
       <div class="wacts">
         ${w.id !== st.active ? '<a href="#" class="text-link" data-a="use">use</a>' : ''}
         <a href="#" class="text-link" data-a="rename">rename</a>
