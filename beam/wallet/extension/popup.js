@@ -176,7 +176,8 @@
             $('dNote').textContent = res.note || ''; $('dNote').hidden = !res.note;
             $('dPassBox').hidden = true; $('dInputBox').hidden = true; $('dPass').value = pass;
             $('dYes').textContent = res.yes || 'Done'; $('dNo').hidden = true;
-            $('dYes').focus();
+            // no focus moved onto the button (it showed a ring): the hidden field's focus goes to the page
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             return;
           }
         }
@@ -184,7 +185,9 @@
       };
       $('dNo').onclick = () => done(false);
       $('dlg').oncancel = (e) => { e.preventDefault(); done(false); };
-      $('dPass').onkeydown = $('dInput').onkeydown = (e) => { if (e.key === 'Enter') $('dYes').click(); };
+      // Enter presses the button and nothing else: its default action, left to Chrome, took the popup's focus on
+      // Windows (traced 2026-11-06: blur 2 ms after Enter, before any answer), and a popup that loses it closes
+      $('dPass').onkeydown = $('dInput').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); $('dYes').click(); } };
     });
     const p = dlgBusy.then(run);
     dlgBusy = p.catch(() => {});
@@ -1275,6 +1278,8 @@
   const touch = () => { if (st && st.phase === 'unlocked' && Date.now() - touched > 15000) { touched = Date.now(); host('touch').catch(() => {}); } };
   document.addEventListener('click', touch, true);
   document.addEventListener('keydown', touch, true);
+  // Enter in a field has no default here (no forms); left to Chrome, it took the popup's focus on Windows
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') e.preventDefault(); }, true);
 
   // ---------- boot and routing ----------
   async function route() {
