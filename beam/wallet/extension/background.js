@@ -29,7 +29,21 @@ const OPS = {
 
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
 let lockedImages = null;
-// drawn here, on the bee itself (icon-128 scaled down): a light disc in the lower right corner with a dark padlock
+// the badge, pixel by pixel on a 16-px icon (doubled for 32): a light disc 9 px across in the lower right
+// corner, a dark padlock on it. L light, h light at half, S the shackle, D the body, G its lower edge
+const BADGE = [
+  '..hLLLh..',
+  '.hLSSSLh.',
+  'hLLSLSLLh',
+  'LLLSLSLLL',
+  'LLDDDDDLL',
+  'LLDDDDDLL',
+  'hLDDDDDLh',
+  '.hGGGGGh.',
+  '..hLLLh..',
+];
+const INK = { L: [243, 244, 245, 255], h: [243, 244, 245, 140], S: [74, 84, 104, 255], D: [62, 73, 94, 255], G: [110, 119, 134, 255] };
+// on the bee itself (icon-128 scaled down)
 async function lockedIcon() {
   if (lockedImages) return lockedImages;
   const bee = await createImageBitmap(await (await fetch(chrome.runtime.getURL('icons/icon-128.png'))).blob());
@@ -38,12 +52,12 @@ async function lockedIcon() {
     const c = new OffscreenCanvas(n, n), g = c.getContext('2d');
     g.imageSmoothingQuality = 'high';
     g.drawImage(bee, 0, 0, n, n);
-    // in 16-px units: a light disc 9 px across in the corner, on it a dark padlock (body 5 x 3, a thin shackle)
-    const u = n / 16, cx = 11.5 * u, cy = 11.5 * u;
-    g.beginPath(); g.arc(cx, cy, 4.5 * u, 0, Math.PI * 2); g.fillStyle = '#f3f4f5'; g.fill();
-    g.strokeStyle = '#4a5468'; g.lineWidth = 1 * u;
-    g.beginPath(); g.moveTo(cx - 1.5 * u, cy); g.lineTo(cx - 1.5 * u, cy - 1 * u); g.arc(cx, cy - 1 * u, 1.5 * u, Math.PI, 0); g.lineTo(cx + 1.5 * u, cy); g.stroke();
-    g.fillStyle = '#3e495e'; g.fillRect(cx - 2.5 * u, cy - 0.5 * u, 5 * u, 3.5 * u);
+    const u = n / 16;
+    BADGE.forEach((row, y) => [...row].forEach((k, x) => {
+      const ink = INK[k]; if (!ink) return;
+      g.fillStyle = `rgba(${ink[0]}, ${ink[1]}, ${ink[2]}, ${ink[3] / 255})`;
+      g.fillRect((7 + x) * u, (7 + y) * u, u, u);
+    }));
     out[n] = g.getImageData(0, 0, n, n);
   }
   return (lockedImages = out);
