@@ -14,7 +14,7 @@ services:
     container_name: beam-node
     hostname: beam-node
     restart: unless-stopped
-    command: ["/data/bin/beam-node", "--config_file=/data/beam-node.cfg"]   # patched build: 7.5.14548 + BeamMW/beam#2171 (websocket_port segfault, #2170); back to "beam-node" once released
+    command: ["/data/bin/beam-node", "--config_file=/data/beam-node.cfg"]   # patched build 7.5.14551: 7.5.14548 + BeamMW/beam#2171 (websocket_port segfault and plain sessions closed after 30 s, #2170); back to "beam-node" once released
     working_dir: /data
     ports:
       - "10000:10000"                     # p2p, the node is a full peer
