@@ -505,20 +505,26 @@
   $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
 
   function total() {
-    if (!rates) { $('totalUsd').textContent = '—'; return; }
-    let t = 0;
+    if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }
+    // t: now; t0: the same holdings at the prices of 24 h ago (an asset with no 24 h change counts unchanged)
+    let t = 0, t0 = 0;
+    const ch = rates.ch || {};
+    const add = (usdNow, pct) => { t += usdNow; t0 += isFinite(pct) ? usdNow / (1 + pct / 100) : usdNow; };
     // BEAM: available and maturing (still the wallet's own: max privacy coins unlock within 72 h)
-    if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; t += b * rates.beam; }
+    if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; add(b * rates.beam, ch.beam); }
     if (ethData) {
-      t += units(ethData.eth, 18) * rates.eth;
+      add(units(ethData.eth, 18) * rates.eth, ch.eth);
       for (const x of ethData.tokens) {
         const v = units(x.balance, x.decimals);
         if (!(v > 0)) continue;
-        if (x.address.toLowerCase() === st.contracts.wbeam) t += v * rates.beam;
-        else if (x.usd) t += v * x.usd;
+        if (x.address.toLowerCase() === st.contracts.wbeam) add(v * rates.beam, ch.beam);
+        else if (x.usd) add(v * x.usd, NaN);
       }
     }
     $('totalUsd').textContent = usd(t);
+    // the 24 h change of the total, as wallets show it: +$12.34 (+1.02%) 24h; none without prices or a balance
+    const d = t - t0, pc = t0 > 0 ? (d / t0) * 100 : 0;
+    $('totalCh').textContent = rates.ch && t >= 0.01 ? `${d < 0 ? '−' : '+'}${usd(Math.abs(d))} (${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}%) 24h` : '';
   }
   async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
 

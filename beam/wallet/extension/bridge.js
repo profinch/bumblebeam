@@ -72,15 +72,29 @@ const Bridge = (() => {
     if (!ok.length) return null;                     // all disagree: the last good price, or none
     return ok[(ok.length - 1) >> 1];
   }
+  // the 24 h change in %, for the total's line: CoinGecko, else Coinpaprika (they differ much on thin BEAM
+  // markets: 2026-11-06 -2.7% vs +9.0%), else none. Never needed for a payment, so a failure is just no number.
+  async function change24h() {
+    try {
+      const j = await Eth.getJSON('https://api.coingecko.com/api/v3/simple/price?ids=beam,ethereum&vs_currencies=usd&include_24hr_change=true');
+      const b = Number(j.beam.usd_24h_change), e = Number(j.ethereum.usd_24h_change);
+      if (isFinite(b) && isFinite(e)) return { beam: b, eth: e };
+    } catch {}
+    try {
+      const [b, e] = await Promise.all(['beam-beam', 'eth-ethereum'].map(async (t) => Number((await Eth.getJSON(`https://api.coinpaprika.com/v1/tickers/${t}`)).quotes.USD.percent_change_24h)));
+      if (isFinite(b) && isFinite(e)) return { beam: b, eth: e };
+    } catch {}
+    return null;
+  }
   let rateCache = null, lastGood = null;
   async function rates() {
     if (rateCache && Date.now() - rateCache.at < 60000) return rateCache.r;
-    const [b, e] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth)]);
+    const [b, e, ch] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth), change24h()]);
     if (!b || !e) {
       if (lastGood && Date.now() - lastGood.at < 600000) return lastGood.r;
       throw new Error(`no ${!b ? 'BEAM' : 'ETH'} price to trust: the sources failed or disagree (more than 3x)`);
     }
-    const r = { eth: e.v, beam: b.v, src: `BEAM: ${b.name}, ETH: ${e.name}` };
+    const r = { eth: e.v, beam: b.v, src: `BEAM: ${b.name}, ETH: ${e.name}`, ch };
     rateCache = lastGood = { at: Date.now(), r };
     return r;
   }

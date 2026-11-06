@@ -77,7 +77,9 @@ html.popup .seed { columns: 2; }
 
 /* ---- the wallet tab ---- */
 .total { padding: 12px 2px; }
-.total-v { margin-top: 2px; font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
+.total-line { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
+.total-v { font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
+.total-ch { font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
 .panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
 /* Beam's balance: one big line, the amount, the unit, its dollars */
