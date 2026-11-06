@@ -79,7 +79,7 @@ html.popup .seed { columns: 2; }
 .total { padding: 12px 2px; }
 .total-line { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
 .total-v { font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
-.total-ch { font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }
+.total-ch { align-self: flex-start; margin-top: 4px; font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }      /* at the top of the total's line */
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
 .panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
 /* Beam's balance: one big line, the amount, the unit, its dollars */
@@ -181,6 +181,8 @@ html.popup .seed { columns: 2; }
 .wname b { margin-right: 4px; }
 .wacts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
 .werr { margin: 6px 0 0; color: var(--color-red); overflow-wrap: anywhere; }
+.errlog { font-size: var(--fs-s); overflow-wrap: anywhere; }
+.errlog div + div { margin-top: 4px; }
 .text-link.danger { color: var(--color-red); }
 .badge.net-beam { color: var(--color-green); background: rgba(0, 246, 210, 0.08); }
 .badge.net-eth { color: #8c9eff; background: rgba(140, 158, 255, 0.1); }

@@ -30,7 +30,11 @@
   let settings = { autoLock: 60, active: null, activeEth: {}, tokens: [], ethRpc: '', beamAddr: {} };
   let lastActive = Date.now();
   const ports = new Set();
-  const broadcast = (msg) => { for (const p of ports) { try { p.postMessage(msg); } catch {} } };
+  const broadcast = (msg) => {
+    if (msg && msg.method === 'bb_error') { errLog.unshift({ t: Date.now(), m: String(msg.result) }); errLog.length = Math.min(errLog.length, 20); }
+    for (const p of ports) { try { p.postMessage(msg); } catch {} }
+  };
+  const errLog = [];                         // the last 20 errors told to the popup, newest first, for Settings
 
   // chrome.storage through the service worker (an offscreen document has chrome.runtime only)
   const kv = {
@@ -108,6 +112,7 @@
   const starting = new Map();
   // why a wallet's Beam part did not start (the last failure; cleared when it starts), for Settings
   const startErr = new Map();
+  const queued = new Set();                  // wallets startAll has still to start
   function startEngine(id, cfg, nodeIx = 0) {
     if (engines.has(id)) return Promise.resolve(engines.get(id).e);
     if (!starting.has(id)) {
@@ -117,14 +122,22 @@
     }
     return starting.get(id);
   }
+  // the step a starting wallet is at, and since when, for Settings: a start that hangs shows where
+  const stage = new Map();
   async function startEngine1(id, cfg, nodeIx) {
     const list = nodeList(), n = list[nodeIx % list.length];
-    const e = await Engines.fresh(id);
-    wire(e, id);
-    try { await e.rpc('open', [cfg.db, cfg.pass, n]); }
-    catch (err) { e.drop(); throw err; }
-    await register(id, e, cfg, n, nodeIx % list.length);
-    return e;
+    const at = (what) => stage.set(id, { what, since: Date.now() });
+    try {
+      at('loading the Beam engine');
+      const e = await Engines.fresh(id, false, () => at('reading its database'));
+      wire(e, id);
+      at(`opening the wallet (node ${n})`);
+      try { await e.rpc('open', [cfg.db, cfg.pass, n]); }
+      catch (err) { e.drop(); throw err; }
+      at('subscribing to its events');
+      await register(id, e, cfg, n, nodeIx % list.length);
+      return e;
+    } finally { stage.delete(id); }
   }
 
   async function stopEngine(id) {
@@ -154,7 +167,9 @@
     if (!data) return;
     // the open wallet first: the popup shows it, and a slow or stuck start of another must not hold it
     const order = [...data.wallets].sort((a, b) => (b.id === settings.active) - (a.id === settings.active));
+    for (const w of order) if (w.beam && !engines.has(w.id)) queued.add(w.id);
     for (const w of order) {
+      queued.delete(w.id);
       if (!w.beam || engines.has(w.id)) { if (engines.has(w.id)) engines.get(w.id).lingering = false; continue; }
       try { await startEngine(w.id, { db: w.beam.db, pass: w.beam.pass }); }
       catch (err) { broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }); }
@@ -424,7 +439,12 @@
         // each Beam wallet's engine: running, connected to its node (the WebSocket open), which node
         engines: Object.fromEntries([...engines].map(([id, x]) => [id, { running: !x.e.dead, connected: x.e.ws.open > 0, node: x.node }])),
         // the wallets whose Beam part is not running: starting now, or why it failed
-        beamDown: Object.fromEntries((data ? data.wallets : []).filter((w) => w.beam && !engines.has(w.id)).map((w) => [w.id, starting.has(w.id) ? 'starting' : startErr.get(w.id) || 'not started'])),
+        beamDown: Object.fromEntries((data ? data.wallets : []).filter((w) => w.beam && !engines.has(w.id)).map((w) => {
+          const g = stage.get(w.id);
+          return [w.id, starting.has(w.id) ? { starting: g ? `${g.what}, ${Math.round((Date.now() - g.since) / 1000)} s` : 'waiting for its turn' }
+            : queued.has(w.id) && !startErr.has(w.id) ? { starting: 'waiting for its turn' } : { err: startErr.get(w.id) || 'not started' }];
+        })),
+        errors: errLog.slice(0, 10),
         nodes: nodeList(),
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,

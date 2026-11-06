@@ -100,9 +100,10 @@ const Engines = (() => {
   }
 
   // a fresh engine for a wallet: its own store loaded (the old shared folder too only for a migration)
-  async function fresh(walletId, keepShared = false) {
+  async function fresh(walletId, keepShared = false, onBooted = null) {
     const e = new Engine(walletId);
     await e.boot();
+    if (onBooted) onBooted();
     try { await e.rpc('load', [store(walletId), keepShared]); }
     catch (err) { e.drop(); throw err; }
     return e;
