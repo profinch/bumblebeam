@@ -98,7 +98,7 @@
     $('tabs').hidden = !inside;
     $('setBtn').hidden = !inside;
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
-    $('foot').hidden = !inside;
+    $('foot').hidden = !inside && id !== 's-unlock';      // the copyright line: in the wallet and under the lock
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
     $('lockBtn').hidden = !(st && st.phase === 'unlocked');
     window.scrollTo(0, 0); document.querySelector('main').scrollTop = 0;
