@@ -76,10 +76,8 @@ html.popup .seed { columns: 2; }
 .progress .bar > i { width: 0; transition: width .3s; }
 
 /* ---- the wallet tab ---- */
-.total { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 2px 12px; padding: 12px 2px 12px; }
-.total .caps { grid-column: 1 / -1; }
-.total-v { font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
-.total-s { font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.total { padding: 12px 2px; }
+.total-v { margin-top: 2px; font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
 .panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
 /* Beam's balance: one big line, the amount, the unit, its dollars */
@@ -155,7 +153,10 @@ html.popup .seed { columns: 2; }
 .ic.in { color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .ic.out { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.08); }
 #tokList .li { grid-template-columns: minmax(0, 1fr) auto; }
-#actNet { margin: 12px 0 4px; }
+/* the Activity network switch in the header row: small, before the lock */
+.wrow .seg.mini { flex: none; align-self: flex-start; margin-top: 4px; }      /* centred on the 30 px buttons */
+.seg.mini button { padding: 4px 8px; font-size: 10px; }
+#actList { margin-top: 4px; }
 
 /* ---- settings ---- */
 .wcard { padding: 10px 0; border-bottom: 1px solid var(--border-dim); }

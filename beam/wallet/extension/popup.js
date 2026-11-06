@@ -100,6 +100,7 @@
     const adding = id === 's-welcome' && !!(st && st.phase === 'unlocked');
     $('setBtn').hidden = !inside && !adding;
     $('backBtn').hidden = !adding;
+    $('actNet').hidden = id !== 't-activity';
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
@@ -506,21 +507,18 @@
   function total() {
     if (!rates) { $('totalUsd').textContent = '—'; return; }
     let t = 0;
-    const parts = [];
     // BEAM: available and maturing (still the wallet's own: max privacy coins unlock within 72 h)
-    if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; t += b * rates.beam; parts.push(`${num(b, 2)} BEAM`); }
+    if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; t += b * rates.beam; }
     if (ethData) {
-      const e = units(ethData.eth, 18); t += e * rates.eth; parts.push(`${num(e, 4)} ETH`);
+      t += units(ethData.eth, 18) * rates.eth;
       for (const x of ethData.tokens) {
         const v = units(x.balance, x.decimals);
         if (!(v > 0)) continue;
-        if (x.address.toLowerCase() === st.contracts.wbeam) { t += v * rates.beam; parts.push(`${num(v, 2)} WBEAM`); }
-        else if (x.usd) { t += v * x.usd; parts.push(`${num(v, 2)} ${x.symbol}`); }
+        if (x.address.toLowerCase() === st.contracts.wbeam) t += v * rates.beam;
+        else if (x.usd) t += v * x.usd;
       }
     }
     $('totalUsd').textContent = usd(t);
-    $('totalSub').textContent = parts.join(' · ');
-    $('totalSub').title = `BEAM ${usd(rates.beam)} · ETH ${usd(rates.eth)} (${rates.src})`;
   }
   async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
 
