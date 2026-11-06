@@ -72,9 +72,40 @@ const Bridge = (() => {
     if (!ok.length) return null;                     // all disagree: the last good price, or none
     return ok[(ok.length - 1) >> 1];
   }
-  // the 24 h change in %, for the total's line: CoinGecko, else Coinpaprika (they differ much on thin BEAM
-  // markets: 2026-11-06 -2.7% vs +9.0%), else none. Never needed for a payment, so a failure is just no number.
+  // BEAM's change over 24 h by Beam's own oracle, as its price: the oracle's median now (the pool's priceUsd)
+  // against its median 1440 blocks ago, rebuilt from the oracle contract's FeedData calls (each provider's
+  // last value at that height, the median of those, as the contract takes it) on our explorer, else 0xmx's
+  const ORACLE2 = '4f160f01dcc6751e61d793279b803328d5332125fe8492e93ee8f3bfe9abe13b';
+  async function oracleChange() {
+    const net = await Eth.getJSON('https://pool.bumblebeam.org/api/network');
+    const now = Number(net.priceUsd), h = Number(net.height) - 1440;
+    if (!(now > 0) || !(h > 0)) return null;
+    for (const base of ['https://explorer.bumblebeam.org/api', 'https://explorer.0xmx.net/api']) {
+      try {
+        const j = await Eth.getJSON(`${base}/contract?id=${ORACLE2}&hMin=${h - 600}&hMax=${h}&nMaxTxs=200`);
+        const last = new Map();                    // newest first: the first value seen per provider is its last
+        for (const r of (j['Calls history'] || {}).value || []) {
+          if (r[3] !== 'FeedData' || !r[4] || last.has(r[4].iProvider)) continue;
+          const v = Number(r[4].Value);
+          if (v > 0) last.set(r[4].iProvider, v);
+        }
+        const v = [...last.values()].sort((a, b) => a - b);
+        if (!v.length) continue;
+        const then = v.length % 2 ? v[v.length >> 1] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+        return (now / then - 1) * 100;
+      } catch {}
+    }
+    return null;
+  }
+  // the 24 h change in %, for the total's line. BEAM: the oracle (above); else, as ETH, CoinGecko, else
+  // Coinpaprika (they differ much on thin BEAM markets: 2026-11-06 -2.7% vs +9.0%). Never needed for a
+  // payment, so a failure is just no number.
   async function change24h() {
+    const [o, m] = await Promise.all([oracleChange().catch(() => null), marketChange()]);
+    if (!m && o == null) return null;
+    return { beam: o != null ? o : m ? m.beam : NaN, eth: m ? m.eth : NaN };
+  }
+  async function marketChange() {
     try {
       const j = await Eth.getJSON('https://api.coingecko.com/api/v3/simple/price?ids=beam,ethereum&vs_currencies=usd&include_24hr_change=true');
       const b = Number(j.beam.usd_24h_change), e = Number(j.ethereum.usd_24h_change);
