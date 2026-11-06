@@ -278,6 +278,7 @@
     const rec = await Vault.seal(k, d);
     await kv.set('vault', rec);
     vaultRec = rec; data = d; vk = k;
+    lockIcon();
   }
   const saveSettings = () => kv.set('settings', settings);
   const wallet = (id, d = data) => { need(); const w = d.wallets.find((x) => x.id === id); if (!w) throw new Error('no such wallet'); return w; };
@@ -326,8 +327,18 @@
     return { phrase: p, accounts: [{ i: 0, name: 'Account 1', address: Eth.addressOf({ phrase: p, i: 0 }) }] };
   }
 
+  // the toolbar icon: a lock on it while there is a wallet and it is locked (sent only when it changes)
+  let iconLocked = null;
+  function lockIcon() {
+    const locked = !data && !!(vaultRec || legacyDb);
+    if (locked === iconLocked) return;
+    iconLocked = locked;
+    chrome.runtime.sendMessage({ op: 'icon', locked }).catch(() => { iconLocked = null; });
+  }
+
   function lock() {
     data = null; vk = null; pendingPhrase = null;
+    lockIcon();
     for (const p of prepared.values()) clearTimeout(p.t);
     prepared.clear();
     broadcast({ type: 'event', method: 'bb_locked' });
@@ -385,6 +396,7 @@
 
   const api = {
     state() {
+      lockIcon();
       const base = {
         phase: data ? 'unlocked' : vaultRec ? 'locked' : legacyDb ? 'legacy' : 'new',
         progress, phrase: !!pendingPhrase, node, beamRunning: engines.size > 0, autoLock: settings.autoLock,
@@ -415,6 +427,7 @@
       if (vaultRec) {
         const o = await Vault.open(vaultRec, pass);
         data = o.data; vk = o.k;
+        lockIcon();
       } else if (legacyDb) {
         if (!(await (await util()).rpc('checkPassword', ['/beam_wallet/wallet.db', pass]))) throw new Error('wrong password');
         const d = { v: 1, wallets: [{ id: newId(), name: 'Wallet 1', created: Date.now(), phrase: null, beam: { db: '/beam_wallet/wallet.db', pass }, eth: null }] };
@@ -815,6 +828,7 @@
     if (settings.ethRpc) Eth.setRpc(settings.ethRpc);
     // the util engine reads the old shared folder: is there a 0.1 wallet.db waiting for its first unlock?
     if (!vaultRec) legacyDb = !!(await (await util()).rpc('exists', ['/beam_wallet/wallet.db']));
+    lockIcon();
   })();
   ready.catch(() => {});                       // reported to each operation instead
 
