@@ -92,7 +92,11 @@ html.popup .seed { columns: 2; }
 .chain { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; }
 .chain.beam { background: var(--color-green); box-shadow: 0 0 6px var(--color-green); }
 .chain.eth { background: #8c9eff; box-shadow: 0 0 6px #8c9eff; }
-.panel-meta .dot { width: 6px; height: 6px; vertical-align: 1px; }
+.chain.warn { background: var(--color-yellow); box-shadow: 0 0 6px var(--color-yellow); }
+.chain.down { background: var(--color-red); box-shadow: 0 0 6px var(--color-red); }
+.panel-meta.warn { color: var(--color-yellow); }
+.panel-meta.bad { color: var(--color-red); }
+.panel-meta.warn b, .panel-meta.bad b { color: inherit; }
 .asset { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; grid-template-areas: "sym amt usd"; align-items: baseline; column-gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
 .asset:last-child { border-bottom: 0; }
 .asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

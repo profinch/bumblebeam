@@ -439,12 +439,24 @@
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
       case 'bb_net': if (st && st.phase === 'unlocked') load().then(() => { if (curTab === 'home') beamRefresh(); }); break;
       case 'ev_sync_progress':
-        if (here && m.result) { const { done, total } = m.result; if (total && done < total) pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`); }
+        if (here && m.result) {
+          const { done, total } = m.result;
+          if (total && done < total) {
+            pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`);
+            beamMeta('warn', `syncing ${Math.floor((done / total) * 100)}%`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
+          }
+        }
         break;
       case 'ev_system_state': case 'ev_utxos_changed': if (here) beamRefresh(); break;
       case 'ev_txs_changed': if (here) { beamRefresh(); if (curTab === 'activity') activity(); } break;
     }
   };
+  // a network's state on its card: the dot by its name (its colour: live; yellow: starting, syncing,
+  // reconnecting; red: no node / no RPC) with the state in its tip, and for Beam the line on the right
+  function netDot(id, state, tip) { const d = $(id); d.classList.toggle('warn', state === 'warn'); d.classList.toggle('down', state === 'down'); d.title = tip || ''; }
+  function beamMeta(cls, html, tip) { const m = $('beamMeta'); m.className = `panel-meta${cls ? ' ' + cls : ''}`; m.innerHTML = html ? `<span>${html}</span>` : ''; m.title = tip || ''; }
+  const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
+  let beamHeight = 0, beamLostAt = 0;          // beamLostAt: when the node stopped answering (0: it answers)
   function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
 
   // ---------- Wallet tab: Beam ----------
@@ -452,13 +464,13 @@
     const w = W();
     $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
     if (!w || !w.beam) {
-      beamStatus = null; total(); $('beamMeta').textContent = '';
+      beamStatus = null; total(); beamMeta('', ''); netDot('beamDot', '', '');
       const n = st && st.engines ? Object.values(st.engines).filter((x) => x.running).length : 0;
       pill('beamPill', n ? '' : 'off', n ? `Beam: ${n} wallet${n > 1 ? 's' : ''} online` : 'Beam off');
       $('beamPill').title = 'This wallet has no Beam part; the Beam parts of your other wallets run and receive';
       return;
     }
-    if (!beamHere()) { $('beamMeta').textContent = 'starting…'; pill('beamPill', 'demo', 'Beam starting…'); return; }
+    if (!beamHere()) { beamMeta('warn', 'starting…'); netDot('beamDot', 'warn', 'Beam: the wallet is starting'); pill('beamPill', 'demo', 'Beam starting…'); return; }
     try {
       // The balance is BEAM's line of `totals` (asset 0): its sums count regular coins and those of the
       // shielded pool (offline, public, max privacy). The top-level fields count regular coins only, so
@@ -482,12 +494,22 @@
       else if (s.maturing && !s.maturing_regular) minor.push(chip('info', `${amt(s.maturing)} maturing`, MATURING));
       $('beamMinor').innerHTML = minor.join('');
       const synced = s.current_height && s.is_in_sync !== false;
-      $('beamMeta').innerHTML = `<span class="dot${synced ? '' : ' off'}"></span> ${esc((s.current_height || 0).toLocaleString('en-US'))}`;
       const x = engineOf(W());
+      const node = x ? x.node : st.node, backup = !!(x && x.node !== st.node);
+      beamHeight = s.current_height || beamHeight;
+      // no node: reconnecting (yellow) for the first minute, then no node (red); the last block seen stays
+      if (x && !x.connected) beamLostAt ||= Date.now(); else beamLostAt = 0;
+      if (beamLostAt && Date.now() - beamLostAt > 60000) { beamMeta('bad', `no node · ${blockAt(beamHeight)}`, `No Beam node answers (${node} and the backups): the balance is as of block ${beamHeight.toLocaleString('en-US')}. Settings → Networks`); netDot('beamDot', 'down', 'Beam: no node answers'); }
+      else if (beamLostAt) { beamMeta('warn', `reconnecting · ${blockAt(beamHeight)}`, `No answer from ${node}: trying again, then the next node`); netDot('beamDot', 'warn', 'Beam: reconnecting'); }
+      else if (!synced) { beamMeta('warn', `syncing · ${blockAt(beamHeight)}`, `Catching up with the chain through ${node}`); netDot('beamDot', 'warn', 'Beam: syncing'); }
+      else {
+        beamMeta('', `${blockAt(beamHeight)}${backup ? ' · backup' : ''}`, `The chain's last block, from ${node}${backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
+        netDot('beamDot', '', `Beam: online through ${node}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online`);
+      }
       if (x && !x.connected) pill('beamPill', 'demo', 'Beam: reconnecting…');
       else if (!$('beamPill').textContent.includes('syncing') || synced) pill('beamPill', '', `Beam live → ${(s.current_height || 0).toLocaleString('en-US')}`);
       $('beamPill').title = `Beam node ${x ? x.node : st.node}${x && x.node !== st.node ? ' (a backup: the main one did not answer)' : ''}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online.`;
-    } catch (e) { $('beamMeta').textContent = msg(e); pill('beamPill', 'off', 'Beam: no node'); }
+    } catch (e) { beamMeta('bad', `no node${beamHeight ? ` · ${blockAt(beamHeight)}` : ''}`, msg(e)); netDot('beamDot', 'down', `Beam: no node answers (${msg(e)})`); pill('beamPill', 'off', 'Beam: no node'); }
     total();
   }
 
@@ -509,8 +531,12 @@
           u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
           title: t.address })));
       $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
-      pill('ethPill', '', 'Ethereum live');
-    } catch (e) { $('ethAssets').innerHTML = `<div class="empty">${esc(msg(e))}</div>`; pill('ethPill', 'off', 'Ethereum: no RPC'); }
+      pill('ethPill', '', 'Ethereum live'); netDot('ethDot', '', 'Ethereum: online through public RPCs');
+    } catch (e) {
+      // the last balances stay, marked as not current; none yet: the reason
+      if (!ethData) $('ethAssets').innerHTML = `<div class="empty">no Ethereum RPC answers: ${esc(msg(e))}</div>`;
+      pill('ethPill', 'off', 'Ethereum: no RPC'); netDot('ethDot', 'down', `Ethereum: no RPC answers (${msg(e)}); the balances shown may be old`);
+    }
     total();
   }
   $('acctRename').onclick = renameAccount;
