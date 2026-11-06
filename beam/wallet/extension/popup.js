@@ -100,7 +100,7 @@
     const adding = id === 's-welcome' && !!(st && st.phase === 'unlocked');
     $('setBtn').hidden = !inside && !adding;
     $('backBtn').hidden = !adding;
-    $('actNet').hidden = id !== 't-activity';
+    $('actBar').hidden = id !== 't-activity';
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome

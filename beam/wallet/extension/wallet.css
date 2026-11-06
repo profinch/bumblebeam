@@ -153,8 +153,8 @@ html.popup .seed { columns: 2; }
 .ic.in { color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .ic.out { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.08); }
 #tokList .li { grid-template-columns: minmax(0, 1fr) auto; }
-/* the Activity network switch in the header row: small, before the lock */
-.wrow .seg.mini { flex: none; align-self: flex-start; margin-top: 4px; }      /* centred on the 30 px buttons */
+/* the Activity network switch: small, on the left under the tabs */
+.wsub { max-width: 640px; margin: 0 auto; padding-top: 6px; }
 .seg.mini button { padding: 4px 8px; font-size: 10px; }
 #actList { margin-top: 4px; }
 
