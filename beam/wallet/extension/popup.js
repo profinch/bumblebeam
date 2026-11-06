@@ -565,7 +565,7 @@
   $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
 
   function total() {
-    if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').hidden = $('total24').hidden = true; return; }
+    if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }
     // t: now; t0: the same holdings at the prices of 24 h ago (an asset with no 24 h change counts unchanged)
     let t = 0, t0 = 0;
     const ch = rates.ch || {};
@@ -582,11 +582,9 @@
       }
     }
     $('totalUsd').textContent = usd(t);
-    // the 24 h change of the total, as wallets show it: +$12.34 (+1.02%) 24h; none without prices or a balance
+    // the 24 h change of the total in %: −0.73% 24h; none without prices or a balance
     const d = t - t0, pc = t0 > 0 ? (d / t0) * 100 : 0;
-    const showCh = !!(rates.ch && t >= 0.01);
-    $('totalCh').hidden = $('total24').hidden = !showCh;
-    if (showCh) { $('totalPc').textContent = `${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}%`; $('totalD').textContent = `${d < 0 ? '−' : '+'}${usd(Math.abs(d))}`; }
+    $('totalCh').textContent = rates.ch && t >= 0.01 ? `${pc < 0 ? '−' : '+'}${Math.abs(pc).toFixed(2)}% 24h` : '';
   }
   async function priceTick() { try { rates = await host('rates'); total(); } catch {} }
 
