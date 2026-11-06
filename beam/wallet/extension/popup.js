@@ -470,14 +470,16 @@
       beamStatus = s;
       $('beamAvail').textContent = amt(s.available || 0);
       $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
+      // what is not spendable yet, as chips in the explorer's way: one colour per state
+      const chip = (cls, text, tip) => `<span class="badge ${cls} chip"${tip ? ` title="${esc(tip)}"` : ''}>${text}</span>`;
       const minor = [];
-      if (s.receiving) minor.push(`+${amt(s.receiving)} incoming`);
-      if (s.sending) minor.push(`−${amt(s.sending)} outgoing`);
-      if (s.maturing_regular) minor.push(`${amt(s.maturing_regular)} maturing`);
+      if (s.receiving) minor.push(chip('ok', `+${amt(s.receiving)} incoming`));
+      if (s.sending) minor.push(chip('pending', `−${amt(s.sending)} outgoing`));
+      if (s.maturing_regular) minor.push(chip('info', `${amt(s.maturing_regular)} maturing`));
       // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
-      if (s.maturing_mp) minor.push(`<span class="tipped" title="Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest">${amt(s.maturing_mp)} maturing (max privacy, up to 72 h)</span>`);
-      else if (s.maturing && !s.maturing_regular) minor.push(`${amt(s.maturing)} maturing`);
-      $('beamMinor').innerHTML = minor.join(' · ');
+      if (s.maturing_mp) minor.push(chip('solo', `${amt(s.maturing_mp)} max privacy ≤72 h`, 'Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
+      else if (s.maturing && !s.maturing_regular) minor.push(chip('info', `${amt(s.maturing)} maturing`));
+      $('beamMinor').innerHTML = minor.join('');
       const synced = s.current_height && s.is_in_sync !== false;
       $('beamMeta').innerHTML = `<span class="dot${synced ? '' : ' off'}"></span> ${esc((s.current_height || 0).toLocaleString('en-US'))}`;
       const x = engineOf(W());

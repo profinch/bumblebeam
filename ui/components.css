@@ -182,6 +182,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .badge.pending { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.1); }
 .badge.bad { color: var(--color-red); background: rgba(var(--red-rgb), 0.12); }
 .badge.solo { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.12); }
+.badge.info { color: var(--color-blue); background: rgba(11, 204, 247, 0.12); }      /* opt-in: a neutral state (the wallet's maturing coins) */
 
 /* a block our pool found: its height as a badge, in the explorer and the pool's network page */
 .badge.ours-h { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 1px 6px; margin: -2px 0 -2px -6px; text-decoration: none; }
