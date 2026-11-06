@@ -1143,7 +1143,7 @@
     if (st.phase === 'new') return welcome();
     $('unlockLead').textContent = st.phase === 'legacy'
       ? 'Version 0.2: one password now opens all your wallets. Type the password of your Beam wallet: it becomes this password.'
-      : st.beamRunning ? 'Your regular Beam addresses go offline once the transfers in progress are done.' : 'Your regular Beam addresses are offline while the wallet is locked.';
+      : st.beamRunning ? 'Your regular Beam addresses go offline\nonce the transfers in progress are done.' : 'Your regular Beam addresses are offline\nwhile the wallet is locked.';
     show('s-unlock');
     $('uPass').focus();
   }

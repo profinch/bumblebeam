@@ -10,7 +10,8 @@ html.popup main { padding: 4px 12px 14px; }
 .wtop { padding: 0 16px; }
 html.popup .wtop { padding: 0 12px; }
 .wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 0 4px; }
-.wrow .brand { font-size: 17px; gap: 9px; margin-right: auto; flex: none; }
+/* the brand as in the pool's and the explorer's header (ui .brand: 19px, the logo 11px from the word) */
+.wrow .brand { margin-right: auto; flex: none; }
 .wrow .dd.compact { min-width: 84px; flex: 0 1 132px; }
 .wnav { max-width: 640px; margin: 0 auto; display: flex; justify-content: space-between; gap: 0; }
 .wnav a { flex: 1; text-align: center; padding: 9px 4px; }
@@ -29,7 +30,7 @@ html.popup .wtop { padding: 0 12px; }
 .lock-emoji { font-size: 48px; line-height: 1; }
 .hero-title { margin: 10px 0 6px; font-size: var(--fs-xl); font-weight: 700; }
 .hero-title .word b { background: var(--gradient-accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero-lead { margin: 0 auto; max-width: 340px; color: var(--text-dim); font-size: var(--fs-base); line-height: 1.55; }
+.hero-lead { margin: 0 auto; max-width: 340px; white-space: pre-line; color: var(--text-dim); font-size: var(--fs-base); line-height: 1.55; }
 .choices { display: grid; gap: 10px; margin: 22px auto 0; max-width: 340px; }
 .btn.wide { width: 100%; justify-content: center; padding: 11px 14px; }
 .screen-title { margin: 14px 0 6px; font: 700 var(--fs-base) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; }
