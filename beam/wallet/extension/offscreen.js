@@ -68,59 +68,88 @@
   const withCtx = (c, fn) => serial(async () => { ctx = c; try { return await fn(); } finally { ctx = null; } });
 
   // a running snapshot import is not idle time (it ends by itself: beam.js gives up on a stalled one)
-  const onProgress = (step, done, total) => { progress = { step, done, total }; lastActive = Date.now(); broadcast({ type: 'progress', ...progress }); };
+  const onProgress = (wallet, step, done, total) => { progress = { wallet, step, done, total }; lastActive = Date.now(); broadcast({ type: 'progress', ...progress }); };
 
   // ---------- the Beam engines: one per Beam wallet ----------
   // All Beam wallets run while the wallet is unlocked: every regular address of every wallet is online.
   // Locking stops them, except one with a transfer still being made (it runs until that ends: a regular
   // transfer needs both wallets online to complete). The browser's start runs none until the first unlock.
-  // A crashed engine, or one without its node for a minute, is replaced by a new one (on the next node in
-  // the list, if there is another).
-  const engines = new Map();                           // wallet id -> { e, cfg: { db, pass }, node, nodeIx, since, lingering }
-  const restarting = new Set();
+  //
+  // Each wallet has one slot: its status and, while it runs, its engine. Everything that starts, stops,
+  // restarts, restores, exports or copies a wallet's engine runs in that wallet's own queue (withWallet), one
+  // thing after another: a new engine never starts before the old one is closed. That matters for the
+  // database: Beam persists by syncing its whole folder, deleting what it does not have, so two engines on one
+  // store would delete each other's files. Every engine has a generation; its events, crashes and progress
+  // count only while it is the slot's current one.
+  //   stopped   not running (locked, or not started yet)
+  //   starting  loading the engine, opening the database
+  //   running   open; e, node, sync
+  //   stopping  closing (writing its database)
+  //   missing   no database in this browser and no copy: Settings offers the seed restore
+  //   restoring rebuilding from the seed phrase (progress)
+  //   failed    did not start (reason); tried again after a pause
+  const slots = new Map();
+  const slot = (id) => { if (!slots.has(id)) slots.set(id, { status: 'stopped', reason: '', gen: 0, e: null, retry: 0 }); return slots.get(id); };
+  const queues = new Map();
+  function withWallet(id, fn) {
+    const r = (queues.get(id) || Promise.resolve()).then(fn, fn);
+    queues.set(id, r.catch(() => {}));
+    return r;
+  }
+  const live = (id) => { const s = slots.get(id); return s && s.status === 'running' && s.e && !s.e.dead ? s : null; };
+  function setStatus(id, status, reason = '') {
+    const s = slot(id);
+    s.status = status; s.reason = reason; s.since = Date.now();
+    broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status, reason } });
+  }
   const nodeList = () => [...new Set([node, ...(settings.backupNodes || DEFAULT_BACKUPS)].filter(Boolean))];
   const PENDING = new Set([0, 1, 5]);                  // tx statuses: pending, in progress, registering
+  const busyTx = async (e) => { try { return (await e.call('tx_list', { count: 100 }, 20000)).some((t) => PENDING.has(t.status)); } catch { return true; } };
+  const beamCfg = (id) => { const w = data && data.wallets.find((x) => x.id === id); return w && w.beam ? { db: w.beam.db, pass: w.beam.pass } : null; };
 
   // ---------- a second copy of each Beam database, outside IndexedDB ----------
-  // On 2026-11-06 Chrome recreated the extension's IndexedDB empty (most likely after the extension was
-  // killed in the middle of a write): every Beam database was gone, the vault (chrome.storage) was not.
-  // So each wallet's database is also kept in the origin private file system (OPFS), another storage:
-  // db-copies/<id>.db and the one before it, <id>.prev.db (a copy read while Beam writes could be torn;
-  // the older one then opens). A file is replaced only once fully written (createWritable commits on close).
-  // The database is encrypted by Beam; its password is in the vault. ~1-2 MB a wallet; written 30 s after a
-  // transfer or a change of coins, else at most every 10 min and only if it changed.
-  const copies = { last: new Map(), timers: new Map() };          // id -> sha-256 of the last copy; pending timers
+  // On 2026-11-06 the extension's IndexedDB was found empty: every Beam database was gone, the vault
+  // (chrome.storage) was not. So each wallet's database is also kept in the origin private file system (OPFS),
+  // another storage: db-copies/<id>.db and the one before it, <id>.prev.db. A copy is checked with the
+  // wallet's password (in a scratch engine store) before it replaces the current one, and it replaces it only
+  // if it differs: a torn read or a bad file never pushes out a good copy. A file is replaced only once fully
+  // written (createWritable commits on close). The database is encrypted by Beam; its password is in the vault.
+  // ~1-2 MB a wallet: written a minute after a start, 30 s after a transfer or a change of coins, and every
+  // 10 min if it changed. In the wallet's queue, like everything else that touches its engine.
   const copyDir = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('db-copies', { create: true });
   const copyName = (id, prev) => `${id}${prev ? '.prev' : ''}.db`;
+  const sha = async (b) => Vault.b64(new Uint8Array(await crypto.subtle.digest('SHA-256', b)));
   async function copyRead(id, prev = false) {
     try { return new Uint8Array(await (await (await (await copyDir()).getFileHandle(copyName(id, prev))).getFile()).arrayBuffer()); }
     catch { return null; }
   }
-  async function copyWrite(id, name, bytes) {
+  async function copyWrite(name, bytes) {
     const w = await (await (await copyDir()).getFileHandle(name, { create: true })).createWritable();
     await w.write(bytes); await w.close();
   }
   async function saveCopy(id) {
-    const x = engines.get(id);
-    if (!x || x.e.dead) return;
-    const bytes = await x.e.rpc('readDb', [x.cfg.db], 60000);
-    if (!bytes || bytes.length < 1024) return;                     // nothing sensible to keep
-    const hash = Vault.b64(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
-    if (copies.last.get(id) === hash) return;
+    const s = live(id);
+    if (!s || !data) return;
+    const bytes = await s.e.rpc('readDb', [s.cfg.db], 60000);
+    if (!bytes || bytes.length < 1024) return;
     const cur = await copyRead(id);
-    if (cur) await copyWrite(id, copyName(id, true), cur);           // the one before stays as .prev
-    await copyWrite(id, copyName(id), bytes);
-    copies.last.set(id, hash);
+    if (cur && (await sha(cur)) === (await sha(bytes))) return;
+    // only a copy that opens with the wallet's password is kept (checked in the util engine's scratch file)
+    if (!(await (await util()).rpc('checkBytes', [bytes, s.cfg.pass]))) { console.warn(`copy of ${id}: read torn, not kept`); return; }
+    if (cur) await copyWrite(copyName(id, true), cur);
+    await copyWrite(copyName(id), bytes);
   }
+  const copyTimers = new Map();
   function copySoon(id, ms = 30000) {
-    clearTimeout(copies.timers.get(id));
-    copies.timers.set(id, setTimeout(() => { copies.timers.delete(id); saveCopy(id).catch((e) => console.warn(`copy of ${id}: ${e.message}`)); }, ms));
+    clearTimeout(copyTimers.get(id));
+    copyTimers.set(id, setTimeout(() => { copyTimers.delete(id); withWallet(id, () => saveCopy(id)).catch((e) => console.warn(`copy of ${id}: ${e.message}`)); }, ms));
   }
   async function dropCopies(id) {
+    clearTimeout(copyTimers.get(id)); copyTimers.delete(id);
     const d = await copyDir();
     for (const prev of [false, true]) await d.removeEntry(copyName(id, prev)).catch(() => {});
   }
-  setInterval(() => { for (const id of engines.keys()) saveCopy(id).catch(() => {}); }, 10 * 60000);
+  setInterval(() => { for (const id of slots.keys()) if (live(id)) withWallet(id, () => saveCopy(id)).catch(() => {}); }, 10 * 60000);
 
   // a wallet whose database is gone: from its copy (the newest that opens with its password); false: none
   async function restoreFromCopy(e, id, cfg) {
@@ -130,97 +159,119 @@
       try {
         await e.rpc('importDb', [cfg.db, bytes, cfg.pass]);
         console.warn(`Beam database of ${id} was gone: restored from its ${prev ? 'previous ' : ''}copy`);
-        broadcast({ type: 'event', method: 'bb_error', result: `a Beam database was missing; restored from its copy in this browser` });
         return true;
       } catch (err) { console.warn(`copy ${copyName(id, prev)} of ${id}: ${err.message}`); }
     }
     return false;
   }
-  const missing = new Set();                                         // wallets with neither a database nor a copy
 
-  function wire(e, id) {
+  // events of the slot's current engine only: an old engine still closing says nothing any more
+  function wire(e, id, gen) {
+    const cur = () => slot(id).gen === gen;
     e.on.consent = askConsent;
-    e.on.progress = onProgress;
+    e.on.progress = (step, done, total) => { if (cur()) onProgress(id, step, done, total); };
     e.on.event = (m) => {
+      if (!cur()) return;
+      if (m.method === 'ev_sync_progress') slot(id).sync = m.result && m.result.total ? { done: m.result.done, total: m.result.total } : null;
       broadcast({ type: 'event', method: m.method, result: m.result, wallet: id });
       if (m.method === 'ev_txs_changed') setTimeout(badge, 3000);
       if (m.method === 'ev_txs_changed' || m.method === 'ev_utxos_changed') copySoon(id);
     };
-    e.on.ws = () => broadcast({ type: 'event', method: 'bb_net', wallet: id });
+    e.on.ws = () => { if (cur()) broadcast({ type: 'event', method: 'bb_net', wallet: id }); };
     e.on.crash = (msg) => {
+      if (!cur()) return;
       console.warn(`Beam engine of ${id} crashed: ${msg}`);
-      broadcast({ type: 'event', method: 'bb_error', result: `the Beam engine stopped (${msg}); starting it again` });
-      restartEngine(id).catch(() => {});
+      restart(id, false).catch(() => {});
     };
   }
 
-  // an engine is running for this wallet: registered, events subscribed, its own address made
-  async function register(id, e, cfg, n, nodeIx) {
-    engines.set(id, { e, cfg, node: n, nodeIx, since: Date.now(), lingering: false });
-    await e.call('ev_subunsub', { ev_sync_progress: true, ev_system_state: true, ev_txs_changed: true, ev_utxos_changed: true, ev_connection_changed: true }).catch(() => {});
-    broadcast({ type: 'event', method: 'bb_changed' });
-    ownAddress(id).catch(() => {});
-    missing.delete(id);
-    copySoon(id, 60000);                                             // a copy soon after every start
-  }
-
-  async function startEngine(id, cfg, nodeIx = 0) {
-    if (engines.has(id)) return engines.get(id).e;
-    const list = nodeList(), n = list[nodeIx % list.length];
-    const e = await Engines.fresh(id);
-    wire(e, id);
+  // In the wallet's queue only (withWallet). Starts it on node nodeIx of the list; a missing database comes
+  // back from its copy, else the slot says missing; any other failure: failed, and tried again later.
+  async function start(id, nodeIx = 0) {
+    const cfg = beamCfg(id), s = slot(id);
+    if (!cfg || s.status === 'running') return;
+    const gen = ++s.gen;
+    setStatus(id, 'starting');
+    const list = nodeList(), ix = ((nodeIx % list.length) + list.length) % list.length, n = list[ix];
+    let e = null;
     try {
-      // the database gone from IndexedDB: back from its copy; neither: the popup offers the seed restore
+      e = await Engines.fresh(id);
+      wire(e, id, gen);
       if (cfg.db.startsWith('/bw_') && !(await e.rpc('exists', [cfg.db])) && !(await restoreFromCopy(e, id, cfg))) {
-        missing.add(id);
-        throw new Error('this Beam wallet has no database in this browser');
+        e.drop();
+        return setStatus(id, 'missing', 'its Beam database is not in this browser');
       }
       await e.rpc('open', [cfg.db, cfg.pass, n]);
-    } catch (err) { e.drop(); throw err; }
-    await register(id, e, cfg, n, nodeIx % list.length);
-    return e;
-  }
-
-  async function stopEngine(id) {
-    const x = engines.get(id);
-    if (!x) return;
-    engines.delete(id);
-    await x.e.close();
-    broadcast({ type: 'event', method: 'bb_changed' });
-  }
-
-  // a new engine for the same wallet (crash, lost node, a backup read, a new node); nextNode: the next in the list
-  async function restartEngine(id, nextNode = false) {
-    const x = engines.get(id);
-    if (!x || restarting.has(id)) return;
-    restarting.add(id);
-    try {
-      const lingering = x.lingering;
-      await stopEngine(id);
-      const e = await startEngine(id, x.cfg, x.nodeIx + (nextNode ? 1 : 0));
-      if (lingering) engines.get(id).lingering = true;
-      return e;
-    } finally { restarting.delete(id); }
-  }
-
-  // the wallets' Beam parts, all of them (one after another: each loads a wasm engine)
-  async function startAll() {
-    if (!data) return;
-    for (const w of data.wallets) {
-      if (!w.beam || engines.has(w.id)) { if (engines.has(w.id)) engines.get(w.id).lingering = false; continue; }
-      try { await startEngine(w.id, { db: w.beam.db, pass: w.beam.pass }); }
-      catch (err) { broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: ${err.message}` }); }
+      if (!data || s.gen !== gen) { await e.close(); return; }       // locked or superseded meanwhile
+      Object.assign(s, { e, cfg, node: n, nodeIx: ix, started: Date.now(), lingering: false, mainOk: 0, sync: null, retry: 0 });
+      await e.call('ev_subunsub', { ev_sync_progress: true, ev_system_state: true, ev_txs_changed: true, ev_utxos_changed: true, ev_connection_changed: true }).catch(() => {});
+      setStatus(id, 'running');
+      ownAddress(id).catch(() => {});
+      copySoon(id, 60000);
+    } catch (err) {
+      if (e) e.drop();
+      if (s.gen !== gen) return;
+      setStatus(id, 'failed', err.message);
+      // tried again after 30 s, 1, 2, 4 … 10 min
+      const wait = Math.min(600000, 30000 * 2 ** s.retry++);
+      setTimeout(() => withWallet(id, () => (data && slot(id).status === 'failed' ? start(id, 0) : null)).catch(() => {}), wait);
     }
   }
 
-  // locked: an engine with a transfer still being made keeps running until it ends; the others stop
-  async function stopIdle() {
-    for (const [id, x] of [...engines]) {
-      let busy = false;
-      try { busy = (await x.e.call('tx_list', { count: 100 }, 20000)).some((t) => PENDING.has(t.status)); } catch {}
-      if (data) return;                                // unlocked meanwhile: everything stays
-      if (busy) x.lingering = true; else await stopEngine(id);
-    }
+  // In the wallet's queue only. Closes its engine (Beam stops and writes its database), then the slot is stopped.
+  async function stop(id) {
+    const s = slots.get(id);
+    if (!s) return;
+    s.gen++;                                            // its events and crashes count no more
+    const e = s.e;
+    s.e = null; s.sync = null;
+    if (!e) { if (s.status !== 'missing') setStatus(id, 'stopped'); return; }
+    setStatus(id, 'stopping');
+    await e.close();
+    setStatus(id, 'stopped');
+  }
+
+  // an engine made by a create or an import (already open) becomes the wallet's running one
+  async function adopt(id, e, cfg, gen) {
+    const s = slot(id);
+    Object.assign(s, { e, cfg, node, nodeIx: 0, started: Date.now(), lingering: false, mainOk: 0, sync: null, retry: 0, gen });
+    await e.call('ev_subunsub', { ev_sync_progress: true, ev_system_state: true, ev_txs_changed: true, ev_utxos_changed: true, ev_connection_changed: true }).catch(() => {});
+    setStatus(id, 'running');
+    ownAddress(id).catch(() => {});
+    copySoon(id, 60000);
+  }
+
+  // a new engine for the same wallet (crash, lost node, a lagging node, a new node list): next = the next node
+  function restart(id, next, toIx = null) {
+    return withWallet(id, async () => {
+      const s = live(id);
+      if (!s || !data) return;
+      const ix = toIx != null ? toIx : s.nodeIx + (next ? 1 : 0);
+      await stop(id);
+      await start(id, ix);
+    });
+  }
+
+  // every wallet's Beam part, one after another (each loads a wasm engine); the open one first
+  function startAll() {
+    if (!data) return Promise.resolve();
+    const order = [...data.wallets].filter((w) => w.beam).sort((a, b) => (b.id === settings.active) - (a.id === settings.active));
+    return order.reduce((p, w) => p.then(() => withWallet(w.id, () => {
+      const s = slot(w.id);
+      if (s.status === 'running') { s.lingering = false; return null; }
+      return data ? start(w.id, 0) : null;
+    })).catch(() => {}), Promise.resolve());
+  }
+
+  // locked: an engine with a transfer still being made keeps running until it ends (lingering); the others stop
+  function stopIdle() {
+    return Promise.all([...slots.keys()].map((id) => withWallet(id, async () => {
+      const s = live(id);
+      if (!s) { if (!data && slot(id).status !== 'stopped') await stop(id); return; }
+      if (data) return;                                 // unlocked meanwhile: it stays
+      if (await busyTx(s.e)) { s.lingering = true; return; }
+      if (!data) await stop(id);
+    })));
   }
 
   // Each Beam wallet keeps one public offline address of its own for the others: Send offers it under "my
@@ -228,64 +279,64 @@
   // receives need not run. A plain offline address holds a few one-time vouchers (10), each payment uses one;
   // its extra privacy does not matter between one's own wallets. An older offline one is replaced.
   async function ownAddress(id) {
-    const x = engines.get(id);
-    if (!x) return;
+    const s = live(id);
+    if (!s) return;
     const have = settings.beamAddr[id];
     if (have) {
-      const v = await x.e.call('validate_address', { address: have.address }).catch(() => null);
+      const v = await s.e.call('validate_address', { address: have.address }).catch(() => null);
       if (v && v.is_valid && v.is_mine && v.type === 'public_offline') return;
     }
-    const address = await x.e.call('create_address', { type: 'public_offline', expiration: 'never', comment: 'for my other wallets' });
+    const address = await s.e.call('create_address', { type: 'public_offline', expiration: 'never', comment: 'for my other wallets' });
     settings.beamAddr[id] = { address, at: Date.now() };
     await saveSettings();
-    broadcast({ type: 'event', method: 'bb_changed' });
+    broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } });
   }
 
   // Version 0.1 and early 0.2 kept every database in one shared folder; each moves into its wallet's own
-  // store (a copy, checked with its password; the old file stays as it was, as a copy to fall back on).
+  // store (a copy, checked with its password; the old file stays as it was). One wallet's failure does not
+  // stop the others: that wallet then fails to start, with the reason.
   async function migrate() {
     for (const w of data.wallets) {
       if (!w.beam || !w.beam.db.startsWith('/beam_wallet/')) continue;
-      const to = Engines.dbOf(w.id);
-      const e = await Engines.fresh(w.id, true);
-      try { await e.rpc('copyFromShared', [w.beam.db, to, w.beam.pass]); }
-      finally { e.drop(); }
-      await mutate((d) => { const x = wallet(w.id, d); x.beam = { db: to, pass: x.beam.pass, movedFrom: x.beam.db }; });
+      try {
+        await withWallet(w.id, async () => {
+          const to = Engines.dbOf(w.id);
+          const e = await Engines.fresh(w.id, true);
+          try { await e.rpc('copyFromShared', [w.beam.db, to, w.beam.pass]); } finally { e.drop(); }
+          await mutate((d) => { const x = wallet(w.id, d); x.beam = { db: to, pass: x.beam.pass, movedFrom: x.beam.db }; });
+        });
+      } catch (err) { broadcast({ type: 'event', method: 'bb_error', result: `${w.name}: moving its Beam database: ${err.message}` }); }
     }
   }
 
-  // watchdog: an engine without a node connection for a minute gets a new engine, on the next node if any
+  // Watchdogs, unlocked only, on running engines: no node for a minute, or a node whose last block is over
+  // 10 min old (Beam makes one about every minute: it lags), means the next node. A new engine gets 5 min.
+  // Each asks for a restart; the wallet's queue runs it, and only if that engine is still the current one.
+  const STALE_MS = 10 * 60000, GRACE_MS = 5 * 60000;
   setInterval(() => {
+    if (!data) return;
     const now = Date.now();
-    for (const [id, x] of engines) {
-      if (restarting.has(id) || x.e.ws.open > 0) continue;
-      const lostSince = Math.max(x.e.ws.lastClose || 0, x.since);
-      if (now - lostSince > 60000) {
-        console.warn(`Beam engine of ${id}: no node for ${Math.round((now - lostSince) / 1000)} s, restarting`);
-        restartEngine(id, nodeList().length > 1).catch(() => {});
-      }
+    for (const id of slots.keys()) {
+      const s = live(id);
+      if (!s || s.e.ws.open > 0) continue;
+      const lostSince = Math.max(s.e.ws.lastClose || 0, s.started);
+      if (now - lostSince > 60000) { console.warn(`Beam engine of ${id}: no node for ${Math.round((now - lostSince) / 1000)} s`); restart(id, nodeList().length > 1).catch(() => {}); }
     }
   }, 15000);
-  // A node that answers but lags: Beam makes a block about every minute, so a tip more than 10 minutes old
-  // means the node is behind (on 2026-11-05 several of BeamMW's public nodes were, one stuck before HF6).
-  // The engine then moves to the next node (through wsb that is another server, picked at random). The tip's
-  // time is the chain's own, signed in the block: nothing outside is asked. A new engine gets 5 min to sync.
-  const STALE_MS = 10 * 60000, GRACE_MS = 5 * 60000;
   setInterval(async () => {
-    for (const [id, x] of [...engines]) {
-      if (restarting.has(id) || Date.now() - x.since < GRACE_MS || x.e.ws.open === 0) continue;
+    if (!data) return;
+    for (const id of [...slots.keys()]) {
+      const s = live(id);
+      if (!s || Date.now() - s.started < GRACE_MS || s.e.ws.open === 0) continue;
       let ts = 0;
-      try { ts = Number((await x.e.call('wallet_status', {}, 20000)).current_state_timestamp || 0) * 1000; } catch { continue; }
-      if (!ts || Date.now() - ts < STALE_MS || engines.get(id) !== x) continue;
-      console.warn(`Beam engine of ${id}: the node's last block is ${Math.round((Date.now() - ts) / 60000)} min old on ${x.node}, trying another`);
-      broadcast({ type: 'event', method: 'bb_error', result: `the Beam node lags (last block ${Math.round((Date.now() - ts) / 60000)} min ago): trying another` });
-      restartEngine(id, nodeList().length > 1).catch(() => {});
+      try { ts = Number((await s.e.call('wallet_status', {}, 20000)).current_state_timestamp || 0) * 1000; } catch { continue; }
+      if (!ts || Date.now() - ts < STALE_MS || live(id) !== s) continue;
+      console.warn(`Beam engine of ${id}: the last block is ${Math.round((Date.now() - ts) / 60000)} min old on ${s.node}`);
+      restart(id, nodeList().length > 1).catch(() => {});
     }
   }, 60000);
-
   // Back to the main node: an engine on a backup tries the main one every 2 min (a short WebSocket that opens
-  // and closes, through the same door), and after two answers in a row moves back, unless it is in the middle
-  // of a transfer (then on a later round, once the transfer is done).
+  // and closes), and after two answers in a row moves back, unless it is in the middle of a transfer.
   function probe(n, ms = 10000) {
     return new Promise((resolve) => {
       let ws;
@@ -297,22 +348,20 @@
     });
   }
   setInterval(async () => {
+    if (!data) return;
     const main = nodeList()[0];
-    for (const [id, x] of [...engines]) {
-      if (x.nodeIx === 0 || restarting.has(id) || x.lingering) { x.mainOk = 0; continue; }
-      x.mainOk = (await probe(main)) ? (x.mainOk || 0) + 1 : 0;
-      if (x.mainOk < 2) continue;
-      let busy = true;
-      try { busy = (await x.e.call('tx_list', { count: 100 }, 20000)).some((t) => PENDING.has(t.status)); } catch {}
-      if (busy || engines.get(id) !== x) continue;
-      console.warn(`Beam engine of ${id}: the main node answers again, moving back from ${x.node}`);
-      x.nodeIx = -1;                                    // restartEngine(+1) -> index 0, the main node
-      await restartEngine(id, true).catch(() => {});
+    for (const id of [...slots.keys()]) {
+      const s = live(id);
+      if (!s || s.nodeIx === 0) continue;
+      s.mainOk = (await probe(main)) ? (s.mainOk || 0) + 1 : 0;
+      if (s.mainOk < 2 || live(id) !== s || (await busyTx(s.e))) continue;
+      console.warn(`Beam engine of ${id}: the main node answers again, moving back from ${s.node}`);
+      restart(id, false, 0).catch(() => {});
     }
   }, 120000);
 
   // while locked: lingering engines stop once their transfers are done
-  setInterval(() => { if (!data && engines.size) stopIdle().catch(() => {}); }, 60000);
+  setInterval(() => { if (!data && [...slots.keys()].some((id) => live(id))) stopIdle().catch(() => {}); }, 60000);
 
   // ---------- the vault ----------
   const need = () => { if (!data) throw new Error('the wallet is locked'); };
@@ -351,9 +400,9 @@
   // a Beam operation is for one wallet, named by the popup, and goes to that wallet's own engine
   function beamFor(id) {
     need();
-    const x = engines.get(id);
-    if (!x || x.e.dead) throw new Error('the Beam part of this wallet is not running');
-    return { w: wallet(id), e: x.e };
+    const s = live(id);
+    if (!s) throw new Error('the Beam part of this wallet is not running');
+    return { w: wallet(id), e: s.e };
   }
   const uint = (v, what) => { const s = String(v); if (!/^\d{1,18}$/.test(s) || !(Number(s) > 0) || !Number.isSafeInteger(Number(s))) throw new Error(`${what}: a positive whole number`); return Number(s); };
   const newId = () => Vault.randomHex(6);
@@ -465,7 +514,7 @@
       lockIcon();
       const base = {
         phase: data ? 'unlocked' : vaultRec ? 'locked' : legacyDb ? 'legacy' : 'new',
-        progress, phrase: !!pendingPhrase, node, beamRunning: engines.size > 0, autoLock: settings.autoLock,
+        progress, phrase: !!pendingPhrase, node, autoLock: settings.autoLock,
         // the contracts the popup must never send tokens to (they would be lost): from bridge.js, not retyped
         contracts: { wbeam: Bridge.WBEAM.toLowerCase(), ethPipe: Bridge.ETH_PIPE.toLowerCase() },
       };
@@ -473,9 +522,13 @@
       return {
         ...base,
         active: settings.active, activeEth: settings.activeEth, tokens: settings.tokens, ethRpc: settings.ethRpc,
-        // each Beam wallet's engine: running, connected to its node (the WebSocket open), which node
-        engines: Object.fromEntries([...engines].map(([id, x]) => [id, { running: !x.e.dead, connected: x.e.ws.open > 0, node: x.node }])),
-        beamMissing: [...missing],
+        // each Beam wallet's part: its status (see the slots), why if it failed, and while it runs: connected
+        // to its node (the WebSocket open), which node, a backup or not, the sync's progress
+        beam: Object.fromEntries(data.wallets.filter((w) => w.beam).map((w) => {
+          const x = slot(w.id), e = x.status === 'running' && x.e ? x.e : null;
+          return [w.id, { status: x.status, reason: x.reason, since: x.since || 0, connected: !!(e && e.ws.open > 0), node: e ? x.node : null,
+            backup: !!(e && x.nodeIx > 0), sync: x.sync || null, progress: progress && progress.wallet === w.id ? progress : null }];
+        })),
         nodes: nodeList(),
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
@@ -552,10 +605,10 @@
           w.phrase = p;
           if (ethOk) w.eth = ethPart(p);
           if (beamOk && (o.kind === 'new' || o.beam !== false)) {
-            progress = { step: 'download', done: 0, total: 0 };
+            progress = { wallet: id, step: 'download', done: 0, total: 0 };
             const db = Engines.dbOf(id);
             made = await Engines.fresh(id);
-            wire(made, id);
+            wire(made, id, ++slot(id).gen);
             try { await made.rpc('create', [db, p, dbPass, node, RECOVERY_URL], 40 * 60 * 1000); }
             finally { progress = null; }
             w.beam = { db, pass: dbPass };
@@ -564,7 +617,7 @@
         } else if (o.kind === 'backup') {
           const db = Engines.dbOf(id);
           made = await Engines.fresh(id);
-          wire(made, id);
+          wire(made, id, ++slot(id).gen);
           await made.rpc('importDb', [db, fromB64(o.b64), o.pass]);
           await made.rpc('open', [db, o.pass, node]);
           w.beam = { db, pass: o.pass };
@@ -577,12 +630,13 @@
         lastActive = Date.now();          // a long snapshot import is not idle time
       } catch (e) {
         if (made) { await made.close(); await Engines.dropStore(id); }
+        slots.delete(id);
         broadcast({ type: 'event', method: 'bb_failed', result: e.message });
         throw e;
       }
       settings.active = id;
       await saveSettings();
-      if (made) await register(id, made, { db: w.beam.db, pass: w.beam.pass }, node, 0);
+      if (made) await withWallet(id, () => adopt(id, made, { db: w.beam.db, pass: w.beam.pass }, slot(id).gen));
       broadcast({ type: 'event', method: 'bb_changed' });
       return id;
     }),
@@ -591,44 +645,63 @@
     // came without it), into the wallet's own store, through Beam's recovery snapshot: for a wallet whose
     // database is gone (2026-11-06: Chrome recreated the extension's IndexedDB empty). The coins come back
     // from the chain; the history and the addresses' names do not. Refused while its database is there.
-    restoreBeam: (id, pass, typed) => serial(async () => {
+    restoreBeam: async (id, pass, typed) => {
       await verify(pass);
       const w = wallet(id);
       const p = w.phrase || Eth.normPhrase(String(typed || ''));
       if (!p) throw new Error('type the seed phrase of this wallet');
       if (!(await (await util()).rpc('isValidPhrase', [p]))) throw new Error('this is not a Beam seed phrase');
       const db = Engines.dbOf(id), dbPass = (w.beam && w.beam.pass) || Vault.randomHex(24);
-      await stopEngine(id).catch(() => {});
-      const made = await Engines.fresh(id);
-      wire(made, id);
-      try {
-        if (await made.rpc('exists', [db])) throw new Error('this wallet\'s Beam database is here: nothing to restore');
-        progress = { step: 'download', done: 0, total: 0 };
-        try { await made.rpc('create', [db, p, dbPass, node, RECOVERY_URL], 40 * 60 * 1000); }
-        finally { progress = null; }
-        await mutate((d) => { const x = wallet(id, d); x.beam = { db, pass: dbPass }; if (!x.phrase) x.phrase = p; });
-      } catch (e) {
-        await made.close().catch(() => {});
-        broadcast({ type: 'event', method: 'bb_failed', result: e.message });
-        throw e;
-      }
-      lastActive = Date.now();
-      await register(id, made, { db, pass: dbPass }, node, 0);
-      broadcast({ type: 'event', method: 'bb_changed' });
-      return true;
-    }),
+      // the database's place and password are in the vault before anything is made, so a half-made one is
+      // never left without them; the phrase too, for a wallet that came without it
+      await mutate((d) => { const x = wallet(id, d); x.beam = { db, pass: dbPass, ...(x.beam && x.beam.movedFrom ? { movedFrom: x.beam.movedFrom } : {}) }; if (!x.phrase) x.phrase = p; });
+      return withWallet(id, async () => {
+        await stop(id);
+        const s = slot(id), gen = ++s.gen;
+        setStatus(id, 'restoring');
+        // the snapshot is ~320 MB, held twice while it goes into Beam: the other wallets pause meanwhile
+        // (not one with a transfer being made), so the browser's memory holds it
+        const paused = [];
+        for (const o of data.wallets) {
+          const os = o.id !== id && live(o.id);
+          if (os && !(await busyTx(os.e))) { paused.push(o.id); await withWallet(o.id, async () => { await stop(o.id); setStatus(o.id, 'stopped', 'paused'); }); }
+        }
+        let made = null, made2 = false;
+        try {
+          made = await Engines.fresh(id);
+          wire(made, id, gen);
+          if (await made.rpc('exists', [db])) throw new Error('this wallet\'s Beam database is here: nothing to restore');
+          progress = { wallet: id, step: 'download', done: 0, total: 0 };
+          made2 = true;
+          try { await made.rpc('create', [db, p, dbPass, node, RECOVERY_URL], 40 * 60 * 1000); }
+          finally { progress = null; }
+          lastActive = Date.now();
+          await adopt(id, made, { db, pass: dbPass }, gen);
+          return true;
+        } catch (e) {
+          if (made) { if (made2) { made.drop(); await Engines.dropStore(id); } else await made.close().catch(() => {}); }
+          if (slot(id).gen === gen) setStatus(id, 'missing', e.message);
+          throw e;
+        } finally {
+          for (const o of paused) withWallet(o, () => (data ? start(o, 0) : null)).catch(() => {});
+        }
+      });
+    },
 
     // every Beam wallet runs already: switching only changes what the popup shows
-    switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_changed' }); },
+    switchWallet: async (id) => { wallet(id); settings.active = id; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} }); },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
     removeWallet: (id, pass) => serial(async () => {
       await verify(pass);
       const w = wallet(id);
       // out of the vault first: if that write fails, nothing is gone (the database is deleted only after)
       await mutate((d) => { d.wallets = d.wallets.filter((x) => x.id !== id); });
-      await stopEngine(id);
-      if (w.beam && w.beam.db.startsWith('/bw_')) await Engines.dropStore(id);   // a file left in the old shared folder stays
-      await dropCopies(id).catch(() => {});
+      await withWallet(id, async () => {
+        await stop(id);
+        if (w.beam && w.beam.db.startsWith('/bw_')) await Engines.dropStore(id);   // a file left in the old shared folder stays
+        await dropCopies(id).catch(() => {});
+      });
+      slots.delete(id);
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
       delete settings.activeEth[id]; delete settings.beamAddr[id];
       await saveSettings();
@@ -719,12 +792,12 @@
       const w = wallet(id);
       if (!w.beam) throw new Error('this wallet has no Beam part');
       // read while the wallet is stopped (its engine closed, the database written); then a new engine runs it
-      const b64 = await serial(async () => {
-        const wasRunning = engines.has(id);
-        await stopEngine(id);
+      const b64 = await withWallet(id, async () => {
+        const was = live(id), ix = was ? was.nodeIx : 0;
+        await stop(id);
         const e = await Engines.fresh(id);
         try { return toB64(await e.rpc('readDb', [w.beam.db])); }
-        finally { e.drop(); if (wasRunning) await startEngine(id, { db: w.beam.db, pass: w.beam.pass }).catch(() => {}); }
+        finally { e.drop(); if (was && data) await start(id, ix); }
       });
       return { b64, samePassword: w.beam.pass === pass };
     },
@@ -735,7 +808,7 @@
       node = String(n || '').trim() || DEFAULT_NODE;
       await kv.set('node', node);
       // every engine starts again on the new node
-      await serial(async () => { for (const id of [...engines.keys()]) { const x = engines.get(id); x.nodeIx = -1; await restartEngine(id, true).catch(() => {}); } });
+      await Promise.all([...slots.keys()].filter((id) => live(id)).map((id) => restart(id, false, 0).catch(() => {})));
       return node;
     },
     async setEthRpc(url) {
@@ -806,7 +879,7 @@
       need();
       const mine = data.wallets.flatMap((w) => ethAccounts(w).map((a) => a.address));
       // the pipe's messages are the same for every wallet: any running engine reads them
-      const x = [...engines.values()].find((y) => !y.e.dead);
+      const x = [...slots.keys()].map(live).find(Boolean);
       if (!x) throw new Error('no Beam wallet is running');
       return Bridge.outgoing(x.e, [...mine, ...(extra && Eth.isAddress(extra) ? [extra] : [])]);
     },
@@ -940,7 +1013,7 @@
   // 5 min while engines run: a read of the pipe, nothing is signed)
   async function badge() {
     let n = 0;
-    for (const x of engines.values()) { try { n += (await Bridge.incoming(x.e)).length; } catch {} }
+    for (const id of [...slots.keys()]) { const x = live(id); if (x) { try { n += (await Bridge.incoming(x.e)).length; } catch {} } }
     chrome.runtime.sendMessage({ op: 'badge', text: n ? String(n) : '' }).catch(() => {});
   }
   setInterval(badge, 5 * 60 * 1000);

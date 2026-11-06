@@ -48,6 +48,7 @@
     isValidPhrase: (p) => Beam.isValidPhrase(p),
     isAllowedWord: (w) => Beam.isAllowedWord(w),
     checkPassword: (db, pass) => Beam.checkPassword(db, pass),
+    checkBytes: (bytes, pass) => Beam.checkBytes(bytes, pass),
     snapshotInfo: () => Beam.snapshotInfo(),
     dropSnapshot: () => Beam.dropSnapshot(),
     running: () => Beam.running(),

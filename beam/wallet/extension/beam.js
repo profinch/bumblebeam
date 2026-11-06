@@ -146,6 +146,13 @@ const Beam = (() => {
   }
 
   const checkPassword = (db, pass) => new Promise((resolve) => WC.CheckPassword(db, pass, (ok) => resolve(!!ok)));
+  // bytes of a database: do they open with pass? (a scratch file in memory, outside every IndexedDB mount)
+  async function checkBytes(bytes, pass) {
+    const f = '/scratch-check.db';
+    try { M.FS.writeFile(f, bytes); return await checkPassword(f, pass); }
+    catch { return false; }
+    finally { try { M.FS.unlink(f); } catch {} }
+  }
 
   // Beam's recovery snapshot (what the mobile "Automatic restore" and the web wallet use): ~320 MB,
   // refreshed daily. It is kept in the extension's private file system (OPFS) for a few days, so a
@@ -236,6 +243,7 @@ const Beam = (() => {
     isValidPhrase: (phrase) => WC.IsValidPhrase(words(phrase).join(' ')),
     isAllowedWord: (w) => WC.IsAllowedWord(w),
     checkPassword,
+    checkBytes,
     snapshotInfo,
     dropSnapshot,
 

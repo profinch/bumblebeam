@@ -25,7 +25,8 @@ const Engines = (() => {
 
     boot(timeoutMs = 60000) {
       return new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('the Beam engine did not start')), timeoutMs);
+        // a frame that does not come up in time goes (not left holding a wasm module)
+        const t = setTimeout(() => { this.drop(); reject(new Error('the Beam engine did not start')); }, timeoutMs);
         this.ready = () => { clearTimeout(t); resolve(this); };
         window.addEventListener('message', this.listener);
         this.frame = document.createElement('iframe');
@@ -51,7 +52,13 @@ const Engines = (() => {
           .then((ok) => this.post({ type: 'consentReply', cid: m.cid, ok: !!ok }));
         return;
       }
-      if (m.type === 'crash') { this.dead = true; return this.on.crash(m.message); }
+      if (m.type === 'crash') {
+        // a dead engine answers nothing: everything waiting on it fails now, not at its timeout
+        this.dead = true;
+        for (const w of this.wait.values()) w.reject(new Error(`the Beam engine stopped: ${m.message}`));
+        this.wait.clear();
+        return this.on.crash(m.message);
+      }
       const w = m.id != null && this.wait.get(m.id);
       if (!w) return;
       this.wait.delete(m.id);

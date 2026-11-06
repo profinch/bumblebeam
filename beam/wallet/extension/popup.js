@@ -96,8 +96,6 @@
   };
   const allAccounts = () => (st && st.wallets ? st.wallets.flatMap((w) => w.accounts.map((a) => ({ ...a, wallet: w }))) : []);
   // this wallet's Beam engine: running (all of them run while unlocked), and connected to its node
-  const engineOf = (w) => (w && st && st.engines ? st.engines[w.id] : null);
-  const beamHere = () => { const w = W(); const x = engineOf(w); return !!(w && w.beam && x && x.running); };
 
   // ---------- screens, tabs, sheets ----------
   let curTab = 'home';
@@ -121,7 +119,11 @@
     curTab = name;
     qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
     show(`t-${name}`);
-    if (name === 'home') { beamRefresh(); ethRefresh(); }
+    paint(name);
+  }
+  // a tab's data drawn again, the screen as it is
+  function paint(name) {
+    if (name === 'home') { renderBeam(); beamRefresh(); ethRefresh(); }
     if (name === 'bridge') bridgeOpen();
     if (name === 'activity') activity();
     if (name === 'settings') settingsOpen();
@@ -219,7 +221,9 @@
   const addArgs = (o, p) => (st.phase === 'new' ? [o, p] : [{ ...o, dbPass: p }, null]);
 
   let progressScreen = null;
-  handlers.progress = ({ step, done, total }) => {
+  handlers.progress = ({ wallet, step, done, total }) => {
+    // a restore of a wallet that exists: its card shows it
+    if (wallet && st && st.beam && st.beam[wallet]) { st.beam[wallet].progress = { step, done, total }; if (wallet === st.active) renderBeam(); return; }
     if (!progressScreen) return;
     const box = $(progressScreen).querySelector('.progress');
     box.hidden = false;
@@ -350,7 +354,7 @@
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
-    await host('switchWallet', v).catch((e) => alert(msg(e)));
+    await host('switchWallet', v).catch((e) => ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }));
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
@@ -424,122 +428,123 @@
     priceTick();
   }
 
+  // Events change data, never the screen: what is shown is drawn again from the new state; a sheet with a
+  // form being filled stays as it is.
   handlers.event = (m) => {
     const here = st && st.active && m.wallet === st.active;
     switch (m.method) {
-      case 'bb_changed':
+      case 'bb_changed':                              // wallets added, removed, renamed
         if (progressScreen === 's-progress') { progressScreen = null; route(); }
         else if (progressScreen) break;
-        else if (!$('tabs').hidden) load().then(() => (st.phase === 'unlocked' ? tab(curTab) : route()));
+        else if (!$('tabs').hidden) load().then(() => (st.phase === 'unlocked' ? (curTab && !$(`t-${curTab}`).hidden ? paint(curTab) : null) : route()));
         else if (!$('s-boot').hidden || !$('s-unlock').hidden) route();
+        break;
+      case 'bb_wallet': case 'bb_net':                // a wallet's Beam part changed status, or its node connection
+        if (st && st.phase === 'unlocked') load().then(() => { if (m.wallet === st.active) { renderBeam(); if (curTab === 'home') beamSoon(); } if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen(); });
         break;
       case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
       case 'bb_locked': st = null; route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
-      case 'bb_net': if (st && st.phase === 'unlocked') load().then(() => { if (curTab === 'home') beamRefresh(); }); break;
       case 'ev_sync_progress':
-        if (here && m.result) {
-          const { done, total } = m.result;
-          if (total && done < total) {
-            pill('beamPill', 'demo', `Beam syncing ${Math.floor((done / total) * 100)}%`);
-            beamMeta(`<span class="warn">syncing ${Math.floor((done / total) * 100)}%</span>`); netDot('beamDot', 'warn', 'Beam: catching up with the chain');
-          }
-        }
+        if (m.wallet && st && st.beam && st.beam[m.wallet]) { st.beam[m.wallet].sync = m.result && m.result.total ? { done: m.result.done, total: m.result.total } : null; if (here) renderBeam(); }
         break;
-      case 'ev_system_state': case 'ev_utxos_changed': if (here) beamRefresh(); break;
-      case 'ev_txs_changed': if (here) { beamRefresh(); if (curTab === 'activity') activity(); } break;
+      case 'ev_system_state': case 'ev_utxos_changed': if (here) beamSoon(); break;
+      case 'ev_txs_changed': if (here) { beamSoon(); if (curTab === 'activity') activity(); } break;
     }
   };
   // a network's state on its card: the dot by its name (its colour: live; yellow: starting, syncing,
-  // reconnecting; red: no node / no RPC) with the state in its tip, and for Beam the line on the right
+  // reconnecting; red: missing, not running, disconnected, no RPC) with the state in its tip
   function netDot(id, state, tip) { const d = $(id); d.classList.toggle('warn', state === 'warn'); d.classList.toggle('down', state === 'down'); d.title = tip || ''; }
   // Beam's line on the right: what (block: N, starting…, syncing 42%) and under it, if any, how (backup,
-  // reconnecting, disconnected) in its colour
+  // connecting, reconnecting, disconnected, database missing) in its colour
   function beamMeta(html, sub, subCls, tip) {
     const m = $('beamMeta');
     m.innerHTML = `${html ? `<span class="l1">${html}</span>` : ''}${sub ? `<span class="l2 ${subCls || ''}">${sub}</span>` : ''}`;
     m.title = tip || '';
   }
   const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
-  let beamHeight = 0, beamLostAt = 0, startedAt = 0, startPoll = 0, beamSeen = false;   // beamSeen: connected once since the popup opened          // beamLostAt: when the node stopped answering (0: it answers)
-  function pill(id, cls, text) { const p = $(id); p.className = `pill-status ${cls}`; p.querySelector('span').textContent = text; }
+  const share = (d, t) => (t ? Math.min(100, Math.floor((d / t) * 100)) : 0);
 
   // ---------- Wallet tab: Beam ----------
+  // Per wallet, by its id: its last wallet_status (never shown for another wallet), when its node was lost,
+  // whether it was ever connected since the popup opened. The host's state (st.beam[id]) says the rest.
+  const beamView = new Map();                         // id -> { s, seq, lostAt, seen }
+  const view = (id) => { if (!beamView.has(id)) beamView.set(id, { s: null, seq: 0, lostAt: 0, seen: false }); return beamView.get(id); };
+  const beamOf = (w) => (w && st && st.beam ? st.beam[w.id] : null);
+  const beamHere = () => { const b = beamOf(W()); return !!(b && b.status === 'running'); };
+  // its wallet_status, asked once for many events in a row; an answer older than the last one asked is dropped
+  let beamTimer = 0;
+  function beamSoon() { clearTimeout(beamTimer); beamTimer = setTimeout(beamRefresh, 250); }
   async function beamRefresh() {
     const w = W();
-    $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
-    if (!w || !w.beam) {
-      beamStatus = null; total(); beamMeta(''); netDot('beamDot', '', '');
-      const n = st && st.engines ? Object.values(st.engines).filter((x) => x.running).length : 0;
-      pill('beamPill', n ? '' : 'off', n ? `Beam: ${n} wallet${n > 1 ? 's' : ''} online` : 'Beam off');
-      $('beamPill').title = 'This wallet has no Beam part; the Beam parts of your other wallets run and receive';
-      return;
-    }
-    if (!beamHere()) {
-      // the engine is starting: asked again every 2 s (its start is announced, but a state read before it
-      // came would leave this line as it is); after 2 min it is not starting, it failed
-      startedAt ||= Date.now();
-      // its database is gone and there is no copy: say so, with the way back (Settings → restore Beam)
-      if ((st.beamMissing || []).includes(w.id)) {
-        beamMeta('', 'database missing · <a href="#" class="text-link" id="goRestore">restore</a>', 'bad');
-        netDot('beamDot', 'down', '');
-        $('goRestore').onclick = (ev) => { ev.preventDefault(); tab('settings'); };
-        clearTimeout(startPoll);
-        startPoll = setTimeout(() => load().then(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }).catch(() => {}), 5000);
-        return;
-      }
-      const long = Date.now() - startedAt > 120000;
-      beamMeta(long ? '' : '<span class="warn">starting…</span>', long ? 'not running' : '', 'bad');
-      netDot('beamDot', long ? 'down' : 'warn', '');
-      pill('beamPill', 'demo', 'Beam starting…');
-      clearTimeout(startPoll);
-      startPoll = setTimeout(() => load().then(() => { if (curTab === 'home' && !$('t-home').hidden) beamRefresh(); }).catch(() => {}), 2000);
-      return;
-    }
-    startedAt = 0;
+    if (!w || !beamHere()) return renderBeam();
+    const v = view(w.id), seq = ++v.seq;
     try {
       // The balance is BEAM's line of `totals` (asset 0): its sums count regular coins and those of the
-      // shielded pool (offline, public, max privacy). The top-level fields count regular coins only, so
-      // coins received through the pool did not show at all.
-      const raw = await host('beam', W().id, 'wallet_status');
+      // shielded pool (offline, public, max privacy). The top-level fields count regular coins only.
+      const raw = await host('beam', w.id, 'wallet_status');
+      if (seq !== v.seq) return;
       const t = (raw.totals || []).find((x) => Number(x.asset_id) === 0);
-      const s = t ? { ...raw, available: t.available, receiving: t.receiving, sending: t.sending, maturing: t.maturing,
+      v.s = t ? { ...raw, available: t.available, receiving: t.receiving, sending: t.sending, maturing: t.maturing,
         maturing_mp: t.maturing_mp || 0, maturing_regular: t.maturing_regular || 0, available_mp: t.available_mp || 0 } : raw;
-      beamStatus = s;
-      $('beamCard').classList.remove('nodata');
-      $('beamAvail').textContent = amt(s.available || 0);
-      $('beamUsd').textContent = rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
-      // what is not spendable yet, as chips in the explorer's way: one colour per state
-      const chip = (cls, text, tip) => `<span class="badge ${cls} chip"${tip ? ` title="${esc(tip)}"` : ''}>${text}</span>`;
-      const MATURING = 'Not spendable yet: mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
-      const minor = [];
-      if (s.receiving) minor.push(chip('ok', `+${amt(s.receiving)} incoming`, 'Coming to this wallet: a transfer still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay unlocked until then'));
-      if (s.sending) minor.push(chip('pending', `−${amt(s.sending)} outgoing`, 'Leaving this wallet: a transfer not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
-      if (s.maturing_regular) minor.push(chip('info', `${amt(s.maturing_regular)} maturing`, MATURING));
-      // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
-      if (s.maturing_mp) minor.push(chip('solo', `${amt(s.maturing_mp)} max privacy ≤72 h`, 'Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
-      else if (s.maturing && !s.maturing_regular) minor.push(chip('info', `${amt(s.maturing)} maturing`, MATURING));
-      $('beamMinor').innerHTML = minor.join('');
-      const synced = s.current_height && s.is_in_sync !== false;
-      const x = engineOf(W());
-      const node = x ? x.node : st.node, backup = !!(x && x.node !== st.node);
-      beamHeight = s.current_height || beamHeight;
-      // no node: reconnecting (yellow) for the first minute, then no node (red); the last block seen stays
-      if (x && !x.connected) beamLostAt ||= Date.now(); else { beamLostAt = 0; beamSeen = true; }
-      if (beamLostAt && Date.now() - beamLostAt > 60000) { beamMeta(blockAt(beamHeight), 'disconnected', 'bad', `No Beam node answers (${node} and the backups): the balance is as of block ${beamHeight.toLocaleString('en-US')}. Settings → Networks`); netDot('beamDot', 'down', 'Beam: disconnected'); }
-      else if (beamLostAt && !beamSeen) { beamMeta(blockAt(beamHeight), 'connecting', 'warn', `Connecting to ${node}`); netDot('beamDot', 'warn', 'Beam: connecting'); }
-      else if (beamLostAt) { beamMeta(blockAt(beamHeight), 'reconnecting', 'warn', `No answer from ${node}: trying again, then the next node`); netDot('beamDot', 'warn', 'Beam: reconnecting'); }
-      else if (!synced) { beamMeta(blockAt(beamHeight), 'syncing', 'warn', `Catching up with the chain through ${node}`); netDot('beamDot', 'warn', 'Beam: syncing'); }
-      else {
-        beamMeta(blockAt(beamHeight), backup ? 'backup' : '', '', `The chain's last block, from ${node}${backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
-        netDot('beamDot', '', `Beam: online through ${node}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online`);
-      }
-      if (x && !x.connected) pill('beamPill', 'demo', 'Beam: reconnecting…');
-      else if (!$('beamPill').textContent.includes('syncing') || synced) pill('beamPill', '', `Beam live → ${(s.current_height || 0).toLocaleString('en-US')}`);
-      $('beamPill').title = `Beam node ${x ? x.node : st.node}${x && x.node !== st.node ? ' (a backup: the main one did not answer)' : ''}. Every Beam wallet runs while the wallet is unlocked: all regular addresses are online.`;
-    } catch (e) { beamMeta(beamHeight ? blockAt(beamHeight) : '', 'disconnected', 'bad', msg(e)); netDot('beamDot', 'down', `Beam: disconnected (${msg(e)})`); pill('beamPill', 'off', 'Beam: no node'); }
+    } catch { if (seq !== v.seq) return; }
+    renderBeam();
+  }
+
+  // The Beam card, drawn only from the active wallet's own data: the host's status for it and its own last
+  // wallet_status. Every field is written each time, so nothing of another wallet can stay on it.
+  function renderBeam() {
+    const w = W(), b = beamOf(w);
+    $('beamBody').hidden = !(w && w.beam); $('beamNone').hidden = !!(w && w.beam);
+    const v = w ? view(w.id) : null, s = b && b.status === 'running' && v ? v.s : null;
+    beamStatus = s;
+    $('beamCard').classList.toggle('nodata', !s);
+    $('beamAvail').textContent = s ? amt(s.available || 0) : '';
+    $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
+    $('beamMinor').innerHTML = s ? chips(s) : '';
     total();
+    if (!w || !w.beam || !b) { beamMeta(''); netDot('beamDot', '', ''); return; }
+    const restore = '<a href="#" class="text-link" data-go-restore>restore</a>';
+    switch (b.status) {
+      case 'missing': beamMeta('', `database missing · ${restore}`, 'bad'); return netDot('beamDot', 'down', '');
+      case 'failed': beamMeta('', 'not running', 'bad'); return netDot('beamDot', 'down', '');
+      case 'restoring': {
+        const p = b.progress;
+        beamMeta(`<span class="warn">restoring${p && p.total ? ` ${share(p.done, p.total)}%` : '…'}</span>`, p ? (p.step === 'download' ? 'downloading the snapshot' : p.step === 'import' ? 'importing it' : '') : '', '');
+        return netDot('beamDot', 'warn', '');
+      }
+      case 'running': break;
+      case 'stopped': if (b.reason === 'paused') { beamMeta('<span class="warn">paused</span>', 'while another wallet restores'); return netDot('beamDot', 'warn', ''); }
+      // falls through: stopped (in the queue), starting, stopping
+      default: beamMeta('<span class="warn">starting…</span>'); return netDot('beamDot', 'warn', '');
+    }
+    const h = s && s.current_height ? s.current_height : 0;
+    // no node: connecting (never connected yet), reconnecting (lost, first minute), disconnected (after it)
+    if (!b.connected) v.lostAt ||= Date.now(); else { v.lostAt = 0; v.seen = true; }
+    const node = b.node || st.node;
+    if (v.lostAt && Date.now() - v.lostAt > 60000) { beamMeta(h ? blockAt(h) : '', 'disconnected', 'bad', `No Beam node answers (${node} and the backups). Settings → Networks`); return netDot('beamDot', 'down', ''); }
+    if (v.lostAt) { beamMeta(h ? blockAt(h) : '', v.seen ? 'reconnecting' : 'connecting', 'warn'); return netDot('beamDot', 'warn', ''); }
+    // syncing: its % from the sync's own progress, else the word; the block once the wallet has one
+    if (b.sync && b.sync.total && b.sync.done < b.sync.total) { beamMeta(`<span class="warn">syncing ${share(b.sync.done, b.sync.total)}%</span>`, h ? blockAt(h).replace('block:', 'at') : ''); return netDot('beamDot', 'warn', ''); }
+    if (!s || !h || s.is_in_sync === false) { beamMeta(h ? blockAt(h) : '<span class="warn">syncing…</span>', h ? 'syncing' : '', 'warn'); return netDot('beamDot', 'warn', ''); }
+    beamMeta(blockAt(h), b.backup ? 'backup' : '', '', `The chain's last block, from ${node}${b.backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
+    netDot('beamDot', '', '');
+  }
+  $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
+
+  // what is not spendable yet, as chips in the explorer's way: one colour per state
+  function chips(s) {
+    const chip = (cls, text, tip) => `<span class="badge ${cls} chip"${tip ? ` title="${esc(tip)}"` : ''}>${text}</span>`;
+    const MATURING = 'Not spendable yet: mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
+    const out = [];
+    if (s.receiving) out.push(chip('ok', `+${amt(s.receiving)} incoming`, 'Coming to this wallet: a transfer still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay unlocked until then'));
+    if (s.sending) out.push(chip('pending', `−${amt(s.sending)} outgoing`, 'Leaving this wallet: a transfer not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
+    if (s.maturing_regular) out.push(chip('info', `${amt(s.maturing_regular)} maturing`, MATURING));
+    // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
+    if (s.maturing_mp) out.push(chip('solo', `${amt(s.maturing_mp)} max privacy ≤72 h`, 'Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
+    else if (s.maturing && !s.maturing_regular) out.push(chip('info', `${amt(s.maturing)} maturing`, MATURING));
+    return out.join('');
   }
 
   // ---------- Wallet tab: Ethereum ----------
@@ -549,18 +554,19 @@
     $('ethBody').hidden = !a; $('ethNone').hidden = !!a; $('acctDd').hidden = !a;
     if (!a) { ethData = null; total(); return; }
     $('ethAddr').textContent = a.address;
-    if (ethFor !== a.address) $('ethAssets').innerHTML = '<div class="empty">loading…</div>';
+    if (ethFor !== a.address) { ethData = null; $('ethAssets').innerHTML = '<div class="empty">loading…</div>'; total(); }
     ethFor = a.address;
     try {
       const d = await host('ethBalances', a.address);
       if (ethFor !== a.address) return;
       ethData = d;
       ethRows();
-      pill('ethPill', '', 'Ethereum live'); netDot('ethDot', '', 'Ethereum: online through public RPCs');
+      netDot('ethDot', '', 'Ethereum: online through public RPCs');
     } catch (e) {
       // the last balances stay, marked as not current; none yet: the reason
+      if (ethFor !== a.address) return;
       if (!ethData) $('ethAssets').innerHTML = `<div class="empty">no Ethereum RPC answers: ${esc(msg(e))}</div>`;
-      pill('ethPill', 'off', 'Ethereum: no RPC'); netDot('ethDot', 'down', `Ethereum: no RPC answers (${msg(e)}); the balances shown may be old`);
+      netDot('ethDot', 'down', `Ethereum: no RPC answers (${msg(e)}); the balances shown may be old`);
     }
     total();
   }
@@ -1030,7 +1036,7 @@
 
     const extra = teTo.value() === '__other' ? $('teOther').value.trim() : '';
     const [out, ins] = await Promise.all([
-      Object.keys(st.engines || {}).length ? host('outgoing', extra).catch((e) => { note('bErr', 'bad', msg(e)); return { msgs: [] }; }) : { msgs: [] },
+      Object.values(st.beam || {}).some((b) => b.status === 'running') ? host('outgoing', extra).catch((e) => { note('bErr', 'bad', msg(e)); return { msgs: [] }; }) : { msgs: [] },
       host('bridgeIn').catch(() => []),
     ]);
     const OUT = { done: ['ok', 'arrived'], waiting: ['pending', 'waiting for the relayer'], failed: ['bad', 'failed on Ethereum'], unknown: ['warn', 'see the bridge monitor'] };
@@ -1104,7 +1110,7 @@
     if (!c) return;
     e.preventDefault();
     if (!(await confirmBox('Cancel the transfer', [['Transaction', c.dataset.cancel]], 'Only a transfer the other wallet has not signed yet can be cancelled.'))) return;
-    try { await host('beam', W().id, 'tx_cancel', { txId: c.dataset.cancel }); activity(); } catch (err) { alert(msg(err)); }
+    try { await host('beam', W().id, 'tx_cancel', { txId: c.dataset.cancel }); activity(); } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
   };
 
   // ---------- Settings ----------
@@ -1127,7 +1133,7 @@
         ${w.ethKind === 'phrase' ? '<a href="#" class="text-link" data-a="ethPhrase">Ethereum phrase</a>' : ''}
         ${w.eth ? '<a href="#" class="text-link" data-a="ethKey">private key</a>' : ''}
         ${w.beam ? '<a href="#" class="text-link" data-a="backup">Beam backup</a>' : ''}
-        ${w.beam && !(st.engines && st.engines[w.id]) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
+        ${w.beam && st.beam && st.beam[w.id] && ['missing', 'failed'].includes(st.beam[w.id].status) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
         <a href="#" class="text-link danger" data-a="remove">remove</a>
       </div></div>`).join('');
     $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
@@ -1149,10 +1155,9 @@
           input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '' },
           note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back; the history and address names do not. Only when its Beam database is gone.` });
         if (!r.ok) return;
-        show('s-progress'); progressScreen = 's-progress'; clearNotes('s-progress');
-        try { await host('restoreBeam', w.id, r.pass, r.input || ''); }
-        catch (err) { note('s-progress', 'bad', msg(err)); progressScreen = null; return; }
-        progressScreen = null; await load(); tab('home');
+        // it runs in the host (the popup may close); the wallet's card shows its progress
+        await host('switchWallet', w.id); await load(); tab('home');
+        host('restoreBeam', w.id, r.pass, r.input || '').catch((err) => ask({ title: 'Not restored', note: msg(err), yes: 'OK', no: null }));
         return;
       }
       if (act === 'rename') {
@@ -1195,7 +1200,7 @@
           check: async ({ pass }) => { await host('removeWallet', w.id, pass); } });
         if (r.ok) { await load(); if (st.phase === 'unlocked' && st.wallets.length) settingsOpen(); else route(); }
       }
-    } catch (err) { alert(msg(err)); }
+    } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
   };
   $('chPass').onclick = async () => {
     let old = '';
@@ -1242,7 +1247,7 @@
   // ---------- boot and routing ----------
   async function route() {
     st = await host('state');
-    if (st.progress) {                              // a create or restore is still running in the host
+    if (st.progress && !(st.beam && st.beam[st.progress.wallet])) {   // a new wallet is still being made in the host
       show('s-progress'); progressScreen = 's-progress'; handlers.progress(st.progress);
       return;
     }
