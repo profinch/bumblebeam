@@ -330,7 +330,8 @@
     if (/^storage/i.test(m)) return 'the browser could not read the wallet\'s data: close and reopen the browser, then try again';
     return m;
   }
-  $('unlockForm').onsubmit = (e) => { e.preventDefault(); unlock(); };
+  $('doUnlock').onclick = () => unlock();
+  $('uPass').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); unlock(); } };
 
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
