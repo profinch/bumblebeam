@@ -28,18 +28,9 @@ const OPS = {
 };
 
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
-// Chrome closes the action popup when the icon under it changes: while the popup is open the change waits,
-// and is made once it is closed (checked each second)
-let wantLocked = null, shownLocked = null, waiting = 0;
-const popupOpen = async () => (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).length > 0;
-async function applyIcon() {
-  if (wantLocked === null || wantLocked === shownLocked) return;
-  if (await popupOpen()) { waiting ||= setInterval(() => applyIcon().catch(() => {}), 1000); return; }
-  clearInterval(waiting); waiting = 0;
-  const locked = wantLocked;
-  await (locked ? lockedIcon().then((imageData) => chrome.action.setIcon({ imageData })) : chrome.action.setIcon({ path: ICONS }));
-  shownLocked = locked;
-}
+// set as soon as the host says (the open popup stays open through the change)
+let wantLocked = null;
+const applyIcon = () => (wantLocked ? lockedIcon().then((imageData) => chrome.action.setIcon({ imageData })) : chrome.action.setIcon({ path: ICONS }));
 let lockedImages = null;
 // locked: the same bee, grey and dimmed (asleep); nothing drawn over it
 async function lockedIcon() {
