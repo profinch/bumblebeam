@@ -41,6 +41,7 @@ html.popup .wtop { padding-bottom: 3px; }      /* the fixed header ends 3 px und
 .hero { text-align: center; padding: 18px 0 6px; }
 .lock-hero { padding-top: 24px; }
 .lock-emoji { font-size: 48px; line-height: 1; }
+#unlockForm { padding-top: 15px; }      /* the text to the password as far as the logo to the lock: 33 px */
 .hero-title { margin: 10px 0 6px; font-size: var(--fs-xl); font-weight: 700; }
 .hero-title .word b { background: var(--gradient-accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero-lead { margin: 0 auto; max-width: 340px; white-space: pre-line; color: var(--text-dim); font-size: var(--fs-base); line-height: 1.55; }
