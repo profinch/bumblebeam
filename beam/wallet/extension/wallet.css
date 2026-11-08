@@ -113,10 +113,17 @@ html.popup .seed { columns: 2; }
 .asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset .amt { grid-area: amt; font: 700 14px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
 .asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; }
-#ethAssets .asset { padding-right: 10px; }      /* the dollars clear of the scroll bar */
-.minor { display: flex; flex-wrap: wrap; gap: 6px; }
-.minor:not(:empty) { margin-top: 6px; }
+/* a token row: its contract's link and copy button, the symbol, the amount, the dollars; the row (and its line)
+   ends 10 px before the scroll bar */
+#ethAssets .asset { grid-template-columns: 34px minmax(0, 1fr) auto 72px; grid-template-areas: "tok sym amt usd"; margin-right: 10px; }
+#ethAssets .tok { grid-area: tok; display: flex; gap: 6px; align-self: center; }
+#ethAssets .more { padding: 8px 10px 4px 0; }
 .badge.chip { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 2px 6px; text-transform: none; }      /* as the explorer's block of ours (.ours-h) */
+/* the chips: one line, its room kept even when empty; too long for the card (big amounts), it scrolls, with
+   the scroll bar's room kept too */
+#beamCard, #beamBody, #ethCard { min-width: 0; }      /* a long line scrolls inside, the card keeps its width */
+.minor { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 6px; height: 27px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+.minor .chip { flex: none; white-space: nowrap; cursor: help; align-self: flex-start; }
 .acts { display: flex; gap: 8px; margin-top: 10px; }
 .acts .btn { flex: 1; justify-content: center; padding: 7px 10px; }
 /* Ethereum's head as Beam's: the title on the same line from the top; the account list from the title to the

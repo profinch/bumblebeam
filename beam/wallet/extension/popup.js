@@ -561,20 +561,24 @@
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
 
   // what is not spendable yet, as chips in the explorer's way: one colour per state
+  // what is not spendable yet, as chips in the explorer's way: one colour per state, the amount only (to the
+  // hundredth); what each is, in its tip
   function chips(s) {
-    const chip = (cls, text, tip) => `<span class="badge ${cls} chip"${tip ? ` title="${esc(tip)}"` : ''}>${text}</span>`;
-    const MATURING = 'Not spendable yet: mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
+    const two = (g) => (g / GROTH).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const chip = (cls, text, tip) => `<span class="badge ${cls} chip" title="${esc(tip)}">${text}</span>`;
+    const MATURING = 'Maturing: not spendable yet. Mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
     const out = [];
-    if (s.receiving) out.push(chip('ok', `+${amt(s.receiving)} incoming`, 'Coming to this wallet: a transfer still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay unlocked until then'));
-    if (s.sending) out.push(chip('pending', `−${amt(s.sending)} outgoing`, 'Leaving this wallet: a transfer not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
-    if (s.maturing_regular) out.push(chip('info', `${amt(s.maturing_regular)} maturing`, MATURING));
+    if (s.receiving) out.push(chip('ok', `+${two(s.receiving)}`, 'Incoming: a transfer to this wallet still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay open and unlocked until then'));
+    if (s.sending) out.push(chip('pending', `−${two(s.sending)}`, 'Outgoing: a transfer from this wallet not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
+    if (s.maturing_regular) out.push(chip('info', two(s.maturing_regular), MATURING));
     // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
-    if (s.maturing_mp) out.push(chip('solo', `${amt(s.maturing_mp)} max privacy ≤72 h`, 'Received through the shielded pool (max privacy): Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
-    else if (s.maturing && !s.maturing_regular) out.push(chip('info', `${amt(s.maturing)} maturing`, MATURING));
+    if (s.maturing_mp) out.push(chip('solo', `${two(s.maturing_mp)} ≤72h`, 'Max privacy: received through the shielded pool. Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
+    else if (s.maturing && !s.maturing_regular) out.push(chip('info', two(s.maturing), MATURING));
     return out.join('');
   }
 
   // ---------- Wallet tab: Ethereum ----------
+  const CPI = $('ethCopy').innerHTML;                 // the copy icon (two sheets), as in 3BMiner
   // Per address: its last balances and whether the last read failed; the card shows only the shown account's
   // own (nothing of another account or wallet), or "syncing…" until they come.
   const ethView = new Map();                          // address -> { d, err, seq }
@@ -605,27 +609,42 @@
   }
   // the Ethereum card's rows from the last balances, at the current prices: drawn again when prices come
   // (the balances can arrive first, and their dollars stayed empty)
+  // ETH and WBEAM first, always; then the tokens worth $1 or more (dearest first); the others (cheaper, or
+  // with no price: mostly airdropped junk) only after "load low-value tokens", until another account is shown.
+  // Each token: a link to its contract on Etherscan (its address in the tip) and a copy button.
+  let ethShowLow = null;                              // the address whose low-value tokens are shown
+  const LINK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function ethRows() {
     const d = ethData;
     if (!d) return;
-    const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null }]
-      .concat(d.tokens.map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals),
-        u: t.address.toLowerCase() === st.contracts.wbeam ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null,
-        title: t.address })));
-    $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
+    const wb = st.contracts.wbeam;
+    const val = (t) => (t.address.toLowerCase() === wb ? (rates ? units(t.balance, 8) * (rates.wbeam || rates.beam) : null) : t.usd != null ? units(t.balance, t.decimals) * t.usd : null);
+    const rows = [{ sym: 'ETH', v: units(d.eth, 18), u: rates ? units(d.eth, 18) * rates.eth : null, addr: null }];
+    const w = d.tokens.find((t) => t.address.toLowerCase() === wb);
+    if (w) rows.push({ sym: w.symbol, v: units(w.balance, w.decimals), u: val(w), addr: w.address });
+    const rest = d.tokens.filter((t) => t !== w).map((t) => ({ sym: t.symbol, v: t.balance == null ? NaN : units(t.balance, t.decimals), u: val(t), addr: t.address }))
+      .sort((x, y) => (y.u || 0) - (x.u || 0));
+    const high = rest.filter((r) => r.u != null && r.u >= 1), low = rest.filter((r) => !(r.u != null && r.u >= 1));
+    const showLow = ethShowLow === ethFor;
+    const row = (r) => `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="${esc(r.addr)}">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" aria-label="Copy the contract">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`;
+    $('ethAssets').innerHTML = [...rows, ...high, ...(showLow ? low : [])].map(row).join('')
+      + (low.length && !showLow ? `<div class="more"><button type="button" class="btn ghost small" data-more>load low-value tokens (${low.length})</button></div>` : '');
   }
-  // the address's copy button: a tick for 2 s once copied (as in 3BMiner)
-  const CPI = $('ethCopy').innerHTML;
-  const OKI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  let cpTimer = 0;
-  $('ethCopy').onclick = () => {
-    const v = $('ethAddr').textContent;
-    if (!v) return;
-    navigator.clipboard.writeText(v).then(() => {
-      $('ethCopy').innerHTML = OKI; $('ethCopy').classList.add('done');
-      clearTimeout(cpTimer); cpTimer = setTimeout(() => { $('ethCopy').innerHTML = CPI; $('ethCopy').classList.remove('done'); }, 2000);
-    }).catch(() => {});
+  $('ethAssets').onclick = (e) => {
+    const c = e.target.closest('[data-cp]');
+    if (c) return copyFlash(c, c.dataset.cp);
+    if (e.target.closest('[data-more]')) { ethShowLow = ethFor; ethRows(); }
   };
+  // the address's copy button: a tick for 2 s once copied (as in 3BMiner)
+  const OKI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function copyFlash(btn, text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.innerHTML = OKI; btn.classList.add('done');
+      clearTimeout(btn._t); btn._t = setTimeout(() => { btn.innerHTML = CPI; btn.classList.remove('done'); }, 2000);
+    }).catch(() => {});
+  }
+  $('ethCopy').onclick = () => copyFlash($('ethCopy'), $('ethAddr').textContent);
 
   function total() {
     if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }
