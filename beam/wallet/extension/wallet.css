@@ -10,13 +10,13 @@ html.popup, html.popup body { height: 600px; overflow: hidden; }
 html.popup body { width: 400px; min-height: 0; display: flex; flex-direction: column; }
 html.popup main { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 html.popup #t-home { display: flex; flex-direction: column; height: 100%; }
-html.popup #ethCard { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+html.popup #ethCard { flex: none; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }      /* never squeezed: its buttons as far from its edge as Beam's */
 html.popup #ethBody { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 /* the token list is 4 rows tall for every wallet (more scroll), so the card looks the same with or without
    tokens; the address line and the buttons never shrink */
 html.popup #ethAssets { flex: none; height: 116px; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 main { max-width: 640px; padding: 4px 16px 20px; }
-html.popup main { padding: 4px 12px 14px; }
+html.popup main { padding: 4px 12px 5px; }
 .wtop { padding: 0 16px; }
 html.popup .wtop { padding: 0 12px; }
 .wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; }
