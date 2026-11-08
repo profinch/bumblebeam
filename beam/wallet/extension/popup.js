@@ -611,7 +611,7 @@
   // (the balances can arrive first, and their dollars stayed empty)
   // ETH and WBEAM first, always; then the tokens worth $1 or more (dearest first); the others (cheaper, or
   // with no price: mostly airdropped junk) only after "load low-value tokens", until another account is shown.
-  // Each token: a link to its contract on Etherscan (its address in the tip) and a copy button.
+  // Each token: a link to its contract on Etherscan and a button that copies the contract's address.
   let ethShowLow = null;                              // the address whose low-value tokens are shown
   const LINK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function ethRows() {
@@ -626,7 +626,7 @@
       .sort((x, y) => (y.u || 0) - (x.u || 0));
     const high = rest.filter((r) => r.u != null && r.u >= 1), low = rest.filter((r) => !(r.u != null && r.u >= 1));
     const showLow = ethShowLow === ethFor;
-    const row = (r) => `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="${esc(r.addr)}">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" aria-label="Copy the contract">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`;
+    const row = (r) => `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="Open on Etherscan">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" title="Copy the token's contract address">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`;
     $('ethAssets').innerHTML = [...rows, ...high, ...(showLow ? low : [])].map(row).join('')
       + (low.length && !showLow ? `<div class="more"><button type="button" class="btn ghost small" data-more>load low-value tokens (${low.length})</button></div>` : '');
   }
