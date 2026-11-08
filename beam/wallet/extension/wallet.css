@@ -133,7 +133,8 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 /* Ethereum's head as Beam's: the title on the same line from the top; the account list from the title to the
    right edge, as far from the title's last letter as from that edge */
 #ethCard .panel-head { align-items: flex-start; gap: 0; }
-#ethCard .panel-title { line-height: 15px; flex: none; white-space: nowrap; }      /* a long account name never pushes it to two lines */
+#ethCard .panel-title { line-height: 15px; flex: none; white-space: nowrap; }
+#beamCard .panel-title, #ethCard .panel-title { position: relative; top: 2px; }      /* the network's dot and name 2 px lower; nothing else moves */      /* a long account name never pushes it to two lines */
 .dd.acct { flex: 1 1 auto; min-width: 0; width: auto; margin-left: 15px; }
 /* its list: rows a little closer; an account's name left (cut with …), its address right; the actions with
    their icons in one column, so the words line up */

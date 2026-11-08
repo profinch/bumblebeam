@@ -856,7 +856,17 @@
 
     // ---------- Ethereum ----------
     rates: () => Bridge.rates(),
-    ethBalances: (address) => Eth.balances(address, settings.tokens),
+    // each address's tokens are kept (chrome.storage 'ethTokens'): a Blockscout that fails or answers an empty
+    // list leaves them in place, read on the chain, instead of showing ETH and WBEAM alone
+    async ethBalances(address) {
+      const key = String(address).toLowerCase();
+      const all = (await kv.get('ethTokens').catch(() => null)) || {};
+      const r = await Eth.balances(address, settings.tokens, all[key] || []);
+      // kept: every token seen for it, with its last price (one Blockscout gave no longer empties the list)
+      const next = r.tokens.filter((t) => !t.pinned && !t.custom).map((t) => ({ address: t.address, symbol: t.symbol, decimals: t.decimals, usd: t.usd || null })).slice(0, 100);
+      if (JSON.stringify(next) !== JSON.stringify(all[key] || [])) { all[key] = next; kv.set('ethTokens', all).catch(() => {}); }
+      return r;
+    },
     ethHistory: (address) => Eth.history(address),
     // { from, to, amount (decimal string), token: null | { address, decimals, symbol } } -> priced, kept for ethSend
     // A token's decimals are read from its contract here, never taken from the popup or Blockscout; the

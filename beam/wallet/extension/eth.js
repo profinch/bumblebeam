@@ -89,13 +89,18 @@ const Eth = (() => {
   // ---------- reading ----------
   // ETH, WBEAM and the extra tokens (their own list), read from the chain; other tokens Blockscout knows a
   // price for come along (unpriced ones are mostly airdropped spam and stay out)
-  async function balances(address, extra = []) {
+  // known: the tokens this address had before (the host keeps them). Blockscout's list is not always whole: it
+  // fails, or answers an empty list for an address it has not indexed. So the known tokens it does not name are
+  // read on the chain itself (balanceOf), with their last known price, instead of vanishing. listed: whether
+  // Blockscout answered at all.
+  async function balances(address, extra = [], known = []) {
     const [eth, wbeam] = await Promise.all([rpc('eth_getBalance', [address, 'latest']), callBig(WBEAM, ERC20.balanceOf(address))]);
     const tokens = [{ address: WBEAM, symbol: 'WBEAM', decimals: 8, balance: wbeam.toString(), pinned: true }];
     const seen = new Set([WBEAM.toLowerCase()]);
     const mine = extra.filter((t) => !seen.has(t.address.toLowerCase()) && seen.add(t.address.toLowerCase()));
     const bals = await Promise.all(mine.map((t) => callBig(t.address, ERC20.balanceOf(address)).catch(() => null)));
     mine.forEach((t, k) => tokens.push({ ...t, balance: bals[k] == null ? null : bals[k].toString(), custom: true }));
+    let listed = false;
     try {
       const list = await getJSON(`${BLOCKSCOUT}/addresses/${address}/token-balances`);
       for (const x of list || []) {
@@ -105,8 +110,12 @@ const Eth = (() => {
         tokens.push({ address: t.address_hash, symbol: String(t.symbol || '?').slice(0, 12), decimals: Number(t.decimals || 18),
           balance: String(x.value || '0'), usd: Number(t.exchange_rate) || null });
       }
+      listed = true;
     } catch {}
-    return { eth: BigInt(eth).toString(), tokens };
+    const rest = known.filter((t) => t && t.address && !seen.has(t.address.toLowerCase()) && seen.add(t.address.toLowerCase()));
+    const kb = await Promise.all(rest.map((t) => callBig(t.address, ERC20.balanceOf(address)).catch(() => null)));
+    rest.forEach((t, k) => { if (kb[k] != null) tokens.push({ address: t.address, symbol: t.symbol, decimals: t.decimals, balance: kb[k].toString(), usd: t.usd || null, cached: true }); });
+    return { eth: BigInt(eth).toString(), tokens, listed };
   }
 
   // the account's last transactions and token transfers, newest first (Blockscout)
