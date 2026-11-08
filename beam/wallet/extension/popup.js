@@ -646,7 +646,7 @@
       .sort((x, y) => (y.u || 0) - (x.u || 0));
     const high = rest.filter((r) => r.u != null && r.u >= 1), low = rest.filter((r) => !(r.u != null && r.u >= 1));
     const showLow = ethShowLow === ethFor;
-    const row = (r) => `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="Open on Etherscan">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" data-tip-wide title="Copy the token's contract address
+    const row = (r) => `<div class="asset${r.addr ? '' : ' native'}"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="Open on Etherscan">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" data-tip-wide title="Copy the token's contract address
 ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`;
     $('ethAssets').innerHTML = [...rows, ...high, ...(showLow ? low : [])].map(row).join('')
       + (low.length && !showLow ? `<div class="more"><button type="button" class="btn ghost small" data-more>load low-value tokens (${low.length})</button></div>` : '');
