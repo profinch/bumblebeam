@@ -51,6 +51,7 @@
     if (!tip.isConnected) document.body.appendChild(tip);
     current = el;
     tip.textContent = text;
+    tip.classList.toggle('wide', el.hasAttribute('data-tip-wide'));      // opt-in: a wider tip, its line breaks kept
     tip.classList.remove('on');
     place(el);
     el.setAttribute('aria-describedby', tip.id);

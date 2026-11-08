@@ -437,6 +437,8 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
   pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 0.14s ease, transform 0.14s ease;
 }
 .bb-tip.below { transform: translateY(-4px); }
+/* opt-in (data-tip-wide on the element): up to 360 px, line breaks kept (e.g. a label, then a whole address) */
+.bb-tip.wide { max-width: min(360px, calc(100vw - 16px)); white-space: pre-line; }
 .bb-tip.on { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .bb-tip { transition: none; }
