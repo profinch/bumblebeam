@@ -133,8 +133,16 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 /* Ethereum's head as Beam's: the title on the same line from the top; the account list from the title to the
    right edge, as far from the title's last letter as from that edge */
 #ethCard .panel-head { align-items: flex-start; gap: 0; }
-#ethCard .panel-title { line-height: 15px; }
+#ethCard .panel-title { line-height: 15px; flex: none; white-space: nowrap; }      /* a long account name never pushes it to two lines */
 .dd.acct { flex: 1 1 auto; min-width: 0; width: auto; margin-left: 15px; }
+/* its list: rows a little closer; an account's name left (cut with …), its address right; the actions with
+   their icons in one column, so the words line up */
+#acctDd .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding-top: 5px; padding-bottom: 5px; }
+#acctDd .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#acctDd .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+#acctDd .dd-list [aria-selected="true"] .ad { color: inherit; }
+#acctDd .dd-list .mi { flex: none; display: grid; place-items: center; width: 16px; }
+#acctDd .dd-list .mi svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* the whole address on the right, its copy button before it */
 .addr-line { margin: 2px 0 4px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .own-label { margin-top: 12px; }

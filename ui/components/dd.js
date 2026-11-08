@@ -13,6 +13,8 @@
    Script:
      var d = BB.dropdown(document.getElementById('x'), function (v) { ... });  // onPick(value)
      d.set('a');  d.value();  d.options([{ v: 'a', label: 'First' }, { group: 'Group' }, ...], 'a');
+   Opt-in: an option's html (trusted markup, e.g. a name and an address on one line) shows in the list while its
+   label goes on the button; { sep: true } is a thin line between groups.
    A classic script; works in Chromium 83 and the MV3 extension like the rest of ui/. */
 (function () {
   'use strict';
@@ -32,7 +34,7 @@
       var li = its.filter(function (x) { return x.getAttribute('data-v') === String(v); })[0] || its.filter(function (x) { return x.getAttribute('data-v') === ''; })[0] || its[0];
       its.forEach(function (x) { x.setAttribute('aria-selected', String(x === li)); });
       root.setAttribute('data-value', li ? li.getAttribute('data-v') : '');
-      btn.textContent = li ? li.textContent : '';
+      btn.textContent = li ? (li.getAttribute('data-label') || li.textContent) : '';
     }
     function open() {
       list.hidden = false;
@@ -78,8 +80,12 @@
       list.innerHTML = '';
       opts.forEach(function (o) {
         var li = document.createElement('li');
-        if (o.group) { li.className = 'dd-group'; li.setAttribute('role', 'presentation'); li.textContent = o.group; }
-        else { li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v)); li.textContent = o.label; }
+        if (o.sep) { li.className = 'dd-sep'; li.setAttribute('role', 'separator'); }
+        else if (o.group) { li.className = 'dd-group'; li.setAttribute('role', 'presentation'); li.textContent = o.group; }
+        else {
+          li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v));
+          if (o.html != null) { li.innerHTML = o.html; li.setAttribute('data-label', o.label); } else li.textContent = o.label;
+        }
         list.appendChild(li);
       });
       set(value !== undefined ? value : root.getAttribute('data-value') || '');

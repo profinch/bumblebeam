@@ -292,6 +292,8 @@ th.sortable:hover { color: var(--text); }
 th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); color: var(--accent); }
 .dd-list [role="option"].active { background: rgba(var(--accent-rgb), 0.12); color: var(--text); }
 .dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
+/* opt-in: a thin line between groups of a list ({ sep: true } in BB.dropdown) */
+.dd-list .dd-sep { height: 1px; margin: 4px 10px; background: var(--border); list-style: none; }
 
 /* scrolling boxes (wide tables, code, the card list): a thin accent bar, no track, no arrows */
 .dd-list::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .code pre::-webkit-scrollbar, .doc-obj::-webkit-scrollbar { width: 4px; height: 4px; }

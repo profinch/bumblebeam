@@ -85,6 +85,14 @@
     port.postMessage({ id, op, args });
   });
 
+  // the account menu's icons, drawn as the header's (stroked, round ends)
+  const ICON = {
+    add: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
+    import: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>',
+    rename: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+    remove: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
+  };
+
   // ---------- state ----------
   let st = null, rates = null, beamStatus = null, ethData = null, feeData = null;
   const W = () => st && st.wallets && st.wallets.find((w) => w.id === st.active);
@@ -434,9 +442,14 @@
     $('teFrom').textContent = $('feTo').textContent = w ? w.name : 'Beam';
     if (w && w.accounts.length) {
       const a = acct();
-      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} · ${short(x.address)}` })),
-        { group: ' ' }, ...(w.hd ? [{ v: '__add', label: '+ Add an account' }] : []), { v: '__import', label: '+ Import an account' },
-        { v: '__rename', label: '✎ Rename this account' }, ...(w.accounts.length > 1 ? [{ v: '__remove', label: '− Remove this account' }] : [])], String(a.i));
+      // the accounts: the name on the left (cut with … if long), the address on the right; a line; then what
+      // can be done, each with its icon in a column of its own so the words line up
+      const six = (x) => `${x.slice(0, 8)}…${x.slice(-6)}`;
+      const act = (v, icon, text) => ({ v, label: text, html: `<span class="mi">${icon}</span><span>${esc(text)}</span>` });
+      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${six(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span>` })),
+        { sep: true },
+        ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
+        act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(a.i));
     }
     return st;
   }
