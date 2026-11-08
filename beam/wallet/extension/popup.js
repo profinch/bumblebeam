@@ -450,6 +450,13 @@
         { sep: true },
         ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
         act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(a.i));
+      // the accounts in a box of their own that scrolls past 4, inside the list; the actions stay below it
+      const list = $('acctDd').querySelector('.dd-list');
+      const rows = [...list.querySelectorAll(':scope > [role="option"]')].filter((li) => !li.dataset.v.startsWith('__'));
+      const box = document.createElement('li'), ul = document.createElement('ul');
+      box.className = 'dd-scroll'; box.setAttribute('role', 'presentation'); ul.setAttribute('role', 'group');
+      rows.forEach((li) => ul.appendChild(li));
+      box.appendChild(ul); list.insertBefore(box, list.firstChild);
     }
     return st;
   }

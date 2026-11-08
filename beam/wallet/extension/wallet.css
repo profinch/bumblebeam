@@ -138,7 +138,12 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 .dd.acct { flex: 1 1 auto; min-width: 0; width: auto; margin-left: 15px; }
 /* its list: rows a little closer; an account's name left (cut with …), its address right; the actions with
    their icons in one column, so the words line up */
-#acctDd .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding-top: 5px; padding-bottom: 5px; }
+#acctDd .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding-top: 5px; padding-bottom: 5px; line-height: 16px; }
+/* the accounts: 4 rows seen (26 px each), more scroll inside the list */
+#acctDd .dd-scroll { list-style: none; }
+#acctDd .dd-scroll ul { list-style: none; margin: 0; padding: 0; max-height: 104px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+/* on the wallet tab nothing scrolls: an open list may lie over the bottom of the popup instead */
+html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 #acctDd .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #acctDd .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
 #acctDd .dd-list [aria-selected="true"] .ad { color: inherit; }
