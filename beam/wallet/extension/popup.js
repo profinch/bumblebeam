@@ -380,6 +380,7 @@
     try {
       if (v === '__add') await host('addEthAccount', w.id);
       else if (v === '__import') { if (!(await importAccount(w))) return load(); }
+      else if (v === '__rename') { await renameAccount(); }
       else if (v === '__remove') { await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
       else await host('setActiveEth', w.id, Number(v));
     } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
@@ -435,7 +436,7 @@
       const a = acct();
       acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} · ${short(x.address)}` })),
         { group: ' ' }, ...(w.hd ? [{ v: '__add', label: '+ Add an account' }] : []), { v: '__import', label: '+ Import an account' },
-        ...(w.accounts.length > 1 ? [{ v: '__remove', label: '− Remove this account' }] : [])], String(a.i));
+        { v: '__rename', label: '✎ Rename this account' }, ...(w.accounts.length > 1 ? [{ v: '__remove', label: '− Remove this account' }] : [])], String(a.i));
     }
     return st;
   }
@@ -554,7 +555,7 @@
     // syncing: its % from the sync's own progress, else the word; the block once the wallet has one
     if (b.sync && b.sync.total && b.sync.done < b.sync.total) { beamMeta(h ? blockAt(h).replace('block:', 'at:') : '', `syncing ${share(b.sync.done, b.sync.total)}%`, 'warn'); return netDot('beamDot', 'warn', ''); }
     if (!s || !h || s.is_in_sync === false) { beamMeta(h ? blockAt(h) : '', 'syncing…', 'warn'); return netDot('beamDot', 'warn', ''); }
-    beamMeta(blockAt(h), b.backup ? 'backup' : '', '');
+    beamMeta(blockAt(h));
     netDot('beamDot', '', '');
   }
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
@@ -613,8 +614,18 @@
         title: t.address })));
     $('ethAssets').innerHTML = rows.map((r) => `<div class="asset"${r.title ? ` title="${esc(r.title)}"` : ''}><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`).join('');
   }
-  $('acctRename').onclick = renameAccount;
-  $('ethAddr').onclick = () => navigator.clipboard.writeText($('ethAddr').textContent).then(() => { $('ethAddr').classList.add('copied'); setTimeout(() => $('ethAddr').classList.remove('copied'), 1000); });
+  // the address's copy button: a tick for 2 s once copied (as in 3BMiner)
+  const CPI = $('ethCopy').innerHTML;
+  const OKI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  let cpTimer = 0;
+  $('ethCopy').onclick = () => {
+    const v = $('ethAddr').textContent;
+    if (!v) return;
+    navigator.clipboard.writeText(v).then(() => {
+      $('ethCopy').innerHTML = OKI; $('ethCopy').classList.add('done');
+      clearTimeout(cpTimer); cpTimer = setTimeout(() => { $('ethCopy').innerHTML = CPI; $('ethCopy').classList.remove('done'); }, 2000);
+    }).catch(() => {});
+  };
 
   function total() {
     if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }

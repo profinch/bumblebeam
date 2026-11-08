@@ -522,6 +522,11 @@ td .kv { font-size: 11px; gap: 2px 10px; }
 .nowrap { white-space: nowrap; }
 .wrap { white-space: normal; }
 .copy { cursor: pointer; }
+/* opt-in: a small copy button (two sheets), a green tick for 2 s once copied (the 3BMiner pattern) */
+.cp { display: inline-flex; align-items: center; background: none; border: 0; padding: 0; margin: 0; color: var(--muted); cursor: pointer; line-height: 0; }
+.cp:hover { color: var(--text-dim); }
+.cp.done { color: #34d399; }
+.cp svg { width: 12px; height: 12px; }
 .copy:hover { color: var(--accent); }
 .small { font-size: 10px; }
 /* a calculator's results: tiles in a grid (were the pool's) */

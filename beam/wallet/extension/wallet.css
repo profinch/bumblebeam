@@ -98,7 +98,7 @@ html.popup .seed { columns: 2; }
    keeps the room for both, so the card does not move when one comes or goes */
 /* the corner: two lines at the top right, as far from the top edge as from the right one; the title on the
    first line's height */
-#beamCard .panel-head { align-items: flex-start; min-height: 30px; }
+#beamCard .panel-head { align-items: flex-start; min-height: 30px; margin-bottom: 0; }
 #beamCard .panel-title { line-height: 15px; }
 #beamMeta { flex-direction: column; align-items: flex-end; gap: 0; line-height: 15px; }
 #beamMeta .l1 .text-link { color: var(--muted); }
@@ -113,19 +113,23 @@ html.popup .seed { columns: 2; }
 .asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset .amt { grid-area: amt; font: 700 14px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
 .asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; }
+#ethAssets .asset { padding-right: 10px; }      /* the dollars clear of the scroll bar */
 .minor { display: flex; flex-wrap: wrap; gap: 6px; }
 .minor:not(:empty) { margin-top: 6px; }
 .badge.chip { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 2px 6px; text-transform: none; }      /* as the explorer's block of ours (.ours-h) */
 .acts { display: flex; gap: 8px; margin-top: 10px; }
 .acts .btn { flex: 1; justify-content: center; padding: 7px 10px; }
-.dd.acct { min-width: 0; width: 200px; margin-left: auto; }
-.addr-line { margin: -2px 0 4px; display: flex; align-items: center; gap: 6px; }
-.ibtn.sm { width: 22px; height: 22px; border-color: transparent; }
-.ibtn.sm svg { width: 13px; height: 13px; }
+/* Ethereum's head as Beam's: the title on the same line from the top; the account list from the title to the
+   right edge, as far from the title's last letter as from that edge */
+#ethCard .panel-head { align-items: flex-start; gap: 0; }
+#ethCard .panel-title { line-height: 15px; }
+.dd.acct { flex: 1 1 auto; min-width: 0; width: auto; margin-left: 15px; }
+/* the whole address on the right, its copy button before it */
+.addr-line { margin: 2px 0 4px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .own-label { margin-top: 12px; }
 .dd.own { margin-top: 6px; }
 #bsOwnHint:empty { display: none; }
-.addr-line .hash { font-size: var(--fs-s); color: var(--muted); }
+.addr-line .hash { font-size: var(--fs-s); color: var(--muted); white-space: nowrap; }
 .copy.copied { color: var(--accent); }
 
 /* receive */
