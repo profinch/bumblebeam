@@ -481,12 +481,13 @@
   // a network's state on its card: the dot by its name (its colour: live; yellow: starting, syncing,
   // reconnecting; red: missing, not running, disconnected, no RPC) with the state in its tip
   function netDot(id, state, tip) { const d = $(id); d.classList.toggle('warn', state === 'warn'); d.classList.toggle('down', state === 'down'); d.title = tip || ''; }
-  // Beam's line on the right: what (block: N, starting…, syncing 42%) and under it, if any, how (backup,
-  // connecting, reconnecting, disconnected, database missing) in its colour
-  function beamMeta(html, sub, subCls, tip) {
+  // Beam's corner: always two lines. The first, grey: what there is (block: N, at: N, the restore's step, a
+  // link); the second, under it in the same place every time: the state, yellow (warn) or red (bad), or grey
+  // (backup). An empty line keeps its room, so the second never moves.
+  function beamMeta(first, state = '', cls = '', tip = '') {
     const m = $('beamMeta');
-    m.innerHTML = `${html ? `<span class="l1">${html}</span>` : ''}${sub ? `<span class="l2 ${subCls || ''}">${sub}</span>` : ''}`;
-    m.title = tip || '';
+    m.innerHTML = `<span class="l1">${first || '&nbsp;'}</span><span class="l2 ${cls}">${state || '&nbsp;'}</span>`;
+    m.title = tip;
   }
   const blockAt = (h) => `block: <b>${esc((h || 0).toLocaleString('en-US'))}</b>`;
   const share = (d, t) => (t ? Math.min(100, Math.floor((d / t) * 100)) : 0);
@@ -529,31 +530,31 @@
     $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
     $('beamMinor').innerHTML = s ? chips(s) : '';
     total();
-    if (!w || !w.beam || !b) { beamMeta(''); netDot('beamDot', '', ''); return; }
+    if (!w || !w.beam || !b) { $('beamMeta').innerHTML = ''; netDot('beamDot', '', ''); return; }
     const restore = '<a href="#" class="text-link" data-go-restore>restore</a>';
     switch (b.status) {
-      case 'missing': beamMeta('', `database missing · ${restore}`, 'bad'); return netDot('beamDot', 'down', '');
+      case 'missing': beamMeta(restore, 'database missing', 'bad'); return netDot('beamDot', 'down', '');
       case 'failed': beamMeta('', 'not running', 'bad'); return netDot('beamDot', 'down', '');
       case 'restoring': {
         const p = b.progress;
-        beamMeta(`<span class="warn">restoring${p && p.total ? ` ${share(p.done, p.total)}%` : '…'}</span>`, p ? (p.step === 'download' ? 'downloading the snapshot' : p.step === 'import' ? 'importing it' : '') : '', '');
+        beamMeta(p ? (p.step === 'import' ? 'importing wallet' : 'downloading the snapshot') : '', `restoring${p && p.total ? ` ${share(p.done, p.total)}%` : '…'}`, 'warn');
         return netDot('beamDot', 'warn', '');
       }
       case 'running': break;
-      case 'stopped': if (b.reason === 'paused') { beamMeta('<span class="warn">paused</span>', 'while another wallet restores'); return netDot('beamDot', 'warn', ''); }
+      case 'stopped': if (b.reason === 'paused') { beamMeta('while another wallet restores', 'paused', 'warn'); return netDot('beamDot', 'warn', ''); }
       // falls through: stopped (in the queue), starting, stopping
-      default: beamMeta('<span class="warn">starting…</span>'); return netDot('beamDot', 'warn', '');
+      default: beamMeta('', 'starting…', 'warn'); return netDot('beamDot', 'warn', '');
     }
     const h = s && s.current_height ? s.current_height : 0;
     // no node: connecting (never connected yet), reconnecting (lost, first minute), disconnected (after it)
     if (!b.connected) v.lostAt ||= Date.now(); else { v.lostAt = 0; v.seen = true; }
     const node = b.node || st.node;
-    if (v.lostAt && Date.now() - v.lostAt > 60000) { beamMeta(h ? blockAt(h) : '', 'disconnected', 'bad', `No Beam node answers (${node} and the backups). Settings → Networks`); return netDot('beamDot', 'down', ''); }
+    if (v.lostAt && Date.now() - v.lostAt > 60000) { beamMeta(h ? blockAt(h) : '', 'disconnected', 'bad'); return netDot('beamDot', 'down', ''); }
     if (v.lostAt) { beamMeta(h ? blockAt(h) : '', v.seen ? 'reconnecting' : 'connecting', 'warn'); return netDot('beamDot', 'warn', ''); }
     // syncing: its % from the sync's own progress, else the word; the block once the wallet has one
-    if (b.sync && b.sync.total && b.sync.done < b.sync.total) { beamMeta(`<span class="warn">syncing ${share(b.sync.done, b.sync.total)}%</span>`, h ? blockAt(h).replace('block:', 'at') : ''); return netDot('beamDot', 'warn', ''); }
-    if (!s || !h || s.is_in_sync === false) { beamMeta(h ? blockAt(h) : '<span class="warn">syncing…</span>', h ? 'syncing' : '', 'warn'); return netDot('beamDot', 'warn', ''); }
-    beamMeta(blockAt(h), b.backup ? 'backup' : '', '', `The chain's last block, from ${node}${b.backup ? ' (a backup node: the main one did not answer; the wallet goes back to it by itself)' : ''}`);
+    if (b.sync && b.sync.total && b.sync.done < b.sync.total) { beamMeta(h ? blockAt(h).replace('block:', 'at:') : '', `syncing ${share(b.sync.done, b.sync.total)}%`, 'warn'); return netDot('beamDot', 'warn', ''); }
+    if (!s || !h || s.is_in_sync === false) { beamMeta(h ? blockAt(h) : '', 'syncing…', 'warn'); return netDot('beamDot', 'warn', ''); }
+    beamMeta(blockAt(h), b.backup ? 'backup' : '', '');
     netDot('beamDot', '', '');
   }
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
