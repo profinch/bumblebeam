@@ -126,6 +126,8 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 #ethAssets .asset.native .lead .amt { grid-area: auto; text-align: left; }
 #ethAssets .asset.native .lead .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
 #ethAssets .more { padding: 8px 10px 4px 0; }
+/* a token row lights up under the pointer, as a table row of the pool (tbody tr:hover); ETH's does not */
+#ethAssets .asset:not(.native):hover { background: rgba(255, 255, 255, 0.03); }
 .badge.chip { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 2px 6px; text-transform: none; }      /* as the explorer's block of ours (.ours-h) */
 /* the chips: one line, its room kept even when empty; too long for the card (big amounts), it scrolls, with
    the scroll bar's room kept too */
