@@ -561,19 +561,19 @@
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
 
   // what is not spendable yet, as chips in the explorer's way: one colour per state
-  // what is not spendable yet, as chips in the explorer's way: one colour per state, the amount only (to the
-  // hundredth); what each is, in its tip
+  // what is not spendable yet, as chips in the explorer's way: one colour per state, "name: amount" (to the
+  // hundredth), what each is in its tip; the line scrolls when they do not fit
   function chips(s) {
     const two = (g) => (g / GROTH).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const chip = (cls, text, tip) => `<span class="badge ${cls} chip" title="${esc(tip)}">${text}</span>`;
     const MATURING = 'Maturing: not spendable yet. Mostly a mined block\'s reward, which Beam releases 240 blocks (about 4 hours) after its block';
     const out = [];
-    if (s.receiving) out.push(chip('ok', `+${two(s.receiving)}`, 'Incoming: a transfer to this wallet still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay open and unlocked until then'));
-    if (s.sending) out.push(chip('pending', `−${two(s.sending)}`, 'Outgoing: a transfer from this wallet not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
-    if (s.maturing_regular) out.push(chip('info', two(s.maturing_regular), MATURING));
+    if (s.receiving) out.push(chip('ok', `incoming: +${two(s.receiving)}`, 'Incoming: a transfer to this wallet still being made. It joins the balance once a block confirms it. To a regular address, this wallet must stay open and unlocked until then'));
+    if (s.sending) out.push(chip('pending', `outgoing: −${two(s.sending)}`, 'Outgoing: a transfer from this wallet not in a block yet. While the receiver has not answered, it can be cancelled under Activity'));
+    if (s.maturing_regular) out.push(chip('info', `maturing: ${two(s.maturing_regular)}`, MATURING));
     // max privacy coins wait for the pool to grow, or 72 h at most (Beam's MaxPrivacyLockTimeLimitHours)
-    if (s.maturing_mp) out.push(chip('solo', `${two(s.maturing_mp)} ≤72h`, 'Max privacy: received through the shielded pool. Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
-    else if (s.maturing && !s.maturing_regular) out.push(chip('info', two(s.maturing), MATURING));
+    if (s.maturing_mp) out.push(chip('solo', `max privacy ≤72h: ${two(s.maturing_mp)}`, 'Max privacy: received through the shielded pool. Beam unlocks them once enough other coins have joined the pool after them, or 72 hours after they arrived at the latest'));
+    else if (s.maturing && !s.maturing_regular) out.push(chip('info', `maturing: ${two(s.maturing)}`, MATURING));
     return out.join('');
   }
 
