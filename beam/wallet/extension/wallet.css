@@ -104,7 +104,6 @@ html.popup .seed { columns: 2; }
 #beamCard .panel-head { align-items: flex-start; min-height: 30px; margin-bottom: 0; }
 #beamCard .panel-title { line-height: 15px; }
 #beamMeta { flex-direction: column; align-items: flex-end; gap: 0; line-height: 15px; }
-#beamMeta .l1 .text-link { color: var(--muted); }
 #beamMeta .l2 { font-size: 10px; color: var(--muted); }
 #beamMeta .l2.warn { color: var(--color-yellow); }
 #beamMeta .l2.bad { color: var(--color-red); }
@@ -206,7 +205,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .li:last-child { border-bottom: 0; }
 .li .what { font-size: var(--fs-base); min-width: 0; }
 .li .what .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.li .what .sub a { color: var(--muted); text-decoration: underline dotted rgba(255, 255, 255, 0.3); }
 .li .amt { font: 700 var(--fs-m) var(--font-mono); text-align: right; }
 .li > :only-child { grid-column: 1 / -1; }
 .ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--text-dim); }
@@ -227,7 +225,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .text-link.danger { color: var(--color-red); }
 .badge.net-beam { color: var(--color-green); background: rgba(0, 246, 210, 0.08); }
 .badge.net-eth { color: #8c9eff; background: rgba(140, 158, 255, 0.1); }
-.panel .kv dd a { color: var(--text-dim); }
 
 /* ---- the dialog ---- */
 dialog {
@@ -262,7 +259,7 @@ dialog .row { margin-top: 14px; }
 .dapp-cap { position: relative; margin-bottom: 2px; font: 700 var(--fs-xs) var(--font-mono); line-height: normal; }      /* the line of TOTAL's caption (.caps): the same font and line height */
 
 .dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
-.dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
+.dapp-box .dapp-st { font: 400 var(--fs-base) var(--font-sans); color: var(--text-dim); }      /* a plain link's look (ui's a), its colour by state */
 .dapp-box .dapp-sub { color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dapp-box.ok .dapp-st { color: var(--accent); }
 .dapp-box.warn .dapp-st { color: var(--color-yellow); }
@@ -315,13 +312,10 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #dappList .li.site, #dappCatalog .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }
 #dappList .li.site > :nth-child(even), #dappCatalog .li.site > :nth-child(even) { justify-self: end; }
 #dappList .li.site .sub, #dappCatalog .li.site .sub { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* links as the others: the dotted line from the start */
-.site-a { color: var(--accent); font-size: var(--fs-base); text-decoration: underline dotted rgba(var(--accent-rgb), 0.5); text-underline-offset: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.site-a:hover { text-decoration-color: var(--accent); }
-/* the status as a connected site's link (.site-a): its size, its weight, the dotted line from the start */
-.dapp-box .dapp-st { font: 400 var(--fs-base) var(--font-sans); text-decoration: underline dotted rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
-.dapp-box.ok .dapp-st { text-decoration-color: rgba(var(--accent-rgb), 0.5); }
-.dapp-box.warn .dapp-st { text-decoration-color: rgba(255, 200, 0, 0.5); }
+/* a site's name: a plain link (ui: the accent, a line under the pointer), cut with … when long */
+.site-a { font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* under the pointer a line, as a plain link */
+.dapp-box:hover .dapp-st { text-decoration: underline; }
 /* Recent requests: the method and the site left, how it ended right (red: an error, yellow: still waiting) */
 #dappLog .li.log { grid-template-columns: minmax(0, 1fr) minmax(0, 45%); align-items: start; }
 #dappLog .li.log > .sub { margin-top: 0; text-align: right; overflow-wrap: anywhere; }
@@ -336,5 +330,5 @@ html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-ed
    scrolled to the end, the last card's edge is where the Ethereum card's is */
 #x-dapps:not([hidden]), #dappCatalog:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
 #x-dapps .panel, #x-dapps .sheet-head { margin-bottom: 0; }
-/* under the pointer, as a link: the line solid, in the text's colour */
-.dapp-box:hover .dapp-st { text-decoration-style: solid; text-decoration-color: currentColor; }
+/* a .text-link inside a small grey line takes the line's size */
+.sub .text-link { font-size: inherit; }

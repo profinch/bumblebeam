@@ -1308,10 +1308,10 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const IN = { approving: ['pending', 'approving'], sending: ['pending', 'sending'], sent: ['pending', 'mining'], unconfirmed: ['warn', 'not mined yet'], confirmed: ['ok', 'sent to Beam'], failed: ['bad', 'failed'] };
     const rows = [
       ...out.msgs.map((m) => ({ t: m.eth ? Date.parse(m.eth.time) : Infinity, html: `<div class="li"><span class="ic out">${SVG_BRIDGE}</span>
-        <span class="what">BEAM → WBEAM #${m.id}<span class="sub">to ${esc(short(m.receiver))} · fee ${amt(m.fee, 2)}${m.eth ? ` · <a href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(fdt(m.eth.time))}</a>` : ''}</span></span>
+        <span class="what">BEAM → WBEAM #${m.id}<span class="sub">to ${esc(short(m.receiver))} · fee ${amt(m.fee, 2)}${m.eth ? ` · <a class="text-link" href="https://etherscan.io/tx/${esc(m.eth.hash)}" target="_blank" rel="noopener">${esc(fdt(m.eth.time))}</a>` : ''}</span></span>
         <span class="amt">${amt(m.amount)}</span><span class="badge ${OUT[m.state][0]}">${OUT[m.state][1]}</span></div>` })),
       ...ins.map((r) => ({ t: r.time, html: `<div class="li"><span class="ic in">${SVG_BRIDGE}</span>
-        <span class="what">WBEAM → BEAM<span class="sub">from ${esc(short(r.from))} · ${esc(ago(r.time))}${r.hash ? ` · <a href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener">tx</a>` : ''}${r.error ? ` · ${esc(r.error)}` : ''}</span></span>
+        <span class="what">WBEAM → BEAM<span class="sub">from ${esc(short(r.from))} · ${esc(ago(r.time))}${r.hash ? ` · <a class="text-link" href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener">tx</a>` : ''}${r.error ? ` · ${esc(r.error)}` : ''}</span></span>
         <span class="amt">${num(units(r.value, 8), 4)}</span><span class="badge ${(IN[r.state] || IN.sent)[0]}">${(IN[r.state] || IN.sent)[1]}</span></div>` })),
     ].sort((a, b) => b.t - a.t);
     $('bList').innerHTML = rows.map((r) => r.html).join('') || '<div class="empty">none yet</div>';
@@ -1346,7 +1346,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
           const contract = t.tx_type_string === 'contract';
           const what = contract ? (t.comment || 'contract') : t.income ? 'Received' : 'Sent';
           const [cls, label] = BEAM_STATUS[t.status] || ['pending', t.status_string || String(t.status)];
-          const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
+          const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a class="text-link" href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
           const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? ` · <a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
           return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
             <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}</span></span>
@@ -1364,7 +1364,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
           const what = t.method && !t.token ? t.method : t.out ? 'Sent' : 'Received';
           const other = t.out ? t.to : t.from;
           return `<div class="li"><span class="ic ${t.out ? 'out' : 'in'}">${t.out ? SVG_OUT : SVG_IN}</span>
-            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? fdt(t.time) : 'pending')}</a></span></span>
+            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a class="text-link" href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? fdt(t.time) : 'pending')}</a></span></span>
             <span class="amt ${t.out ? '' : 'pos'}">${v ? `${t.out ? '−' : '+'}${esc(v)}` : ''}</span><span class="badge ${t.pending ? 'pending' : t.ok ? 'ok' : 'bad'}">${t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
       } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
