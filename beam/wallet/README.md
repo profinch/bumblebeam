@@ -15,6 +15,7 @@ Why it exists (2026-10-30):
 |---|---|
 | [`extension/`](extension) | MV3 extension: the popup under the toolbar icon (`popup.html`, a view only), the wallet host (`offscreen.html`: the vault, Beam's wasm wallet, the Ethereum accounts, the bridge), the service worker that starts the host (`background.js`) |
 | `extension/icons/` | the bee alone, from `brand/src/icons.py` (default mode) |
+| [`CHANGELOG.md`](CHANGELOG.md) | what each version changed (the version is `extension/manifest.json`'s) |
 | [`sync-ui.sh`](sync-ui.sh) | copies the shared look (`ui/` in the repo root) into `extension/ui/`; run it after a `ui/` change |
 | [`bridge-dash/`](bridge-dash) | bridge status page, one static file: the relayer's queue and health, locked BEAM against WBEAM supply, every message both ways |
 | [`../../deploy/docker/containers/nginx/conf/wss.conf`](../../deploy/docker/containers/nginx/conf/wss.conf) | `wss://wss.bumblebeam.org`: a WebSocket door to the pool's beam-node (`websocket_port=8200`) |

@@ -924,20 +924,21 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
   const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'never' : fdate((x.create_time + x.duration) * 1000));
   // My addresses: a row each, newest first: its name (else the address, shortened), made, expires, its type
-  // right, a cross that removes it; the one shown above stays lit
-  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  // right, the trash that removes it; the one shown above stays lit
+  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';      // the trash, as the card's icon
   function renderAddrs() {
     $('addrCount').textContent = `${addrs.length}`;
     $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}" data-k="${k}">
       <span class="a-name">${esc(x.comment || short(x.address))}</span><span class="a-d">${esc(ago2(x.create_time))}</span><span class="a-d${x.expired ? ' bad' : ''}">${esc(expiry(x))}</span>
-      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="a-x" data-del="${k}" title="Remove this address">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
+      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp danger a-x" data-del="${k}" title="Remove this address">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
   }
   function showAddr(x) {
     shownAddr = x.address;
     $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
-    // right of the QR: its name (nothing when it has none), its type, when it expires
+    // right of the QR: its name (nothing when it has none), its type, when it was made, when it expires
     $('beamAddrName').textContent = x.comment || '';
     $('beamAddrType').textContent = TYPE_NAME[x.type] || x.type;
+    $('beamAddrMade').textContent = ago2(x.create_time);
     $('beamAddrExp').textContent = expiry(x);
     BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
@@ -976,19 +977,21 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try { await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input }); await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x); }
     catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
+  // removes an address once asked (it stops taking payments): the list's trash and the card's
+  async function removeAddr(x) {
+    if (!x) return;
+    const r = await ask({ title: 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]], note: 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
+    if (!r.ok) return;
+    try {
+      await host('beam', W().id, 'delete_address', { address: x.address });
+      if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
+    } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
+  }
+  $('delBeamAddr').onclick = () => removeAddr(addrs.find((y) => y.address === shownAddr));
   $('addrList').onclick = async (e) => {
-    // the cross: this address removed, once asked (it stops taking payments)
+    // the trash: this address removed, once asked
     const del = e.target.closest('[data-del]');
-    if (del) {
-      const x = addrs[Number(del.dataset.del)]; if (!x) return;
-      const r = await ask({ title: 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]], note: 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
-      if (!r.ok) return;
-      try {
-        await host('beam', W().id, 'delete_address', { address: x.address });
-        if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
-      } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
-      return;
-    }
+    if (del) return removeAddr(addrs[Number(del.dataset.del)]);
     const row = e.target.closest('[data-k]'); if (!row) return;
     const x = addrs[Number(row.dataset.k)];
     if (!x) return;

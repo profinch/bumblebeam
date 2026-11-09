@@ -238,20 +238,21 @@ dialog .row { margin-top: 14px; }
 .addr-meta { margin-top: 10px; font: var(--fs-m) var(--font-mono); color: var(--muted); }
 .addr-meta b { color: var(--text); }
 .addr-panel { margin-top: 16px; }
-/* My addresses: name (or the address), made, expires, the type right, the cross (columns in ch of the row's mono
+/* My addresses: name (or the address), made, expires, the type right, the trash (columns in ch of the row's mono
    font: the dates 10, the type 15, so every row's line up); the rows light up under the
    pointer as the token list's, the one shown above stays lit with its name in the accent */
 #addrList { margin: 0 -8px; }
 .li.addr { grid-template-columns: minmax(0, 1fr) 10ch 10ch 15ch 16px; gap: 0 10px; align-items: center; font: var(--fs-s) var(--font-mono); padding: 8px; cursor: pointer; }
 .li.addr:hover, .li.addr.on { background: rgba(255, 255, 255, 0.03); }
-.li.addr .a-name { font: var(--fs-base) var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li.addr .a-name { font: var(--fs-m) var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .li.addr.on .a-name { color: var(--accent); }
 .li.addr .a-d { font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }
 .li.addr .a-d.bad { color: var(--color-red); }
 .li.addr .a-t { font: var(--fs-s) var(--font-mono); color: var(--text-dim); text-align: right; white-space: nowrap; }
-.a-x { display: grid; place-items: center; width: 16px; height: 16px; padding: 0; background: none; border: 0; cursor: pointer; color: rgba(242, 95, 91, 0.6); }
-.a-x:hover { color: var(--color-red); }
+.a-x { justify-self: end; }
 .a-x svg { width: 14px; height: 14px; }
+/* an icon that removes: as the others, red under the pointer */
+.cp.danger:hover { color: var(--color-red); }
 
 /* Secret fields (passwords, keys) are text fields shown as dots, not type=password: Chrome's password manager
    takes a type=password that is filled and then goes away (a dialog closing, a screen changing) for a login
@@ -348,12 +349,10 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .recv-top { display: flex; gap: 14px; align-items: stretch; }
 .recv .qr { flex: none; line-height: 0; }      /* ui's qr.js gives it its size; no frame: the code is on the card itself */
 .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-/* right of the QR: the name (its line kept when there is none), then 9 px down Type and its value, 6 px down
-   Expiry and its value (the titles as Settings' field titles: ui's .caps), the icons along the QR's bottom */
+/* right of the QR: the name (its line kept when there is none), then 9 px down Type, Created and Expiry, each title
+   (as Settings' field titles: ui's .caps) with its value on its line, 6 px apart; the icons along the QR's bottom */
 .recv-name { min-height: 18px; font-weight: 700; font-size: var(--fs-base); line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recv-kv { margin-top: 9px; }
-.recv-kv .caps + .recv-v { margin-top: 3px; }
-.recv-v + .caps { margin-top: 6px; }
+.recv-kv { margin-top: 9px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: baseline; }
 .recv-v { font: var(--fs-m) var(--font-mono); color: var(--text); }
 .recv-icons { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
 .recv-icons .cp svg { width: 16px; height: 16px; }
