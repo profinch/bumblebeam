@@ -211,20 +211,18 @@
   // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
   // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
   // metadata (SN=, the short name) when the wallet knows it.
-  // Every asset's metadata, from the node (assets_list with refresh: get_asset_info knows only the assets
-  // the wallet has already seen), once per wallet while the popup is open: asset id -> { N, SN, UN, … }
-  const assetMetaP = new Map(), assetMetaDone = new Map();
-  const assetMeta = (wid) => {
-    if (!assetMetaP.has(wid)) {
-      assetMetaP.set(wid, host('beam', wid, 'assets_list', { refresh: true })
-        .then((r) => { const m = new Map(((r && r.assets) || []).map((a) => [Number(a.asset_id), a.metadata_pairs || {}])); assetMetaDone.set(wid, m); return m; })
-        .catch(() => { assetMetaP.delete(wid); return new Map(); }));
-    }
-    return assetMetaP.get(wid);
+  // asset names (metadata pairs) by asset id, per wallet, from the host's beamAssets (the wallet's own list,
+  // then the node's); what is known is kept here, what is missing asked again next time
+  const assetMetaDone = new Map();                     // wallet id -> Map(aid -> pairs)
+  const assetMeta = async (wid, ids) => {
+    if (!assetMetaDone.has(wid)) assetMetaDone.set(wid, new Map());
+    const m = assetMetaDone.get(wid), need = ids.filter((a) => a && !m.has(a));
+    if (need.length) { try { const r = await host('beamAssets', wid, need); for (const [a, v] of Object.entries(r || {})) m.set(Number(a), v); } catch {} }
+    return m;
   };
   // the short name, as Beam's DEX shows it (SN), else the unit's name (UN)
   const assetSym = (m) => (m && (m.SN || m.UN)) || '';
-  const assetSymOf = async (aid) => { const w = W(), m = w ? (await assetMeta(w.id)).get(aid) : null; return assetSym(m); };
+  const assetSymOf = async (aid) => { const w = W(), m = w ? (await assetMeta(w.id, [aid])).get(aid) : null; return assetSym(m); };
   const coins = (v) => { const t = String(v ?? '').trim(); return /^\d+(\.\d+)?$/.test(t) ? t : '—'; };
   const consentRows = async (info, amounts) => {
     // an amount by its asset's short name ("0.00003264 bETH"); each asset other than BEAM then has a row
@@ -527,6 +525,14 @@
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
       case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else dappRefresh(); break;
+      // a request ended or a site was disconnected (here or in another window): the request window shows
+      // what is still waiting (it closes when nothing is); a popup its site's state, the sites list, the balances
+      case 'bb_dapp_done':
+        if (inWin) { if (!dpBusy && st && st.phase === 'unlocked') dappScreen(); break; }
+        dappRefresh();
+        if (curTab === 'settings' && !$('t-settings').hidden) dappListOpen();
+        if (curTab === 'home' && !$('t-home').hidden) ethRefresh();
+        break;
       case 'ev_sync_progress':
         if (m.wallet && st && st.beam && st.beam[m.wallet]) { st.beam[m.wallet].sync = m.result && m.result.total ? { done: m.result.done, total: m.result.total } : null; if (here) renderBeam(); }
         break;
@@ -588,7 +594,7 @@
     // another wallet open: its card starts with the tokens folded
     if (!(w && w.beam) || (w && beamTokFor && beamTokFor !== w.id)) beamTokens(false, true); else beamRows();
     beamTokFor = w ? w.id : null;
-    if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0 && t.available)) { assetMeta(w.id); beamPricesLoad(w.id); }
+    if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0 && t.available)) beamPricesLoad(w.id);
     total();
     if (!w || !w.beam || !b) { $('beamMeta').innerHTML = ''; netDot('beamDot', '', ''); return; }
     const restore = '<a href="#" class="text-link" data-go-restore>restore</a>';
@@ -744,12 +750,14 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
       beamTok = false;
       c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
       const end = () => { if (beamTok) return; b.textContent = 'Tokens'; c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
-      if (now) end(); else beamTokT = setTimeout(end, 260);
+      // at once (another tab, another wallet): no transition at all, the card and Ethereum's just as before
+      if (now) { c.classList.add('still'); $('ethCard').classList.add('still'); end(); void c.offsetHeight; c.classList.remove('still'); $('ethCard').classList.remove('still'); }
+      else beamTokT = setTimeout(end, 260);
     }
   }
   $('beamTokBtn').onclick = () => beamTokens(!beamTok);
   new ResizeObserver(() => beamFit()).observe($('ethCard'));
-  let beamRowsSeq = 0;
+  let beamRowsSeq = 0, beamNamesT = 0;
   async function beamRows() {
     if (!beamTok) return;
     const w = W(), s = beamStatus, seq = ++beamRowsSeq;
@@ -757,8 +765,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const list = (s.totals || []).filter((t) => Number(t.asset_id) !== 0 && (t.available || t.receiving || t.maturing))
       .sort((x, y) => Number(x.asset_id) - Number(y.asset_id));
     if (!list.length) { $('beamAssets').innerHTML = '<div class="empty">no tokens in this wallet</div>'; return; }
-    // the rows at once (named from what is known), again once the names come from the node
-    const known = w && assetMetaDone.get(w.id);
+    // the rows at once (named from what is known), again once the names come; a name still missing is
+    // asked for again in 15 s while the list is open
+    const known = w && assetMetaDone.get(w.id), ids = list.map((t) => Number(t.asset_id));
     const draw = (meta) => { $('beamAssets').innerHTML = list.map((t) => {
       const aid = Number(t.asset_id), sym = assetSym(meta.get(aid)) || `asset ${aid}`;
       return `<div class="asset"><span class="tok"><a class="cp" href="https://explorer.bumblebeam.org/asset/${aid}" target="_blank" rel="noopener" title="Open in the explorer">${LINK}</a><button type="button" class="cp" data-cp="${aid}" title="Copy the asset id
@@ -767,7 +776,13 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     draw(known || new Map());
     if (!w) return;
     let meta = known;
-    if (!known) { meta = await assetMeta(w.id); if (seq === beamRowsSeq && beamTok) draw(meta); }
+    if (!known || ids.some((a) => !known.has(a))) {
+      meta = await assetMeta(w.id, ids);
+      if (seq !== beamRowsSeq || !beamTok) return;
+      draw(meta);
+      clearTimeout(beamNamesT);
+      if (ids.some((a) => !meta.has(a))) beamNamesT = setTimeout(() => { if (beamTok) beamRows(); }, 15000);
+    }
     if (beamPricesFresh(w.id)) return;
     await beamPricesLoad(w.id);
     if (seq === beamRowsSeq && beamTok) draw(meta || new Map());
@@ -1407,11 +1422,14 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
     show('s-dapp');
   }
+  let dpBusy = false;                                 // an answer on its way: the window moves on once it is done
   async function dappReply(ok) {
     if (!dpCur) return;
     $('dpYes').disabled = $('dpNo').disabled = true;
+    dpBusy = true;
     try { await host('dappAnswer', dpCur.id, ok); }
     catch (e) { note('s-dapp', 'bad', msg(e)); }
+    dpBusy = false;
     $('dpYes').disabled = $('dpNo').disabled = false;
     dappScreen();
   }

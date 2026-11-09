@@ -401,7 +401,26 @@
   }
   const saveSettings = () => kv.set('settings', settings);
   const wallet = (id, d = data) => { need(); const w = d.wallets.find((x) => x.id === id); if (!w) throw new Error('no such wallet'); return w; };
-  // a Beam operation is for one wallet, named by the popup, and goes to that wallet's own engine
+  // Beam's asset names (metadata pairs: N, SN, UN, …) for the asset ids asked. The wallet's own list first
+  // (its database: every asset it has seen, at once), then, for what is still missing, the node's
+  // (assets_list with refresh). A Beam wallet runs one such node request at a time and a newer one (a site's,
+  // Beam DEX asks it too) drops the older unanswered (Wallet::RequestAssetsListAt), so ours waits 20 s at
+  // most and is asked again 15 s later at the earliest. Kept per wallet while the host runs.
+  const assetNames = new Map();                        // wallet id -> { m: Map(aid -> pairs), tried }
+  async function beamAssets(walletId, ids) {
+    const e = beamFor(walletId).e, want = (Array.isArray(ids) ? ids : []).map(Number).filter((a) => a > 0);
+    let c = assetNames.get(walletId);
+    if (!c) assetNames.set(walletId, (c = { m: new Map(), tried: 0 }));
+    const put = (r) => { for (const a of (r && r.assets) || []) c.m.set(Number(a.asset_id), a.metadata_pairs || {}); };
+    const missing = () => want.some((a) => !c.m.has(a));
+    if (missing()) { try { put(await e.call('assets_list', {}, 10000)); } catch {} }
+    if (missing() && Date.now() - c.tried > 15000) {
+      c.tried = Date.now();
+      try { put(await e.call('assets_list', { refresh: true }, 20000)); } catch {}
+    }
+    return Object.fromEntries(want.filter((a) => c.m.has(a)).map((a) => [a, c.m.get(a)]));
+  }
+
   // Beam's assets priced in BEAM by Beam DEX's pools (its AMM contract, read with the app shader that
   // dex.beam.mw ships, shaders/amm_app.wasm): for each asset, its pool with BEAM that holds the most BEAM,
   // BEAM per unit = BEAM reserve / asset reserve (both in groth). Cached a minute. { assetId: beamPerUnit }
@@ -423,6 +442,7 @@
     ammCache = { at: Date.now(), p };
     return p;
   }
+  // a Beam operation is for one wallet, named by the popup, and goes to that wallet's own engine
   function beamFor(id) {
     need();
     const s = live(id);
@@ -577,6 +597,8 @@
     const seen = new Set([...dappPorts].map((p) => p.origin));
     for (const o of seen) { const a = siteAccount(o); dappTell(o, 'accountsChanged', a ? [a] : []); }
   }
+  // a request ended (answered, rejected, expired, its window closed): the popups show the site's state again
+  function dappDone(origin) { broadcast({ type: 'event', method: 'bb_dapp_done', result: { origin } }); }
   // a request the user answers in the wallet's window
   function ask(origin, kind, method, params, address, extra = {}) {
     return new Promise((resolve, reject) => {
@@ -584,7 +606,7 @@
       dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now(), ...extra });
       broadcast({ type: 'event', method: 'bb_dapp', result: { id, origin } });
       if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow', near: dappWinOf }).then((r) => { dappWin = r && r.result; }).catch(() => {});
-      setTimeout(() => { if (dappReq.delete(id)) reject(err(4001, 'the request expired')); }, 15 * 60 * 1000);
+      setTimeout(() => { if (dappReq.delete(id)) { reject(err(4001, 'the request expired')); dappDone(origin); } }, 15 * 60 * 1000);
     });
   }
   const hexText = (h) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(ethers.getBytes(h)); } catch { return null; } };
@@ -698,8 +720,10 @@
       const r = dappReq.get(id);
       if (!r) throw new Error('this request is gone (answered, or the site closed)');
       dappReq.delete(id);
-      if (!ok) { if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user rejected the request')); return null; }
-      try { const v = await dappDo(r, choice); r.resolve(v); return v; } catch (e) { r.reject(err(-32603, e.message)); throw e; }
+      try {
+        if (!ok) { if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user rejected the request')); return null; }
+        try { const v = await dappDo(r, choice); r.resolve(v); return v; } catch (e) { r.reject(err(-32603, e.message)); throw e; }
+      } finally { dappDone(r.origin); }
     },
     // what the popup shows for the site of the open tab
     dappStatus(origin) {
@@ -710,7 +734,7 @@
       const c = dapps()[origin], b = beamSites()[origin];
       return { origin, address: c ? c.address : null, beam: b ? b.appname : null, at: Math.max(c ? c.at : 0, b ? b.at : 0) };
     }).sort((a, b) => b.at - a.at),
-    async dappDisconnect(origin) { delete dapps()[origin]; delete beamSites()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); },
+    async dappDisconnect(origin) { delete dapps()[origin]; delete beamSites()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); dappDone(origin); },
 
     state() {
       lockIcon();
@@ -982,7 +1006,7 @@
       if (!w.eth || w.eth.accounts.length < 2) throw new Error('the last account stays');
       w.eth.accounts = w.eth.accounts.filter((a) => a.i !== i);
     }),
-    async setActiveEth(id, i) { settings.activeEth[id] = i; await saveSettings(); },
+    async setActiveEth(id, i) { settings.activeEth[id] = i; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} }); },      // other windows show it too
 
     // what only the password shows: the seed phrase, an Ethereum key, the Beam database password
     async reveal(id, pass, what, i) {
@@ -1059,6 +1083,7 @@
     // ---------- Ethereum ----------
     rates: () => Bridge.rates(),
     beamPrices: (walletId) => beamPrices(walletId),
+    beamAssets: (walletId, ids) => beamAssets(walletId, ids),
     // each address's tokens are kept (chrome.storage 'ethTokens'): a Blockscout that fails or answers an empty
     // list leaves them in place, read on the chain, instead of showing ETH and WBEAM alone
     async ethBalances(address) {
@@ -1249,7 +1274,14 @@
       port.origin = port.sender.origin;
       port.windowId = port.sender.tab ? port.sender.tab.windowId : null;
       dappPorts.add(port);
-      port.onDisconnect.addListener(() => dappPorts.delete(port));
+      port.onDisconnect.addListener(() => {
+        dappPorts.delete(port);
+        // the site's last page closed (or went elsewhere): nobody waits for its requests any more
+        if ([...dappPorts].some((p) => p.origin === port.origin)) return;
+        let gone = false;
+        for (const [id, r] of [...dappReq]) if (r.origin === port.origin) { dappReq.delete(id); r.reject(err(4001, 'the site closed')); gone = true; }
+        if (gone) dappDone(port.origin);
+      });
       port.onMessage.addListener(async (m) => {
         if (!m || m.id == null || typeof m.method !== 'string') return;
         try { await ready; dappWinOf = port.windowId; port.postMessage({ id: m.id, result: await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]) }); }
@@ -1276,6 +1308,6 @@
   chrome.runtime.onMessage.addListener((m, sender) => {
     if (sender.id !== chrome.runtime.id || !m || m.op !== 'dappClosed' || m.windowId !== dappWin) return;
     dappWin = null;
-    for (const [id, r] of [...dappReq]) { dappReq.delete(id); r.reject(err(4001, 'the user closed the request')); }
+    for (const [id, r] of [...dappReq]) { dappReq.delete(id); r.reject(err(4001, 'the user closed the request')); dappDone(r.origin); }
   });
 })();

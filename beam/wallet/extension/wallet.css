@@ -306,3 +306,4 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #acctDd .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #acctDd .acc-b .ad { flex: none; white-space: nowrap; }
 #acctDd .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
+#beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
