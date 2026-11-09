@@ -332,11 +332,10 @@ html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-ed
 #x-dapps .panel, #x-dapps .sheet-head { margin-bottom: 0; }
 /* a .text-link inside a small grey line takes the line's size */
 .sub .text-link { font-size: inherit; }
-/* the receive cards: the QR left (ui's qr.js, the puzzle's look), its name, kind, dates and buttons right of
+/* the receive cards: the QR left (ui's qr.js, the puzzle's look, size S), its name, kind, dates and buttons right of
    it, the whole address under both */
 .recv-top { display: flex; gap: 14px; align-items: stretch; }
-.recv .qr { flex: none; width: 180px; height: 180px; border-radius: 10px; overflow: hidden; line-height: 0; box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 6px 18px rgba(0, 0, 0, 0.3); }
-.recv .qr svg { display: block; width: 100%; height: 100%; }
+.recv .qr { flex: none; line-height: 0; }      /* ui's qr.js gives it its size; no frame: the code is on the card itself */
 .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .recv-name { font-weight: 700; font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recv-name .dim { color: var(--muted); font-weight: 400; }

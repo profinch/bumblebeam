@@ -956,7 +956,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
   }
-  const QR_SIZE = 180;                                // the receive cards' QR: Beam's long addresses are read from 180 px (ui/components/qr.js)
+  const QR_SIZE = BB.qrSizes.s;                       // the receive cards' QR: ui's size S (180 px), the popup's width
   async function newAddress(type) {
     const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
     await loadAddrs();
