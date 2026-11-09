@@ -130,6 +130,9 @@
     }
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
+    // dApps is not part of a tab (as Settings): no tab underlined; Receive, Send and the like stay their tab's
+    if (id === 'x-dapps') qa('#tabs a').forEach((a) => a.classList.remove('active'));
+    else if (id.startsWith('t-') || id.startsWith('x-')) qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === curTab));
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
