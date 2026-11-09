@@ -585,7 +585,9 @@
     $('beamAvail').textContent = s ? amt(s.available || 0) : '';
     $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
     $('beamMinor').innerHTML = s ? chips(s) : '';
-    if (!(w && w.beam)) beamTokens(false, true); else beamRows();
+    // another wallet open: its card starts with the tokens folded
+    if (!(w && w.beam) || (w && beamTokFor && beamTokFor !== w.id)) beamTokens(false, true); else beamRows();
+    beamTokFor = w ? w.id : null;
     if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0 && t.available)) { assetMeta(w.id); beamPricesLoad(w.id); }
     total();
     if (!w || !w.beam || !b) { $('beamMeta').innerHTML = ''; netDot('beamDot', '', ''); return; }
@@ -711,7 +713,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
   // The Ethereum card stays in its place underneath (the Beam card's bottom margin takes back what it grows),
   // faded out. Each token as on Ethereum: its page in the explorer, a button that copies its asset id, its
   // short name, the amount available.
-  let beamTok = false, beamH0 = 0, beamMb0 = 0, beamTokT = 0;
+  let beamTok = false, beamH0 = 0, beamMb0 = 0, beamTokT = 0, beamTokFor = null;
   function beamFit() {
     if (!beamTok) return;
     const c = $('beamCard'), e = $('ethCard').getBoundingClientRect();
