@@ -333,3 +333,10 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-edges; }
 /* the catalog: a dApp (it connects to this wallet) marked right of its name */
 .cat-tag { font: 700 10px var(--font-mono); color: var(--accent); letter-spacing: 0.04em; }
+/* dApps: the cards 10 px apart as on the wallet tab, nothing after the last one (hidden ones do not count):
+   scrolled to the end, the last card's edge is where the Ethereum card's is */
+#x-dapps:not([hidden]), #dappCatalog:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+#x-dapps .panel, #x-dapps .sheet-head { margin-bottom: 0; }
+/* the wallet tab's Ethereum card ends 2 px into main's bottom padding (559 of 562 in the 600 px popup): dApps
+   scrolled to its end, its last card's edge in the same place */
+html.popup main:has(> #x-dapps:not([hidden])) { padding-bottom: 3px; }
