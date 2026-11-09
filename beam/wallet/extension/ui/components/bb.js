@@ -21,11 +21,14 @@
   ];
 
   var uid = 0;
-  function logoSvg(size) {
+  // the logo's SVG; with colours ({ from, to }) they are written in, not taken from the page (for a picture
+  // made of it: a QR code's centre, a download)
+  function logoSvg(size, colours) {
     var n = ++uid, g = 'bbl-g' + n, c = 'bbl-c' + n;
+    var from = colours ? colours.from : 'var(--logo-from)', to = colours ? colours.to : 'var(--logo-to)';
     return '<svg class="logo" viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true">' +
       '<defs><linearGradient id="' + g + '" x1="0" y1="1" x2="1" y2="0">' +
-      '<stop offset="0" style="stop-color:var(--logo-from)"/><stop offset="1" style="stop-color:var(--logo-to)"/></linearGradient>' +
+      '<stop offset="0" style="stop-color:' + from + '"/><stop offset="1" style="stop-color:' + to + '"/></linearGradient>' +
       '<clipPath id="' + c + '"><rect x="9.5" y="13.5" width="15" height="9" rx="4.5"/></clipPath></defs>' +
       '<path class="hex" d="M16 2 28 9v14L16 30 4 23V9z" fill="url(#' + g + ')"/>' +
       '<g class="bee"><g class="trail" stroke="#fff" stroke-width="1.3" stroke-linecap="round">' +
@@ -34,7 +37,7 @@
       '<ellipse class="wing wr" cx="20" cy="10.8" rx="3.6" ry="2.1" transform="rotate(24 20 10.8)" fill="#fff" fill-opacity=".9" stroke="#042548" stroke-width=".6"/>' +
       '<rect x="9.5" y="13.5" width="15" height="9" rx="4.5" fill="#042548"/>' +
       '<g clip-path="url(#' + c + ')" fill="#f4ce4a"><rect x="13.3" y="13" width="3" height="10"/><rect x="18.6" y="13" width="3" height="10"/></g>' +
-      '<circle class="eye" cx="22.6" cy="17" r=".95" style="fill:var(--logo-to)"/></g></svg>';
+      '<circle class="eye" cx="22.6" cy="17" r=".95" style="fill:' + to + '"/></g></svg>';
   }
 
   function define(name, render) {

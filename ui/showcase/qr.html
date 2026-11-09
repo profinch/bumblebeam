@@ -15,11 +15,11 @@
   /* showcase-only: the wallet's receive card (QR left, name, kind, dates and buttons right, the address under them) */
   .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
   h2.sec { font: 700 var(--fs-m) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--accent); margin: 32px 0 var(--sp-2); }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--sp-3); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: var(--sp-3); }
   .recv { margin: 0; }
   .recv-top { display: flex; gap: 14px; align-items: stretch; }
-  .recv .qr { flex: none; width: 180px; height: 180px; border-radius: 8px; overflow: hidden; line-height: 0; }      /* as the puzzle's .invite .qr */
-  .recv .qr svg { display: block; width: 100%; height: 100%; }
+  .recv .qr { flex: none; line-height: 0; }      /* BB.qr gives it its size */
+  .recv .qr svg { display: block; }
   .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
   .recv-name { font-weight: 700; font-size: var(--fs-base); }
   .recv-meta { margin-top: 6px; font: var(--fs-s) var(--font-mono); line-height: 1.6; color: var(--muted); }
@@ -31,7 +31,8 @@
 <body>
 <div class="wrap">
   <header class="top"><div class="top-row"><a class="brand" href="index.html"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>UI · QR codes</em></span></a></div></header>
-  <p class="hint">ui/components/qr.js on both chains: <code>BB.qr(el, text, 180)</code> takes the colours of the block it is drawn in. The cards are the wallet's Receive card. Beam's addresses here are random samples with the real lengths and alphabets (a regular address is 67 hex characters, the others base58); Bitcoin's are the well-known examples from the Bitcoin wiki and BIP 350.</p>
+  <div class="seg" id="qrSize" style="margin:4px 0 12px"><button data-s="s">S · 180</button><button class="on" data-s="m">M · 220</button><button data-s="l">L · 260</button></div>
+  <p class="hint">ui/components/qr.js on both chains: <code>BB.qr(el, text, size)</code> takes the colours of the block it is drawn in. The cards are the wallet's Receive card. Beam's addresses here are random samples with the real lengths and alphabets (a regular address is 67 hex characters, the others base58); Bitcoin's are the well-known examples from the Bitcoin wiki and BIP 350.</p>
 
   <section id="beam">
     <h2 class="sec">Beam</h2>
@@ -65,21 +66,27 @@
     ['payment request (BIP 21)', 'the address with an amount and a label', 'BIP 21', 'bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq?amount=0.001&label=BumbleBeam'],
   ];
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  let SIZE = BB.qrSizes.m;
   function cards(id, list) {
     const box = document.getElementById(id);
     box.innerHTML = list.map(([kind, what, when, text], i) => `<div class="panel recv"><div class="recv-top"><div class="qr" data-i="${i}"></div>
       <div class="recv-side"><div class="recv-name">${esc(kind)}</div><div class="recv-meta">${esc(what)}<br>${esc(when)}<br>${text.length} characters</div>
       <div class="recv-acts"><button class="btn small" data-copy="${i}">Copy address</button><button class="btn ghost small" data-save="${i}">Save QR</button></div></div></div>
       <div class="hash">${esc(text)}</div></div>`).join('');
-    box.querySelectorAll('.qr').forEach((el) => BB.qr(el, list[el.dataset.i][3], 180));
+    box.querySelectorAll('.qr').forEach((el) => BB.qr(el, list[el.dataset.i][3], SIZE));
     box.onclick = (e) => {
       const c = e.target.closest('[data-copy]'), s = e.target.closest('[data-save]');
       if (c) navigator.clipboard.writeText(list[c.dataset.copy][3]).catch(() => {});
       if (s) BB.qrSave(list[s.dataset.save][3], `${id}-${s.dataset.save}`, 'png', box);
     };
   }
-  cards('beamCards', BEAM);
-  cards('btcCards', BTC);
+  const draw = () => { cards('beamCards', BEAM); cards('btcCards', BTC); };
+  document.getElementById('qrSize').onclick = (e) => {
+    const b = e.target.closest('button[data-s]'); if (!b) return;
+    document.querySelectorAll('#qrSize button').forEach((x) => x.classList.toggle('on', x === b));
+    SIZE = BB.qrSizes[b.dataset.s]; draw();
+  };
+  draw();
 </script>
 </body>
 </html>
