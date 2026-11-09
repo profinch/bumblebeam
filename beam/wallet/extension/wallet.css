@@ -259,12 +259,9 @@ dialog .row { margin-top: 14px; }
 .total-row { display: flex; align-items: flex-start; gap: 12px; }
 .total-row .total { flex: 1 1 auto; min-width: 0; }
 .dapp-wrap { flex: none; display: flex; flex-direction: column; align-items: flex-end; padding: 12px 2px 0; max-width: 150px; }
-/* the caption: the cube (all connected sites) left of "dApp", out of the line's flow, so "dApp" stays on
-   TOTAL's line */
 .dapp-cap { position: relative; margin-bottom: 2px; font: 700 var(--fs-xs) var(--font-mono); line-height: normal; }      /* the line of TOTAL's caption (.caps): the same font and line height */
 .dapp-cap .caps { text-transform: none; }
-.ibtn.mini { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 4px; width: 20px; height: 20px; border-color: transparent; }
-.ibtn.mini svg { width: 14px; height: 14px; }
+
 .dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
 .dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
 .dapp-box .dapp-sub { color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -316,9 +313,9 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #dappBar { text-align: justify; text-align-last: justify; }      /* the networks where Activity has them, the way back right on their line (one line box: the same baseline) */
 /* a site: its link, "disconnect" right of it on its line; under them what it is connected to, and the date
    under "disconnect" */
-#dappList .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }
-#dappList .li.site > :nth-child(even) { justify-self: end; }
-#dappList .li.site .sub { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#dappList .li.site, #dappCatalog .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }
+#dappList .li.site > :nth-child(even), #dappCatalog .li.site > :nth-child(even) { justify-self: end; }
+#dappList .li.site .sub, #dappCatalog .li.site .sub { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* links as the others: the dotted line from the start */
 .site-a { color: var(--accent); font-size: var(--fs-base); text-decoration: underline dotted rgba(var(--accent-rgb), 0.5); text-underline-offset: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .site-a:hover { text-decoration-color: var(--accent); }
@@ -334,3 +331,5 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 /* Connected sites: the scroll bar's room kept from the start (both sides, so the cards stay centred), so
    nothing moves when the requests grow past the popup */
 html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-edges; }
+/* the catalog: a dApp (it connects to this wallet) marked right of its name */
+.cat-tag { font: 700 10px var(--font-mono); color: var(--accent); letter-spacing: 0.04em; }

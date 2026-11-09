@@ -129,6 +129,7 @@
       m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
     }
     $('setBtn').classList.toggle('on', id === 't-settings');
+    $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
@@ -159,6 +160,8 @@
   });
   $('lockBtn').onclick = async () => { await host('lock'); };
   $('backBtn').onclick = () => tab(curTab === 'settings' ? 'settings' : 'home');
+  // the cube: dApps (the connected sites, the catalog); again: back to the tab it came from
+  $('dappsBtn').onclick = () => ($('x-dapps').hidden ? sheet('dapps') : tab(curTab));
   $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? 'home' : 'settings');
 
   // ---------- the dialog: confirm, password, one input ----------
@@ -1507,8 +1510,12 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // under them what it is connected to and since when
   let dappNet = 'beam';
   async function dappListOpen() {
+    qa('#dappBar button[data-n]').forEach((b) => b.classList.toggle('on', b.dataset.n === dappNet));
+    const cat = dappNet === 'cat';
+    $('dappCatalog').hidden = !cat; $('dappSitesCard').hidden = cat;
+    $('dappTitle').textContent = cat ? 'Catalog' : 'Connected sites';
+    if (cat) return catalogOpen();
     const l = await host('dappList').catch(() => []);
-    qa('#dappNet button').forEach((b) => b.classList.toggle('on', b.dataset.n === dappNet));
     const named = (a) => (st.wallets || []).flatMap((w) => w.accounts).find((x) => x.address.toLowerCase() === a.toLowerCase());
     const rows = l.filter((d) => (dappNet === 'beam' ? d.beam : d.address)).map((d) => {
       const n = dappNet === 'eth' && named(d.address);
@@ -1517,7 +1524,32 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     });
     $('dappList').innerHTML = rows.join('') || `<div class="empty">no site connected on ${dappNet === 'beam' ? 'Beam' : 'Ethereum'}</div>`;
   }
+  // The catalog: Beam's own sites and ours. "dApp": it connects to this wallet (Beam's web wallet protocol, or
+  // Ethereum for the bridge). Checked 2026-11-09: each answers; the dApps' pages carry the protocol.
+  const CATALOG = [
+    { title: 'Beam: official', items: [
+      ['dex.beam.mw', 'Beam DEX', 'Swaps and liquidity pools of Beam assets', 'dApp'],
+      ['bridge.beam.mw', 'Beam Bridge', 'BEAM to Ethereum and back (WBEAM)', 'Ethereum dApp'],
+      ['gallery.beam.mw', 'NFT Gallery', 'Art and collectibles on Beam', 'dApp'],
+      ['bans.beam.mw', 'BANS', 'Names on Beam', 'dApp'],
+      ['minter.beam.mw', 'Asset Minter', 'Your own confidential asset', 'dApp'],
+      ['faucet.beam.mw', 'Faucet', 'Beam\'s faucet', 'dApp'],
+      ['beamx.beam.mw', 'BeamX DAO', 'The DAO and its BEAMX token', ''],
+      ['explorer.beam.mw', 'Beam Explorer', 'Blocks, assets and DEX analytics', ''],
+      ['beam.mw', 'beam.mw', 'Beam itself: news, wallets, docs', ''],
+    ] },
+    { title: 'BumbleBeam', items: [
+      ['explorer.bumblebeam.org', 'Explorer', 'Blocks, kernels, assets, DEX, contracts', ''],
+      ['pool.bumblebeam.org', 'Mining pool', 'Beam mining, PPLNS and solo', ''],
+      ['puzzle.bumblebeam.org', 'Puzzle', 'The Bitcoin puzzle, searched together in the browser', ''],
+    ] },
+  ];
+  function catalogOpen() {
+    $('dappCatalog').innerHTML = CATALOG.map((g) => `<div class="panel"><div class="panel-head"><h3 class="panel-title">${esc(g.title)}</h3></div><div class="list">${g.items.map(([h, name, what, tag]) =>
+      `<div class="li site"><a class="site-a" href="https://${esc(h)}/" target="_blank" rel="noopener">${esc(name)}</a><span class="cat-tag">${esc(tag)}</span><span class="sub">${esc(what)}</span><span class="sub">${esc(h)}</span></div>`).join('')}</div></div>`).join('');
+  }
   async function dappLogOpen() {
+    if (dappNet === 'cat') { $('dappLogCard').hidden = true; return; }
     // the network shown above: Beam's calls (beam_connect, beam: …) or Ethereum's (the rest)
     const l = (await host('dappLog').catch(() => [])).filter((r) => /^beam[_:]/.test(r.method) === (dappNet === 'beam'));
     const tm = (t) => new Date(t).toLocaleTimeString('en-GB');
@@ -1526,7 +1558,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   }
   // read again every 2 s while the page is open: a call's end shows by itself
   setInterval(() => { if (!$('x-dapps').hidden) dappLogOpen(); }, 2000);
-  $('dappNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); dappLogOpen(); } };
+  $('dappBar').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); dappLogOpen(); } };
   $('dappList').onclick = async (e) => {
     const a = e.target.closest('[data-dapp]');
     if (!a) return;
