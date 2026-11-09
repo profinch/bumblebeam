@@ -171,7 +171,10 @@
   // events of the slot's current engine only: an old engine still closing says nothing any more
   function wire(e, id, gen) {
     const cur = () => slot(id).gen === gen;
-    e.on.consent = askConsent;
+    // a contract transaction asked by a website (one of its calls is running) is answered in the request
+    // window, naming the site; the bridge's own, in the popup
+    e.on.consent = (info, amounts) => { const c = beamCtx.get(id); return c ? beamConsent(c, info, amounts) : askConsent(info, amounts); };
+    e.on.site = (key, msg) => { if (cur()) dappTellBeam(key, msg); };
     e.on.progress = (step, done, total) => { if (cur()) onProgress(id, step, done, total); };
     e.on.event = (m) => {
       if (!cur()) return;
@@ -525,6 +528,15 @@
     'eth_getBlockByHash', 'eth_getBlockByNumber', 'eth_getCode', 'eth_getLogs', 'eth_getStorageAt', 'eth_getTransactionByHash',
     'eth_getTransactionCount', 'eth_getTransactionReceipt', 'eth_maxPriorityFeePerGas', 'eth_syncing', 'web3_clientVersion']);
   const err = (code, message) => Object.assign(new Error(message), { code });
+  // Beam dApps: the methods a site may call through its own app API (Beam limits an app further); plain
+  // transfers (tx_send) are refused by the engine's send handler anyway
+  const BEAM_SITE = new Set(['wallet_status', 'assets_list', 'get_asset_info', 'tx_list', 'tx_status', 'addr_list', 'get_utxo',
+    'ev_subunsub', 'invoke_contract', 'process_invoke_data', 'block_details', 'get_version', 'create_address', 'validate_address', 'calc_change']);
+  const BEAM_TX = new Set(['invoke_contract', 'process_invoke_data', 'tx_send']);
+  const beamCtx = new Map();                      // wallet id -> { origin, appname, n }: a site's call that may ask consent
+  const beamSites = () => (settings.beamSites ||= {});
+  function dappTellBeam(origin, msg) { for (const p of dappPorts) if (p.origin === origin) { try { p.postMessage({ event: 'beam', data: msg }); } catch {} } }
+  const beamConsent = (c, info, amounts) => ask(c.origin, 'beamtx', 'beam_tx', [info, amounts], null, { appname: c.appname }).then((ok) => !!ok, () => false);
   const dapps = () => (settings.dapps ||= {});
   // the account a site was given, while it still is one of this wallet's (and the wallet is open)
   function siteAccount(origin) {
@@ -544,10 +556,10 @@
     for (const o of seen) { const a = siteAccount(o); dappTell(o, 'accountsChanged', a ? [a] : []); }
   }
   // a request the user answers in the wallet's window
-  function ask(origin, kind, method, params, address) {
+  function ask(origin, kind, method, params, address, extra = {}) {
     return new Promise((resolve, reject) => {
       const id = dappNext++;
-      dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now() });
+      dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now(), ...extra });
       broadcast({ type: 'event', method: 'bb_dapp', result: { id, origin } });
       if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow' }).then((r) => { dappWin = r && r.result; }).catch(() => {});
       setTimeout(() => { if (dappReq.delete(id)) reject(err(4001, 'the request expired')); }, 15 * 60 * 1000);
@@ -570,6 +582,25 @@
         throw err(4902, 'BumbleBeam Wallet works on Ethereum mainnet only');
       }
       case 'wallet_addEthereumChain': throw err(4200, 'BumbleBeam Wallet works on Ethereum mainnet only');
+      // Beam: the site asks for the wallet (create_beam_api); then its calls go to its own app API in the open
+      // wallet's Beam part
+      case 'beam_connect': {
+        const appname = String((params[0] && params[0].appname) || '').trim().slice(0, 40) || new URL(origin).hostname;
+        if (!(data && beamSites()[origin])) await ask(origin, 'beamConnect', method, params, null, { appname });
+        return { ok: true };
+      }
+      case 'beam_call': {
+        const site = beamSites()[origin];
+        if (!site || !data) throw err(4100, 'connect the site to the wallet first');
+        const q = params[0] || {};
+        if (!BEAM_SITE.has(q.method)) throw err(4200, `not allowed for a site: ${q.method}`);
+        const id = settings.active, s = live(id);
+        if (!s) throw err(4900, 'the Beam part of the open wallet is not running');
+        const tx = BEAM_TX.has(q.method);
+        if (tx) { const c = beamCtx.get(id) || { origin, appname: site.appname, n: 0 }; c.n++; beamCtx.set(id, c); }
+        try { return await s.e.rpc('siteCall', [origin, site.appname, origin, q.method, q.params || {}], 7 * 60 * 1000); }
+        finally { if (tx) { const c = beamCtx.get(id); if (c && --c.n <= 0) beamCtx.delete(id); } }
+      }
       case 'personal_sign': case 'eth_signTypedData_v4': case 'eth_sendTransaction': {
         // locked: a connected site's request still goes to the window, which asks for the password first
         const a = siteAccount(origin) || (!data && dapps()[origin] ? dapps()[origin].address : null);
@@ -585,6 +616,12 @@
   }
   // what the user agreed to, done here (the keys never leave this document)
   async function dappDo(r, choice) {
+    if (r.kind === 'beamtx') return true;
+    if (r.kind === 'beamConnect') {
+      beamSites()[r.origin] = { appname: r.appname, at: Date.now() };
+      await saveSettings();
+      return true;
+    }
     if (r.kind === 'connect') {
       const a = choice && choice.address ? findEth(choice.address).a.address : activeAddress();
       if (!a) throw new Error('this wallet has no Ethereum account');
@@ -624,6 +661,12 @@
           v.fee = r.priced ? { now: r.priced.feeNow, max: r.priced.feeMax } : null; v.feeErr = r.priceErr || null;
         }
         if (r.kind === 'connect') v.address = activeAddress();
+        if (r.kind === 'beamConnect' || r.kind === 'beamtx') {
+          v.appname = r.appname;
+          const w = data && data.wallets.find((x) => x.id === settings.active);
+          v.wallet = w ? { name: w.name, beam: !!w.beam, running: !!live(w.id) } : null;
+        }
+        if (r.kind === 'beamtx') { v.info = r.params[0]; v.amounts = r.params[1]; }
         out.push(v);
       }
       return out;
@@ -633,16 +676,19 @@
       const r = dappReq.get(id);
       if (!r) throw new Error('this request is gone (answered, or the site closed)');
       dappReq.delete(id);
-      if (!ok) { r.reject(err(4001, 'the user rejected the request')); return null; }
+      if (!ok) { if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user rejected the request')); return null; }
       try { const v = await dappDo(r, choice); r.resolve(v); return v; } catch (e) { r.reject(err(-32603, e.message)); throw e; }
     },
     // what the popup shows for the site of the open tab
     dappStatus(origin) {
-      const c = dapps()[origin];
-      return { connected: !!(c && siteAccount(origin)), address: c ? c.address : null, waiting: [...dappReq.values()].some((r) => r.origin === origin) };
+      const c = dapps()[origin], b = beamSites()[origin];
+      return { connected: !!((c && siteAccount(origin)) || (b && data)), address: c ? c.address : null, beam: !!b, waiting: [...dappReq.values()].some((r) => r.origin === origin) };
     },
-    dappList: () => Object.entries(dapps()).map(([origin, c]) => ({ origin, address: c.address, at: c.at })).sort((a, b) => b.at - a.at),
-    async dappDisconnect(origin) { delete dapps()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); },
+    dappList: () => [...new Set([...Object.keys(dapps()), ...Object.keys(beamSites())])].map((origin) => {
+      const c = dapps()[origin], b = beamSites()[origin];
+      return { origin, address: c ? c.address : null, beam: b ? b.appname : null, at: Math.max(c ? c.at : 0, b ? b.at : 0) };
+    }).sort((a, b) => b.at - a.at),
+    async dappDisconnect(origin) { delete dapps()[origin]; delete beamSites()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); },
 
     state() {
       lockIcon();

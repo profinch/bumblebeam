@@ -1245,6 +1245,33 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const accRow = r.address ? [['Account', `${acc ? `${acc.a.name} · ` : ''}${six(r.address)}`]] : [['Account', 'this wallet has no Ethereum account']];
     const kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
     $('dpSite').textContent = r.origin;
+    const wRow = r.wallet ? [['Beam wallet', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
+    if (r.kind === 'beamConnect') {
+      $('dpTitle').textContent = 'Connect to Beam';
+      $('dpBody').innerHTML = kv([['App', r.appname || ''], ...wRow]);
+      $('dpNote').textContent = r.wallet && !r.wallet.beam ? 'The open wallet has no Beam part: open a wallet with one first.'
+        : 'The site sees this wallet\'s Beam balance, assets and its own transactions, and can ask for contract transactions; each one is asked here first. For another wallet, open it in the wallet first.';
+      $('dpYes').textContent = 'Connect';
+      $('dpYes').disabled = !(r.wallet && r.wallet.beam);
+      $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
+      return show('s-dapp');
+    }
+    if (r.kind === 'beamtx') {
+      $('dpTitle').textContent = 'Beam contract transaction';
+      const rows = [['App', r.appname || ''], ...wRow];
+      for (const a of Array.isArray(r.amounts) ? r.amounts : []) {
+        const asset = Number(a.assetID ?? a.asset_id ?? 0);
+        rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${amt(Number(a.amount), 8)} ${asset ? `asset ${asset}` : 'BEAM'}`]);
+      }
+      if (r.info && r.info.fee != null) rows.push(['Beam network fee', `${amt(Number(r.info.fee), 8)} BEAM`]);
+      if (r.info && r.info.comment) rows.push(['Contract says', String(r.info.comment)]);
+      $('dpBody').innerHTML = kv(rows);
+      $('dpNote').textContent = 'What it spends and receives is the wallet\'s own reading of the transaction, not the site\'s.';
+      $('dpYes').textContent = 'Approve';
+      $('dpYes').disabled = false;
+      $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
+      return show('s-dapp');
+    }
     if (r.kind === 'connect') {
       $('dpTitle').textContent = 'Connect this site';
       $('dpBody').innerHTML = kv(accRow);
@@ -1295,7 +1322,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     try { s = await host('dappStatus', siteOrigin); } catch {}
     const hostName = new URL(siteOrigin).hostname;
     if (s.waiting) { box.classList.add('warn'); $('dappSt').textContent = 'request waiting'; $('dappSub').textContent = hostName; }
-    else if (s.connected) { box.classList.add('ok'); $('dappSt').textContent = 'connected'; $('dappSub').textContent = six(s.address); }
+    else if (s.connected) { box.classList.add('ok'); $('dappSt').textContent = 'connected'; $('dappSub').textContent = [s.beam ? 'Beam' : '', s.address ? six(s.address) : ''].filter(Boolean).join(' · '); }
     else { $('dappSt').textContent = 'not connected'; $('dappSub').textContent = hostName; }
     box.title = '';
   }
@@ -1305,7 +1332,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     if (!s) return;
     if (s.waiting) { chrome.runtime.sendMessage({ op: 'dappWindow' }).catch(() => {}); return; }
     if (s.connected) {
-      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ['Account', six(s.address)]], note: 'Disconnected, the site sees no account until you connect it again.', yes: 'Disconnect', no: 'Close' });
+      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ...(s.beam ? [['Beam', 'connected']] : []), ...(s.address ? [['Ethereum', six(s.address)]] : [])], note: 'Disconnected, the site sees nothing of the wallet until you connect it again.', yes: 'Disconnect', no: 'Close' });
       if (r.ok) { await host('dappDisconnect', siteOrigin); dappRefresh(); }
       return;
     }
@@ -1313,7 +1340,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
   };
   async function dappListOpen() {
     const l = await host('dappList').catch(() => []);
-    $('dappList').innerHTML = l.map((d) => `<div class="li"><span class="what">${esc(new URL(d.origin).hostname)}<span class="sub">${esc(six(d.address))} · ${esc(fdate(d.at))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`).join('')
+    $('dappList').innerHTML = l.map((d) => `<div class="li"><span class="what">${esc(new URL(d.origin).hostname)}<span class="sub">${esc([d.beam ? `Beam: ${d.beam}` : '', d.address ? six(d.address) : '', fdate(d.at)].filter(Boolean).join(' · '))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`).join('')
       || '<div class="empty">no site connected</div>';
   }
   $('dappList').onclick = async (e) => {

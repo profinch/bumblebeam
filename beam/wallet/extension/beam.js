@@ -113,6 +113,46 @@ const Beam = (() => {
     });
   }
 
+  // ---------- a website's own app API (Beam dApps: the BeamApi protocol of Beam's web wallet) ----------
+  // One per site (key: its origin), with an app id made from the site's name and origin, as Beam's own web
+  // wallet does: a site sees only what Beam's app API shows an app, and its transactions come to the consent
+  // handler like the bridge's. An answer goes back to its call; anything else (events) to onEvent(key, json).
+  const sites = new Map();                       // key -> { api: Promise, pending: Map(id -> resolve/reject) }
+  let siteNext = 1, siteEvent = () => {};
+  function siteApi(key, appname, origin) {
+    let x = sites.get(key);
+    if (x) return x.api;
+    x = { pending: new Map() };
+    x.api = new Promise((resolve, reject) => {
+      const appid = WC.GenerateAppID(appname, origin);
+      client.createAppAPI('current', '', appid, appname, (err, api) => {
+        if (err) { sites.delete(key); return reject(new Error(String(err))); }
+        api.setHandler((json) => {
+          let m;
+          try { m = JSON.parse(json); } catch { return; }
+          const p = m.id != null && x.pending.get(m.id);
+          if (p) { x.pending.delete(m.id); p(m); return; }
+          siteEvent(key, m);
+        });
+        resolve(api);
+      });
+    });
+    sites.set(key, x);
+    return x.api;
+  }
+  // the site's call, answered with the app API's whole reply ({ result } or { error }), its id the site's own
+  async function siteCall(key, appname, origin, method, params, ms = 120000) {
+    if (!client) throw new Error('the Beam wallet is not running');
+    const api = await siteApi(key, appname, origin);
+    const x = sites.get(key);
+    const id = siteNext++;
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { if (x.pending.delete(id)) resolve({ error: { code: -32603, message: `no answer to ${method}` } }); }, ms);
+      x.pending.set(id, (m) => { clearTimeout(t); resolve(m.error ? { error: m.error } : { result: m.result }); });
+      api.callWalletApi(JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} }));
+    });
+  }
+
   // beforeStart: what has to be set on the client before startWallet (the snapshot import)
   function start(db, pass, node, beforeStart) {
     if (client || cur) throw new Error('this engine has run a wallet already: a new engine is needed');
@@ -128,7 +168,7 @@ const Beam = (() => {
     client.setApproveSendHandler((req, info, cb) => cb.sendRejected(req));
     if (beforeStart) beforeStart();
     client.startWallet();
-    app = null;
+    app = null; sites.clear();
   }
 
   // The wallet stops and writes its database; the client object is left as it is (never deleted: see the
@@ -243,6 +283,8 @@ const Beam = (() => {
     isValidPhrase: (phrase) => WC.IsValidPhrase(words(phrase).join(' ')),
     isAllowedWord: (w) => WC.IsAllowedWord(w),
     checkPassword,
+    siteCall,
+    onSiteEvent: (fn) => { siteEvent = fn; },
     checkBytes,
     snapshotInfo,
     dropSnapshot,

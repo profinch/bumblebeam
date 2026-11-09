@@ -41,6 +41,7 @@ const Engines = (() => {
       const m = e.data;
       if (m.type === 'ready') { if (this.ready) this.ready(); return; }
       if (m.type === 'event') return this.on.event(m);
+      if (m.type === 'site') return this.on.site && this.on.site(m.key, m.msg);
       if (m.type === 'progress') return this.on.progress(m.step, m.done, m.total);
       if (m.type === 'ws') {
         this.ws.open = m.open;

@@ -19,6 +19,8 @@
     post({ type: 'consent', cid, info, amounts });
   }));
   Beam.on((msg) => { if (msg.method) post({ type: 'event', method: msg.method, result: msg.result }); });
+  // a website's events (from its own app API) go to the host with the site's key
+  Beam.onSiteEvent((key, msg) => post({ type: 'site', key, msg }));
 
   // Something the wallet has to ask its node, after 15 s without sending anything: the tip block's details.
   // The node's idle clock counts what the wallet sends (blocks it receives do not reset it). Checked
@@ -49,6 +51,7 @@
     isAllowedWord: (w) => Beam.isAllowedWord(w),
     checkPassword: (db, pass) => Beam.checkPassword(db, pass),
     checkBytes: (bytes, pass) => Beam.checkBytes(bytes, pass),
+    siteCall: (key, appname, origin, method, params) => Beam.siteCall(key, appname, origin, method, params),
     snapshotInfo: () => Beam.snapshotInfo(),
     dropSnapshot: () => Beam.dropSnapshot(),
     running: () => Beam.running(),

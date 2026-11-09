@@ -19,6 +19,7 @@
     if (e.source !== window || e.origin !== location.origin || !e.data || e.data.target !== 'bumblebeam-inpage') return;
     const m = e.data;
     if (m.event) {
+      if (m.event === 'beam') { if (beamResult) { try { beamResult(JSON.stringify(m.data)); } catch (e) { console.error(e); } } return; }
       if (m.event === 'accountsChanged') accounts = m.data || [];
       return emit(m.event, m.data);
     }
@@ -64,4 +65,28 @@
   window.addEventListener('eip6963:requestProvider', announce);
   announce();
   send('eth_accounts', []).then((a) => { emit('connect', { chainId: '0x1' }); return a; }).catch(() => {});
+
+  // Beam dApps (the protocol of Beam's web wallet): the page posts { type: 'create_beam_api', appname, … };
+  // once the user connects the site in the wallet, window.BeamApi is set and the page is told 'apiInjected'
+  // ('rejected' if not). BeamApi.callWalletApi(id, method, params) answers through the callback given to
+  // callWalletApiResult, as JSON text: { id, jsonrpc, result | error }; events come the same way, without an id.
+  let beamResult = null, beamAsked = false;
+  const BeamApi = {
+    callWalletApiResult(cb) { beamResult = cb; return Promise.resolve(); },
+    callWalletApi(id, method, params) {
+      const reply = (x) => { if (beamResult) beamResult(JSON.stringify({ jsonrpc: '2.0', id, ...x })); };
+      send('beam_call', [{ method, params }]).then((r) => reply(r && r.error ? { error: r.error } : { result: r ? r.result : null }),
+        (e) => reply({ error: { code: e.code || -32603, message: e.message } }));
+    },
+  };
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || e.data.type !== 'create_beam_api' || beamAsked) return;
+    // another Beam wallet answered already (Beam's own web wallet): it keeps the page
+    if (window.BeamApi && window.BeamApi !== BeamApi) return;
+    beamAsked = true;
+    send('beam_connect', [{ appname: e.data.appname, apiver: e.data.apiver, apivermin: e.data.apivermin }]).then(() => {
+      try { Object.defineProperty(window, 'BeamApi', { value: BeamApi, configurable: true, writable: true }); } catch { window.BeamApi = BeamApi; }
+      window.postMessage('apiInjected', location.origin);
+    }, () => window.postMessage('rejected', location.origin)).finally(() => { beamAsked = false; });
+  });
 })();
