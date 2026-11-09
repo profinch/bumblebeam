@@ -231,7 +231,7 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 
 /* ---- the dialog ---- */
 dialog {
-  width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 16px; color: var(--text);
+  width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 16px 14px; color: var(--text);
   background: linear-gradient(180deg, #08385c, #052a4b); border: 1px solid rgba(var(--accent-rgb), 0.3); border-radius: var(--radius-l);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
@@ -277,6 +277,10 @@ html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: 
 #s-dapp #dpBody { overflow-y: auto; min-height: 0; }
 #s-dapp #dpNote { margin-top: 14px; }
 #s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; white-space: pre-line; }      /* a name, then a whole address on its own line */
+/* the dialogs and the request window: the label close to its value (10 px, not 18), values at 11 px, so a whole
+   Ethereum address (42 characters) fits on one line next to its label */
+#s-dapp .kv, dialog .kv { column-gap: 10px; }
+#s-dapp .kv dd, dialog .kv dd { font-size: 11px; }
 #s-dapp .dp-foot { margin-top: auto; padding-top: 14px; }
 html.win main { padding-bottom: 14px; }
 #s-dapp #dpMore:empty { display: none; }
