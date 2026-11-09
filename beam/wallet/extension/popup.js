@@ -127,6 +127,8 @@
     window.scrollTo(0, 0); document.querySelector('main').scrollTop = 0;
   }
   function tab(name) {
+    // another tab: Beam's tokens folded away at once, so the wallet tab comes back as it was before them
+    if (name !== 'home') beamTokens(false, true);
     curTab = name;
     qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
     show(`t-${name}`);
@@ -712,7 +714,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
   let beamTok = false, beamH0 = 0, beamMb0 = 0, beamTokT = 0;
   function beamFit() {
     if (!beamTok) return;
-    const c = $('beamCard'), H = $('ethCard').getBoundingClientRect().bottom - c.getBoundingClientRect().top;
+    const c = $('beamCard'), e = $('ethCard').getBoundingClientRect();
+    if (!e.height || !c.offsetParent) return;          // not on screen (a sheet over the tab): fitted again when back
+    const H = e.bottom - c.getBoundingClientRect().top;
     c.style.height = `${H}px`; c.style.marginBottom = `${beamMb0 - (H - beamH0)}px`;
   }
   function beamTokens(on, now) {
