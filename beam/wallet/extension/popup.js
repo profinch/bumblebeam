@@ -24,7 +24,7 @@
   const exact = (s, dec) => { const v = BigInt(s || 0), p = 10n ** BigInt(dec); const f = (v % p).toString().padStart(dec, '0').replace(/0+$/, ''); return `${v / p}${f ? '.' + f : ''}`; };
   const num = (x, max = 4) => (x == null || !isFinite(x) ? '—' : x.toLocaleString('en-US', { maximumFractionDigits: x !== 0 && Math.abs(x) < 1 ? Math.max(max, 6) : max }));
   const usd = (x) => (x == null || !isFinite(x) ? '' : `$${x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-  const short = (a) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
+  const short = (a) => (a && a.length > 12 ? `${a.slice(0, 3)}…${a.slice(-6)}` : a || '');      // an address: its first 3 and last 6
   // dates as dd.mm.yyyy everywhere; the time in 24 or 12 hours, as chosen in Settings (kept in this browser)
   const pad = (n) => String(n).padStart(2, '0');
   let time12 = false;
@@ -132,7 +132,7 @@
     // so its cards line up with every other screen's
     const m = document.querySelector('main');
     m.style.paddingLeft = m.style.paddingRight = m.style.paddingBottom = '';
-    if (id === 'x-dapps' && document.documentElement.classList.contains('popup')) {
+    if ((id === 'x-dapps' || id === 'x-beamRecv') && document.documentElement.classList.contains('popup')) {
       const g = (m.offsetWidth - m.clientWidth) / 2, pad = parseFloat(getComputedStyle(m).paddingLeft) || 0;
       m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
       m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
@@ -908,7 +908,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
     offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The sender pays 0.011 BEAM and the coins arrive shielded. For many payments use public.',
     max_privacy: 'One payment, maximum anonymity (the shielded pool). The coins mature over a while before they can be spent.',
-    public_offline: 'Public and offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM, the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
+    public_offline: 'Public offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM, the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
   };
   // Receive shows the newest address of the chosen type (made once if there is none); "New address" makes
   // another. "My addresses" lists every address this wallet made, with the payments that came in to each
@@ -916,43 +916,29 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   const TYPE_NAME = { regular: 'regular', regular_new: 'regular', offline: 'offline', max_privacy: 'max privacy', public_offline: 'public offline' };
   let addrs = [], shownAddr = null;
   async function loadAddrs() {
-    const [list, txs] = await Promise.all([host('beam', W().id, 'addr_list', { own: true }), host('beam', W().id, 'tx_list', { count: 1000 }).catch(() => [])]);
-    const got = new Map();
-    for (const t of txs) {
-      if (!t.income) continue;
-      for (const k of [t.receiver, t.token, t.address, t.receiver_identity]) {
-        if (!k) continue;
-        const g = got.get(k) || { n: 0, sum: 0 };
-        if (t.status === 3) { g.n++; g.sum += t.value || 0; }
-        got.set(k, g);
-      }
-    }
-    const txText = txs.map((t) => JSON.stringify(t));
-    addrs = list.map((x) => {
-      const g = got.get(x.address) || (x.identity && got.get(x.identity)) || { n: 0, sum: 0 };
-      // any transaction at all (in or out, finished or not) that names this address or its identity
-      const touched = txText.some((j) => j.includes(x.address) || (x.identity && j.includes(x.identity)));
-      return { ...x, n: g.n, sum: g.sum, touched: touched || g.n > 0 };
-    }).sort((p1, p2) => (p2.create_time || 0) - (p1.create_time || 0));
+    const list = await host('beam', W().id, 'addr_list', { own: true });
+    addrs = list.slice().sort((p1, p2) => (p2.create_time || 0) - (p1.create_time || 0));
     renderAddrs();
   }
   const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
   const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
-  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'no expiry' : `until ${fdate((x.create_time + x.duration) * 1000)}`);
+  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'never' : fdate((x.create_time + x.duration) * 1000));
+  // My addresses: a row each, newest first: its name (else the address, shortened), made, expires, its type
+  // right, a cross that removes it; the one shown above stays lit
+  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   function renderAddrs() {
     $('addrCount').textContent = `${addrs.length}`;
     $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}" data-k="${k}">
-      <span class="badge ${x.expired ? 'bad' : 'ok'}">${esc(TYPE_NAME[x.type] || x.type)}</span>
-      <span class="what">${esc(x.comment || short(x.address))}<span class="sub">${x.comment ? esc(short(x.address)) + ' · ' : ''}${esc(ago2(x.create_time))} · ${esc(expiry(x))}</span></span>
-      <span class="amt ${x.n ? 'pos' : ''}">${x.n ? `${x.n} in · ${amt(x.sum, 2)}` : 'unused'}</span></div>`).join('') || '<div class="empty">none yet</div>';
+      <span class="a-name">${esc(x.comment || short(x.address))}</span><span class="a-d">${esc(ago2(x.create_time))}</span><span class="a-d${x.expired ? ' bad' : ''}">${esc(expiry(x))}</span>
+      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="a-x" data-del="${k}" title="Remove this address">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
   }
   function showAddr(x) {
     shownAddr = x.address;
     $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
-    // right of the QR: its name (or none yet), what kind, until when, what came in
-    $('beamAddrName').textContent = x.comment || 'no name'; $('beamAddrName').classList.toggle('dim', !x.comment);
-    $('nameBeamAddr').textContent = x.comment ? 'rename' : 'name it';
-    $('beamAddrMeta').innerHTML = [TYPE_NAME[x.type] || x.type, expiry(x), x.n ? `${x.n} payment${x.n > 1 ? 's' : ''} in` : 'nothing in yet'].map(esc).join('<br>');
+    // right of the QR: its name (nothing when it has none), its type, when it expires
+    $('beamAddrName').textContent = x.comment || '';
+    $('beamAddrType').textContent = TYPE_NAME[x.type] || x.type;
+    $('beamAddrExp').textContent = expiry(x);
     BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
   }
@@ -960,7 +946,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   async function newAddress(type) {
     const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
     await loadAddrs();
-    showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0, n: 0 });
+    showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0 });
   }
   async function showType(type, fresh = false) {
     note('x-beamRecv', 'bad', '');
@@ -990,32 +976,19 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try { await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input }); await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x); }
     catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
-  // Remove unused: only addresses with no transaction of any kind, no name, and not the one the other
-  // wallets send to. A removed address stops taking payments, so the dialog says how many go and stay.
-  $('addrClean').onclick = async () => {
-    note('x-beamRecv', 'bad', '');
-    try {
-      await loadAddrs();
-      const own = (W() && W().beamAddress) || '';
-      // a name you gave, not one the wallet wrote itself ("regular 2026-11-05", "wallet offline", "default",
-      // "for my other wallets", "probe")
-      const AUTO = /^(?:(?:regular|offline|max_privacy|public_offline) \d{4}-\d{2}-\d{2}|wallet (?:regular|offline)|default|for my other wallets|probe)?$/;
-      const named = (x) => !AUTO.test(String(x.comment || '').trim());
-      const keep = (x) => x.touched || named(x) || x.address === own;
-      const gone = addrs.filter((x) => !keep(x));
-      if (!gone.length) return ask({ title: 'Nothing to remove', note: 'Every address here has a transaction, a name, or is the one your other wallets send to.', yes: 'OK', no: null });
-      const ok = await confirmBox('Remove unused addresses', [['Removed', String(gone.length)], ['Kept', `${addrs.length - gone.length} (with a transaction, a name, or for your other wallets)`]],
-        'A removed address stops taking payments. If you gave one of these to someone and still expect coins on it, name it first (Name it): named ones stay. Coins already received are not affected.');
-      if (!ok) return;
-      let n = 0;
-      for (const x of gone) { try { await host('beam', W().id, 'delete_address', { address: x.address }); n++; } catch {} }
-      if (gone.some((x) => x.address === shownAddr)) shownAddr = null;
-      await loadAddrs();
-      if (!shownAddr) await showType(addrType); else renderAddrs();
-      await ask({ title: 'Done', note: `${n} removed, ${addrs.length} left.`, yes: 'OK', no: null });
-    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
-  };
-  $('addrList').onclick = (e) => {
+  $('addrList').onclick = async (e) => {
+    // the cross: this address removed, once asked (it stops taking payments)
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      const x = addrs[Number(del.dataset.del)]; if (!x) return;
+      const r = await ask({ title: 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]], note: 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
+      if (!r.ok) return;
+      try {
+        await host('beam', W().id, 'delete_address', { address: x.address });
+        if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
+      } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
+      return;
+    }
     const row = e.target.closest('[data-k]'); if (!row) return;
     const x = addrs[Number(row.dataset.k)];
     if (!x) return;
@@ -1025,7 +998,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     showAddr(x);
     $('beamQrWrap').scrollIntoView({ block: 'nearest' });
   };
-  $('copyBeamAddr').onclick = () => copy($('copyBeamAddr'), $('beamAddr').textContent);
+  $('copyBeamAddr').onclick = () => copyFlash($('copyBeamAddr'), $('beamAddr').textContent);
 
   // my other Beam wallets as receivers: the offline address each keeps for this (made once it has run)
   const bsOwn = BB.dropdown($('bsOwn'), (v) => { if (v) { $('bsAddr').value = v; $('bsAddr').oninput(); } });
@@ -1142,7 +1115,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
   };
   $('saveEthQr').onclick = () => BB.qrSave($('ethRecvAddr').textContent, 'ethereum-address', 'png');
-  $('copyEthAddr').onclick = () => copy($('copyEthAddr'), $('ethRecvAddr').textContent);
+  $('copyEthAddr').onclick = () => copyFlash($('copyEthAddr'), $('ethRecvAddr').textContent);
 
   // ---------- Bridge ----------
   let dir = 'toEth';

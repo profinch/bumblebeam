@@ -36,7 +36,7 @@
   </nav>
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
   <!-- Receive BEAM's address type: in the same place, the way back on its line -->
-  <div class="wsub split" id="recvBar" hidden><div class="seg mini" id="addrType"><button class="on" data-t="regular" title="Online: works while this wallet is the open one and unlocked. The transfer completes while both wallets are online">regular</button><button data-t="offline" title="Offline: takes payments while this wallet is off, up to 10. The sender's wallet completes them alone">offline</button><button data-t="public_offline" title="Public, and offline too: one address for any number of payments, also while this wallet is off (a pool's payouts, an exchange, donations). Less private: every payment goes to the same public key">public</button><button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool. One payment per address">max privacy</button></div> <div class="seg mini"><button type="button" data-close>← Back</button></div></div>
+  <div class="wsub split" id="recvBar" hidden><div class="seg mini" id="addrType"><button class="on" data-t="regular" title="Online: works while this wallet is the open one and unlocked. The transfer completes while both wallets are online">regular</button><button data-t="offline" title="Offline: takes payments while this wallet is off, up to 10. The sender's wallet completes them alone">offline</button><button data-t="public_offline" title="Public offline: one address for any number of payments, also while this wallet is off (a pool's payouts, an exchange, donations). Less private: every payment goes to the same public key">public offline</button><button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool. One payment per address">max privacy</button></div> <div class="seg mini"><button type="button" data-close>← Back</button></div></div>
   <!-- Connected sites' network: in the same place -->
   <div class="wsub split" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
   <div class="wsub" id="actBar" hidden><div class="seg mini" id="actNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
@@ -193,12 +193,13 @@ while the wallet is locked.</p>
       <div class="recv-top">
         <div class="qr" id="beamQr"></div>
         <div class="recv-side">
-          <div class="recv-name"><span id="beamAddrName"></span> <a href="#" class="text-link" id="nameBeamAddr" title="A name only you see: who it was given to">rename</a></div>
-          <div class="recv-meta" id="beamAddrMeta"></div>
-          <div class="recv-acts">
-            <button class="btn small" id="copyBeamAddr" data-copy>Copy address</button>
-            <button class="btn ghost small" id="newBeamAddr" title="Another address of the same type. All addresses lead to the same balance. A new one per sender keeps senders from telling they pay the same person">New address</button>
-            <button class="btn ghost small" id="saveBeamQr" title="The QR code as a picture, to send or print">Save QR</button>
+          <div class="recv-name" id="beamAddrName"></div>
+          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v" id="beamAddrType"></div><div class="caps">Expiry</div><div class="recv-v" id="beamAddrExp"></div></div>
+          <div class="recv-icons">
+            <button type="button" class="cp" id="copyBeamAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+            <button type="button" class="cp" id="saveBeamQr" title="Share: the QR code as a picture (size M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="nameBeamAddr" title="Rename: a name only you see, who it was given to"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="newBeamAddr" title="New address of the same type. All lead to the same balance. A new one per sender keeps senders from telling they pay the same person"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11zM8 5.5v5M5.5 8h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
@@ -206,8 +207,8 @@ while the wallet is locked.</p>
     </div>
     <p class="note bad" hidden></p>
     <div class="panel addr-panel">
-      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span id="addrCount"></span><button class="btn ghost small" id="addrClean" title="Removes the addresses nothing ever came to and that have no name. Kept: any with a transaction, any you named, the one for your other wallets">Remove unused</button></span></div>
-      <p class="hint">Every address this wallet made, newest first, with what came in to it. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
+      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span id="addrCount"></span></span></div>
+      <p class="hint">Every address this wallet made, newest first: when it was made and until when it takes payments. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
       <div class="list" id="addrList"><div class="empty">loading…</div></div>
     </div>
   </section>
@@ -233,10 +234,10 @@ while the wallet is locked.</p>
         <div class="qr" id="ethQr"></div>
         <div class="recv-side">
           <div class="recv-name" id="ethRecvName"></div>
-          <div class="recv-meta">Ethereum mainnet · one address for every payment</div>
-          <div class="recv-acts">
-            <button class="btn small" id="copyEthAddr" data-copy>Copy address</button>
-            <button class="btn ghost small" id="saveEthQr" title="The QR code as a picture, to send or print">Save QR</button>
+          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v">Ethereum mainnet</div><div class="caps">Expiry</div><div class="recv-v">never</div></div>
+          <div class="recv-icons">
+            <button type="button" class="cp" id="copyEthAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+            <button type="button" class="cp" id="saveEthQr" title="Share: the QR code as a picture (size M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
