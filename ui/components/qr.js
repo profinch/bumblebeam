@@ -1,7 +1,8 @@
 // BumbleBeam QR codes, the puzzle invite's look (bitcoin/puzzle/web/pool.js qrOpts) for every site:
 // qr-code-styling (ui/vendor, MIT), rounded dots in a gradient from the accent to the logo's light end,
 // extra-rounded eyes in the accent with round centres in that light end, no ground of their own (the page's
-// navy under them), our logo in the middle. Every code fills its box exactly, whatever its length. The chain's
+// navy under them), our logo in the middle, the sites' own at their 42 px in every code, on a navy hexagon
+// ring. Every code fills its box exactly, whatever its length. The chain's
 // theme gives the colours (Beam: teal, Bitcoin: orange); a block with data-chain="bitcoin" gets Bitcoin's.
 // Three sizes: BB.qrSizes = { s: 180, m: 220, l: 260 }.
 // Checked 2026-11-09 with jsQR on Beam's four address types and five Bitcoin ones: all read at each size with
@@ -15,6 +16,10 @@
 (() => {
   const css = (at, k, d) => (getComputedStyle(at || document.documentElement).getPropertyValue(k) || '').trim() || d;
   const SIZES = { s: 180, m: 220, l: 260 };
+  // the logo in the middle: the sites' own (ui .logo, 42 px, the header's), the same size in every code; the
+  // code is cleared under it with a 4 px gap
+  const LOGO = 42, GAP = 4;
+  const CLEAR = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>');
   // our logo in the middle, in the chain's colours (bb.js), as a picture the QR library can place
   const logo = (at) => {
     if (!window.BB || !window.BB.logoSvg) return undefined;
@@ -36,8 +41,10 @@
     return { px, inst: new window.QRCodeStyling({
       width: px, height: px, type, data: text, margin: 0,
       qrOptions: { errorCorrectionLevel: ec },
-      image: o.logo === false ? undefined : logo(at),
-      imageOptions: { hideBackgroundDots: true, imageSize: o.logoSize || 0.3, margin: Math.round(cell / 2) },
+      // on screen an empty picture only clears the middle (the logo goes over the code, BB.qr); in a download
+      // the logo itself, at the same share of the code
+      image: o.logo === false ? undefined : o.clearOnly ? CLEAR : logo(at),
+      imageOptions: { hideBackgroundDots: true, imageSize: (LOGO + 2 * GAP) / (o.boxSize || size), margin: 0 },
       dotsOptions: { type: 'rounded', gradient: { type: 'linear', rotation: Math.PI / 4, colorStops: [{ offset: 0, color: acc }, { offset: 1, color: light }] } },
       cornersSquareOptions: { type: 'extra-rounded', color: acc },
       cornersDotOptions: { type: 'dot', color: light },
@@ -48,12 +55,22 @@
     el.innerHTML = '';
     el.style.width = el.style.height = `${size}px`;
     if (!window.QRCodeStyling) { el.textContent = 'QR code unavailable'; return; }
-    make(text, size, el, o).inst.append(el);
+    make(text, size, el, { ...o, clearOnly: true }).inst.append(el);
     const c = el.querySelector('canvas');
     if (c) { c.style.width = c.style.height = `${size}px`; c.style.display = 'block'; }
+    if (o && o.logo === false) return;
+    el.style.position = 'relative';
+    const m = document.createElement('span');
+    m.className = 'qr-logo';
+    m.style.cssText = `position:absolute;left:50%;top:50%;width:${LOGO}px;height:${LOGO}px;margin:-${LOGO / 2}px 0 0 -${LOGO / 2}px;line-height:0;pointer-events:none`;
+    // under it the logo's hexagon a little bigger in the page's navy: the same clear ring round it in every code
+    // (the library clears less of a long code: what level L can lose)
+    const halo = `<svg viewBox="0 0 32 32" width="${LOGO}" height="${LOGO}" style="position:absolute;left:0;top:0;overflow:visible" aria-hidden="true"><path d="M16 2 28 9v14L16 30 4 23V9z" fill="var(--bg)" stroke="var(--bg)" stroke-width="${(GAP * 2 * 32) / LOGO}" stroke-linejoin="round"/></svg>`;
+    m.innerHTML = halo + (window.BB && window.BB.logoSvg ? window.BB.logoSvg(LOGO).replace('<svg ', '<svg style="position:relative" ') : '');
+    el.appendChild(m);
   };
   const qrSave = (text, name = 'qr', ext = 'png', at) => {
-    if (window.QRCodeStyling) make(text, 1024, at, {}, ext === 'svg' ? 'svg' : 'canvas').inst.download({ name, extension: ext });
+    if (window.QRCodeStyling) make(text, 1024, at, { boxSize: SIZES.m }, ext === 'svg' ? 'svg' : 'canvas').inst.download({ name, extension: ext });
   };
   window.BB = window.BB || {};
   window.BB.qr = qr;
