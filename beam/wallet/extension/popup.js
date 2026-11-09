@@ -10,6 +10,8 @@
   const inTab = new URLSearchParams(location.search).has('tab');
   const inWin = new URLSearchParams(location.search).has('win');   // the window where a site's request is answered
   if (!inTab) document.documentElement.classList.add('popup');
+  // the request window (popup.html?win=1): the popup's layout at the window's own size, not the popup's 400 x 600
+  if (new URLSearchParams(location.search).has('win')) document.documentElement.classList.add('win');
 
   // ---------- small things ----------
   const $ = (id) => document.getElementById(id);

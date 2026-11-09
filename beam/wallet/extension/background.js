@@ -34,7 +34,14 @@ const OPS = {
   dappWindow: async () => {
     const { dappWin } = await chrome.storage.session.get('dappWin');
     if (dappWin != null) { try { await chrome.windows.update(dappWin, { focused: true }); return dappWin; } catch {} }
-    const w = await chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: 400, height: 640, focused: true });
+    // at the right of the browser window the user is in, under its toolbar (where the extension's icon is)
+    const W = 400, H = 640;
+    let at = {};
+    try {
+      const cur = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+      if (cur && cur.left != null) at = { left: Math.max(0, cur.left + cur.width - W - 12), top: Math.max(0, cur.top + 80) };
+    } catch {}
+    const w = await chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: W, height: H, focused: true, ...at });
     await chrome.storage.session.set({ dappWin: w.id });
     return w.id;
   },

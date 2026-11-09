@@ -8,6 +8,7 @@
    (on the wallet tab nothing does: just a long token list, inside its card) */
 html.popup, html.popup body { height: 600px; overflow: hidden; }
 html.popup body { width: 400px; min-height: 0; display: flex; flex-direction: column; }
+html.popup.win, html.popup.win body { width: 100%; height: 100vh; }
 html.popup main { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 html.popup #t-home { display: flex; flex-direction: column; height: 100%; }
 html.popup #ethCard { flex: none; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }      /* never squeezed: its buttons as far from its edge as Beam's */
