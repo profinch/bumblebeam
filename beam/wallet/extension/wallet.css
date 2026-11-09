@@ -260,7 +260,6 @@ dialog .row { margin-top: 14px; }
 .total-row .total { flex: 1 1 auto; min-width: 0; }
 .dapp-wrap { flex: none; display: flex; flex-direction: column; align-items: flex-end; padding: 12px 2px 0; max-width: 150px; }
 .dapp-cap { position: relative; margin-bottom: 2px; font: 700 var(--fs-xs) var(--font-mono); line-height: normal; }      /* the line of TOTAL's caption (.caps): the same font and line height */
-.dapp-cap .caps { text-transform: none; }
 
 .dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
 .dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
