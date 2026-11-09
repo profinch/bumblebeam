@@ -637,6 +637,12 @@
         throw err(4902, 'BumbleBeam Wallet works on Ethereum mainnet only');
       }
       case 'wallet_addEthereumChain': throw err(4200, 'BumbleBeam Wallet works on Ethereum mainnet only');
+      // EIP-5792: no batches here (one transaction at a time, each asked in the window); said as the standard
+      // wants it, so a site (Uniswap) sends its calls one by one without an error on the way
+      case 'wallet_getCapabilities': {
+        if (!siteAccount(origin)) throw err(4100, 'connect the site to the wallet first');
+        return { '0x1': { atomic: { status: 'unsupported' } } };
+      }
       // Beam: the site asks for the wallet (create_beam_api); then its calls go to its own app API in the open
       // wallet's Beam part
       case 'beam_connect': {
