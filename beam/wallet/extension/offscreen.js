@@ -739,7 +739,15 @@
       const c = dapps()[origin], b = beamSites()[origin];
       return { origin, address: c ? c.address : null, beam: b ? b.appname : null, at: Math.max(c ? c.at : 0, b ? b.at : 0) };
     }).sort((a, b) => b.at - a.at),
-    async dappDisconnect(origin) { delete dapps()[origin]; delete beamSites()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); dappDone(origin); },
+    // a site disconnected: from both networks, or from one ('beam' | 'eth', Connected sites' sections)
+    async dappDisconnect(origin, net) {
+      const eth = net !== 'beam' && !!dapps()[origin];
+      if (net !== 'beam') delete dapps()[origin];
+      if (net !== 'eth') delete beamSites()[origin];
+      await saveSettings();
+      if (eth) dappTell(origin, 'accountsChanged', []);
+      dappDone(origin);
+    },
 
     state() {
       lockIcon();

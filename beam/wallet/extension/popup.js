@@ -1494,20 +1494,26 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     }
     await ask({ title: new URL(siteOrigin).hostname, note: 'Not connected. On the site, choose "Connect wallet", pick BumbleBeam Wallet and approve it here.', yes: 'OK', no: null });
   };
+  // Connected sites, one network at a time (as Activity): each site a link to it with "disconnect" right of it;
+  // under them what it is connected to and since when
+  let dappNet = 'beam';
   async function dappListOpen() {
     const l = await host('dappList').catch(() => []);
-    // each site: its address (a link to it), then what it is connected to (Beam: its app's name; Ethereum: the
-    // account's name and address) and since when
+    qa('#dappNet button').forEach((b) => b.classList.toggle('on', b.dataset.n === dappNet));
     const named = (a) => (st.wallets || []).flatMap((w) => w.accounts).find((x) => x.address.toLowerCase() === a.toLowerCase());
-    $('dappList').innerHTML = l.map((d) => { const n = d.address && named(d.address);
-      return `<div class="li"><span class="what"><a href="${esc(d.origin)}" target="_blank" rel="noopener">${esc(new URL(d.origin).host)}</a><span class="sub">${esc([d.beam ? `Beam (${d.beam})` : '', d.address ? `Ethereum: ${n ? `${n.name} ` : ''}${six(d.address)}` : '', fdate(d.at)].filter(Boolean).join(' · '))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`; }).join('')
-      || '<div class="empty">no site connected</div>';
+    const rows = l.filter((d) => (dappNet === 'beam' ? d.beam : d.address)).map((d) => {
+      const n = dappNet === 'eth' && named(d.address);
+      const what = dappNet === 'beam' ? `Beam: ${d.beam}` : `Ethereum: ${n ? `${n.name} | ` : ''}${six(d.address)}`;
+      return `<div class="li site"><a class="site-a" href="${esc(d.origin)}" target="_blank" rel="noopener">${esc(new URL(d.origin).host)}</a><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a><span class="sub">${esc(what)}</span><span class="sub">${esc(fdate(d.at))}</span></div>`;
+    });
+    $('dappList').innerHTML = rows.join('') || `<div class="empty">no site connected on ${dappNet === 'beam' ? 'Beam' : 'Ethereum'}</div>`;
   }
+  $('dappNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); } };
   $('dappList').onclick = async (e) => {
     const a = e.target.closest('[data-dapp]');
     if (!a) return;
     e.preventDefault();
-    await host('dappDisconnect', a.dataset.dapp); dappListOpen(); dappRefresh();
+    await host('dappDisconnect', a.dataset.dapp, dappNet); dappListOpen(); dappRefresh();
   };
   $('wList').onclick = (e) => {
     const a = e.target.closest('[data-a]');
