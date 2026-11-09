@@ -1248,13 +1248,13 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const accRow = r.address ? [['Account', `${acc ? `${acc.a.name}\n` : ''}${r.address}`]] : [['Account', 'this wallet has no Ethereum account']];
     const kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
     $('dpSite').textContent = r.origin;
-    // the site asked for "Beam Web Wallet": it is this one, answering in its place; and which of its wallets is open
-    const wRow = r.wallet ? [['Beam wallet', 'BumbleBeam Wallet (Beam emulation)'], ['Wallet', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
+    // Beam: the account is the open wallet (its name), as the Ethereum one is the chosen account
+    const wRow = r.wallet ? [['Account', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
     if (r.kind === 'beamConnect') {
       $('dpTitle').textContent = 'Connect to Beam';
       $('dpBody').innerHTML = kv([['App', r.appname || ''], ...wRow]);
       $('dpNote').textContent = r.wallet && !r.wallet.beam ? 'The open wallet has no Beam part: open a wallet with one first.'
-        : 'The site sees this wallet\'s Beam balance, assets and its own transactions, and can ask for contract transactions. Each one is asked here first. For another wallet, open it in the wallet first.';
+        : 'The site sees this account\'s Beam balance, assets and its own transactions, and can ask for contract transactions. Each one is asked here first. For another account, open it in the wallet first.';
       $('dpYes').textContent = 'Connect';
       $('dpYes').disabled = !(r.wallet && r.wallet.beam);
       $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
