@@ -222,18 +222,18 @@
   };
   // the short name, as Beam's DEX shows it (SN), else the unit's name (UN)
   const assetSym = (m) => (m && (m.SN || m.UN)) || '';
-  const assetName = async (aid) => {
-    if (!aid) return 'BEAM';
-    const w = W(), m = w ? (await assetMeta(w.id)).get(aid) : null, n = assetSym(m);
-    return n ? `${n} (asset ${aid})` : `asset ${aid}`;
-  };
+  const assetSymOf = async (aid) => { const w = W(), m = w ? (await assetMeta(w.id)).get(aid) : null; return assetSym(m); };
   const coins = (v) => { const t = String(v ?? '').trim(); return /^\d+(\.\d+)?$/.test(t) ? t : '—'; };
   const consentRows = async (info, amounts) => {
-    const rows = [];
+    // an amount by its asset's short name ("0.00003264 bETH"); each asset other than BEAM then has a row
+    // of its own with its id ("Asset ID 36 (bETH)"); one the wallet cannot name: "0.5 asset 36", no row
+    const rows = [], ids = [];
     for (const a of Array.isArray(amounts) ? amounts : []) {
-      const aid = Number(a.assetID ?? a.asset_id ?? 0);
-      rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${coins(a.amount)} ${await assetName(aid)}`]);
+      const aid = Number(a.assetID ?? a.asset_id ?? 0), n = aid ? await assetSymOf(aid) : 'BEAM';
+      rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${coins(a.amount)} ${n || `asset ${aid}`}`]);
+      if (aid && n && !ids.some((x) => x[0] === aid)) ids.push([aid, n]);
     }
+    for (const [aid, n] of ids) rows.push(['Asset ID', `${aid} (${n})`]);
     if (info && info.fee != null) rows.push(['Beam network fee', `${coins(info.fee)} BEAM`]);
     if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
     return rows;
