@@ -5,7 +5,7 @@
 // Drawn here on a canvas; ui/vendor/qr-code-styling.js gives only the code's modules. So:
 //   - every code fills its box exactly, whatever its length (a whole number of device pixels per module, the
 //     picture scaled to the box: no seams between the modules);
-//   - the logo is the sites' own at their 42 px in every code and size, still (no animation), and the modules
+//   - the logo is the sites' own, still (no animation), the same size in every code and size, and the modules
 //     under it and round it are left out whole, the dots next to the gap rounded towards it as at any other edge
 //     (the library clears less of a long code, and only a square);
 //   - level Q up to 300 characters, L past it (Beam's offline, public and max privacy addresses).
@@ -22,7 +22,10 @@
 (() => {
   const css = (at, k, d) => (getComputedStyle(at || document.documentElement).getPropertyValue(k) || '').trim() || d;
   const SIZES = { s: 180, m: 220, l: 260 };
-  const LOGO = 42, GAP = 5;                      // the logo (px) and the free ring round it
+  // the free circle in the middle: 26 px in radius in every code (the most it can be: wider, Beam's long
+  // addresses at 180 px are not read); the logo as big as fits in it, its hexagon's corners 4 px from its edge
+  // (the hexagon's corners are 14 of the logo's 32 units from its centre)
+  const HOLE = 26, LOGO = Math.round(((HOLE - 4) * 32) / 14);
 
   // the code's modules: dark or not, n x n
   const matrix = (text) => {
@@ -93,7 +96,7 @@
     if (!window.QRCodeStyling) { el.textContent = 'QR code unavailable'; return; }
     const { n } = matrix(text);
     const cell = Math.max(2, Math.ceil(size * (window.devicePixelRatio || 1) / n));
-    const holeR = (LOGO / 2 + GAP) / (size / n);         // the free circle round the logo, in modules
+    const holeR = HOLE / (size / n);                    // the free circle round the logo, in modules
     const { c } = paint(text, cell, el, holeR);
     c.style.cssText = `display:block;width:${size}px;height:${size}px`;
     el.appendChild(c);
@@ -107,7 +110,7 @@
   const qrSave = (text, name = 'qr', at, at2) => {
     if (typeof at === 'string') at = at2;              // the older (text, name, 'png', at): always a png now
     if (!window.QRCodeStyling) return;
-    const { n } = matrix(text), size = SIZES.m, cell = Math.ceil(1024 / n), holeR = (LOGO / 2 + GAP) / (size / n);
+    const { n } = matrix(text), size = SIZES.m, cell = Math.ceil(1024 / n), holeR = HOLE / (size / n);
     const { c } = paint(text, cell, at, holeR);
     const img = new Image();
     img.onload = () => {
