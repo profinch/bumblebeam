@@ -154,7 +154,8 @@ while the wallet is locked.</p>
       <div id="beamBody">
         <div class="bigamt"><span class="amt" id="beamAvail"></span><span class="unit">BEAM</span><span class="usd" id="beamUsd"></span></div>
         <div class="minor" id="beamMinor"></div>
-        <div class="acts"><button class="btn" data-sheet="beamRecv">Receive</button><button class="btn" data-sheet="beamSend">Send</button></div>
+        <div class="assets" id="beamAssets" hidden></div>
+        <div class="acts"><button class="btn" data-sheet="beamRecv">Receive</button><button class="btn" data-sheet="beamSend">Send</button><button type="button" class="btn" id="beamTokBtn" aria-pressed="false">Tokens</button></div>
       </div>
       <p class="hint" id="beamNone" hidden>This wallet has no Beam part (it came from an Ethereum key or phrase).</p>
     </div>

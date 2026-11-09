@@ -118,13 +118,13 @@ html.popup .seed { columns: 2; }
 .asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; }
 /* a token row: its contract's link and copy button, the symbol, the amount, the dollars; the row (and its line)
    ends 5 px before the scroll bar */
-#ethAssets .asset { grid-template-columns: 30px minmax(0, 1fr) auto 72px; grid-template-areas: "tok sym amt usd"; margin-right: 5px; }
+#ethAssets .asset, #beamAssets .asset { grid-template-columns: 30px minmax(0, 1fr) auto 72px; grid-template-areas: "tok sym amt usd"; margin-right: 5px; }
 /* the content 8 px inside the row's light (as 3BMiner's rows): the list itself reaches 8 px into the card's
    margin (a scrolling box clips what sticks out of it), so the text stays in line with the rest of the card */
-#ethAssets { margin-left: -8px; }
-#ethAssets .asset { padding-left: 8px; padding-right: 8px; }
+#ethAssets, #beamAssets { margin-left: -8px; }
+#ethAssets .asset, #beamAssets .asset { padding-left: 8px; padding-right: 8px; }
 /* the symbol as far from the icons as they are from each other (6 px; the grid's gap is 12) */
-#ethAssets .tok { grid-area: tok; display: flex; gap: 6px; align-self: center; margin-right: -6px; }
+#ethAssets .tok, #beamAssets .tok { grid-area: tok; display: flex; gap: 6px; align-self: center; margin-right: -6px; }
 html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 /* ETH has no contract: as Beam's balance, its amount then its symbol, from where the others' icons start */
 #ethAssets .asset.native .lead { grid-column: 1 / span 3; grid-row: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -132,7 +132,7 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 #ethAssets .asset.native .lead .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
 #ethAssets .more { padding: 8px 10px 4px 0; }
 /* a token row lights up under the pointer, as a table row of the pool (tbody tr:hover); ETH's does not */
-#ethAssets .asset:not(.native):hover { background: rgba(255, 255, 255, 0.03); }
+#ethAssets .asset:not(.native):hover, #beamAssets .asset:hover { background: rgba(255, 255, 255, 0.03); }
 .badge.chip { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 2px 6px; text-transform: none; }      /* as the explorer's block of ours (.ours-h) */
 /* the chips: one line, its room kept even when empty; too long for the card (big amounts), it scrolls, with
    the scroll bar's room kept too */
@@ -285,3 +285,23 @@ html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: 
 html.win main { padding-bottom: 14px; }
 #s-dapp #dpMore:empty { display: none; }
 #s-dapp #dpMore { margin: 0 0 8px; text-align: center; }
+
+/* Beam's tokens: the card grows over the Ethereum one (popup.js beamTokens), its bottom edge on Ethereum's;
+   BEAM's line and its chips stay, the list takes what is left, the buttons stay at the bottom */
+html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not squeezed back by the column */
+#beamCard { position: relative; z-index: 1; transition: height 0.25s ease, margin-bottom 0.25s ease; }
+#beamCard.tok { display: flex; flex-direction: column; overflow: hidden; }
+#beamCard.tok > * { flex: none; }
+#beamCard.tok #beamBody { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#beamCard.tok #beamBody > * { flex: none; }
+#beamCard.tok #beamAssets { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+#beamAssets .empty { padding: 8px 0 0 8px; }
+#ethCard { transition: opacity 0.2s ease, visibility 0s linear 0s; }
+#ethCard.under { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.2s ease, visibility 0s linear 0.2s; }
+.acts .btn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
+/* the account's button: its name | its short address; when both do not fit, the address (with its bar) goes
+   to a second line that is cut off, so only the name shows (cut with … if even it is too long) */
+#acctDd .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
+#acctDd .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#acctDd .acc-b .ad { flex: none; white-space: nowrap; }
+#acctDd .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }

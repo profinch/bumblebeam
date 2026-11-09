@@ -34,7 +34,9 @@
       var li = its.filter(function (x) { return x.getAttribute('data-v') === String(v); })[0] || its.filter(function (x) { return x.getAttribute('data-v') === ''; })[0] || its[0];
       its.forEach(function (x) { x.setAttribute('aria-selected', String(x === li)); });
       root.setAttribute('data-value', li ? li.getAttribute('data-v') : '');
-      btn.textContent = li ? (li.getAttribute('data-label') || li.textContent) : '';
+      // an option with its own look on the button (opt-in: { btn: '<html>' }); otherwise its label as text
+      if (li && li.hasAttribute('data-btn')) btn.innerHTML = li.getAttribute('data-btn');
+      else btn.textContent = li ? (li.getAttribute('data-label') || li.textContent) : '';
     }
     function open() {
       list.hidden = false;
@@ -75,7 +77,7 @@
       else if (k === 'Tab') close(false);
     });
     document.addEventListener('click', function (e) { if (isOpen() && !root.contains(e.target)) close(false); });
-    // rebuild the options: [{ v, label }] or { group: 'Name' } for a heading
+    // rebuild the options: [{ v, label, html?, btn? }] or { group: 'Name' } for a heading
     function options(opts, value) {
       list.innerHTML = '';
       opts.forEach(function (o) {
@@ -85,6 +87,7 @@
         else {
           li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v));
           if (o.html != null) { li.innerHTML = o.html; li.setAttribute('data-label', o.label); } else li.textContent = o.label;
+          if (o.btn != null) li.setAttribute('data-btn', o.btn);
         }
         list.appendChild(li);
       });

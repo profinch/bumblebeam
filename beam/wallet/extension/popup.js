@@ -209,15 +209,22 @@
   // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
   // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
   // metadata (SN=, the short name) when the wallet knows it.
-  const assetNames = new Map();
+  // Every asset's metadata, from the node (assets_list with refresh: get_asset_info knows only the assets
+  // the wallet has already seen), once per wallet while the popup is open: asset id -> { N, SN, UN, … }
+  const assetMetaP = new Map(), assetMetaDone = new Map();
+  const assetMeta = (wid) => {
+    if (!assetMetaP.has(wid)) {
+      assetMetaP.set(wid, host('beam', wid, 'assets_list', { refresh: true })
+        .then((r) => { const m = new Map(((r && r.assets) || []).map((a) => [Number(a.asset_id), a.metadata_pairs || {}])); assetMetaDone.set(wid, m); return m; })
+        .catch(() => { assetMetaP.delete(wid); return new Map(); }));
+    }
+    return assetMetaP.get(wid);
+  };
+  // the short name, as Beam's DEX shows it (SN), else the unit's name (UN)
+  const assetSym = (m) => (m && (m.SN || m.UN)) || '';
   const assetName = async (aid) => {
     if (!aid) return 'BEAM';
-    if (!assetNames.has(aid)) {
-      let n = '';
-      try { const w = W(); const i = w && await host('beam', w.id, 'get_asset_info', { asset_id: aid }); const m = /(?:^|;)SN=([^;]+)/.exec((i && i.metadata) || ''); n = m ? m[1] : ''; } catch {}
-      assetNames.set(aid, n);
-    }
-    const n = assetNames.get(aid);
+    const w = W(), m = w ? (await assetMeta(w.id)).get(aid) : null, n = assetSym(m);
     return n ? `${n} (asset ${aid})` : `asset ${aid}`;
   };
   const coins = (v) => { const t = String(v ?? '').trim(); return /^\d+(\.\d+)?$/.test(t) ? t : '—'; };
@@ -469,7 +476,8 @@
       // can be done, each with its icon in a column of its own so the words line up
       const six = (x) => `${x.slice(0, 8)}…${x.slice(-6)}`;
       const act = (v, icon, text) => ({ v, label: text, html: `<span class="mi">${icon}</span><span>${esc(text)}</span>` });
-      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${six(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span>` })),
+      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${six(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span>`,
+        btn: `<span class="acc-b"><span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span></span>` })),
         { sep: true },
         ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
         act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(a.i));
@@ -575,6 +583,8 @@
     $('beamAvail').textContent = s ? amt(s.available || 0) : '';
     $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
     $('beamMinor').innerHTML = s ? chips(s) : '';
+    if (!(w && w.beam)) beamTokens(false, true); else beamRows();
+    if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0)) assetMeta(w.id);
     total();
     if (!w || !w.beam || !b) { $('beamMeta').innerHTML = ''; netDot('beamDot', '', ''); return; }
     const restore = '<a href="#" class="text-link" data-go-restore>restore</a>';
@@ -692,6 +702,63 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     }).catch(() => {});
   }
   $('ethCopy').onclick = () => copyFlash($('ethCopy'), $('ethAddr').textContent);
+
+  // ---------- Beam's tokens ----------
+  // "Tokens" grows the Beam card down over the Ethereum one: its bottom edge on Ethereum's, to the pixel.
+  // BEAM's line and its chips stay where they are; the list comes under them, the buttons go to the bottom.
+  // The Ethereum card stays in its place underneath (the Beam card's bottom margin takes back what it grows),
+  // faded out. Each token as on Ethereum: its page in the explorer, a button that copies its asset id, its
+  // short name, the amount available.
+  let beamTok = false, beamH0 = 0, beamMb0 = 0, beamTokT = 0;
+  function beamFit() {
+    if (!beamTok) return;
+    const c = $('beamCard'), H = $('ethCard').getBoundingClientRect().bottom - c.getBoundingClientRect().top;
+    c.style.height = `${H}px`; c.style.marginBottom = `${beamMb0 - (H - beamH0)}px`;
+  }
+  function beamTokens(on, now) {
+    const c = $('beamCard'), b = $('beamTokBtn');
+    if (on === beamTok) return;
+    clearTimeout(beamTokT);
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+    $('ethCard').classList.toggle('under', on);
+    if (on) {
+      if (!c.classList.contains('tok')) {
+        beamH0 = c.getBoundingClientRect().height; beamMb0 = parseFloat(getComputedStyle(c).marginBottom) || 0;
+        c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
+        c.classList.add('tok'); $('beamAssets').hidden = false;
+        void c.offsetHeight;                         // the start of the transition
+      }
+      beamTok = true; beamFit(); beamRows();
+    } else {
+      beamTok = false;
+      c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
+      const end = () => { if (beamTok) return; c.classList.remove('tok'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
+      if (now) end(); else beamTokT = setTimeout(end, 260);
+    }
+  }
+  $('beamTokBtn').onclick = () => beamTokens(!beamTok);
+  new ResizeObserver(() => beamFit()).observe($('ethCard'));
+  let beamRowsSeq = 0;
+  async function beamRows() {
+    if (!beamTok) return;
+    const w = W(), s = beamStatus, seq = ++beamRowsSeq;
+    if (!s) { $('beamAssets').innerHTML = '<div class="empty">syncing…</div>'; return; }
+    const list = (s.totals || []).filter((t) => Number(t.asset_id) !== 0 && (t.available || t.receiving || t.maturing))
+      .sort((x, y) => Number(x.asset_id) - Number(y.asset_id));
+    if (!list.length) { $('beamAssets').innerHTML = '<div class="empty">no tokens in this wallet</div>'; return; }
+    // the rows at once (named from what is known), again once the names come from the node
+    const known = w && assetMetaDone.get(w.id);
+    const draw = (meta) => { $('beamAssets').innerHTML = list.map((t) => {
+      const aid = Number(t.asset_id), sym = assetSym(meta.get(aid)) || `asset ${aid}`;
+      return `<div class="asset"><span class="tok"><a class="cp" href="https://explorer.bumblebeam.org/asset/${aid}" target="_blank" rel="noopener" title="Open in the explorer">${LINK}</a><button type="button" class="cp" data-cp="${aid}" title="Copy the asset id
+${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="amt">${num((t.available || 0) / GROTH)}</span><span class="usd"></span></div>`;
+    }).join(''); };
+    draw(known || new Map());
+    if (known || !w) return;
+    const meta = await assetMeta(w.id);
+    if (seq === beamRowsSeq && beamTok) draw(meta);
+  }
+  $('beamAssets').onclick = (e) => { const c = e.target.closest('[data-cp]'); if (c) copyFlash(c, c.dataset.cp); };
 
   function total() {
     if (!rates) { $('totalUsd').textContent = '—'; $('totalCh').textContent = ''; return; }
