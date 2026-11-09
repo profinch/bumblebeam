@@ -1516,7 +1516,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('dappLog').innerHTML = l.map((r) => `<div class="li log"><span class="what">${esc(r.method)}<span class="sub">${esc(new URL(r.origin).host)} · ${tm(r.at)}</span></span><span class="sub ${r.out === 'ok' ? '' : r.out ? 'bad' : 'warn'}">${esc(r.out || 'waiting…')}${r.end ? `${r.out === 'ok' ? ':' : ' ·'} ${((r.end - r.at) / 1000).toFixed(1)} s` : ''}</span></div>`).join('');
     $('dappLogCard').hidden = !l.length;            // none on this network: no card at all
   }
-  $('dappLogMore').onclick = (e) => { e.preventDefault(); dappLogOpen(); };
+  // read again every 2 s while the page is open: a call's end shows by itself
+  setInterval(() => { if (!$('x-dapps').hidden) dappLogOpen(); }, 2000);
   $('dappNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); dappLogOpen(); } };
   $('dappList').onclick = async (e) => {
     const a = e.target.closest('[data-dapp]');
