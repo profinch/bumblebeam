@@ -782,7 +782,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     // only when the tokens do not all fit
     c.classList.add('moving');
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
-    $('ethCard').classList.toggle('under', on);
+    // the Beam card lets through what is under it: Ethereum's goes at once when it grows, and comes back
+    // only once it has folded (never seen through the moving card)
+    if (on) { const e = $('ethCard'); e.classList.add('still', 'under'); void e.offsetHeight; e.classList.remove('still'); }
     if (on) {
       if (!c.classList.contains('tok')) {
         beamH0 = c.getBoundingClientRect().height; beamMb0 = parseFloat(getComputedStyle(c).marginBottom) || 0;
@@ -796,7 +798,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     } else {
       beamTok = false;
       c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
-      const end = () => { if (beamTok) return; b.textContent = 'Tokens'; c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
+      const end = () => { if (beamTok) return; b.textContent = 'Tokens'; $('ethCard').classList.remove('under'); c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
       // at once (another tab, another wallet): no transition at all, the card and Ethereum's just as before
       if (now) { c.classList.add('still'); $('ethCard').classList.add('still'); end(); void c.offsetHeight; c.classList.remove('still'); $('ethCard').classList.remove('still'); }
       else beamTokT = setTimeout(end, 260);

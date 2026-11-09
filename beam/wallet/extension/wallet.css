@@ -313,8 +313,10 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #dappList .li.site > :nth-child(even), #dappCatalog .li.site > :nth-child(even) { justify-self: end; }
 #dappList .li.site .sub, #dappCatalog .li.site .sub { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a site's name: a plain link (ui: the accent, a line under the pointer), cut with … when long */
-.site-a { font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-/* under the pointer a line, as a plain link */
+.site-a { justify-self: start; max-width: 100%; font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }      /* clickable on its text only */
+/* only the status is clicked (the box passes the rest through), and under the pointer it gets a line, as a plain link */
+.dapp-box { pointer-events: none; }
+.dapp-box .dapp-st { pointer-events: auto; cursor: pointer; }
 .dapp-box:hover .dapp-st { text-decoration: underline; }
 /* Recent requests: the method and the site left, how it ended right (red: an error, yellow: still waiting) */
 #dappLog .li.log { grid-template-columns: minmax(0, 1fr) minmax(0, 45%); align-items: start; }
