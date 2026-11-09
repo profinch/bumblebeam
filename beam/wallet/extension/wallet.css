@@ -259,10 +259,11 @@ dialog .row { margin-top: 14px; }
 .total-row { display: flex; align-items: flex-start; gap: 12px; }
 .total-row .total { flex: 1 1 auto; min-width: 0; }
 .dapp-wrap { flex: none; display: flex; flex-direction: column; align-items: flex-end; padding: 12px 2px 0; max-width: 150px; }
-/* the caption: the gear (all connected sites) left of "dApp" */
-.dapp-cap { display: flex; align-items: center; gap: 6px; font: var(--fs-s) var(--font-mono); color: var(--muted); margin-bottom: 2px; }
+/* the caption: the cube (all connected sites) left of "dApp", out of the line's flow, so "dApp" stays on
+   TOTAL's line */
+.dapp-cap { position: relative; margin-bottom: 2px; font: 700 var(--fs-xs) var(--font-mono); line-height: normal; }      /* the line of TOTAL's caption (.caps): the same font and line height */
 .dapp-cap .caps { text-transform: none; }
-.ibtn.mini { width: 20px; height: 20px; border-color: transparent; }
+.ibtn.mini { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 4px; width: 20px; height: 20px; border-color: transparent; }
 .ibtn.mini svg { width: 14px; height: 14px; }
 .dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
 .dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
