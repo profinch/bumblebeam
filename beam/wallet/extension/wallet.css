@@ -330,3 +330,6 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #dappLog .li.log > .sub { margin-top: 0; text-align: right; overflow-wrap: anywhere; }
 #dappLog .sub.bad { color: var(--color-red); }
 #dappLog .sub.warn { color: var(--color-yellow); }
+/* Connected sites: the scroll bar's room kept from the start (both sides, so the cards stay centred), so
+   nothing moves when the requests grow past the popup */
+html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-edges; }

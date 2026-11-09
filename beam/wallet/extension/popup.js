@@ -120,6 +120,14 @@
     $('backBtn').hidden = !adding;
     $('actBar').hidden = id !== 't-activity';
     $('dappBar').hidden = id !== 'x-dapps';
+    // Connected sites keeps the scroll bar's room on both sides (wallet.css): its own padding less by as much,
+    // so its cards line up with every other screen's
+    const m = document.querySelector('main');
+    m.style.paddingLeft = m.style.paddingRight = '';
+    if (id === 'x-dapps' && document.documentElement.classList.contains('popup')) {
+      const g = (m.offsetWidth - m.clientWidth) / 2, pad = parseFloat(getComputedStyle(m).paddingLeft) || 0;
+      m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
+    }
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
