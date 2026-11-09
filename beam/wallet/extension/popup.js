@@ -1513,7 +1513,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     // the network shown above: Beam's calls (beam_connect, beam: …) or Ethereum's (the rest)
     const l = (await host('dappLog').catch(() => [])).filter((r) => /^beam[_:]/.test(r.method) === (dappNet === 'beam'));
     const tm = (t) => new Date(t).toLocaleTimeString('en-GB');
-    $('dappLog').innerHTML = l.map((r) => `<div class="li log"><span class="what">${esc(r.method)}<span class="sub">${esc(new URL(r.origin).host)} · ${tm(r.at)}</span></span><span class="sub ${r.out === 'ok' ? '' : r.out ? 'bad' : 'warn'}">${esc(r.out || 'waiting…')}${r.end ? ` · ${((r.end - r.at) / 1000).toFixed(1)} s` : ''}</span></div>`).join('');
+    $('dappLog').innerHTML = l.map((r) => `<div class="li log"><span class="what">${esc(r.method)}<span class="sub">${esc(new URL(r.origin).host)} · ${tm(r.at)}</span></span><span class="sub ${r.out === 'ok' ? '' : r.out ? 'bad' : 'warn'}">${esc(r.out || 'waiting…')}${r.end ? `${r.out === 'ok' ? ':' : ' ·'} ${((r.end - r.at) / 1000).toFixed(1)} s` : ''}</span></div>`).join('');
     $('dappLogCard').hidden = !l.length;            // none on this network: no card at all
   }
   $('dappLogMore').onclick = (e) => { e.preventDefault(); dappLogOpen(); };
