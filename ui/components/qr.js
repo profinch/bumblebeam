@@ -22,17 +22,19 @@
     const svg = window.BB.logoSvg(64, { from: css(at, '--logo-from', '#0b76ff'), to: css(at, '--logo-to', '#39fff2') }).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
   };
-  // the code itself, every one the same size: drawn at a whole number of pixels per module (the library rounds
-  // a module down, which left codes of different sizes in the same box), then scaled to the box by its viewBox
-  const make = (text, size, at, o = {}) => {
+  // the code itself, every one the same size: drawn on a canvas at a whole number of device pixels per module
+  // (the library rounds a module down, which left codes of different sizes in the same box), then the picture is
+  // scaled to the box. Not an SVG scaled by its viewBox: each module is a shape of its own, and at a fractional
+  // scale their shared edges were smoothed into thin seams, a grid over the whole code.
+  const make = (text, size, at, o = {}, type = 'canvas') => {
     // level Q for addresses (room for a bigger logo: the library keeps the logo inside what the level can
     // lose), L past 300 characters (Beam's offline, public and max privacy: only L read at every size)
     const ec = o.ec || (text.length > 300 ? 'L' : 'Q');
     const probe = new window.QRCodeStyling({ data: text, qrOptions: { errorCorrectionLevel: ec } });
-    const n = probe._qr ? probe._qr.getModuleCount() : 33, cell = Math.max(4, Math.ceil(size / n)), px = n * cell;
+    const n = probe._qr ? probe._qr.getModuleCount() : 33, cell = Math.max(4, Math.ceil(size * (window.devicePixelRatio || 1) / n)), px = n * cell;
     const acc = css(at, '--accent', '#00f6d2'), light = css(at, '--logo-to', '#39fff2');
     return { px, inst: new window.QRCodeStyling({
-      width: px, height: px, type: 'svg', data: text, margin: 0,
+      width: px, height: px, type, data: text, margin: 0,
       qrOptions: { errorCorrectionLevel: ec },
       image: o.logo === false ? undefined : logo(at),
       imageOptions: { hideBackgroundDots: true, imageSize: o.logoSize || 0.3, margin: Math.round(cell / 2) },
@@ -46,13 +48,12 @@
     el.innerHTML = '';
     el.style.width = el.style.height = `${size}px`;
     if (!window.QRCodeStyling) { el.textContent = 'QR code unavailable'; return; }
-    const { px, inst } = make(text, size, el, o);
-    inst.append(el);
-    const svg = el.querySelector('svg');
-    if (svg) { svg.setAttribute('viewBox', `0 0 ${px} ${px}`); svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); }
+    make(text, size, el, o).inst.append(el);
+    const c = el.querySelector('canvas');
+    if (c) { c.style.width = c.style.height = `${size}px`; c.style.display = 'block'; }
   };
   const qrSave = (text, name = 'qr', ext = 'png', at) => {
-    if (window.QRCodeStyling) make(text, 1024, at).inst.download({ name, extension: ext });
+    if (window.QRCodeStyling) make(text, 1024, at, {}, ext === 'svg' ? 'svg' : 'canvas').inst.download({ name, extension: ext });
   };
   window.BB = window.BB || {};
   window.BB.qr = qr;
