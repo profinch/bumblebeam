@@ -22,7 +22,7 @@ accents (`#bitcoin` in the URL starts in the Bitcoin one).
 
 | | Beam (default) | Bitcoin |
 |---|---|---|
-| Switch | nothing | `<html data-chain="bitcoin">` |
+| Switch | nothing | `<html data-chain="bitcoin">`, or `data-chain="bitcoin"` on a block (both chains on one page) |
 | `--accent` | `#00f6d2` | `#f7931a` |
 | `--gradient-accent`, logo hexagon | `#0b76ff → #39fff2` | `#f7931a → #ffc46b` |
 | Sites | pool, explorer, wallet, desktop miner, DEX | puzzle, 3BMiner |

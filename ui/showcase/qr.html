@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BumbleBeam UI: QR codes</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../base.css">
+<link rel="stylesheet" href="../components.css">
+<script src="../components/bb.js"></script>
+<script src="../components/tips.js" defer></script>
+<script src="../vendor/qr-code-styling.js"></script>
+<script src="../components/qr.js"></script>
+<style>
+  /* showcase-only: the wallet's receive card (QR left, name, kind, dates and buttons right, the address under them) */
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
+  h2.sec { font: 700 var(--fs-m) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--accent); margin: 32px 0 var(--sp-2); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--sp-3); }
+  .recv { margin: 0; }
+  .recv-top { display: flex; gap: 14px; align-items: stretch; }
+  .recv .qr { flex: none; width: 180px; height: 180px; border-radius: 10px; overflow: hidden; line-height: 0; box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 6px 18px rgba(0, 0, 0, 0.3); }
+  .recv .qr svg { display: block; width: 100%; height: 100%; }
+  .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .recv-name { font-weight: 700; font-size: var(--fs-base); }
+  .recv-meta { margin-top: 6px; font: var(--fs-s) var(--font-mono); line-height: 1.6; color: var(--muted); }
+  .recv-acts { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .recv-acts .btn { justify-content: center; }
+  .recv .hash { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-m); background: rgba(0, 0, 0, 0.2); font: var(--fs-s) var(--font-mono); color: var(--text-dim); overflow-wrap: anywhere; max-height: 7.5em; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><div class="top-row"><a class="brand" href="index.html"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>UI · QR codes</em></span></a></div></header>
+  <p class="hint">ui/components/qr.js on both chains: <code>BB.qr(el, text, 180)</code> takes the colours of the block it is drawn in. The cards are the wallet's Receive card. Beam's addresses here are random samples with the real lengths and alphabets (a regular address is 67 hex characters, the others base58); Bitcoin's are the well-known examples from the Bitcoin wiki and BIP 350.</p>
+
+  <section id="beam">
+    <h2 class="sec">Beam</h2>
+    <div class="cards" id="beamCards"></div>
+  </section>
+
+  <section id="btc" data-chain="bitcoin">
+    <h2 class="sec">Bitcoin</h2>
+    <div class="cards" id="btcCards"></div>
+  </section>
+</div>
+<script>
+  // a fixed random sample of the given length and alphabet (the same on every load)
+  function sample(n, abc, seed) {
+    let x = seed >>> 0, s = '';
+    for (let i = 0; i < n; i++) { x = (x * 1664525 + 1013904223) >>> 0; s += abc[(x >>> 16) % abc.length]; }
+    return s;
+  }
+  const HEX = '0123456789abcdef', B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const BEAM = [
+    ['regular', 'Online while the wallet is open', 'until 05.01.2027', sample(67, HEX, 1)],
+    ['offline', 'Up to 10 payments while the wallet is off', 'until 05.01.2027', sample(451, B58, 2)],
+    ['public offline', 'Any number of payments, also offline', 'no expiry', sample(433, B58, 3)],
+    ['max privacy', 'One payment through the shielded pool', 'until 05.01.2027', sample(385, B58, 4)],
+  ];
+  const BTC = [
+    ['native segwit (bech32)', 'bc1q…: the usual one today', 'BIP 173', 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'],
+    ['taproot (bech32m)', 'bc1p…', 'BIP 350', 'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0'],
+    ['legacy (P2PKH)', '1…', 'the first kind', '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'],
+    ['script (P2SH)', '3…', 'multisig, wrapped segwit', '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'],
+    ['payment request (BIP 21)', 'the address with an amount and a label', 'BIP 21', 'bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq?amount=0.001&label=BumbleBeam'],
+  ];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  function cards(id, list) {
+    const box = document.getElementById(id);
+    box.innerHTML = list.map(([kind, what, when, text], i) => `<div class="panel recv"><div class="recv-top"><div class="qr" data-i="${i}"></div>
+      <div class="recv-side"><div class="recv-name">${esc(kind)}</div><div class="recv-meta">${esc(what)}<br>${esc(when)}<br>${text.length} characters</div>
+      <div class="recv-acts"><button class="btn small" data-copy="${i}">Copy address</button><button class="btn ghost small" data-save="${i}">Save QR</button></div></div></div>
+      <div class="hash">${esc(text)}</div></div>`).join('');
+    box.querySelectorAll('.qr').forEach((el) => BB.qr(el, list[el.dataset.i][3], 180));
+    box.onclick = (e) => {
+      const c = e.target.closest('[data-copy]'), s = e.target.closest('[data-save]');
+      if (c) navigator.clipboard.writeText(list[c.dataset.copy][3]).catch(() => {});
+      if (s) BB.qrSave(list[s.dataset.save][3], `${id}-${s.dataset.save}`, 'png', box);
+    };
+  }
+  cards('beamCards', BEAM);
+  cards('btcCards', BTC);
+</script>
+</body>
+</html>

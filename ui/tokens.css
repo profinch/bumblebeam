@@ -96,7 +96,8 @@
   --chart-label-text: #ffffff;
 }
 
-:root[data-chain="bitcoin"] {
+/* on <html> for a page, or on a block: a page can show both chains (the QR showcase does) */
+:root[data-chain="bitcoin"], [data-chain="bitcoin"] {
   --accent: #f7931a;
   --accent-rgb: 247, 147, 26;
   --gradient-accent: linear-gradient(135deg, #f7931a 0%, #ffc46b 100%);
