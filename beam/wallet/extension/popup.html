@@ -146,7 +146,10 @@ while the wallet is locked.</p>
         <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh"></span></div>
       </div>
       <!-- the site of the open tab: whether it is connected to this wallet -->
-      <button type="button" class="dapp-box" id="dappBox" hidden><span class="caps">dApp</span><span class="dapp-st" id="dappSt"></span><span class="dapp-sub" id="dappSub">&nbsp;</span></button>
+      <div class="dapp-wrap">
+        <div class="dapp-cap"><button type="button" class="ibtn mini" id="dappGear" data-sheet="dapps" title="Connected sites: all of them, and disconnect"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><span class="caps">dApp</span></div>
+        <button type="button" class="dapp-box" id="dappBox" hidden><span class="dapp-st" id="dappSt"></span><span class="dapp-sub" id="dappSub">&nbsp;</span></button>
+      </div>
     </div>
 
     <div class="panel net beam nodata" id="beamCard">
@@ -229,6 +232,15 @@ while the wallet is locked.</p>
     <p class="hint" id="esAvail"></p>
     <div class="row"><button class="btn solid" id="doEthSend">Review</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
+  </section>
+
+  <!-- ================= connected sites (the dApp gear) ================= -->
+  <section id="x-dapps" class="screen sheet" hidden>
+    <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Connected sites</h2></div>
+    <div class="panel">
+      <p class="hint">On Ethereum a site sees the account it was connected with. On Beam it sees the open wallet's balance and its own transactions. Either way it asks here before anything is signed or sent. A disconnected site sees nothing until you connect it again.</p>
+      <div class="list" id="dappList"></div>
+    </div>
   </section>
 
   <!-- ================= bridge ================= -->
@@ -322,11 +334,6 @@ while the wallet is locked.</p>
       <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>
       <label class="field">Ethereum RPC (https, empty = public ones)<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button class="btn ghost small" id="saveRpc">Save</button></span></label>
       <p class="note bad" hidden id="netErr"></p>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Connected sites</h3></div>
-      <p class="hint">Sites that see one of your Ethereum accounts. They ask before anything is signed or sent. A disconnected site sees no account.</p>
-      <div class="list" id="dappList"></div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Tokens</h3></div>

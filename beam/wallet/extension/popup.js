@@ -530,7 +530,7 @@
       case 'bb_dapp_done':
         if (inWin) { if (!dpBusy && st && st.phase === 'unlocked') dappScreen(); break; }
         dappRefresh();
-        if (curTab === 'settings' && !$('t-settings').hidden) dappListOpen();
+        if (!$('x-dapps').hidden) dappListOpen();
         if (curTab === 'home' && !$('t-home').hidden) ethRefresh();
         break;
       case 'ev_sync_progress':
@@ -786,8 +786,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     if (!beamTok) return;
     const w = W(), s = beamStatus, seq = ++beamRowsSeq;
     if (!s) { $('beamAssets').innerHTML = '<div class="empty">syncing…</div>'; return; }
+    // as Ethereum's: the dearest first, then those with no price (by asset id)
     const list = (s.totals || []).filter((t) => Number(t.asset_id) !== 0 && (t.available || t.receiving || t.maturing))
-      .sort((x, y) => Number(x.asset_id) - Number(y.asset_id));
+      .sort((x, y) => (beamTokUsd(Number(y.asset_id), y.available) ?? -1) - (beamTokUsd(Number(x.asset_id), x.available) ?? -1) || Number(x.asset_id) - Number(y.asset_id));
     if (!list.length) { $('beamAssets').innerHTML = '<div class="empty">no tokens in this wallet</div>'; return; }
     // the rows at once (named from what is known), again once the names come; a name still missing is
     // asked for again in 15 s while the list is open
@@ -1106,6 +1107,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethQr').innerHTML = '';
       new QRCode($('ethQr'), { text: a.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
     },
+    dapps: () => dappListOpen(),
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
   };
   $('copyEthAddr').onclick = () => copy($('copyEthAddr'), $('ethRecvAddr').textContent);
@@ -1376,7 +1378,6 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
         ${w.beam && st.beam && st.beam[w.id] && ['missing', 'failed'].includes(st.beam[w.id].status) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
         <a href="#" class="text-link danger" data-a="remove">remove</a>
       </div></div>`).join('');
-    dappListOpen();
     $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
       || '<div class="empty">no tokens added</div>';
     host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
@@ -1494,7 +1495,11 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   };
   async function dappListOpen() {
     const l = await host('dappList').catch(() => []);
-    $('dappList').innerHTML = l.map((d) => `<div class="li"><span class="what">${esc(new URL(d.origin).hostname)}<span class="sub">${esc([d.beam ? `Beam: ${d.beam}` : '', d.address ? six(d.address) : '', fdate(d.at)].filter(Boolean).join(' · '))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`).join('')
+    // each site: its address (a link to it), then what it is connected to (Beam: its app's name; Ethereum: the
+    // account's name and address) and since when
+    const named = (a) => (st.wallets || []).flatMap((w) => w.accounts).find((x) => x.address.toLowerCase() === a.toLowerCase());
+    $('dappList').innerHTML = l.map((d) => { const n = d.address && named(d.address);
+      return `<div class="li"><span class="what"><a href="${esc(d.origin)}" target="_blank" rel="noopener">${esc(new URL(d.origin).host)}</a><span class="sub">${esc([d.beam ? `Beam (${d.beam})` : '', d.address ? `Ethereum: ${n ? `${n.name} ` : ''}${six(d.address)}` : '', fdate(d.at)].filter(Boolean).join(' · '))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`; }).join('')
       || '<div class="empty">no site connected</div>';
   }
   $('dappList').onclick = async (e) => {

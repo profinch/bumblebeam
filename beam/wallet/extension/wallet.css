@@ -258,8 +258,13 @@ dialog .row { margin-top: 14px; }
 /* the total and, right of it, the open tab's site: caps title, its state (grey, green, yellow), the host or account */
 .total-row { display: flex; align-items: flex-start; gap: 12px; }
 .total-row .total { flex: 1 1 auto; min-width: 0; }
-.dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 12px 2px; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
-.dapp-box .caps { margin-bottom: 2px; text-transform: none; }      /* dApp, as it is written */
+.dapp-wrap { flex: none; display: flex; flex-direction: column; align-items: flex-end; padding: 12px 2px 0; max-width: 150px; }
+/* the caption: the gear (all connected sites) left of "dApp" */
+.dapp-cap { display: flex; align-items: center; gap: 6px; font: var(--fs-s) var(--font-mono); color: var(--muted); margin-bottom: 2px; }
+.dapp-cap .caps { text-transform: none; }
+.ibtn.mini { width: 20px; height: 20px; border-color: transparent; }
+.ibtn.mini svg { width: 14px; height: 14px; }
+.dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
 .dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
 .dapp-box .dapp-sub { color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dapp-box.ok .dapp-st { color: var(--accent); }
