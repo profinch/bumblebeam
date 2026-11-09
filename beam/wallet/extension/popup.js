@@ -584,7 +584,7 @@
     $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
     $('beamMinor').innerHTML = s ? chips(s) : '';
     if (!(w && w.beam)) beamTokens(false, true); else beamRows();
-    if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0)) assetMeta(w.id);
+    if (s && w && (s.totals || []).some((t) => Number(t.asset_id) !== 0 && t.available)) { assetMeta(w.id); beamPricesLoad(w.id); }
     total();
     if (!w || !w.beam || !b) { $('beamMeta').innerHTML = ''; netDot('beamDot', '', ''); return; }
     const restore = '<a href="#" class="text-link" data-go-restore>restore</a>';
@@ -719,6 +719,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const c = $('beamCard'), b = $('beamTokBtn');
     if (on === beamTok) return;
     clearTimeout(beamTokT);
+    // no scroll bar while the card moves (the list is shorter than its rows until the end); after it, one
+    // only when the tokens do not all fit
+    c.classList.add('moving');
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
     $('ethCard').classList.toggle('under', on);
     if (on) {
@@ -729,10 +732,11 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
         void c.offsetHeight;                         // the start of the transition
       }
       beamTok = true; beamFit(); beamRows();
+      beamTokT = setTimeout(() => c.classList.remove('moving'), 260);
     } else {
       beamTok = false;
       c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
-      const end = () => { if (beamTok) return; c.classList.remove('tok'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
+      const end = () => { if (beamTok) return; c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
       if (now) end(); else beamTokT = setTimeout(end, 260);
     }
   }
@@ -751,13 +755,25 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const draw = (meta) => { $('beamAssets').innerHTML = list.map((t) => {
       const aid = Number(t.asset_id), sym = assetSym(meta.get(aid)) || `asset ${aid}`;
       return `<div class="asset"><span class="tok"><a class="cp" href="https://explorer.bumblebeam.org/asset/${aid}" target="_blank" rel="noopener" title="Open in the explorer">${LINK}</a><button type="button" class="cp" data-cp="${aid}" title="Copy the asset id
-${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="amt">${num((t.available || 0) / GROTH)}</span><span class="usd"></span></div>`;
+${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="amt">${num((t.available || 0) / GROTH)}</span><span class="usd">${usd(beamTokUsd(aid, t.available))}</span></div>`;
     }).join(''); };
     draw(known || new Map());
-    if (known || !w) return;
-    const meta = await assetMeta(w.id);
-    if (seq === beamRowsSeq && beamTok) draw(meta);
+    if (!w) return;
+    let meta = known;
+    if (!known) { meta = await assetMeta(w.id); if (seq === beamRowsSeq && beamTok) draw(meta); }
+    if (beamPricesFresh(w.id)) return;
+    await beamPricesLoad(w.id);
+    if (seq === beamRowsSeq && beamTok) draw(meta || new Map());
   }
+  // the tokens' dollars: their price in BEAM from Beam DEX's pools (the host's beamPrices), times BEAM's
+  let beamPx = { wid: null, at: 0, p: {} }, beamPxP = null;
+  const beamPricesFresh = (wid) => beamPx.wid === wid && Date.now() - beamPx.at < 60000;
+  function beamPricesLoad(wid) {
+    if (beamPricesFresh(wid)) return Promise.resolve();
+    if (!beamPxP) beamPxP = host('beamPrices', wid).then((p) => { beamPx = { wid, at: Date.now(), p: p || {} }; total(); }, () => {}).finally(() => { beamPxP = null; });
+    return beamPxP;
+  }
+  const beamTokUsd = (aid, groth) => { const w = W(), px = w && beamPx.wid === w.id ? beamPx.p[aid] : undefined; return rates && px > 0 ? ((groth || 0) / GROTH) * px * rates.beam : null; };
   $('beamAssets').onclick = (e) => { const c = e.target.closest('[data-cp]'); if (c) copyFlash(c, c.dataset.cp); };
 
   function total() {
@@ -768,6 +784,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const add = (usdNow, pct) => { t += usdNow; t0 += isFinite(pct) ? usdNow / (1 + pct / 100) : usdNow; };
     // BEAM: available and maturing (still the wallet's own: max privacy coins unlock within 72 h)
     if (beamStatus) { const b = ((beamStatus.available || 0) + (beamStatus.maturing || 0)) / GROTH; add(b * rates.beam, ch.beam); }
+    // Beam's tokens priced by Beam DEX (in BEAM): with BEAM's 24 h change, their price follows it
+    if (beamStatus) for (const x of beamStatus.totals || []) { const v = Number(x.asset_id) ? beamTokUsd(Number(x.asset_id), x.available) : null; if (v > 0) add(v, ch.beam); }
     if (ethData) {
       add(units(ethData.eth, 18) * rates.eth, ch.eth);
       for (const x of ethData.tokens) {

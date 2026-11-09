@@ -402,6 +402,27 @@
   const saveSettings = () => kv.set('settings', settings);
   const wallet = (id, d = data) => { need(); const w = d.wallets.find((x) => x.id === id); if (!w) throw new Error('no such wallet'); return w; };
   // a Beam operation is for one wallet, named by the popup, and goes to that wallet's own engine
+  // Beam's assets priced in BEAM by Beam DEX's pools (its AMM contract, read with the app shader that
+  // dex.beam.mw ships, shaders/amm_app.wasm): for each asset, its pool with BEAM that holds the most BEAM,
+  // BEAM per unit = BEAM reserve / asset reserve (both in groth). Cached a minute. { assetId: beamPerUnit }
+  const AMM_CID = '729fe098d9fd2b57705db1a05a74103dd4b891f535aef2ae69b47bcfdeef9cbf';
+  let ammShader = null, ammCache = null;
+  async function beamPrices(walletId) {
+    if (ammCache && Date.now() - ammCache.at < 60000) return ammCache.p;
+    if (!ammShader) ammShader = Array.from(new Uint8Array(await (await fetch('shaders/amm_app.wasm')).arrayBuffer()));
+    const res = await beamFor(walletId).e.appCall('invoke_contract', { contract: ammShader, args: `action=pools_view,cid=${AMM_CID}`, create_tx: false });
+    const out = JSON.parse((res && res.output) || '{}');
+    if (out.error) throw new Error(`Beam DEX: ${out.error}`);
+    const best = new Map();
+    for (const x of Array.isArray(out.res) ? out.res : []) {
+      if (Number(x.aid1) !== 0 || !(Number(x.tok1) > 0) || !(Number(x.tok2) > 0)) continue;
+      const a = Number(x.aid2), b = best.get(a);
+      if (!b || Number(x.tok1) > Number(b.tok1)) best.set(a, x);
+    }
+    const p = Object.fromEntries([...best].map(([a, x]) => [a, Number(x.tok1) / Number(x.tok2)]));
+    ammCache = { at: Date.now(), p };
+    return p;
+  }
   function beamFor(id) {
     need();
     const s = live(id);
@@ -1037,6 +1058,7 @@
 
     // ---------- Ethereum ----------
     rates: () => Bridge.rates(),
+    beamPrices: (walletId) => beamPrices(walletId),
     // each address's tokens are kept (chrome.storage 'ethTokens'): a Blockscout that fails or answers an empty
     // list leaves them in place, read on the chain, instead of showing ETH and WBEAM alone
     async ethBalances(address) {

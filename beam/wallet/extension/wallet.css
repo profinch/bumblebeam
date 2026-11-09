@@ -296,6 +296,8 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #beamCard.tok #beamBody > * { flex: none; }
 #beamCard.tok #beamAssets { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 #beamAssets .empty { padding: 8px 0 0 8px; }
+#beamCard.moving #beamAssets { overflow-y: hidden; }
+#beamAssets .asset:last-child { border-bottom: 1px solid var(--border-dim); }      /* a table's lines under every row, the last too (often there is just one) */
 #ethCard { transition: opacity 0.2s ease, visibility 0s linear 0s; }
 #ethCard.under { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.2s ease, visibility 0s linear 0.2s; }
 .acts .btn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
