@@ -524,6 +524,7 @@
   const dappPorts = new Set();
   const dappReq = new Map();                      // id -> { id, origin, kind, method, params, address, resolve, reject, at }
   let dappNext = 1, dappWin = null;               // the request window's id while it is open
+  let dappWinOf = null;                           // the browser window of the site that asked last (the request window opens at its right)
   const DAPP_READ = new Set(['eth_blockNumber', 'eth_call', 'eth_estimateGas', 'eth_feeHistory', 'eth_gasPrice', 'eth_getBalance',
     'eth_getBlockByHash', 'eth_getBlockByNumber', 'eth_getCode', 'eth_getLogs', 'eth_getStorageAt', 'eth_getTransactionByHash',
     'eth_getTransactionCount', 'eth_getTransactionReceipt', 'eth_maxPriorityFeePerGas', 'eth_syncing', 'web3_clientVersion']);
@@ -561,7 +562,7 @@
       const id = dappNext++;
       dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now(), ...extra });
       broadcast({ type: 'event', method: 'bb_dapp', result: { id, origin } });
-      if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow' }).then((r) => { dappWin = r && r.result; }).catch(() => {});
+      if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow', near: dappWinOf }).then((r) => { dappWin = r && r.result; }).catch(() => {});
       setTimeout(() => { if (dappReq.delete(id)) reject(err(4001, 'the request expired')); }, 15 * 60 * 1000);
     });
   }
@@ -1224,11 +1225,12 @@
     // a site, through content.js: its origin is the one Chrome gives (the page cannot choose it)
     if (port.name === 'dapp' && port.sender.id === chrome.runtime.id && port.sender.origin && /^https?:/.test(port.sender.origin)) {
       port.origin = port.sender.origin;
+      port.windowId = port.sender.tab ? port.sender.tab.windowId : null;
       dappPorts.add(port);
       port.onDisconnect.addListener(() => dappPorts.delete(port));
       port.onMessage.addListener(async (m) => {
         if (!m || m.id == null || typeof m.method !== 'string') return;
-        try { await ready; port.postMessage({ id: m.id, result: await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]) }); }
+        try { await ready; dappWinOf = port.windowId; port.postMessage({ id: m.id, result: await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]) }); }
         catch (e) { try { port.postMessage({ id: m.id, error: { code: e.code || -32603, message: e.message || String(e) } }); } catch {} }
       });
       return;

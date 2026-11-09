@@ -31,17 +31,21 @@ const OPS = {
   },
   // the window where a site's request is answered (one; a second request shows in it too)
   // (its id kept in session storage: this worker sleeps and forgets)
-  dappWindow: async () => {
+  dappWindow: async (m) => {
     const { dappWin } = await chrome.storage.session.get('dappWin');
     if (dappWin != null) { try { await chrome.windows.update(dappWin, { focused: true }); return dappWin; } catch {} }
     // at the right of the browser window the user is in, under its toolbar (where the extension's icon is)
     const W = 400, H = 640;
     let at = {};
     try {
-      const cur = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
-      if (cur && cur.left != null) at = { left: Math.max(0, cur.left + cur.width - W - 12), top: Math.max(0, cur.top + 80) };
+      // the window of the site's own tab (as Chrome gave it), else the last one in use
+      const cur = (m && m.near != null ? await chrome.windows.get(m.near).catch(() => null) : null) || await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+      // no clamping at 0: a screen left of (or above) the main one has negative coordinates
+      if (cur && cur.left != null) at = { left: cur.left + cur.width - W - 12, top: cur.top + 80 };
     } catch {}
     const w = await chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: W, height: H, focused: true, ...at });
+    // Chrome may place a new window on another screen (screens with different scaling): put it where it belongs
+    if (at.left != null) chrome.windows.update(w.id, at).catch(() => {});
     await chrome.storage.session.set({ dappWin: w.id });
     return w.id;
   },
