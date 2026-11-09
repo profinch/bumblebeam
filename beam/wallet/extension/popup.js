@@ -110,7 +110,14 @@
 
   // ---------- screens, tabs, sheets ----------
   let curTab = 'home';
+  // how far the wallet tab's Ethereum card reaches past the end of main's content (into its bottom padding):
+  // measured where it shows (fonts differ between systems), so dApps scrolled to its end ends on the same line
+  let homeOver = 2;
   function show(id) {
+    if (!$('t-home').hidden) {
+      const mm = document.querySelector('main'), e = $('ethCard').getBoundingClientRect();
+      if (e.height) homeOver = e.bottom - (mm.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(mm).paddingBottom) || 0));
+    }
     qa('.screen').forEach((s) => { s.hidden = s.id !== id; });
     const inside = id.startsWith('t-') || id.startsWith('x-');
     $('tabs').hidden = !inside;
@@ -123,10 +130,11 @@
     // Connected sites keeps the scroll bar's room on both sides (wallet.css): its own padding less by as much,
     // so its cards line up with every other screen's
     const m = document.querySelector('main');
-    m.style.paddingLeft = m.style.paddingRight = '';
+    m.style.paddingLeft = m.style.paddingRight = m.style.paddingBottom = '';
     if (id === 'x-dapps' && document.documentElement.classList.contains('popup')) {
       const g = (m.offsetWidth - m.clientWidth) / 2, pad = parseFloat(getComputedStyle(m).paddingLeft) || 0;
       m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
+      m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
     }
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
