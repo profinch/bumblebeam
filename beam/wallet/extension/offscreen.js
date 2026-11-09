@@ -22,7 +22,7 @@
   const DEFAULT_BACKUPS = ['wsb.bumblebeam.org:443'];
   const RECOVERY_URL = 'https://mobile-restore.beam.mw/mainnet/mainnet_recovery.bin';
   // wallet API methods the popup may call; contracts go through Bridge (the app API)
-  const BEAM_READ = new Set(['wallet_status', 'tx_list', 'addr_list', 'validate_address', 'tx_status', 'get_version']);
+  const BEAM_READ = new Set(['wallet_status', 'tx_list', 'addr_list', 'validate_address', 'tx_status', 'get_version', 'get_asset_info']);
   const BEAM_WRITE = new Set(['create_address', 'tx_send', 'tx_cancel', 'edit_address', 'delete_address']);
 
   let node = DEFAULT_NODE, progress = null, pendingPhrase = null;

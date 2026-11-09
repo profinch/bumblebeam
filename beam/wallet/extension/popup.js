@@ -206,6 +206,32 @@
   }
   const confirmBox = async (title, rows, n) => (await ask({ title, rows, note: n })).ok;
 
+  // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
+  // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
+  // metadata (SN=, the short name) when the wallet knows it.
+  const assetNames = new Map();
+  const assetName = async (aid) => {
+    if (!aid) return 'BEAM';
+    if (!assetNames.has(aid)) {
+      let n = '';
+      try { const w = W(); const i = w && await host('beam', w.id, 'get_asset_info', { asset_id: aid }); const m = /(?:^|;)SN=([^;]+)/.exec((i && i.metadata) || ''); n = m ? m[1] : ''; } catch {}
+      assetNames.set(aid, n);
+    }
+    const n = assetNames.get(aid);
+    return n ? `${n} (asset ${aid})` : `asset ${aid}`;
+  };
+  const coins = (v) => { const t = String(v ?? '').trim(); return /^\d+(\.\d+)?$/.test(t) ? t : '—'; };
+  const consentRows = async (info, amounts) => {
+    const rows = [];
+    for (const a of Array.isArray(amounts) ? amounts : []) {
+      const aid = Number(a.assetID ?? a.asset_id ?? 0);
+      rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${coins(a.amount)} ${await assetName(aid)}`]);
+    }
+    if (info && info.fee != null) rows.push(['Beam network fee', `${coins(info.fee)} BEAM`]);
+    if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
+    return rows;
+  };
+
   // The wallet asks for consent on every contract transaction with what it computed itself:
   // the amounts it moves and the fee. The bridge context (address, relayer fee) goes on top.
   // a box answered in another popup, or expired in the host (5 min), closes here too
@@ -214,13 +240,7 @@
   handlers.consentDone = ({ id }) => { consentGone.add(id); if (consentShown === id && dlgCancel) dlgCancel(); };
   handlers.consent = async ({ id, info, amounts, ctx }) => {
     const c = ctx || { title: 'Contract transaction', rows: [], note: 'Not started by this wallet: reject it unless you know what it is.' };
-    const rows = [...(c.rows || [])];
-    for (const a of Array.isArray(amounts) ? amounts : []) {
-      const asset = Number(a.assetID ?? a.asset_id ?? 0);
-      rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${amt(Number(a.amount), 8)} ${asset ? `asset ${asset}` : 'BEAM'}`]);
-    }
-    if (info && info.fee != null) rows.push(['Beam network fee', `${amt(Number(info.fee), 8)} BEAM`]);
-    if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
+    const rows = [...(c.rows || []), ...await consentRows(info, amounts)];
     const r = await ask({ title: c.title, rows, note: c.note, before: () => { consentShown = id; return !consentGone.has(id); } });
     consentShown = null;
     if (!consentGone.has(id)) port && port.postMessage({ type: 'consent', id, ok: r.ok });
@@ -1262,13 +1282,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     }
     if (r.kind === 'beamtx') {
       $('dpTitle').textContent = 'Beam contract transaction';
-      const rows = [['App', r.appname || ''], ...wRow];
-      for (const a of Array.isArray(r.amounts) ? r.amounts : []) {
-        const asset = Number(a.assetID ?? a.asset_id ?? 0);
-        rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${amt(Number(a.amount), 8)} ${asset ? `asset ${asset}` : 'BEAM'}`]);
-      }
-      if (r.info && r.info.fee != null) rows.push(['Beam network fee', `${amt(Number(r.info.fee), 8)} BEAM`]);
-      if (r.info && r.info.comment) rows.push(['Contract says', String(r.info.comment)]);
+      const rows = [['App', r.appname || ''], ...wRow, ...await consentRows(r.info, r.amounts)];
       $('dpBody').innerHTML = kv(rows);
       $('dpNote').textContent = 'What it spends and receives is the wallet\'s own reading of the transaction, not the site\'s.';
       $('dpYes').textContent = 'Approve';
