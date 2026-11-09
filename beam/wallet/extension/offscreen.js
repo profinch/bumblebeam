@@ -597,6 +597,14 @@
     const seen = new Set([...dappPorts].map((p) => p.origin));
     for (const o of seen) { const a = siteAccount(o); dappTell(o, 'accountsChanged', a ? [a] : []); }
   }
+  // the sites' last 40 calls (method, how they ended, how long), in memory only: Connected sites shows them,
+  // to see what a site asked when it seems stuck
+  const dappLog = [];
+  function dappLogAdd(origin, method) {
+    const rec = { at: Date.now(), origin, method, end: 0, out: '' };
+    dappLog.push(rec); if (dappLog.length > 40) dappLog.shift();
+    return rec;
+  }
   // a request ended (answered, rejected, expired, its window closed): the popups show the site's state again
   function dappDone(origin) { broadcast({ type: 'event', method: 'bb_dapp_done', result: { origin } }); }
   // the request window: the open one comes to the front, else a new one (the background knows whether the one
@@ -694,7 +702,8 @@
   const api = {
     // ---------- dApps ----------
     // the waiting requests, oldest first, as the wallet's window shows them (a transaction priced for it)
-    dappWinDone() { dappWinSelf = true; },      // the request window closes itself: nothing left to answer
+    dappWinDone() { dappWinSelf = true; },
+    dappLog: () => dappLog.slice().reverse(),      // the request window closes itself: nothing left to answer
     async dappPending() {
       const out = [];
       for (const r of [...dappReq.values()].sort((x, y) => x.at - y.at)) {
@@ -1297,8 +1306,9 @@
       });
       port.onMessage.addListener(async (m) => {
         if (!m || m.id == null || typeof m.method !== 'string') return;
-        try { await ready; dappWinOf = port.windowId; port.postMessage({ id: m.id, result: await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]) }); }
-        catch (e) { try { port.postMessage({ id: m.id, error: { code: e.code || -32603, message: e.message || String(e) } }); } catch {} }
+        const rec = dappLogAdd(port.origin, m.method === 'beam_call' && m.params && m.params[0] ? `beam: ${m.params[0].method}` : m.method);
+        try { await ready; dappWinOf = port.windowId; const result = await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]); rec.end = Date.now(); rec.out = 'ok'; port.postMessage({ id: m.id, result }); }
+        catch (e) { rec.end = Date.now(); rec.out = `error ${e.code || -32603}: ${(e.message || String(e)).slice(0, 120)}`; try { port.postMessage({ id: m.id, error: { code: e.code || -32603, message: e.message || String(e) } }); } catch {} }
       });
       return;
     }

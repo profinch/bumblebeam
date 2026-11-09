@@ -524,13 +524,13 @@
       case 'bb_locked': st = null; route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
-      case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else dappRefresh(); break;
+      case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappLogOpen(); } break;
       // a request ended or a site was disconnected (here or in another window): the request window shows
       // what is still waiting (it closes when nothing is); a popup its site's state, the sites list, the balances
       case 'bb_dapp_done':
         if (inWin) { if (!dpBusy && st && st.phase === 'unlocked') dappScreen(); break; }
         dappRefresh();
-        if (!$('x-dapps').hidden) dappListOpen();
+        if (!$('x-dapps').hidden) { dappListOpen(); dappLogOpen(); }
         if (curTab === 'home' && !$('t-home').hidden) ethRefresh();
         break;
       case 'ev_sync_progress':
@@ -1107,7 +1107,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethQr').innerHTML = '';
       new QRCode($('ethQr'), { text: a.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
     },
-    dapps: () => dappListOpen(),
+    dapps: () => { dappListOpen(); dappLogOpen(); },
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
   };
   $('copyEthAddr').onclick = () => copy($('copyEthAddr'), $('ethRecvAddr').textContent);
@@ -1508,6 +1508,13 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     });
     $('dappList').innerHTML = rows.join('') || `<div class="empty">no site connected on ${dappNet === 'beam' ? 'Beam' : 'Ethereum'}</div>`;
   }
+  async function dappLogOpen() {
+    const l = await host('dappLog').catch(() => []);
+    const tm = (t) => new Date(t).toLocaleTimeString('en-GB');
+    $('dappLog').innerHTML = l.map((r) => `<div class="li log"><span class="what">${esc(r.method)}<span class="sub">${esc(new URL(r.origin).host)} · ${tm(r.at)}</span></span><span class="sub ${r.out === 'ok' ? '' : r.out ? 'bad' : 'warn'}">${esc(r.out || 'waiting…')}${r.end ? ` · ${((r.end - r.at) / 1000).toFixed(1)} s` : ''}</span></div>`).join('')
+      || '<div class="empty">no request yet</div>';
+  }
+  $('dappLogMore').onclick = (e) => { e.preventDefault(); dappLogOpen(); };
   $('dappNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); } };
   $('dappList').onclick = async (e) => {
     const a = e.target.closest('[data-dapp]');

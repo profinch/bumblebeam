@@ -326,3 +326,8 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 .dapp-box .dapp-st { text-decoration: underline dotted rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
 .dapp-box.ok .dapp-st { text-decoration-color: rgba(var(--accent-rgb), 0.5); }
 .dapp-box.warn .dapp-st { text-decoration-color: rgba(255, 200, 0, 0.5); }
+/* Recent requests: the method and the site left, how it ended right (red: an error, yellow: still waiting) */
+#dappLog .li.log { grid-template-columns: minmax(0, 1fr) minmax(0, 45%); align-items: start; }
+#dappLog .li.log > .sub { margin-top: 0; text-align: right; overflow-wrap: anywhere; }
+#dappLog .sub.bad { color: var(--color-red); }
+#dappLog .sub.warn { color: var(--color-yellow); }
