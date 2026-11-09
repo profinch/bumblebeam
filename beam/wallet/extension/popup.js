@@ -732,11 +732,12 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
         void c.offsetHeight;                         // the start of the transition
       }
       beamTok = true; beamFit(); beamRows();
-      beamTokT = setTimeout(() => c.classList.remove('moving'), 260);
+      // once fully out, the button says what it does now
+      beamTokT = setTimeout(() => { c.classList.remove('moving'); b.textContent = 'Collapse'; }, 260);
     } else {
       beamTok = false;
       c.style.height = `${beamH0}px`; c.style.marginBottom = `${beamMb0}px`;
-      const end = () => { if (beamTok) return; c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
+      const end = () => { if (beamTok) return; b.textContent = 'Tokens'; c.classList.remove('tok', 'moving'); $('beamAssets').hidden = true; c.style.height = ''; c.style.marginBottom = ''; };
       if (now) end(); else beamTokT = setTimeout(end, 260);
     }
   }
