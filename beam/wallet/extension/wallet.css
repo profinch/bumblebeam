@@ -277,10 +277,10 @@ html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: 
 #s-dapp #dpBody { overflow-y: auto; min-height: 0; }
 #s-dapp #dpNote { margin-top: 14px; }
 #s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; white-space: pre-line; }      /* a name, then a whole address on its own line */
-/* the dialogs and the request window: the label close to its value (10 px, not 18), values at 11 px, so a whole
+/* the dialogs and the request window: the label close to its value (10 px, not 18), values at 12 px, so a whole
    Ethereum address (42 characters) fits on one line next to its label */
 #s-dapp .kv, dialog .kv { column-gap: 10px; }
-#s-dapp .kv dd, dialog .kv dd { font-size: 11px; }
+#s-dapp .kv dd, dialog .kv dd { font-size: 12px; }
 #s-dapp .dp-foot { margin-top: auto; padding-top: 14px; }
 html.win main { padding-bottom: 14px; }
 #s-dapp #dpMore:empty { display: none; }
