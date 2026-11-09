@@ -340,3 +340,5 @@ html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-ed
 /* the wallet tab's Ethereum card ends 2 px into main's bottom padding (559 of 562 in the 600 px popup): dApps
    scrolled to its end, its last card's edge in the same place */
 html.popup main:has(> #x-dapps:not([hidden])) { padding-bottom: 3px; }
+/* under the pointer, as a link: the line solid, in the text's colour */
+.dapp-box:hover .dapp-st { text-decoration-style: solid; text-decoration-color: currentColor; }
