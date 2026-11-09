@@ -18,14 +18,14 @@
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--sp-3); }
   .recv { margin: 0; }
   .recv-top { display: flex; gap: 14px; align-items: stretch; }
-  .recv .qr { flex: none; width: 180px; height: 180px; border-radius: 10px; overflow: hidden; line-height: 0; box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 6px 18px rgba(0, 0, 0, 0.3); }
+  .recv .qr { flex: none; width: 180px; height: 180px; border-radius: 8px; overflow: hidden; line-height: 0; }      /* as the puzzle's .invite .qr */
   .recv .qr svg { display: block; width: 100%; height: 100%; }
   .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
   .recv-name { font-weight: 700; font-size: var(--fs-base); }
   .recv-meta { margin-top: 6px; font: var(--fs-s) var(--font-mono); line-height: 1.6; color: var(--muted); }
   .recv-acts { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
   .recv-acts .btn { justify-content: center; }
-  .recv .hash { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-m); background: rgba(0, 0, 0, 0.2); font: var(--fs-s) var(--font-mono); color: var(--text-dim); overflow-wrap: anywhere; max-height: 7.5em; overflow: auto; }
+  .recv .hash { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-m); background: rgba(0, 0, 0, 0.2); font: var(--fs-s) var(--font-mono); color: var(--text-dim); overflow-wrap: anywhere; }      /* the whole address, no scrolling */
 </style>
 </head>
 <body>

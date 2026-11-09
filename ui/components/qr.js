@@ -1,33 +1,27 @@
-// BumbleBeam QR codes: qr-code-styling (ui/vendor, MIT) with the puzzle invite's shapes (rounded dots in a
-// gradient, rounded eyes with round centres) in the site's own tones, dark on light: the page's navy to the
-// accent half mixed into that navy, on a ground tinted with the accent (Beam: navy to deep teal on pale teal,
-// Bitcoin: navy to deep amber on pale amber). Not the puzzle's light on
-// dark: checked 2026-11-09 with a scanner that does not invert (jsQR), light-on-dark codes were not read at all,
-// and Beam's long addresses (offline, public, max privacy: 385-451 characters) needed 180 px and level L to be
-// read; this look at 180 px, level L, read all four address types at 1x and 2x.
+// BumbleBeam QR codes: the puzzle invite's look (bitcoin/puzzle/web/pool.js qrOpts, puzzle.css .invite .qr),
+// for every site: qr-code-styling (ui/vendor, MIT), rounded dots in a gradient from the accent to the logo's
+// light end, extra-rounded eyes in the accent with round centres in that light end, on the page's navy, an
+// 8 px margin, the code's corners rounded 8 px by its box. The chain's theme gives the colours (Beam: teal,
+// Bitcoin: orange); a block with data-chain="bitcoin" gets Bitcoin's on a Beam page.
+// One difference from the puzzle, for long texts only: past 300 characters (Beam's offline, public and max
+// privacy addresses, 385-451) level L instead of M, else at 180 px the modules are too small to be read at all
+// (checked 2026-11-09 with jsQR).
 //
-//   BB.qr(el, text, size)            draws into el (an SVG, size x size; 180 or more for long texts)
+//   BB.qr(el, text, size)            draws into el (an SVG, size x size)
 //   BB.qrSave(text, name, ext, at)   downloads it as png or svg, 1024 px (in the colours at element at)
 //
 // Needs ui/vendor/qr-code-styling.js loaded before it.
 (() => {
-  // the colours where the code goes: a block with data-chain="bitcoin" gets Bitcoin's on a Beam page
   const css = (at, k, d) => (getComputedStyle(at || document.documentElement).getPropertyValue(k) || '').trim() || d;
-  // the ground: white with 8% of the accent
-  const tint = (at) => { const c = css(at, '--accent-rgb', '0, 246, 210').split(',').map(Number); return `rgb(${c.map((v) => Math.round(255 - (255 - v) * 0.08)).join(', ')})`; };
-  // the deep end of the dots: the accent half mixed into the page's navy (Beam: a deep teal, Bitcoin: a deep
-  // amber), dark enough on the light ground on every chain (the accent itself is too light on it)
-  const rgb = (h) => (h.match(/[0-9a-f]{2}/gi) || []).map((x) => parseInt(x, 16));
-  const deepOf = (at, dark) => { const a = css(at, '--accent-rgb', '0, 246, 210').split(',').map(Number), d = rgb(dark); return `rgb(${a.map((v, i) => Math.round(v * 0.5 + (d[i] || 0) * 0.5)).join(', ')})`; };
   const opts = (text, size, at) => {
-    const dark = css(at, '--bg', '#042548'), deep = deepOf(at, dark);
+    const acc = css(at, '--accent', '#00f6d2'), light = css(at, '--logo-to', '#39fff2');
     return {
-      width: size, height: size, type: 'svg', data: text, margin: Math.max(6, Math.round(size / 22)),
-      qrOptions: { errorCorrectionLevel: 'L' },
-      dotsOptions: { type: 'rounded', gradient: { type: 'linear', rotation: Math.PI / 4, colorStops: [{ offset: 0, color: dark }, { offset: 1, color: deep }] } },
-      cornersSquareOptions: { type: 'extra-rounded', color: dark },
-      cornersDotOptions: { type: 'dot', color: deep },
-      backgroundOptions: { color: tint(at) },
+      width: size, height: size, type: 'svg', data: text, margin: 8,
+      qrOptions: { errorCorrectionLevel: text.length > 300 ? 'L' : 'M' },
+      dotsOptions: { type: 'rounded', gradient: { type: 'linear', rotation: Math.PI / 4, colorStops: [{ offset: 0, color: acc }, { offset: 1, color: light }] } },
+      cornersSquareOptions: { type: 'extra-rounded', color: acc },
+      cornersDotOptions: { type: 'dot', color: light },
+      backgroundOptions: { color: css(at, '--bg', '#042548') },
     };
   };
   const qr = (el, text, size = 180) => {
