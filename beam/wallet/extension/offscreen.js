@@ -27,7 +27,7 @@
 
   let node = DEFAULT_NODE, progress = null, pendingPhrase = null;
   let vaultRec = null, data = null, vk = null;          // the stored record; unlocked: its contents and key
-  let settings = { autoLock: 60, active: null, activeEth: {}, tokens: [], ethRpc: '', beamAddr: {} };
+  let settings = { autoLock: 60, active: null, activeEth: {}, tokens: [], ethRpc: '', beamAddr: {}, addrFav: {}, addrExt: {} };
   let lastActive = Date.now();
   const ports = new Set();
   const broadcast = (msg) => { for (const p of ports) { try { p.postMessage(msg); } catch {} } };
@@ -489,6 +489,8 @@
 
   // the toolbar icon: a lock on it while there is a wallet and it is locked (sent only when it changes)
   let iconLocked = null;
+  // Receive's address last shown, per wallet, since the unlock (in memory only: the lock forgets it)
+  let recvSel = {};
   function lockIcon() {
     const locked = !data && !!(vaultRec || legacyDb);
     if (locked === iconLocked) return;
@@ -497,7 +499,7 @@
   }
 
   function lock() {
-    data = null; vk = null; pendingPhrase = null;
+    data = null; vk = null; pendingPhrase = null; recvSel = {};
     setTimeout(() => dappTellAll(), 0);
     lockIcon();
     for (const p of prepared.values()) clearTimeout(p.t);
@@ -1034,6 +1036,39 @@
       if (!w.eth || w.eth.accounts.length < 2) throw new Error('the last account stays');
       w.eth.accounts = w.eth.accounts.filter((a) => a.i !== i);
     }),
+    // a wallet's favourite Beam addresses (Receive's list keeps them first): wallet id -> [address]
+    addrFavs: (id) => (settings.addrFav && settings.addrFav[id]) || [],
+    // the favourites in the order dragged into (Receive's list): only addresses already favourites
+    recvSel: (id) => recvSel[id] || null,
+    setRecvSel: (id, address) => { recvSel[id] = address ? String(address) : null; return null; },
+    async setAddrFavOrder(id, list) {
+      need();
+      const m = settings.addrFav || (settings.addrFav = {}), have = new Set(m[id] || []);
+      const l = (Array.isArray(list) ? list : []).map(String).filter((a) => have.delete(a));
+      m[id] = [...l, ...have];
+      await saveSettings();
+      return m[id];
+    },
+    async setAddrFav(id, address, on) {
+      need();
+      // one marked (again) goes first: the newest favourite on top
+      const m = settings.addrFav || (settings.addrFav = {}), a = String(address), l = (m[id] || []).filter((x) => x !== a);
+      m[id] = on ? [a, ...l] : l;
+      await saveSettings();
+      return m[id];
+    },
+    // a wallet's own Beam addresses it has no record of (made before a restore, or by another wallet of the same
+    // phrase), added by hand: wallet id -> [{ address, name, type, at }]; shown in Receive's list, never in Beam's
+    addrExt: (id) => (settings.addrExt && settings.addrExt[id]) || [],
+    async setAddrExt(id, rec, drop) {
+      need();
+      const m = settings.addrExt || (settings.addrExt = {});
+      const l = (m[id] || []).filter((x) => x.address !== (drop || rec.address));
+      if (!drop) l.push({ address: String(rec.address), name: String(rec.name || '').slice(0, 64), type: String(rec.type || ''), at: Number(rec.at) || Date.now() });
+      m[id] = l;
+      await saveSettings();
+      return l;
+    },
     async setActiveEth(id, i) { settings.activeEth[id] = i; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} }); },      // other windows show it too
 
     // what only the password shows: the seed phrase, an Ethereum key, the Beam database password

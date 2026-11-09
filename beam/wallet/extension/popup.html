@@ -194,13 +194,13 @@ while the wallet is locked.</p>
         <div class="qr" id="beamQr"></div>
         <div class="recv-side">
           <div class="recv-name" id="beamAddrName"></div>
-          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v" id="beamAddrType"></div><div class="caps">Created</div><div class="recv-v" id="beamAddrMade"></div><div class="caps">Expiry</div><div class="recv-v" id="beamAddrExp"></div></div>
+          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v" id="beamAddrType"></div><div class="caps">Created</div><div class="recv-v" id="beamAddrMade"></div><div class="caps">Expiry</div><div class="recv-v" id="beamAddrExp"></div><div class="caps">Symbols</div><div class="recv-v" id="beamAddrLen"></div><div class="caps" id="beamAddrStK" hidden>Status</div><div class="recv-v" id="beamAddrSt" hidden></div></div>
           <div class="recv-icons">
             <button type="button" class="cp" id="copyBeamAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
-            <button type="button" class="cp" id="saveBeamQr" title="Share: the QR code as a picture (size M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="saveBeamQr" title="Share: the QR code as a picture"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="cp" id="nameBeamAddr" title="Rename: a name only you see, who it was given to"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="cp" id="newBeamAddr" title="New address of the same type. All lead to the same balance. A new one per sender keeps senders from telling they pay the same person"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11zM8 5.5v5M5.5 8h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button type="button" class="cp danger" id="delBeamAddr" title="Remove this address: it stops taking payments"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="delBeamAddr" title="Remove this address: it stops taking payments"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
@@ -208,8 +208,8 @@ while the wallet is locked.</p>
     </div>
     <p class="note bad" hidden></p>
     <div class="panel addr-panel">
-      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span id="addrCount"></span></span></div>
-      <p class="hint">Every address this wallet made, newest first: when it was made and until when it takes payments. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
+      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span class="seg mini"><button type="button" id="addAddr" title="Add an address of this wallet that is not listed">Add</button></span></span></div>
+      <p class="hint">Every address this wallet made, your favourites (the star) first, then the others in the order they were made. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
       <div class="list" id="addrList"><div class="empty">loading…</div></div>
     </div>
   </section>
@@ -235,10 +235,10 @@ while the wallet is locked.</p>
         <div class="qr" id="ethQr"></div>
         <div class="recv-side">
           <div class="recv-name" id="ethRecvName"></div>
-          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v">Ethereum mainnet</div><div class="caps">Expiry</div><div class="recv-v">never</div></div>
+          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v">Ethereum mainnet</div><div class="caps">Expiry</div><div class="recv-v">never</div><div class="caps">Symbols</div><div class="recv-v">42</div></div>
           <div class="recv-icons">
             <button type="button" class="cp" id="copyEthAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
-            <button type="button" class="cp" id="saveEthQr" title="Share: the QR code as a picture (size M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="saveEthQr" title="Share: the QR code as a picture"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>

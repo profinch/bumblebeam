@@ -30,9 +30,13 @@
   The list folds when another tab or wallet opens.
 - Receive:
   - address types in the bar under the tabs (regular, offline, public offline, max privacy);
-  - a card with the QR, the address's name, type, creation and expiry dates, and icons to copy, share the QR,
-    rename, make a new address, remove;
-  - My addresses as a table, the shown one lit;
+  - a card with the QR, the address's name, type, creation and expiry dates, its length, and icons to copy,
+    share the QR, rename, make a new address, remove;
+  - My addresses as a list (a star for favourites, which come first, the last marked on top, and can be
+    dragged into any order, then the others in the order they were made, the name or the address, the type), the
+    shown one lit;
+  - an address of this wallet that Beam does not list (made before a restore, or the one a miner pays to) can be
+    added by hand: it is checked to be a Beam address, and shows as not verified until a payment to it is found;
   - "Remove unused" is gone.
 - Contract confirmations show amounts and fees in coins (they were divided by 10^8 a second time).
 - Only the open wallet's Beam part runs, the others stop once their transfers are done.

@@ -232,27 +232,24 @@ dialog::backdrop { background: rgba(2, 16, 32, 0.7); }
 .dbody { margin-top: 12px; }
 .dbody .kv { grid-template-columns: max-content minmax(0, 1fr); }
 dialog .hint { margin: 12px 0 0; }
+dialog .field { margin-top: 12px; }      /* a field (Address, the password) 12 px under the text above it, as on the screens */
 dialog .row { margin-top: 14px; }
 
 /* Receive: the shown address's name and type, the list of addresses */
 .addr-meta { margin-top: 10px; font: var(--fs-m) var(--font-mono); color: var(--muted); }
 .addr-meta b { color: var(--text); }
 .addr-panel { margin-top: 16px; }
-/* My addresses: name (or the address), made, expires, the type right, the trash (columns in ch of the row's mono
-   font: the dates 10, the type 15, so every row's line up); the rows light up under the
+/* My addresses: the star, name (or the address), the type right (15 ch of the row's mono font, so every row's
+   line up), the trash; the rows light up under the
    pointer as the token list's, the one shown above stays lit with its name in the accent */
 #addrList { margin: 0 -8px; }
-.li.addr { grid-template-columns: minmax(0, 1fr) 10ch 10ch 15ch 16px; gap: 0 10px; align-items: center; font: var(--fs-s) var(--font-mono); padding: 8px; cursor: pointer; }
+.li.addr { grid-template-columns: 16px minmax(0, 1fr) 15ch 16px; gap: 0 10px; align-items: center; font: var(--fs-s) var(--font-mono); padding: 6px 8px; cursor: pointer; }      /* 6 px above and below as a token row */
 .li.addr:hover, .li.addr.on { background: rgba(255, 255, 255, 0.03); }
 .li.addr .a-name { font: var(--fs-m) var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .li.addr.on .a-name { color: var(--accent); }
-.li.addr .a-d { font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }
-.li.addr .a-d.bad { color: var(--color-red); }
 .li.addr .a-t { font: var(--fs-s) var(--font-mono); color: var(--text-dim); text-align: right; white-space: nowrap; }
 .a-x { justify-self: end; }
 .a-x svg { width: 14px; height: 14px; }
-/* an icon that removes: as the others, red under the pointer */
-.cp.danger:hover { color: var(--color-red); }
 
 /* Secret fields (passwords, keys) are text fields shown as dots, not type=password: Chrome's password manager
    takes a type=password that is filled and then goes away (a dialog closing, a screen changing) for a login
@@ -351,6 +348,7 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 /* right of the QR: the name (its line kept when there is none), then 9 px down Type, Created and Expiry, each title
    (as Settings' field titles: ui's .caps) with its value on its line, 6 px apart; the icons along the QR's bottom */
+.recv-name.dim { color: var(--muted); font-weight: 400; }      /* Unnamed */
 .recv-name { min-height: 18px; font-weight: 700; font-size: var(--fs-base); line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recv-kv { margin-top: 9px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: baseline; }
 .recv-v { font: var(--fs-m) var(--font-mono); color: var(--text); }
@@ -359,4 +357,17 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .recv .hash.box { margin-top: 12px; }
 /* a hint under a sheet's title: 8 px under it and 12 px over what follows, as under a card's title everywhere */
 .sheet-head + .hint { margin-top: -2px; }
-#x-beamRecv > .panel:last-child { margin-bottom: 0; }      /* scrolled to the end: on the Ethereum card's line */
+#x-beamRecv > .panel:last-child { margin-bottom: 0; padding-bottom: 12px; }      /* scrolled to the end: on the Ethereum card's line; under its last row the Ethereum card's bottom padding */
+/* the favourite's star: an outline, filled in the accent once marked */
+.cp.fav svg { width: 14px; height: 14px; fill: none; }
+.cp.fav.is { color: var(--accent); }
+.cp.fav.is svg { fill: currentColor; }
+.cp.fav:hover { color: var(--accent); }
+/* an address added by hand and not verified (no payment to it found): its name in yellow, shown or not */
+.li.addr .a-name.unver, .li.addr.on .a-name.unver { color: var(--color-yellow); }
+.recv-v.warn { color: var(--color-yellow); }
+/* a favourite's row is dragged among the favourites: a line in the accent where it goes */
+.li.addr.fav-row { cursor: grab; }
+.li.addr.dragging { opacity: 0.4; }
+.li.addr.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.li.addr.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }

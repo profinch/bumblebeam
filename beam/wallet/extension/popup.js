@@ -93,7 +93,7 @@
     add: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
     import: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>',
     rename: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
-    remove: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
+    remove: '<svg viewBox="0 0 24 24"><path d="M3.75 6.75h16.5M9.75 6.75V4.5h4.5v2.25M6 6.75l1.05 12.9a1.5 1.5 0 0 0 1.5 1.35h6.9a1.5 1.5 0 0 0 1.5-1.35l1.05-12.9M10.05 10.5v6.75M13.95 10.5v6.75"/></svg>',      // the trash, as Receive's
   };
 
   // ---------- state ----------
@@ -915,31 +915,59 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // (tx_list joined on the address: Beam's chain has no addresses, so the wallet's own records are all there is).
   const TYPE_NAME = { regular: 'regular', regular_new: 'regular', offline: 'offline', max_privacy: 'max privacy', public_offline: 'public offline' };
   let addrs = [], shownAddr = null;
+  // the favourites first (a star on the row), then the others, each newest first
+  let favs = new Set();
+  // Beam's own list, and the addresses added manually (the host keeps them): those are this wallet's only as far
+  // as a payment to them shows it, so each is verified once its history has an incoming transfer that names it
   async function loadAddrs() {
-    const list = await host('beam', W().id, 'addr_list', { own: true });
-    addrs = list.slice().sort((p1, p2) => (p2.create_time || 0) - (p1.create_time || 0));
+    const wid = W().id;
+    const [list, fav, ext] = await Promise.all([host('beam', wid, 'addr_list', { own: true }), host('addrFavs', wid).catch(() => []), host('addrExt', wid).catch(() => [])]);
+    favs = new Set(fav); favOrder = fav.slice();
+    const own = new Set(list.map((x) => x.address));
+    let txs = [];
+    if (ext.length) txs = (await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => [])).filter((t) => t.income).map((t) => JSON.stringify(t));
+    const added = ext.filter((e) => !own.has(e.address)).map((e) => {
+      const n = txs.filter((j) => j.includes(e.address)).length;
+      return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: n > 0, n };
+    });
+    addrs = [...list, ...added].sort(byFav);
     renderAddrs();
   }
+  // favourites first, in their order (the last marked on top, or as dragged), then the others oldest first: a new
+  // address goes to the end
+  let favOrder = [];
+  const favAt = (a) => { const i = favOrder.indexOf(a); return i < 0 ? Infinity : i; };
+  const byFav = (p1, p2) => (favAt(p1.address) - favAt(p2.address)) || (p1.create_time || 0) - (p2.create_time || 0);
   const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
   const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
-  const expiry = (x) => (x.expired ? 'expired' : !x.duration ? 'never' : fdate((x.create_time + x.duration) * 1000));
-  // My addresses: a row each, newest first: its name (else the address, shortened), made, expires, its type
-  // right, the trash that removes it; the one shown above stays lit
-  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';      // the trash, as the card's icon
+  const expiry = (x) => (x.ext ? (x.type === 'public_offline' ? 'never' : 'unknown') : x.expired ? 'expired' : !x.duration ? 'never' : fdate((x.create_time + x.duration) * 1000));
+  // My addresses: a row each (one added manually and not verified: its name in yellow): a star (a favourite: filled,
+  // first in the list, the last marked on top or as dragged), its name (else the address,
+  // shortened), its type right, the trash that removes it; the one shown above stays lit
+  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';      // the list's cross, as the icons
+  const STAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.2 4.4 13.1l.7-4L2.2 6.3l4-.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  const short6 = (a) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-6)}` : a || '');      // in this list: 6 + 6
   function renderAddrs() {
-    $('addrCount').textContent = `${addrs.length}`;
-    $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}" data-k="${k}">
-      <span class="a-name">${esc(x.comment || short(x.address))}</span><span class="a-d">${esc(ago2(x.create_time))}</span><span class="a-d${x.expired ? ' bad' : ''}">${esc(expiry(x))}</span>
-      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp danger a-x" data-del="${k}" title="Remove this address">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
+    $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}${favs.has(x.address) ? ' fav-row' : ''}" data-k="${k}"${favs.has(x.address) ? ' draggable="true"' : ''}>
+      <button type="button" class="cp fav${favs.has(x.address) ? ' is' : ''}" data-fav="${k}" title="${favs.has(x.address) ? 'A favourite: first in the list. Click to unmark' : 'Mark as a favourite: first in the list'}">${STAR}</button>
+      <span class="a-name${x.ext && !x.verified ? ' unver' : ''}"${x.ext && !x.verified ? ' title="⚠️ Added manually, not verified: no payment to it found in this wallet yet"' : ''}>${esc(x.comment || short6(x.address))}</span>
+      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp a-x" data-del="${k}" title="${x.ext ? 'Take it off this list' : 'Remove this address'}">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
   }
   function showAddr(x) {
     shownAddr = x.address;
+    host('setRecvSel', W().id, x.address).catch(() => {});      // opened next time on it, until the lock
     $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
-    // right of the QR: its name (nothing when it has none), its type, when it was made, when it expires
-    $('beamAddrName').textContent = x.comment || '';
+    // right of the QR: its name (Unnamed in grey when it has none), its type, when it was made, when it expires, its length
+    $('beamAddrName').textContent = x.comment || 'Unnamed'; $('beamAddrName').classList.toggle('dim', !x.comment);
     $('beamAddrType').textContent = TYPE_NAME[x.type] || x.type;
     $('beamAddrMade').textContent = ago2(x.create_time);
     $('beamAddrExp').textContent = expiry(x);
+    $('beamAddrLen').textContent = String(x.address.length);      // how long it is: 67 for a regular one, hundreds for the offline kinds
+    // an address added manually: whether a payment to it showed it is this wallet's
+    $('beamAddrStK').hidden = $('beamAddrSt').hidden = !x.ext;
+    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? 'verified'
+      : '<span class="tipped" title="Added manually: Beam cannot tell whether an address belongs to this wallet. It becomes verified once this wallet\'s history has a payment to it">not verified</span>';
+    $('beamAddrSt').classList.toggle('warn', !!x.ext && !x.verified);
     BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
   }
@@ -949,13 +977,31 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     await loadAddrs();
     showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0 });
   }
+  // Receive opens on the address shown last since the unlock (the host remembers it), else the first in the list
+  // that is not an unverified one added manually (a favourite, else the oldest); with none, a regular one is made
+  async function recvOpen() {
+    note('x-beamRecv', 'bad', '');
+    try {
+      const [sel] = await Promise.all([host('recvSel', W().id).catch(() => null), loadAddrs()]);
+      const ok = (y) => !(y.ext && !y.verified);          // never an unverified one by default, even the one shown last
+      const x = addrs.find((y) => y.address === sel && ok(y)) || addrs.find(ok);
+      if (!x) return showType('regular');
+      pickType(x); showAddr(x);
+    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+  }
+  // the filter on the shown address's type, and its words
+  function pickType(x) {
+    addrType = Object.keys(ADDR_HINT).find((t) => sameType(x, t)) || addrType;
+    qa('#addrType button').forEach((b) => b.classList.toggle('on', b.dataset.t === addrType));
+    $('addrHint').textContent = ADDR_HINT[addrType] || '';
+  }
   async function showType(type, fresh = false) {
     note('x-beamRecv', 'bad', '');
     $('addrHint').textContent = ADDR_HINT[type];
     try {
       if (!fresh) {
         await loadAddrs();
-        const have = addrs.find((x) => sameType(x, type) && !x.expired);
+        const have = addrs.find((x) => sameType(x, type) && !x.expired && !x.ext);
         if (have) return showAddr(have);
       }
       await newAddress(type);
@@ -974,30 +1020,79 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     if (!x) return;
     const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save' });
     if (!r.ok) return;
-    try { await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input }); await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x); }
+    try {
+      if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000 });
+      else await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input });
+      await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x);
+    }
     catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
   // removes an address once asked (it stops taking payments): the list's trash and the card's
   async function removeAddr(x) {
     if (!x) return;
-    const r = await ask({ title: 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]], note: 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
+    const r = await ask({ title: x.ext ? 'Take it off the list' : 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]],
+      note: x.ext ? 'Only this list forgets it: payments to it are not affected.' : 'It stops taking payments. Coins it already brought stay in the wallet.', yes: x.ext ? 'Take off' : 'Remove' });
     if (!r.ok) return;
     try {
-      await host('beam', W().id, 'delete_address', { address: x.address });
+      if (x.ext) await host('setAddrExt', W().id, null, x.address);
+      else await host('beam', W().id, 'delete_address', { address: x.address });
       if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
     } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
   }
+  // "+": an address of this wallet that Beam does not list, checked to be a valid Beam address, its type from it
+  $('addAddr').onclick = async () => {
+    const r = await ask({ title: 'Add an address', input: { label: 'Address', value: '' },
+      note: 'Beam cannot tell whether an address belongs to this wallet: the wallet checks only that it is a valid Beam address. It is listed as not verified, and becomes verified once this wallet\'s history has a payment to it.', yes: 'Add' });
+    if (!r.ok) return;
+    const a = String(r.input || '').trim();
+    try {
+      const v = await host('beam', W().id, 'validate_address', { address: a });
+      if (!v || !v.is_valid) return ask({ title: 'Not added', note: 'That is not a valid Beam address.', yes: 'OK', no: null });
+      if (addrs.some((x) => x.address === a)) return ask({ title: 'Already listed', note: 'This address is in the list already.', yes: 'OK', no: null });
+      await host('setAddrExt', W().id, { address: a, name: '', type: v.type || '', at: Date.now() });
+      await loadAddrs();
+      const x = addrs.find((y) => y.address === a); if (x) showAddr(x);
+    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+  };
   $('delBeamAddr').onclick = () => removeAddr(addrs.find((y) => y.address === shownAddr));
+  // dragging a favourite among the favourites: a line shows where it goes, the order is kept
+  let dragK = -1;
+  const favRow = (e) => { const r = e.target.closest('.li.addr.fav-row'); return r && $('addrList').contains(r) ? r : null; };
+  const clearMarks = () => qa('#addrList .drop-above, #addrList .drop-below').forEach((r) => r.classList.remove('drop-above', 'drop-below'));
+  $('addrList').addEventListener('dragstart', (e) => { const r = favRow(e); if (!r) return e.preventDefault(); dragK = Number(r.dataset.k); r.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  $('addrList').addEventListener('dragend', () => { dragK = -1; clearMarks(); qa('#addrList .dragging').forEach((r) => r.classList.remove('dragging')); });
+  $('addrList').addEventListener('dragover', (e) => {
+    const r = favRow(e); if (dragK < 0 || !r) return;
+    e.preventDefault(); clearMarks();
+    const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
+  });
+  $('addrList').addEventListener('drop', async (e) => {
+    const r = favRow(e); if (dragK < 0 || !r) return;
+    e.preventDefault();
+    const above = r.classList.contains('drop-above'); clearMarks();
+    const moved = addrs[dragK].address, target = addrs[Number(r.dataset.k)].address;
+    if (moved === target) return;
+    const order = favOrder.filter((a) => a !== moved);
+    order.splice(order.indexOf(target) + (above ? 0 : 1), 0, moved);
+    favOrder = order; addrs.sort(byFav); renderAddrs();
+    try { favOrder = await host('setAddrFavOrder', W().id, order); } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
+  });
   $('addrList').onclick = async (e) => {
     // the trash: this address removed, once asked
     const del = e.target.closest('[data-del]');
     if (del) return removeAddr(addrs[Number(del.dataset.del)]);
+    // the star: a favourite or not, and the list sorted again
+    const fv = e.target.closest('[data-fav]');
+    if (fv) {
+      const x = addrs[Number(fv.dataset.fav)]; if (!x) return;
+      try { favOrder = await host('setAddrFav', W().id, x.address, !favs.has(x.address)); favs = new Set(favOrder); } catch (er) { return note('x-beamRecv', 'bad', msg(er)); }
+      addrs.sort(byFav);
+      return renderAddrs();
+    }
     const row = e.target.closest('[data-k]'); if (!row) return;
     const x = addrs[Number(row.dataset.k)];
     if (!x) return;
-    addrType = Object.keys(ADDR_HINT).find((t) => sameType(x, t)) || addrType;
-    qa('#addrType button').forEach((b) => b.classList.toggle('on', b.dataset.t === addrType));
-    $('addrHint').textContent = ADDR_HINT[addrType] || '';
+    pickType(x);
     showAddr(x);
     $('beamQrWrap').scrollIntoView({ block: 'nearest' });
   };
@@ -1108,7 +1203,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   };
 
   const SHEETS = {
-    beamRecv: () => { qa('#addrType button').forEach((x) => x.classList.toggle('on', x.dataset.t === addrType)); showType(addrType); },
+    beamRecv: () => recvOpen(),
     beamSend: () => { bsOwnFill(); $('bsAvail').textContent = `${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM`; },
     ethRecv: () => {
       const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethRecvName').textContent = a.name;
