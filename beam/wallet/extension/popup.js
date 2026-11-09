@@ -679,6 +679,30 @@
   // Each token: a link to its contract on Etherscan and a button that copies the contract's address.
   let ethShowLow = null;                              // the address whose low-value tokens are shown
   const LINK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  // Links to Beam's chain go to our explorer; when it does not answer (3 s; known for a minute), the same page
+  // on Beam's official one: a kernel by the block that holds it (/block?kernel_id=), an asset by its id.
+  // Checked 2026-11-09: explorer.beam.mw opens both.
+  const EXP = 'https://explorer.bumblebeam.org', EXP_OFF = 'https://explorer.beam.mw';
+  let expUp = null;
+  async function explorerUp() {
+    if (expUp && Date.now() - expUp.at < 60000) return expUp.ok;
+    let ok = false;
+    try { const r = await fetch(`${EXP}/api/status`, { signal: AbortSignal.timeout(3000), cache: 'no-store' }); ok = r.ok && Number((await r.json()).height) > 0; } catch {}
+    expUp = { ok, at: Date.now() };
+    return ok;
+  }
+  const officialOf = (u) => {
+    const m = /^https:\/\/explorer\.bumblebeam\.org\/(kernel|asset)\/([0-9a-fA-F]+)/.exec(u);
+    return !m ? `${EXP_OFF}/` : m[1] === 'kernel' ? `${EXP_OFF}/block?kernel_id=${m[2]}` : `${EXP_OFF}/asset/${m[2]}`;
+  };
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest(`a[href^="${EXP}/"]`);
+    if (!a || e.button !== 0) return;
+    e.preventDefault();
+    const url = (await explorerUp()) ? a.href : officialOf(a.href);
+    try { await chrome.tabs.create({ url }); } catch { window.open(url, '_blank', 'noopener'); }
+  });
+  explorerUp();                                       // known before the first click
   function ethRows() {
     const d = ethData;
     if (!d) return;
