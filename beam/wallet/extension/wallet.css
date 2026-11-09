@@ -115,7 +115,7 @@ html.popup .seed { columns: 2; }
 .asset:last-child { border-bottom: 0; }
 .asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset .amt { grid-area: amt; font: 700 14px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
-.asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; }
+.asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: left; }      /* the dollars from the column's left edge, in line with each other */
 /* a token row: its contract's link and copy button, the symbol, the amount, the dollars; the row (and its line)
    ends 5 px before the scroll bar */
 #ethAssets .asset, #beamAssets .asset { grid-template-columns: 30px minmax(0, 1fr) auto 72px; grid-template-areas: "tok sym amt usd"; margin-right: 5px; }
