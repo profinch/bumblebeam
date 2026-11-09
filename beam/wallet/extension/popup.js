@@ -119,6 +119,7 @@
     $('setBtn').hidden = !inside && !adding;
     $('backBtn').hidden = !adding;
     $('actBar').hidden = id !== 't-activity';
+    $('dappBar').hidden = id !== 'x-dapps';
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
@@ -1503,7 +1504,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const named = (a) => (st.wallets || []).flatMap((w) => w.accounts).find((x) => x.address.toLowerCase() === a.toLowerCase());
     const rows = l.filter((d) => (dappNet === 'beam' ? d.beam : d.address)).map((d) => {
       const n = dappNet === 'eth' && named(d.address);
-      const what = dappNet === 'beam' ? `Beam: ${d.beam}` : `Ethereum: ${n ? `${n.name} | ` : ''}${six(d.address)}`;
+      const what = dappNet === 'beam' ? d.beam : `${n ? `${n.name} | ` : ''}${six(d.address)}`;
       return `<div class="li site"><a class="site-a" href="${esc(d.origin)}" target="_blank" rel="noopener">${esc(new URL(d.origin).host)}</a><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a><span class="sub">${esc(what)}</span><span class="sub">${esc(fdate(d.at))}</span></div>`;
     });
     $('dappList').innerHTML = rows.join('') || `<div class="empty">no site connected on ${dappNet === 'beam' ? 'Beam' : 'Ethereum'}</div>`;

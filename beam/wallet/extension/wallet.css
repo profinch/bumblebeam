@@ -314,7 +314,6 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
 /* Connected sites: the title left, the way back right; Beam | Ethereum as in Activity */
 .sheet-head.rev { flex-direction: row-reverse; justify-content: space-between; }
-#dappNet { margin: 0 0 10px; }
 /* a site: its link, "disconnect" right of it on its line; under them what it is connected to, and the date
    under "disconnect" */
 #dappList .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }

@@ -33,6 +33,8 @@
     <a href="#" data-tab="activity">Activity</a>
   </nav>
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
+  <!-- Connected sites' network: in the same place -->
+  <div class="wsub" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
   <div class="wsub" id="actBar" hidden><div class="seg mini" id="actNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
 </header>
 
@@ -237,7 +239,6 @@ while the wallet is locked.</p>
   <!-- ================= connected sites (the dApp gear) ================= -->
   <section id="x-dapps" class="screen sheet" hidden>
     <div class="sheet-head rev"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Connected sites</h2></div>
-    <div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div>
     <div class="panel">
       <p class="hint">On Ethereum a site sees the account it was connected with. On Beam it sees the open wallet's balance and its own transactions. Either way it asks here before anything is signed or sent. A disconnected site sees nothing until you connect it again.</p>
       <div class="list" id="dappList"></div>
