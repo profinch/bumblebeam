@@ -1392,7 +1392,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   async function dappScreen() {
     let list = [];
     try { list = await host('dappPending'); } catch {}
-    if (!list.length) { dpCur = null; if (inWin) return window.close(); return; }
+    if (!list.length) { dpCur = null; if (inWin) { await host('dappWinDone').catch(() => {}); return window.close(); } return; }
     const r = dpCur = list[0];
     clearNotes('s-dapp');
     const acc = r.address ? (st.wallets || []).flatMap((w) => w.accounts.map((a) => ({ w, a }))).find((x) => x.a.address.toLowerCase() === r.address.toLowerCase()) : null;
@@ -1476,7 +1476,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try { s = await host('dappStatus', siteOrigin); } catch {}
     const hostName = new URL(siteOrigin).hostname;
     if (s.waiting) { box.classList.add('warn'); $('dappSt').textContent = 'request waiting'; $('dappSub').textContent = hostName; }
-    else if (s.connected) { box.classList.add('ok'); $('dappSt').textContent = 'connected'; $('dappSub').textContent = [s.beam ? 'Beam' : '', s.address ? six(s.address) : ''].filter(Boolean).join(' · '); }
+    // connected: the account's address on Ethereum, else (Beam only) the site
+    else if (s.connected) { box.classList.add('ok'); $('dappSt').textContent = 'connected'; $('dappSub').textContent = s.address ? six(s.address) : hostName; }
     else { $('dappSt').textContent = 'not connected'; $('dappSub').textContent = hostName; }
     box.title = '';
   }

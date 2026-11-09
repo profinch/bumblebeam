@@ -564,7 +564,7 @@
   // 4900 locked/disconnected, 4902 unknown chain).
   const dappPorts = new Set();
   const dappReq = new Map();                      // id -> { id, origin, kind, method, params, address, resolve, reject, at }
-  let dappNext = 1, dappWin = null;               // the request window's id while it is open
+  let dappNext = 1, dappWin = null, dappWinSelf = false;               // the request window's id while it is open
   let dappWinOf = null;                           // the browser window of the site that asked last (the request window opens at its right)
   const DAPP_READ = new Set(['eth_blockNumber', 'eth_call', 'eth_estimateGas', 'eth_feeHistory', 'eth_gasPrice', 'eth_getBalance',
     'eth_getBlockByHash', 'eth_getBlockByNumber', 'eth_getCode', 'eth_getLogs', 'eth_getStorageAt', 'eth_getTransactionByHash',
@@ -599,13 +599,16 @@
   }
   // a request ended (answered, rejected, expired, its window closed): the popups show the site's state again
   function dappDone(origin) { broadcast({ type: 'event', method: 'bb_dapp_done', result: { origin } }); }
+  // the request window: the open one comes to the front, else a new one (the background knows whether the one
+  // it opened is still there: a window that just closed itself, its last request answered, is not)
+  function dappWindow() { chrome.runtime.sendMessage({ op: 'dappWindow', near: dappWinOf }).then((r) => { dappWin = r && r.result; }).catch(() => {}); }
   // a request the user answers in the wallet's window
   function ask(origin, kind, method, params, address, extra = {}) {
     return new Promise((resolve, reject) => {
       const id = dappNext++;
       dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now(), ...extra });
       broadcast({ type: 'event', method: 'bb_dapp', result: { id, origin } });
-      if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow', near: dappWinOf }).then((r) => { dappWin = r && r.result; }).catch(() => {});
+      dappWindow();
       setTimeout(() => { if (dappReq.delete(id)) { reject(err(4001, 'the request expired')); dappDone(origin); } }, 15 * 60 * 1000);
     });
   }
@@ -635,7 +638,8 @@
       }
       case 'beam_call': {
         const site = beamSites()[origin];
-        if (!site || !data) throw err(4100, 'connect the site to the wallet first');
+        if (!data) throw err(4100, 'the wallet is locked');
+        if (!site) throw err(4100, 'connect the site to the wallet first');
         const q = params[0] || {};
         if (!BEAM_SITE.has(q.method)) throw err(4200, `not allowed for a site: ${q.method}`);
         const id = settings.active, s = live(id);
@@ -690,6 +694,7 @@
   const api = {
     // ---------- dApps ----------
     // the waiting requests, oldest first, as the wallet's window shows them (a transaction priced for it)
+    dappWinDone() { dappWinSelf = true; },      // the request window closes itself: nothing left to answer
     async dappPending() {
       const out = [];
       for (const r of [...dappReq.values()].sort((x, y) => x.at - y.at)) {
@@ -1308,6 +1313,10 @@
   chrome.runtime.onMessage.addListener((m, sender) => {
     if (sender.id !== chrome.runtime.id || !m || m.op !== 'dappClosed' || m.windowId !== dappWin) return;
     dappWin = null;
-    for (const [id, r] of [...dappReq]) { dappReq.delete(id); r.reject(err(4001, 'the user closed the request')); dappDone(r.origin); }
+    // the user closed it: a no to all that waits. It closed itself (all answered, dappWinDone): what came
+    // meanwhile gets a window of its own
+    const self = dappWinSelf; dappWinSelf = false;
+    if (!self) for (const [id, r] of [...dappReq]) { dappReq.delete(id); if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user closed the request')); dappDone(r.origin); }
+    if (dappReq.size) dappWindow();
   });
 })();
