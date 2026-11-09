@@ -1244,10 +1244,11 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const r = dpCur = list[0];
     clearNotes('s-dapp');
     const acc = r.address ? (st.wallets || []).flatMap((w) => w.accounts.map((a) => ({ w, a }))).find((x) => x.a.address.toLowerCase() === r.address.toLowerCase()) : null;
-    const accRow = r.address ? [['Account', `${acc ? `${acc.a.name} · ` : ''}${six(r.address)}`]] : [['Account', 'this wallet has no Ethereum account']];
+    const accRow = r.address ? [['Account', `${acc ? `${acc.a.name} - ` : ''}${r.address}`]] : [['Account', 'this wallet has no Ethereum account']];
     const kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
     $('dpSite').textContent = r.origin;
-    const wRow = r.wallet ? [['Beam wallet', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
+    // the site asked for "Beam Web Wallet": it is this one, answering in its place; and which of its wallets is open
+    const wRow = r.wallet ? [['Beam wallet', 'BumbleBeam Wallet (Beam emulation)'], ['Wallet', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
     if (r.kind === 'beamConnect') {
       $('dpTitle').textContent = 'Connect to Beam';
       $('dpBody').innerHTML = kv([['App', r.appname || ''], ...wRow]);
@@ -1290,7 +1291,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
       const t = r.tx || {};
       const rows = [...accRow, ['To', t.to || '(creates a contract)'], ['Value', ethAmt(t.value || '0')],
         ['Data', !t.data || t.data === '0x' ? 'none' : `${t.data.slice(0, 10)}… (${(t.data.length - 2) / 2} bytes)`],
-        ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? `not priced: ${r.feeErr}` : '…']];
+        ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? (/insufficient funds/i.test(r.feeErr) ? 'not enough ETH for the value and the fee' : /revert/i.test(r.feeErr) ? 'the contract refuses it (it would revert)' : `not priced: ${r.feeErr.slice(0, 120)}`) : '…']];
       $('dpBody').innerHTML = kv(rows);
       $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail; sending it may only cost the fee.' : 'Sent from this account on Ethereum mainnet once you confirm.';
       $('dpYes').textContent = 'Send';
@@ -1335,7 +1336,8 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     if (!s) return;
     if (s.waiting) { chrome.runtime.sendMessage({ op: 'dappWindow' }).catch(() => {}); return; }
     if (s.connected) {
-      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ...(s.beam ? [['Beam', 'connected']] : []), ...(s.address ? [['Ethereum', six(s.address)]] : [])], note: 'Disconnected, the site sees nothing of the wallet until you connect it again.', yes: 'Disconnect', no: 'Close' });
+      const named = s.address && (st.wallets || []).flatMap((w) => w.accounts).find((a) => a.address.toLowerCase() === s.address.toLowerCase());
+      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ...(s.beam ? [['Beam', 'connected']] : []), ...(s.address ? [['Ethereum', `${named ? `${named.name} - ` : ''}${s.address}`]] : [])], note: 'Disconnected, the site sees nothing of the wallet until you connect it again.', yes: 'Disconnect', no: 'Close' });
       if (r.ok) { await host('dappDisconnect', siteOrigin); dappRefresh(); }
       return;
     }

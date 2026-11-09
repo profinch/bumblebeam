@@ -269,5 +269,15 @@ dialog .row { margin-top: 14px; }
 .dp-site { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 12px; }
 .dp-site b { font: 700 14px var(--font-mono); overflow-wrap: anywhere; }
 .dp-msg { margin: 10px 0 0; padding: 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px var(--font-mono); color: var(--text-dim); background: var(--surface3); border: 1px solid var(--border-dim); border-radius: var(--radius-m); }
-#s-dapp .row { gap: 8px; }
+#s-dapp .row { gap: 8px; margin-top: 0; }
 #s-dapp .row .btn.wide { flex: 1; }
+/* the request fills the window; its buttons sit at the bottom; the note clear of the rows above it */
+html.win main { display: flex; flex-direction: column; }
+html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+#s-dapp #dpBody { overflow-y: auto; min-height: 0; }
+#s-dapp #dpNote { margin-top: 14px; }
+#s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; }      /* a whole address wraps inside its cell */
+#s-dapp .dp-foot { margin-top: auto; padding-top: 14px; }
+html.win main { padding-bottom: 14px; }
+#s-dapp #dpMore:empty { display: none; }
+#s-dapp #dpMore { margin: 0 0 8px; text-align: center; }

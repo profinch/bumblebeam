@@ -43,7 +43,11 @@ const OPS = {
       // no clamping at 0: a screen left of (or above) the main one has negative coordinates
       if (cur && cur.left != null) at = { left: cur.left + cur.width - W - 12, top: cur.top + 80 };
     } catch {}
-    const w = await chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: W, height: H, focused: true, ...at });
+    // a place Chrome refuses (off the visible screen: a minimised window, an odd layout) must not cost the
+    // window itself: then it opens where Chrome puts it
+    const make = (pos) => chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: W, height: H, focused: true, ...pos });
+    let w;
+    try { w = await make(at); } catch { at = {}; w = await make({}); }
     // Chrome may place a new window on another screen (screens with different scaling): put it where it belongs
     if (at.left != null) chrome.windows.update(w.id, at).catch(() => {});
     await chrome.storage.session.set({ dappWin: w.id });
