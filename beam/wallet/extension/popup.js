@@ -1317,7 +1317,8 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     }
     const box = $('dappBox');
     box.className = 'dapp-box';
-    if (!siteOrigin) { $('dappSt').textContent = '—'; $('dappSub').innerHTML = '&nbsp;'; box.title = 'Open a website to see whether it is connected to this wallet'; return; }
+    box.hidden = !siteOrigin;                          // not a website (a new tab, chrome://): nothing at all
+    if (!siteOrigin) return;
     let s = { connected: false, waiting: false, address: null };
     try { s = await host('dappStatus', siteOrigin); } catch {}
     const hostName = new URL(siteOrigin).hostname;
