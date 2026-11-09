@@ -276,7 +276,7 @@ html.win main { display: flex; flex-direction: column; }
 html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 #s-dapp #dpBody { overflow-y: auto; min-height: 0; }
 #s-dapp #dpNote { margin-top: 14px; }
-#s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; }      /* a whole address wraps inside its cell */
+#s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; white-space: pre-line; }      /* a name, then a whole address on its own line */
 #s-dapp .dp-foot { margin-top: auto; padding-top: 14px; }
 html.win main { padding-bottom: 14px; }
 #s-dapp #dpMore:empty { display: none; }

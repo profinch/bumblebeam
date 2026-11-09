@@ -322,7 +322,7 @@
       const k = await host('checkPhrase', p);
       $('rBeamBox').hidden = !k.beam;
       $('rKind').textContent = k.beam && k.eth ? 'A 12-word phrase: Beam and Ethereum.'
-        : k.eth ? `An Ethereum phrase (${k.words} words): the Ethereum part only; Beam phrases are 12 words.`
+        : k.eth ? `An Ethereum phrase (${k.words} words): the Ethereum part only. Beam phrases are 12 words.`
         : k.beam ? 'A Beam phrase: Beam only.' : k.words >= 12 ? 'Not a valid phrase yet: check the words and their order.' : `${k.words} words…`;
     }, 250);
   };
@@ -423,7 +423,7 @@
     await ask({ title: 'Remove this account', rows, password: true, yes: 'Remove',
       note: imported
         ? 'Imported: its key is deleted from this extension. Only your own copy of the key or phrase brings it back, and whatever is on the address stays there on Ethereum.'
-        : 'From this wallet\'s phrase: it only leaves the list. "+ Add an account" brings the same address back; whatever is on it stays there on Ethereum.',
+        : 'From this wallet\'s phrase: it only leaves the list. "+ Add an account" brings the same address back. Whatever is on it stays there on Ethereum.',
       check: async ({ pass }) => { await host('removeEthAccount', w.id, a.i, pass); } });
   }
 
@@ -727,9 +727,9 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
   // ---------- sheets ----------
   let addrType = 'regular';
   const ADDR_HINT = {
-    regular: 'Give it to the sender. Online while this wallet is the open one and unlocked; the transfer completes while both wallets are online. The popup may be closed.',
+    regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
     offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address); the sender pays 0.011 BEAM and the coins arrive shielded. For many payments use Public.',
-    max_privacy: 'One payment, maximum anonymity (the shielded pool); the coins mature over a while before they can be spent.',
+    max_privacy: 'One payment, maximum anonymity (the shielded pool). The coins mature over a while before they can be spent.',
     public_offline: 'A public offline address: any number of payments, the wallet need not run (for a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM; the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
   };
   // Receive shows the newest address of the chosen type (made once if there is none); "New address" makes
@@ -1006,7 +1006,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const up = covers(f);
     $('teFeeInfo').textContent = f < feeData.min
       ? `Below the relayer's minimum now (${feeData.min.toFixed(2)} BEAM): it would wait until the base fee drops to ${up > 0 ? up.toFixed(3) : '—'} gwei (${pct(shareOf(up))} of the last 24 h).`
-      : `Enough while the base fee is at most ${up.toFixed(3)} gwei: ${pct(shareOf(up))} of the last 24 h. ≈ ${usd(f * feeData.rate.beam)}. Paying more does not speed it up (the relayer takes ~1 h either way); it only covers gas rising meanwhile. The fee is fixed for good.`;
+      : `Enough while the base fee is at most ${up.toFixed(3)} gwei: ${pct(shareOf(up))} of the last 24 h. ≈ ${usd(f * feeData.rate.beam)}. Paying more does not speed it up (the relayer takes ~1 h either way). It only covers gas rising meanwhile. The fee is fixed for good.`;
   }
   async function fee() {
     try {
@@ -1244,7 +1244,8 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     const r = dpCur = list[0];
     clearNotes('s-dapp');
     const acc = r.address ? (st.wallets || []).flatMap((w) => w.accounts.map((a) => ({ w, a }))).find((x) => x.a.address.toLowerCase() === r.address.toLowerCase()) : null;
-    const accRow = r.address ? [['Account', `${acc ? `${acc.a.name} - ` : ''}${r.address}`]] : [['Account', 'this wallet has no Ethereum account']];
+    // the name, then the whole address on the next line (they do not fit on one)
+    const accRow = r.address ? [['Account', `${acc ? `${acc.a.name}\n` : ''}${r.address}`]] : [['Account', 'this wallet has no Ethereum account']];
     const kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
     $('dpSite').textContent = r.origin;
     // the site asked for "Beam Web Wallet": it is this one, answering in its place; and which of its wallets is open
@@ -1253,7 +1254,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
       $('dpTitle').textContent = 'Connect to Beam';
       $('dpBody').innerHTML = kv([['App', r.appname || ''], ...wRow]);
       $('dpNote').textContent = r.wallet && !r.wallet.beam ? 'The open wallet has no Beam part: open a wallet with one first.'
-        : 'The site sees this wallet\'s Beam balance, assets and its own transactions, and can ask for contract transactions; each one is asked here first. For another wallet, open it in the wallet first.';
+        : 'The site sees this wallet\'s Beam balance, assets and its own transactions, and can ask for contract transactions. Each one is asked here first. For another wallet, open it in the wallet first.';
       $('dpYes').textContent = 'Connect';
       $('dpYes').disabled = !(r.wallet && r.wallet.beam);
       $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
@@ -1278,7 +1279,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     if (r.kind === 'connect') {
       $('dpTitle').textContent = 'Connect this site';
       $('dpBody').innerHTML = kv(accRow);
-      $('dpNote').textContent = 'The site will see this account\'s address and balances. It can ask to sign or send; nothing is signed without asking you here. For another account, choose it in the wallet first.';
+      $('dpNote').textContent = 'The site will see this account\'s address and balances. It can ask to sign or send, and nothing is signed without asking you here. For another account, choose it in the wallet first.';
       $('dpYes').textContent = 'Connect';
     } else if (r.kind === 'sign') {
       $('dpTitle').textContent = r.method === 'personal_sign' ? 'Sign a message' : 'Sign typed data';
@@ -1293,7 +1294,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
         ['Data', !t.data || t.data === '0x' ? 'none' : `${t.data.slice(0, 10)}… (${(t.data.length - 2) / 2} bytes)`],
         ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? (/insufficient funds/i.test(r.feeErr) ? 'not enough ETH for the value and the fee' : /revert/i.test(r.feeErr) ? 'the contract refuses it (it would revert)' : `not priced: ${r.feeErr.slice(0, 120)}`) : '…']];
       $('dpBody').innerHTML = kv(rows);
-      $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail; sending it may only cost the fee.' : 'Sent from this account on Ethereum mainnet once you confirm.';
+      $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail. Sending it may only cost the fee.' : 'Sent from this account on Ethereum mainnet once you confirm.';
       $('dpYes').textContent = 'Send';
     }
     $('dpYes').disabled = r.kind !== 'connect' && !r.address;
@@ -1337,11 +1338,11 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     if (s.waiting) { chrome.runtime.sendMessage({ op: 'dappWindow' }).catch(() => {}); return; }
     if (s.connected) {
       const named = s.address && (st.wallets || []).flatMap((w) => w.accounts).find((a) => a.address.toLowerCase() === s.address.toLowerCase());
-      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ...(s.beam ? [['Beam', 'connected']] : []), ...(s.address ? [['Ethereum', `${named ? `${named.name} - ` : ''}${s.address}`]] : [])], note: 'Disconnected, the site sees nothing of the wallet until you connect it again.', yes: 'Disconnect', no: 'Close' });
+      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ...(s.beam ? [['Beam', 'connected']] : []), ...(s.address ? [['Ethereum', `${named ? `${named.name}\n` : ''}${s.address}`]] : [])], note: 'Disconnected, the site sees nothing of the wallet until you connect it again.', yes: 'Disconnect', no: 'Close' });
       if (r.ok) { await host('dappDisconnect', siteOrigin); dappRefresh(); }
       return;
     }
-    await ask({ title: new URL(siteOrigin).hostname, note: 'Not connected. On the site, choose "Connect wallet" and pick BumbleBeam Wallet; you approve it here.', yes: 'OK', no: null });
+    await ask({ title: new URL(siteOrigin).hostname, note: 'Not connected. On the site, choose "Connect wallet", pick BumbleBeam Wallet and approve it here.', yes: 'OK', no: null });
   };
   async function dappListOpen() {
     const l = await host('dappList').catch(() => []);
@@ -1369,7 +1370,7 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
         // the Beam part rebuilt from the seed phrase: the stored one, or typed for a wallet that has none
         const r = await ask({ title: `Restore Beam: ${w.name}`, password: true, yes: 'Restore',
           input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '' },
-          note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back; the history and address names do not. Only when its Beam database is gone.` });
+          note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back, the history and address names do not. Only when its Beam database is gone.` });
         if (!r.ok) return;
         // it runs in the host (the popup may close); the wallet's card shows its progress
         await host('switchWallet', w.id); await load(); tab('home');

@@ -83,7 +83,7 @@
 
   <section id="s-import" class="screen" hidden>
     <h2 class="screen-title">Open a Beam backup file</h2>
-    <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved; the history comes with it.</p>
+    <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved, and the history comes with it.</p>
     <label class="field">Backup file<input type="file" id="iFile" accept=".db,application/octet-stream"></label>
     <label class="field">Password of that file<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="iPass"></label>
     <div class="pw-new"></div>
@@ -104,7 +104,7 @@
 
   <section id="s-progress" class="screen" hidden>
     <h2 class="screen-title">Setting up the Beam part</h2>
-    <p class="hint">The wallet imports Beam's snapshot in the background; this popup may be closed.</p>
+    <p class="hint">The wallet imports Beam's snapshot in the background. This popup may be closed.</p>
     <div class="progress"><div class="bar accent"><i></i></div><span></span></div>
     <p class="note bad" hidden></p>
   </section>
@@ -179,16 +179,16 @@ while the wallet is locked.</p>
   <section id="x-beamRecv" class="screen sheet" hidden>
     <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Receive BEAM</h2></div>
     <div class="seg" id="addrType">
-      <button class="on" data-t="regular" title="Online while this wallet is the open one and unlocked; the transfer completes while both sides are online. The popup may be closed">Regular</button>
+      <button class="on" data-t="regular" title="Online while this wallet is the open one and unlocked. The transfer completes while both sides are online. The popup may be closed">Regular</button>
       <button data-t="offline" title="Takes payments even while the wallet is off: the sender's wallet completes it alone">Offline</button>
-      <button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool (Lelantus); one payment per address">Max privacy</button>
+      <button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool (Lelantus). One payment per address">Max privacy</button>
       <button data-t="public_offline" title="One address for any number of payments while the wallet is off: for a pool's payouts, an exchange, donations. Less private: every payment goes to the same public key">Public</button>
     </div>
     <p class="hint" id="addrHint"></p>
     <div class="qr-wrap" id="beamQrWrap" hidden><div class="qr" id="beamQr"></div>
       <div class="addr-meta" id="beamAddrMeta"></div>
       <div class="hash box" id="beamAddr"></div>
-      <div class="row"><button class="btn small" id="copyBeamAddr" data-copy>Copy</button><button class="btn ghost small" id="nameBeamAddr" title="A name only you see: who it was given to">Name it</button><button class="btn ghost small" id="newBeamAddr" title="Another address of the same type. All addresses lead to the same balance; a new one per sender keeps senders from telling they pay the same person">New address</button></div></div>
+      <div class="row"><button class="btn small" id="copyBeamAddr" data-copy>Copy</button><button class="btn ghost small" id="nameBeamAddr" title="A name only you see: who it was given to">Name it</button><button class="btn ghost small" id="newBeamAddr" title="Another address of the same type. All addresses lead to the same balance. A new one per sender keeps senders from telling they pay the same person">New address</button></div></div>
     <p class="note bad" hidden></p>
     <div class="panel addr-panel">
       <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span id="addrCount"></span><button class="btn ghost small" id="addrClean" title="Removes the addresses nothing ever came to and that have no name. Kept: any with a transaction, any you named, the one for your other wallets">Remove unused</button></span></div>
@@ -265,7 +265,7 @@ while the wallet is locked.</p>
         </div>
         <label class="field">BEAM to receive<span class="inline"><input id="feAmt" inputmode="decimal" placeholder="0"><button class="btn ghost small" id="feMax">All</button></span></label>
         <label class="field">Relayer fee, WBEAM<input id="feFee" inputmode="decimal" value="0.02"></label>
-        <p class="hint">This direction has no minimum fee in the relayer; recent transfers paid 0.02 WBEAM. Ethereum gas is paid in ETH from the same account: two transactions the first time (approve, then send), one after that.</p>
+        <p class="hint">This direction has no minimum fee in the relayer. Recent transfers paid 0.02 WBEAM. Ethereum gas is paid in ETH from the same account: two transactions the first time (approve, then send), one after that.</p>
         <div class="row"><button class="btn solid" id="doFromEth">Review</button></div>
         <p class="note ok" hidden></p><p class="note bad" hidden></p>
       </div>
@@ -304,7 +304,7 @@ while the wallet is locked.</p>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
             <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
             <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></label>
-      <p class="hint">Only the open wallet's Beam part runs: its regular addresses are online while it is unlocked. The other wallets take payments to their offline, public and max-privacy addresses all the time; their regular addresses wait until they are opened. Locking takes Beam offline (a transfer still being made finishes first). Closing the browser locks it.</p>
+      <p class="hint">Only the open wallet's Beam part runs: its regular addresses are online while it is unlocked. The other wallets take payments to their offline, public and max-privacy addresses all the time. Their regular addresses wait until they are opened. Locking takes Beam offline (a transfer still being made finishes first). Closing the browser locks it.</p>
       <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
     </div>
     <div class="panel">
@@ -319,17 +319,17 @@ while the wallet is locked.</p>
       <div class="panel-head"><h3 class="panel-title">Networks</h3></div>
       <label class="field">Beam node (wss, host:port)<span class="inline"><input id="node" spellcheck="false"><button class="btn ghost small" id="saveNode">Save</button></span></label>
       <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>
-      <label class="field">Ethereum RPC (https; empty = public ones)<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button class="btn ghost small" id="saveRpc">Save</button></span></label>
+      <label class="field">Ethereum RPC (https, empty = public ones)<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button class="btn ghost small" id="saveRpc">Save</button></span></label>
       <p class="note bad" hidden id="netErr"></p>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Connected sites</h3></div>
-      <p class="hint">Sites that see one of your Ethereum accounts. They ask before anything is signed or sent; disconnect one and it sees no account.</p>
+      <p class="hint">Sites that see one of your Ethereum accounts. They ask before anything is signed or sent. A disconnected site sees no account.</p>
       <div class="list" id="dappList"></div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Tokens</h3></div>
-      <p class="hint">ETH and WBEAM always show; other tokens with a market price show by themselves. Add any other ERC-20 by its contract address.</p>
+      <p class="hint">ETH and WBEAM always show. Other tokens with a market price show by themselves. Add any other ERC-20 by its contract address.</p>
       <div class="list" id="tokList"></div>
       <label class="field">Token contract<span class="inline"><input id="tokAddr" placeholder="0x…" spellcheck="false"><button class="btn ghost small" id="addTok">Add</button></span></label>
       <p class="note bad" hidden id="tokErr"></p>
