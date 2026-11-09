@@ -454,6 +454,7 @@
 
   function lock() {
     data = null; vk = null; pendingPhrase = null;
+    setTimeout(() => dappTellAll(), 0);
     lockIcon();
     for (const p of prepared.values()) clearTimeout(p.t);
     prepared.clear();
@@ -510,7 +511,139 @@
     return p;
   }
 
+  // ---------- dApps: websites that use this wallet's Ethereum accounts (EIP-1193) ----------
+  // A site's page talks to inpage.js (window.ethereum, EIP-6963), which talks to content.js, which holds a port
+  // named 'dapp' to this host. The site is the port's sender origin, as Chrome gives it (never what the page
+  // says). A site sees an account only once the user connected it (settings.dapps[origin]); signing and sending
+  // are asked each time in a window of the wallet (popup.html?win=1), which shows the request and answers it.
+  // Chain: Ethereum mainnet only. Errors use EIP-1193's codes (4001 rejected, 4100 not allowed, 4200 unknown,
+  // 4900 locked/disconnected, 4902 unknown chain).
+  const dappPorts = new Set();
+  const dappReq = new Map();                      // id -> { id, origin, kind, method, params, address, resolve, reject, at }
+  let dappNext = 1, dappWin = null;               // the request window's id while it is open
+  const DAPP_READ = new Set(['eth_blockNumber', 'eth_call', 'eth_estimateGas', 'eth_feeHistory', 'eth_gasPrice', 'eth_getBalance',
+    'eth_getBlockByHash', 'eth_getBlockByNumber', 'eth_getCode', 'eth_getLogs', 'eth_getStorageAt', 'eth_getTransactionByHash',
+    'eth_getTransactionCount', 'eth_getTransactionReceipt', 'eth_maxPriorityFeePerGas', 'eth_syncing', 'web3_clientVersion']);
+  const err = (code, message) => Object.assign(new Error(message), { code });
+  const dapps = () => (settings.dapps ||= {});
+  // the account a site was given, while it still is one of this wallet's (and the wallet is open)
+  function siteAccount(origin) {
+    const c = dapps()[origin];
+    if (!c || !data) return null;
+    try { findEth(c.address); return c.address; } catch { return null; }
+  }
+  function activeAddress() {
+    const w = data && data.wallets.find((x) => x.id === settings.active);
+    if (!w || !w.eth || !w.eth.accounts.length) return null;
+    const a = w.eth.accounts.find((x) => x.i === settings.activeEth[w.id]) || w.eth.accounts[0];
+    return a.address;
+  }
+  function dappTell(origin, event, payload) { for (const p of dappPorts) if (p.origin === origin) { try { p.postMessage({ event, data: payload }); } catch {} } }
+  function dappTellAll() {
+    const seen = new Set([...dappPorts].map((p) => p.origin));
+    for (const o of seen) { const a = siteAccount(o); dappTell(o, 'accountsChanged', a ? [a] : []); }
+  }
+  // a request the user answers in the wallet's window
+  function ask(origin, kind, method, params, address) {
+    return new Promise((resolve, reject) => {
+      const id = dappNext++;
+      dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now() });
+      broadcast({ type: 'event', method: 'bb_dapp', result: { id, origin } });
+      if (dappWin == null) chrome.runtime.sendMessage({ op: 'dappWindow' }).then((r) => { dappWin = r && r.result; }).catch(() => {});
+      setTimeout(() => { if (dappReq.delete(id)) reject(err(4001, 'the request expired')); }, 15 * 60 * 1000);
+    });
+  }
+  const hexText = (h) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(ethers.getBytes(h)); } catch { return null; } };
+  async function dappCall(origin, method, params = []) {
+    switch (method) {
+      case 'eth_chainId': return '0x1';
+      case 'net_version': return '1';
+      case 'eth_accounts': { const a = siteAccount(origin); return a ? [a] : []; }
+      case 'eth_requestAccounts': case 'wallet_requestPermissions': {
+        const a = siteAccount(origin) || await ask(origin, 'connect', method, params, null);
+        return method === 'wallet_requestPermissions' ? [{ parentCapability: 'eth_accounts', caveats: [{ type: 'restrictReturnedAccounts', value: [a] }] }] : [a];
+      }
+      case 'wallet_getPermissions': { const a = siteAccount(origin); return a ? [{ parentCapability: 'eth_accounts', caveats: [{ type: 'restrictReturnedAccounts', value: [a] }] }] : []; }
+      case 'wallet_revokePermissions': delete dapps()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); return null;
+      case 'wallet_switchEthereumChain': {
+        if (String(params[0] && params[0].chainId).toLowerCase() === '0x1') return null;
+        throw err(4902, 'BumbleBeam Wallet works on Ethereum mainnet only');
+      }
+      case 'wallet_addEthereumChain': throw err(4200, 'BumbleBeam Wallet works on Ethereum mainnet only');
+      case 'personal_sign': case 'eth_signTypedData_v4': case 'eth_sendTransaction': {
+        // locked: a connected site's request still goes to the window, which asks for the password first
+        const a = siteAccount(origin) || (!data && dapps()[origin] ? dapps()[origin].address : null);
+        if (!a) throw err(4100, 'connect the site to the wallet first');
+        const who = method === 'personal_sign' ? params[1] : method === 'eth_signTypedData_v4' ? params[0] : params[0] && params[0].from;
+        if (who && String(who).toLowerCase() !== a.toLowerCase()) throw err(4100, 'that is not the account this site was given');
+        return ask(origin, method === 'eth_sendTransaction' ? 'send' : 'sign', method, params, a);
+      }
+      default:
+        if (DAPP_READ.has(method)) return Eth.rpc(method, params);
+        throw err(4200, `not supported: ${method}`);
+    }
+  }
+  // what the user agreed to, done here (the keys never leave this document)
+  async function dappDo(r, choice) {
+    if (r.kind === 'connect') {
+      const a = choice && choice.address ? findEth(choice.address).a.address : activeAddress();
+      if (!a) throw new Error('this wallet has no Ethereum account');
+      dapps()[r.origin] = { address: a, at: Date.now() };
+      await saveSettings();
+      dappTell(r.origin, 'accountsChanged', [a]);
+      return a;
+    }
+    const { secret } = findEth(r.address);
+    const w = Eth.signer(secret);
+    if (r.method === 'personal_sign') return w.signMessage(ethers.getBytes(r.params[0]));
+    if (r.method === 'eth_signTypedData_v4') {
+      const t = typeof r.params[1] === 'string' ? JSON.parse(r.params[1]) : r.params[1];
+      const types = { ...t.types }; delete types.EIP712Domain;
+      return w.signTypedData(t.domain || {}, types, t.message);
+    }
+    const tx = r.params[0];
+    const p = r.priced || await Eth.price({ from: r.address, to: tx.to, data: tx.data || tx.input || '0x', value: tx.value ? BigInt(tx.value) : 0n });
+    return signSend(secret, p);
+  }
+
   const api = {
+    // ---------- dApps ----------
+    // the waiting requests, oldest first, as the wallet's window shows them (a transaction priced for it)
+    async dappPending() {
+      const out = [];
+      for (const r of [...dappReq.values()].sort((x, y) => x.at - y.at)) {
+        const v = { id: r.id, origin: r.origin, kind: r.kind, method: r.method, address: r.address };
+        if (r.kind === 'sign') {
+          v.text = r.method === 'personal_sign' ? (hexText(r.params[0]) ?? r.params[0]) : null;
+          if (r.method === 'eth_signTypedData_v4') { try { const t = typeof r.params[1] === 'string' ? JSON.parse(r.params[1]) : r.params[1]; v.typed = { domain: t.domain, primaryType: t.primaryType, message: t.message }; } catch { v.typed = null; } }
+        }
+        if (r.kind === 'send') {
+          const tx = r.params[0] || {};
+          v.tx = { to: tx.to || null, value: tx.value ? BigInt(tx.value).toString() : '0', data: tx.data || tx.input || '0x' };
+          if (data && !r.priced && !r.priceErr) { try { r.priced = await Eth.price({ from: r.address, to: v.tx.to, data: v.tx.data, value: BigInt(v.tx.value) }); } catch (e) { r.priceErr = e.message; } }
+          v.fee = r.priced ? { now: r.priced.feeNow, max: r.priced.feeMax } : null; v.feeErr = r.priceErr || null;
+        }
+        if (r.kind === 'connect') v.address = activeAddress();
+        out.push(v);
+      }
+      return out;
+    },
+    async dappAnswer(id, ok, choice) {
+      need();
+      const r = dappReq.get(id);
+      if (!r) throw new Error('this request is gone (answered, or the site closed)');
+      dappReq.delete(id);
+      if (!ok) { r.reject(err(4001, 'the user rejected the request')); return null; }
+      try { const v = await dappDo(r, choice); r.resolve(v); return v; } catch (e) { r.reject(err(-32603, e.message)); throw e; }
+    },
+    // what the popup shows for the site of the open tab
+    dappStatus(origin) {
+      const c = dapps()[origin];
+      return { connected: !!(c && siteAccount(origin)), address: c ? c.address : null, waiting: [...dappReq.values()].some((r) => r.origin === origin) };
+    },
+    dappList: () => Object.entries(dapps()).map(([origin, c]) => ({ origin, address: c.address, at: c.at })).sort((a, b) => b.at - a.at),
+    async dappDisconnect(origin) { delete dapps()[origin]; await saveSettings(); dappTell(origin, 'accountsChanged', []); },
+
     state() {
       lockIcon();
       const base = {
@@ -558,6 +691,7 @@
       } else throw new Error('no wallet yet');
       lastActive = Date.now();
       broadcast({ type: 'event', method: 'bb_changed' });
+      dappTellAll();
       // the databases of the old shared folder move into their own stores, then every Beam wallet starts
       serial(async () => {
         try { await migrate(); } catch (e) { broadcast({ type: 'event', method: 'bb_error', result: `moving a Beam database: ${e.message}` }); }
@@ -1041,6 +1175,18 @@
   setInterval(badge, 5 * 60 * 1000);
 
   chrome.runtime.onConnect.addListener((port) => {
+    // a site, through content.js: its origin is the one Chrome gives (the page cannot choose it)
+    if (port.name === 'dapp' && port.sender.id === chrome.runtime.id && port.sender.origin && /^https?:/.test(port.sender.origin)) {
+      port.origin = port.sender.origin;
+      dappPorts.add(port);
+      port.onDisconnect.addListener(() => dappPorts.delete(port));
+      port.onMessage.addListener(async (m) => {
+        if (!m || m.id == null || typeof m.method !== 'string') return;
+        try { await ready; port.postMessage({ id: m.id, result: await dappCall(port.origin, m.method, Array.isArray(m.params) ? m.params : m.params == null ? [] : [m.params]) }); }
+        catch (e) { try { port.postMessage({ id: m.id, error: { code: e.code || -32603, message: e.message || String(e) } }); } catch {} }
+      });
+      return;
+    }
     if (port.name !== 'wallet-ui' || port.sender.id !== chrome.runtime.id) return port.disconnect();
     ports.add(port);
     port.onDisconnect.addListener(() => {
@@ -1055,5 +1201,11 @@
       try { await ready; port.postMessage({ id: m.id, result: await api[m.op](...(m.args || [])) }); }
       catch (e) { try { port.postMessage({ id: m.id, error: e && e.message ? e.message : String(e) }); } catch {} }
     });
+  });
+  // the request window was closed: what it still showed is a no
+  chrome.runtime.onMessage.addListener((m, sender) => {
+    if (sender.id !== chrome.runtime.id || !m || m.op !== 'dappClosed' || m.windowId !== dappWin) return;
+    dappWin = null;
+    for (const [id, r] of [...dappReq]) { dappReq.delete(id); r.reject(err(4001, 'the user closed the request')); }
   });
 })();

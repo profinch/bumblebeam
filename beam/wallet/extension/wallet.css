@@ -252,3 +252,21 @@ dialog .row { margin-top: 14px; }
    takes a type=password that is filled and then goes away (a dialog closing, a screen changing) for a login
    and offers to save it, and its bubble closes the extension's popup. */
 .secret { -webkit-text-security: disc; }
+
+/* ---- dApps ---- */
+/* the total and, right of it, the open tab's site: caps title, its state (grey, green, yellow), the host or account */
+.total-row { display: flex; align-items: flex-start; gap: 12px; }
+.total-row .total { flex: 1 1 auto; min-width: 0; }
+.dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 12px 2px; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
+.dapp-box .caps { margin-bottom: 2px; text-transform: none; }      /* dApp, as it is written */
+.dapp-box .dapp-st { font-weight: 700; color: var(--text-dim); }
+.dapp-box .dapp-sub { color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dapp-box.ok .dapp-st { color: var(--accent); }
+.dapp-box.warn .dapp-st { color: var(--color-yellow); }
+.dapp-box:hover .dapp-st { text-decoration: underline dotted; }
+/* the request window */
+.dp-site { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 12px; }
+.dp-site b { font: 700 14px var(--font-mono); overflow-wrap: anywhere; }
+.dp-msg { margin: 10px 0 0; padding: 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px var(--font-mono); color: var(--text-dim); background: var(--surface3); border: 1px solid var(--border-dim); border-radius: var(--radius-m); }
+#s-dapp .row { gap: 8px; }
+#s-dapp .row .btn.wide { flex: 1; }

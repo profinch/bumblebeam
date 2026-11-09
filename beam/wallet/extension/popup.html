@@ -124,11 +124,26 @@ while the wallet is locked.</p>
     </div>
   </section>
 
+  <!-- a site's request, in the wallet's own window (popup.html?win=1) -->
+  <section id="s-dapp" class="screen" hidden>
+    <h2 class="screen-title" id="dpTitle">Connect</h2>
+    <div class="dp-site"><span class="caps">Site</span><b id="dpSite"></b></div>
+    <div id="dpBody"></div>
+    <p class="hint" id="dpNote"></p>
+    <div class="row"><button class="btn ghost wide" id="dpNo">Reject</button><button class="btn solid wide" id="dpYes">Approve</button></div>
+    <p class="note bad" hidden></p>
+    <p class="hint" id="dpMore"></p>
+  </section>
+
   <!-- ================= wallet ================= -->
   <section id="t-home" class="screen tab" hidden>
-    <div class="total">
-      <div class="caps">Total</div>
-      <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh"></span></div>
+    <div class="total-row">
+      <div class="total">
+        <div class="caps">Total</div>
+        <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh"></span></div>
+      </div>
+      <!-- the site of the open tab: whether it is connected to this wallet -->
+      <button type="button" class="dapp-box" id="dappBox"><span class="caps">dApp</span><span class="dapp-st" id="dappSt">—</span><span class="dapp-sub" id="dappSub">&nbsp;</span></button>
     </div>
 
     <div class="panel net beam nodata" id="beamCard">
@@ -303,6 +318,11 @@ while the wallet is locked.</p>
       <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>
       <label class="field">Ethereum RPC (https; empty = public ones)<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button class="btn ghost small" id="saveRpc">Save</button></span></label>
       <p class="note bad" hidden id="netErr"></p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3 class="panel-title">Connected sites</h3></div>
+      <p class="hint">Sites that see one of your Ethereum accounts. They ask before anything is signed or sent; disconnect one and it sees no account.</p>
+      <div class="list" id="dappList"></div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Tokens</h3></div>

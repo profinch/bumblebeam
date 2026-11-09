@@ -29,10 +29,21 @@ const OPS = {
     if (!/^[\w.-]{1,120}$/.test(String(m.name)) || typeof m.b64 !== 'string') return Promise.reject(new Error('bad file'));
     return chrome.downloads.download({ url: `data:application/octet-stream;base64,${m.b64}`, filename: m.name, saveAs: false });
   },
+  // the window where a site's request is answered (one; a second request shows in it too)
+  // (its id kept in session storage: this worker sleeps and forgets)
+  dappWindow: async () => {
+    const { dappWin } = await chrome.storage.session.get('dappWin');
+    if (dappWin != null) { try { await chrome.windows.update(dappWin, { focused: true }); return dappWin; } catch {} }
+    const w = await chrome.windows.create({ url: chrome.runtime.getURL('popup.html?win=1'), type: 'popup', width: 400, height: 640, focused: true });
+    await chrome.storage.session.set({ dappWin: w.id });
+    return w.id;
+  },
   // the toolbar icon: the bee, or the bee in grey while locked
   icon: (m) => { wantLocked = !!m.locked; return applyIcon(); },
 };
 
+// a closed window: the host knows whether it was its request window
+chrome.windows.onRemoved.addListener((id) => { chrome.runtime.sendMessage({ op: 'dappClosed', windowId: id }).catch(() => {}); });
 const ICONS = { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' };
 // set as soon as the host says (the open popup stays open through the change)
 let wantLocked = null;

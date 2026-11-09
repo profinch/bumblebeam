@@ -8,6 +8,7 @@
 (() => {
   const GROTH = 1e8;
   const inTab = new URLSearchParams(location.search).has('tab');
+  const inWin = new URLSearchParams(location.search).has('win');   // the window where a site's request is answered
   if (!inTab) document.documentElement.classList.add('popup');
 
   // ---------- small things ----------
@@ -131,7 +132,7 @@
   }
   // a tab's data drawn again, the screen as it is
   function paint(name) {
-    if (name === 'home') { renderBeam(); beamRefresh(); ethRefresh(); }
+    if (name === 'home') { renderBeam(); beamRefresh(); ethRefresh(); dappRefresh(); }
     if (name === 'bridge') bridgeOpen();
     if (name === 'activity') activity();
     if (name === 'settings') settingsOpen();
@@ -464,6 +465,7 @@
   async function enter() {
     await load();
     if (st.phase !== 'unlocked') return route();
+    if (inWin) return dappScreen();
     tab(curTab);
     priceTick();
   }
@@ -492,6 +494,7 @@
       case 'bb_locked': st = null; route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
+      case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else dappRefresh(); break;
       case 'ev_sync_progress':
         if (m.wallet && st && st.beam && st.beam[m.wallet]) { st.beam[m.wallet].sync = m.result && m.result.total ? { done: m.result.done, total: m.result.total } : null; if (here) renderBeam(); }
         break;
@@ -1220,11 +1223,105 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
         ${w.beam && st.beam && st.beam[w.id] && ['missing', 'failed'].includes(st.beam[w.id].status) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
         <a href="#" class="text-link danger" data-a="remove">remove</a>
       </div></div>`).join('');
+    dappListOpen();
     $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
       || '<div class="empty">no tokens added</div>';
     host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
   }
   $('addWallet').onclick = () => welcome();
+
+  // ---------- dApps ----------
+  const six = (x) => (x ? `${x.slice(0, 8)}…${x.slice(-6)}` : '');
+  const ethAmt = (wei) => `${num(units(wei, 18), 6)} ETH`;
+  // the window's screen: the oldest waiting request, what it asks, Approve / Reject; none left: the window closes
+  let dpCur = null;
+  async function dappScreen() {
+    let list = [];
+    try { list = await host('dappPending'); } catch {}
+    if (!list.length) { dpCur = null; if (inWin) return window.close(); return; }
+    const r = dpCur = list[0];
+    clearNotes('s-dapp');
+    const acc = r.address ? (st.wallets || []).flatMap((w) => w.accounts.map((a) => ({ w, a }))).find((x) => x.a.address.toLowerCase() === r.address.toLowerCase()) : null;
+    const accRow = r.address ? [['Account', `${acc ? `${acc.a.name} · ` : ''}${six(r.address)}`]] : [['Account', 'this wallet has no Ethereum account']];
+    const kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+    $('dpSite').textContent = r.origin;
+    if (r.kind === 'connect') {
+      $('dpTitle').textContent = 'Connect this site';
+      $('dpBody').innerHTML = kv(accRow);
+      $('dpNote').textContent = 'The site will see this account\'s address and balances. It can ask to sign or send; nothing is signed without asking you here. For another account, choose it in the wallet first.';
+      $('dpYes').textContent = 'Connect';
+    } else if (r.kind === 'sign') {
+      $('dpTitle').textContent = r.method === 'personal_sign' ? 'Sign a message' : 'Sign typed data';
+      const what = r.method === 'personal_sign' ? r.text : JSON.stringify(r.typed, null, 2);
+      $('dpBody').innerHTML = kv(accRow) + `<pre class="dp-msg">${esc(what || '')}</pre>`;
+      $('dpNote').textContent = 'A signature costs nothing and sends nothing, but it can prove agreement to what it says (some sites use it to approve token spending). Sign only what you understand.';
+      $('dpYes').textContent = 'Sign';
+    } else {
+      $('dpTitle').textContent = 'Send a transaction';
+      const t = r.tx || {};
+      const rows = [...accRow, ['To', t.to || '(creates a contract)'], ['Value', ethAmt(t.value || '0')],
+        ['Data', !t.data || t.data === '0x' ? 'none' : `${t.data.slice(0, 10)}… (${(t.data.length - 2) / 2} bytes)`],
+        ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? `not priced: ${r.feeErr}` : '…']];
+      $('dpBody').innerHTML = kv(rows);
+      $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail; sending it may only cost the fee.' : 'Sent from this account on Ethereum mainnet once you confirm.';
+      $('dpYes').textContent = 'Send';
+    }
+    $('dpYes').disabled = r.kind !== 'connect' && !r.address;
+    $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
+    show('s-dapp');
+  }
+  async function dappReply(ok) {
+    if (!dpCur) return;
+    $('dpYes').disabled = $('dpNo').disabled = true;
+    try { await host('dappAnswer', dpCur.id, ok); }
+    catch (e) { note('s-dapp', 'bad', msg(e)); }
+    $('dpYes').disabled = $('dpNo').disabled = false;
+    dappScreen();
+  }
+  $('dpYes').onclick = () => dappReply(true);
+  $('dpNo').onclick = () => dappReply(false);
+
+  // the open tab's site and its status, right of the total
+  let siteOrigin = null;
+  async function dappRefresh() {
+    siteOrigin = null;
+    if (!inTab && !inWin) {
+      try { const [t] = await chrome.tabs.query({ active: true, currentWindow: true }); const u = t && t.url ? new URL(t.url) : null; if (u && /^https?:$/.test(u.protocol)) siteOrigin = u.origin; } catch {}
+    }
+    const box = $('dappBox');
+    box.className = 'dapp-box';
+    if (!siteOrigin) { $('dappSt').textContent = '—'; $('dappSub').innerHTML = '&nbsp;'; box.title = 'Open a website to see whether it is connected to this wallet'; return; }
+    let s = { connected: false, waiting: false, address: null };
+    try { s = await host('dappStatus', siteOrigin); } catch {}
+    const hostName = new URL(siteOrigin).hostname;
+    if (s.waiting) { box.classList.add('warn'); $('dappSt').textContent = 'request waiting'; $('dappSub').textContent = hostName; }
+    else if (s.connected) { box.classList.add('ok'); $('dappSt').textContent = 'connected'; $('dappSub').textContent = six(s.address); }
+    else { $('dappSt').textContent = 'not connected'; $('dappSub').textContent = hostName; }
+    box.title = '';
+  }
+  $('dappBox').onclick = async () => {
+    if (!siteOrigin) return;
+    const s = await host('dappStatus', siteOrigin).catch(() => null);
+    if (!s) return;
+    if (s.waiting) { chrome.runtime.sendMessage({ op: 'dappWindow' }).catch(() => {}); return; }
+    if (s.connected) {
+      const r = await ask({ title: new URL(siteOrigin).hostname, rows: [['Site', siteOrigin], ['Account', six(s.address)]], note: 'Disconnected, the site sees no account until you connect it again.', yes: 'Disconnect', no: 'Close' });
+      if (r.ok) { await host('dappDisconnect', siteOrigin); dappRefresh(); }
+      return;
+    }
+    await ask({ title: new URL(siteOrigin).hostname, note: 'Not connected. On the site, choose "Connect wallet" and pick BumbleBeam Wallet; you approve it here.', yes: 'OK', no: null });
+  };
+  async function dappListOpen() {
+    const l = await host('dappList').catch(() => []);
+    $('dappList').innerHTML = l.map((d) => `<div class="li"><span class="what">${esc(new URL(d.origin).hostname)}<span class="sub">${esc(six(d.address))} · ${esc(fdate(d.at))}</span></span><a href="#" class="text-link" data-dapp="${esc(d.origin)}">disconnect</a></div>`).join('')
+      || '<div class="empty">no site connected</div>';
+  }
+  $('dappList').onclick = async (e) => {
+    const a = e.target.closest('[data-dapp]');
+    if (!a) return;
+    e.preventDefault();
+    await host('dappDisconnect', a.dataset.dapp); dappListOpen(); dappRefresh();
+  };
   $('wList').onclick = (e) => {
     const a = e.target.closest('[data-a]');
     if (!a) return;

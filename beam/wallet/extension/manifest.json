@@ -27,7 +27,12 @@
     "storage",
     "unlimitedStorage",
     "offscreen",
-    "downloads"
+    "downloads",
+    "activeTab"
+  ],
+  "content_scripts": [
+    { "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"], "js": ["inpage.js"], "run_at": "document_start", "world": "MAIN", "all_frames": false },
+    { "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"], "js": ["content.js"], "run_at": "document_start", "all_frames": false }
   ],
   "host_permissions": [
     "https://mobile-restore.beam.mw/*",
