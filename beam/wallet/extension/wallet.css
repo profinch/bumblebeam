@@ -312,8 +312,8 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #acctDd .acc-b .ad { flex: none; white-space: nowrap; }
 #acctDd .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
 #beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
-/* Connected sites: the title left, the way back right; Beam | Ethereum as in Activity */
-.sheet-head.rev { flex-direction: row-reverse; justify-content: space-between; }
+/* Connected sites: Beam | Ethereum as in Activity, with the way back on their line */
+#dappBar { text-align: justify; text-align-last: justify; }      /* the networks where Activity has them, the way back right on their line (one line box: the same baseline) */
 /* a site: its link, "disconnect" right of it on its line; under them what it is connected to, and the date
    under "disconnect" */
 #dappList .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }
@@ -322,7 +322,8 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 /* links as the others: the dotted line from the start */
 .site-a { color: var(--accent); font-size: var(--fs-base); text-decoration: underline dotted rgba(var(--accent-rgb), 0.5); text-underline-offset: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .site-a:hover { text-decoration-color: var(--accent); }
-.dapp-box .dapp-st { text-decoration: underline dotted rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
+/* the status as a connected site's link (.site-a): its size, its weight, the dotted line from the start */
+.dapp-box .dapp-st { font: 400 var(--fs-base) var(--font-sans); text-decoration: underline dotted rgba(255, 255, 255, 0.3); text-underline-offset: 3px; }
 .dapp-box.ok .dapp-st { text-decoration-color: rgba(var(--accent-rgb), 0.5); }
 .dapp-box.warn .dapp-st { text-decoration-color: rgba(255, 200, 0, 0.5); }
 /* Recent requests: the method and the site left, how it ended right (red: an error, yellow: still waiting) */
