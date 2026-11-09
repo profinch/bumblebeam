@@ -35,8 +35,10 @@
     <a href="#" data-tab="activity">Activity</a>
   </nav>
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
+  <!-- Receive BEAM's address type: in the same place, the way back on its line -->
+  <div class="wsub split" id="recvBar" hidden><div class="seg mini" id="addrType"><button class="on" data-t="regular" title="Online: works while this wallet is the open one and unlocked. The transfer completes while both wallets are online">regular</button><button data-t="offline" title="Offline: takes payments while this wallet is off, up to 10. The sender's wallet completes them alone">offline</button><button data-t="public_offline" title="Public, and offline too: one address for any number of payments, also while this wallet is off (a pool's payouts, an exchange, donations). Less private: every payment goes to the same public key">public</button><button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool. One payment per address">max privacy</button></div> <div class="seg mini"><button type="button" data-close>← Back</button></div></div>
   <!-- Connected sites' network: in the same place -->
-  <div class="wsub" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
+  <div class="wsub split" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
   <div class="wsub" id="actBar" hidden><div class="seg mini" id="actNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
 </header>
 
@@ -185,18 +187,23 @@ while the wallet is locked.</p>
 
   <!-- sheets: one action at a time over the wallet tab -->
   <section id="x-beamRecv" class="screen sheet" hidden>
-    <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Receive BEAM</h2></div>
-    <div class="seg" id="addrType">
-      <button class="on" data-t="regular" title="Online while this wallet is the open one and unlocked. The transfer completes while both sides are online. The popup may be closed">Regular</button>
-      <button data-t="offline" title="Takes payments even while the wallet is off: the sender's wallet completes it alone">Offline</button>
-      <button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool (Lelantus). One payment per address">Max privacy</button>
-      <button data-t="public_offline" title="One address for any number of payments while the wallet is off: for a pool's payouts, an exchange, donations. Less private: every payment goes to the same public key">Public</button>
-    </div>
+    <div class="sheet-head"><h2 class="screen-title">Receive BEAM</h2></div>
     <p class="hint" id="addrHint"></p>
-    <div class="qr-wrap" id="beamQrWrap" hidden><div class="qr" id="beamQr"></div>
-      <div class="addr-meta" id="beamAddrMeta"></div>
+    <div class="panel recv" id="beamQrWrap" hidden>
+      <div class="recv-top">
+        <div class="qr" id="beamQr"></div>
+        <div class="recv-side">
+          <div class="recv-name"><span id="beamAddrName"></span> <a href="#" class="text-link" id="nameBeamAddr" title="A name only you see: who it was given to">rename</a></div>
+          <div class="recv-meta" id="beamAddrMeta"></div>
+          <div class="recv-acts">
+            <button class="btn small" id="copyBeamAddr" data-copy>Copy address</button>
+            <button class="btn ghost small" id="newBeamAddr" title="Another address of the same type. All addresses lead to the same balance. A new one per sender keeps senders from telling they pay the same person">New address</button>
+            <button class="btn ghost small" id="saveBeamQr" title="The QR code as a picture, to send or print">Save QR</button>
+          </div>
+        </div>
+      </div>
       <div class="hash box" id="beamAddr"></div>
-      <div class="row"><button class="btn small" id="copyBeamAddr" data-copy>Copy</button><button class="btn ghost small" id="nameBeamAddr" title="A name only you see: who it was given to">Name it</button><button class="btn ghost small" id="newBeamAddr" title="Another address of the same type. All addresses lead to the same balance. A new one per sender keeps senders from telling they pay the same person">New address</button></div></div>
+    </div>
     <p class="note bad" hidden></p>
     <div class="panel addr-panel">
       <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span id="addrCount"></span><button class="btn ghost small" id="addrClean" title="Removes the addresses nothing ever came to and that have no name. Kept: any with a transaction, any you named, the one for your other wallets">Remove unused</button></span></div>
@@ -206,7 +213,7 @@ while the wallet is locked.</p>
   </section>
 
   <section id="x-beamSend" class="screen sheet" hidden>
-    <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Send BEAM</h2></div>
+    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Send BEAM</h2></div>
     <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your other Beam wallets (to the offline address it keeps for this)"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <p class="hint" id="bsOwnHint"></p>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
@@ -219,14 +226,26 @@ while the wallet is locked.</p>
   </section>
 
   <section id="x-ethRecv" class="screen sheet" hidden>
-    <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Receive on Ethereum</h2></div>
+    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Receive on Ethereum</h2></div>
     <p class="hint">ETH, WBEAM and any ERC-20 token on Ethereum mainnet. Not other networks: tokens sent on BNB Chain, Arbitrum or Base to this address are not seen here.</p>
-    <div class="qr-wrap"><div class="qr" id="ethQr"></div><div class="hash box" id="ethRecvAddr"></div>
-      <div class="row"><button class="btn small" id="copyEthAddr" data-copy>Copy</button></div></div>
+    <div class="panel recv">
+      <div class="recv-top">
+        <div class="qr" id="ethQr"></div>
+        <div class="recv-side">
+          <div class="recv-name" id="ethRecvName"></div>
+          <div class="recv-meta">Ethereum mainnet · one address for every payment</div>
+          <div class="recv-acts">
+            <button class="btn small" id="copyEthAddr" data-copy>Copy address</button>
+            <button class="btn ghost small" id="saveEthQr" title="The QR code as a picture, to send or print">Save QR</button>
+          </div>
+        </div>
+      </div>
+      <div class="hash box" id="ethRecvAddr"></div>
+    </div>
   </section>
 
   <section id="x-ethSend" class="screen sheet" hidden>
-    <div class="sheet-head"><button class="btn ghost small" data-close>← Back</button><h2 class="screen-title">Send on Ethereum</h2></div>
+    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Send on Ethereum</h2></div>
     <label class="field">Asset
       <div class="dd" id="esAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></label>
     <label class="field own-label" id="esOwnL">To one of my accounts</label><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
@@ -379,7 +398,8 @@ while the wallet is locked.</p>
   <div class="row end"><button class="btn ghost" id="dNo">Cancel</button><button class="btn solid" id="dYes">Confirm</button></div>
 </dialog>
 
-<script src="vendor/qrcode.min.js"></script>
+<script src="ui/vendor/qr-code-styling.js"></script>
+<script src="ui/components/qr.js"></script>
 <script src="ui/components/dd.js"></script>
 <script src="ui/components/tips.js"></script>
 <script src="popup.js"></script>

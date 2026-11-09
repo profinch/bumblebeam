@@ -169,15 +169,11 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .copy.copied { color: var(--accent); }
 
 /* receive */
-.qr-wrap { margin-top: 12px; text-align: center; }
-.qr { display: inline-block; padding: 10px; background: #fff; border-radius: var(--radius-l); line-height: 0; }
-.qr img, .qr canvas { display: block; }
+
 .box { margin-top: 10px; padding: 10px; font-size: var(--fs-m); text-align: left; color: var(--text-dim); background: var(--surface3); border: 1px solid var(--border-dim); border-radius: var(--radius-m); }
-.qr-wrap .row { justify-content: center; }
 .seg { flex-wrap: wrap; }
 .seg.dir { display: flex; margin: 12px 0; }
 .seg.dir button { flex: 1; padding: 9px 6px; font-size: var(--fs-m); }
-#addrType { margin-top: 4px; }
 
 /* ---- the bridge ---- */
 .route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
@@ -306,7 +302,9 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #acctDd .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
 #beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
 /* Connected sites: Beam | Ethereum as in Activity, with the way back on their line */
-#dappBar { text-align: justify; text-align-last: justify; }      /* the networks where Activity has them, the way back right on their line (one line box: the same baseline) */
+/* a bar under the tabs (dApps' networks, Receive's address types) with the way back right on its line: one line
+   box, so both sit on Activity's baseline */
+.wsub.split { text-align: justify; text-align-last: justify; }
 /* a site: its link, "disconnect" right of it on its line; under them what it is connected to, and the date
    under "disconnect" */
 #dappList .li.site, #dappCatalog .li.site { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: baseline; }
@@ -334,3 +332,17 @@ html.popup main:has(> #x-dapps:not([hidden])) { scrollbar-gutter: stable both-ed
 #x-dapps .panel, #x-dapps .sheet-head { margin-bottom: 0; }
 /* a .text-link inside a small grey line takes the line's size */
 .sub .text-link { font-size: inherit; }
+/* the receive cards: the QR left (ui's qr.js, the puzzle's look), its name, kind, dates and buttons right of
+   it, the whole address under both */
+.recv-top { display: flex; gap: 14px; align-items: stretch; }
+.recv .qr { flex: none; width: 180px; height: 180px; border-radius: 10px; overflow: hidden; line-height: 0; box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 6px 18px rgba(0, 0, 0, 0.3); }
+.recv .qr svg { display: block; width: 100%; height: 100%; }
+.recv-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.recv-name { font-weight: 700; font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recv-name .dim { color: var(--muted); font-weight: 400; }
+.recv-meta { margin-top: 6px; font: var(--fs-s) var(--font-mono); line-height: 1.6; color: var(--muted); }
+.recv-acts { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+.recv-acts .btn { justify-content: center; }
+.recv .hash.box { margin-top: 12px; }
+/* a hint under a sheet's title: 8 px under it and 12 px over what follows, as under a card's title everywhere */
+.sheet-head + .hint { margin-top: -2px; }

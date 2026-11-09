@@ -127,6 +127,7 @@
     $('backBtn').hidden = !adding;
     $('actBar').hidden = id !== 't-activity';
     $('dappBar').hidden = id !== 'x-dapps';
+    $('recvBar').hidden = id !== 'x-beamRecv';
     // Connected sites keeps the scroll bar's room on both sides (wallet.css): its own padding less by as much,
     // so its cards line up with every other screen's
     const m = document.querySelector('main');
@@ -905,14 +906,14 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   let addrType = 'regular';
   const ADDR_HINT = {
     regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
-    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address); the sender pays 0.011 BEAM and the coins arrive shielded. For many payments use Public.',
+    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The sender pays 0.011 BEAM and the coins arrive shielded. For many payments use public.',
     max_privacy: 'One payment, maximum anonymity (the shielded pool). The coins mature over a while before they can be spent.',
-    public_offline: 'A public offline address: any number of payments, the wallet need not run (for a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM; the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
+    public_offline: 'Public and offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM, the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
   };
   // Receive shows the newest address of the chosen type (made once if there is none); "New address" makes
   // another. "My addresses" lists every address this wallet made, with the payments that came in to each
   // (tx_list joined on the address: Beam's chain has no addresses, so the wallet's own records are all there is).
-  const TYPE_NAME = { regular: 'Regular', regular_new: 'Regular', offline: 'Offline', max_privacy: 'Max privacy', public_offline: 'Public' };
+  const TYPE_NAME = { regular: 'regular', regular_new: 'regular', offline: 'offline', max_privacy: 'max privacy', public_offline: 'public offline' };
   let addrs = [], shownAddr = null;
   async function loadAddrs() {
     const [list, txs] = await Promise.all([host('beam', W().id, 'addr_list', { own: true }), host('beam', W().id, 'tx_list', { count: 1000 }).catch(() => [])]);
@@ -948,11 +949,14 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   function showAddr(x) {
     shownAddr = x.address;
     $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
-    $('beamAddrMeta').innerHTML = `<b>${esc(x.comment || 'no name')}</b> · ${esc(TYPE_NAME[x.type] || x.type)} · ${esc(expiry(x))}${x.n ? ` · ${x.n} payment(s) in` : ''}`;
-    $('beamQr').innerHTML = '';
-    new QRCode($('beamQr'), { text: x.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.L });
+    // right of the QR: its name (or none yet), what kind, until when, what came in
+    $('beamAddrName').textContent = x.comment || 'no name'; $('beamAddrName').classList.toggle('dim', !x.comment);
+    $('nameBeamAddr').textContent = x.comment ? 'rename' : 'name it';
+    $('beamAddrMeta').innerHTML = [TYPE_NAME[x.type] || x.type, expiry(x), x.n ? `${x.n} payment${x.n > 1 ? 's' : ''} in` : 'nothing in yet'].map(esc).join('<br>');
+    BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
   }
+  const QR_SIZE = 180;                                // the receive cards' QR: Beam's long addresses are read from 180 px (ui/components/qr.js)
   async function newAddress(type) {
     const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
     await loadAddrs();
@@ -976,7 +980,9 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     addrType = b.dataset.t; showType(addrType);
   };
   $('newBeamAddr').onclick = () => showType(addrType, true);
-  $('nameBeamAddr').onclick = async () => {
+  $('saveBeamQr').onclick = () => BB.qrSave($('beamAddr').textContent, `beam-${addrType}-address`, 'png');
+  $('nameBeamAddr').onclick = async (e) => {
+    e.preventDefault();
     const x = addrs.find((y) => y.address === shownAddr);
     if (!x) return;
     const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save' });
@@ -1129,12 +1135,13 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     beamRecv: () => { qa('#addrType button').forEach((x) => x.classList.toggle('on', x.dataset.t === addrType)); showType(addrType); },
     beamSend: () => { bsOwnFill(); $('bsAvail').textContent = `${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM`; },
     ethRecv: () => {
-      const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethQr').innerHTML = '';
-      new QRCode($('ethQr'), { text: a.address, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+      const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethRecvName').textContent = a.name;
+      BB.qr($('ethQr'), a.address, QR_SIZE);
     },
     dapps: () => { dappListOpen(); dappLogOpen(); },
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
   };
+  $('saveEthQr').onclick = () => BB.qrSave($('ethRecvAddr').textContent, 'ethereum-address', 'png');
   $('copyEthAddr').onclick = () => copy($('copyEthAddr'), $('ethRecvAddr').textContent);
 
   // ---------- Bridge ----------

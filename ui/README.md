@@ -15,6 +15,7 @@ accents (`#bitcoin` in the URL starts in the Bitcoin one).
 | [`components.css`](components.css) | ecosystem bar, header, panels, tiles, tables, buttons, pills, badges, fields, card list, notes, code, steps, chart and donut styles, footer |
 | [`components/bb.js`](components/bb.js) | web components: `<bb-logo>` (the animated bee on the chain's hexagon), `<bb-eco here="pool">` (the ecosystem bar; the site list lives here) |
 | [`components/tips.js`](components/tips.js) | the sites' own tooltips: any element with a `title` gets them (mouse, focus, tap) |
+| [`components/qr.js`](components/qr.js) | QR codes in the site's colours (the puzzle invite's look): `BB.qr(el, text, size)`, `BB.qrSave(text, name, 'png'|'svg')`; needs [`vendor/qr-code-styling.js`](vendor) (MIT, its licence beside it) |
 | [`charts/`](charts) | `charts.js`: sparkline, time-series line/area chart with crosshair, donut; see [charts/README.md](charts/README.md) |
 
 ## Chains
