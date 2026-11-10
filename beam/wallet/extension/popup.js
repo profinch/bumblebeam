@@ -1692,7 +1692,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // The catalog: Beam's own sites and ours. "dApp": it connects to this wallet (Beam's web wallet protocol, or
   // Ethereum for the bridge). Checked 2026-11-09: each answers; the dApps' pages carry the protocol.
   const CATALOG = [
-    { title: 'Beam: official', items: [
+    { title: 'Beam official', fold: 'official', items: [
       ['dex.beam.mw', 'Beam DEX', 'Swaps and liquidity pools of Beam assets', 'dApp'],
       ['bridge.beam.mw', 'Beam Bridge', 'BEAM to Ethereum and back (WBEAM)', 'Ethereum dApp'],
       ['gallery.beam.mw', 'NFT Gallery', 'Art and collectibles on Beam', 'dApp'],
@@ -1703,16 +1703,35 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       ['explorer.beam.mw', 'Beam Explorer', 'Blocks, assets and DEX analytics', ''],
       ['beam.mw', 'beam.mw', 'Beam itself: news, wallets, docs', ''],
     ] },
-    { title: 'BumbleBeam', items: [
+    { title: 'BumbleBeam whitelisted', items: [
       ['explorer.bumblebeam.org', 'Explorer', 'Blocks, kernels, assets, DEX, contracts', ''],
       ['pool.bumblebeam.org', 'Mining pool', 'Beam mining, PPLNS and solo', ''],
       ['puzzle.bumblebeam.org', 'Puzzle', 'The Bitcoin puzzle, searched together in the browser', ''],
     ] },
   ];
+  // a group with fold folds by a click on its head (an arrow right of it): Beam's official sites start folded, the
+  // choice is kept (this browser's storage); ours do not fold
+  const foldOpen = (k) => { try { return localStorage.getItem(`bb.catalog.${k}`) === 'open'; } catch { return false; } };
+  const CHEV = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function catalogOpen() {
-    $('dappCatalog').innerHTML = CATALOG.map((g) => `<div class="panel"><div class="panel-head"><h3 class="panel-title">${esc(g.title)}</h3></div><div class="list">${g.items.map(([h, name, what, tag]) =>
-      `<div class="li site"><a class="site-a" href="https://${esc(h)}/" target="_blank" rel="noopener">${esc(name)}</a><span class="cat-tag">${esc(tag)}</span><span class="sub">${esc(what)}</span><span class="sub">${esc(h)}</span></div>`).join('')}</div></div>`).join('');
+    $('dappCatalog').innerHTML = CATALOG.map((g) => {
+      const open = !g.fold || foldOpen(g.fold);
+      return `<div class="panel${g.fold ? ' fold' : ''}${open ? '' : ' folded'}"${g.fold ? ` data-fold="${g.fold}"` : ''}><div class="panel-head"><h3 class="panel-title">${esc(g.title)}</h3>${g.fold ? `<span class="panel-meta fold-arrow">${CHEV}</span>` : ''}</div><div class="list">${g.items.map(([h, name, what, tag]) =>
+      `<div class="li site"><a class="site-a" href="https://${esc(h)}/" target="_blank" rel="noopener">${esc(name)}</a><span class="cat-tag">${esc(tag)}</span><span class="sub">${esc(what)}</span><span class="sub">${esc(h)}</span></div>`).join('')}</div></div>`;
+    }).join('');
   }
+  // it slides as Beam's tokens do: the list's height from what it is to what it will be in 0.25 s
+  $('dappCatalog').onclick = (e) => {
+    const head = e.target.closest('.fold > .panel-head'); if (!head) return;
+    const p = head.parentElement, l = p.querySelector('.list'), open = p.classList.contains('folded');
+    clearTimeout(l._t);
+    // the list's own height, its rows' margins in (scrollHeight leaves the last one out: a jump at the end)
+    const full = () => { const was = l.style.height; l.style.height = 'auto'; const h = l.getBoundingClientRect().height; l.style.height = was; return h; };
+    if (open) { p.classList.remove('folded'); const h = full(); l.style.height = '0px'; void l.offsetHeight; l.style.height = `${h}px`; }
+    else { l.style.height = `${full()}px`; void l.offsetHeight; p.classList.add('folded'); l.style.height = '0px'; }
+    l._t = setTimeout(() => { l.style.height = ''; }, 260);
+    try { localStorage.setItem(`bb.catalog.${p.dataset.fold}`, open ? 'open' : 'folded'); } catch {}
+  };
   async function dappLogOpen() {
     if (dappNet === 'cat') { $('dappLogCard').hidden = true; return; }
     // the network shown above: Beam's calls (beam_connect, beam: …) or Ethereum's (the rest)

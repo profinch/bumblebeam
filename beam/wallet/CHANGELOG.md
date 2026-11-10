@@ -9,6 +9,8 @@
 - Every request is approved in a window of its own, at the right of the site's browser window. It shows the
   account (name, then the whole address), and for a contract transaction what the wallet itself reads from it:
   the amounts by the assets' names, the asset ids, the fee.
+- A site is connected to the wallet that was open when it was allowed: after a switch it sees no account and
+  its Beam calls are refused until it is connected in that wallet too; Connected sites lists the open wallet's.
 - `wallet_getCapabilities` is answered as EIP-5792 wants it (Ethereum mainnet, no atomic batches).
 - While the wallet is locked a site sees no account, its Beam calls are refused, and a request opens the
   window on the password first. Closing the window says no.

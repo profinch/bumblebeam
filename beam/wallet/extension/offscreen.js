@@ -560,7 +560,7 @@
   // ---------- dApps: websites that use this wallet's Ethereum accounts (EIP-1193) ----------
   // A site's page talks to inpage.js (window.ethereum, EIP-6963), which talks to content.js, which holds a port
   // named 'dapp' to this host. The site is the port's sender origin, as Chrome gives it (never what the page
-  // says). A site sees an account only once the user connected it (settings.dapps[origin]); signing and sending
+  // says). A site sees an account only once the user connected it (the open wallet's sites); signing and sending
   // are asked each time in a window of the wallet (popup.html?win=1), which shows the request and answers it.
   // Chain: Ethereum mainnet only. Errors use EIP-1193's codes (4001 rejected, 4100 not allowed, 4200 unknown,
   // 4900 locked/disconnected, 4902 unknown chain).
@@ -578,10 +578,24 @@
     'ev_subunsub', 'invoke_contract', 'process_invoke_data', 'block_details', 'get_version', 'create_address', 'validate_address', 'calc_change']);
   const BEAM_TX = new Set(['invoke_contract', 'process_invoke_data', 'tx_send']);
   const beamCtx = new Map();                      // wallet id -> { origin, appname, n }: a site's call that may ask consent
-  const beamSites = () => (settings.beamSites ||= {});
+  // A site is connected to a wallet: the one open when it was allowed. Each wallet keeps its own sites (wallet id
+  // -> origin -> ...), and everything below reads the open wallet's: after a switch a site sees nothing of the
+  // other wallet until it is connected there too.
+  const perWallet = (key) => { const m = (settings[key] ||= {}), id = settings.active; return id ? (m[id] ||= {}) : {}; };
+  // the shared connections of before (by origin only): an Ethereum one goes to the wallet of its account, a Beam
+  // one is dropped (it would open any wallet: asked again)
+  function migrateSites() {
+    if (!data || !(settings.dapps || settings.beamSites)) return;
+    for (const [o, c] of Object.entries(settings.dapps || {})) {
+      try { const { w } = findEth(c.address); ((settings.dappsW ||= {})[w.id] ||= {})[o] = c; } catch {}
+    }
+    delete settings.dapps; delete settings.beamSites;
+    saveSettings().catch(() => {});
+  }
+  const beamSites = () => { migrateSites(); return perWallet('beamSitesW'); };
   function dappTellBeam(origin, msg) { for (const p of dappPorts) if (p.origin === origin) { try { p.postMessage({ event: 'beam', data: msg }); } catch {} } }
   const beamConsent = (c, info, amounts) => ask(c.origin, 'beamtx', 'beam_tx', [info, amounts], null, { appname: c.appname }).then((ok) => !!ok, () => false);
-  const dapps = () => (settings.dapps ||= {});
+  const dapps = () => { migrateSites(); return perWallet('dappsW'); };
   // the account a site was given, while it still is one of this wallet's (and the wallet is open)
   function siteAccount(origin) {
     const c = dapps()[origin];
@@ -954,6 +968,7 @@
       const before = settings.active;
       settings.active = id; await saveSettings();
       broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: {} });
+      if (before !== id) dappTellAll();      // the sites hear this wallet's account (or none: not connected here)
       startOpen();
       if (before && before !== id) sweep(before);
     },
@@ -971,6 +986,7 @@
       slots.delete(id);
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
       delete settings.activeEth[id]; delete settings.beamAddr[id];
+      for (const k of ['dappsW', 'beamSitesW', 'addrFav', 'addrExt']) if (settings[k]) delete settings[k][id];      // its sites and address lists go with it
       await saveSettings();
       startOpen();
       broadcast({ type: 'event', method: 'bb_changed' });

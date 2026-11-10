@@ -371,3 +371,13 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .li.addr.dragging { opacity: 0.4; }
 .li.addr.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
 .li.addr.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+/* the catalog's folding group: the whole head clicks, the arrow right turns; folded, only the head shows */
+#dappCatalog .fold > .panel-head { cursor: pointer; user-select: none; }
+#dappCatalog .fold-arrow { display: grid; place-items: center; color: var(--muted); }
+#dappCatalog .fold-arrow svg { width: 16px; height: 16px; transition: transform 0.15s; transform: rotate(180deg); }
+#dappCatalog .fold > .panel-head:hover .fold-arrow { color: var(--text); }
+#dappCatalog .folded .fold-arrow svg { transform: none; }
+#dappCatalog .fold > .list { overflow: hidden; transition: height 0.25s ease; }
+#dappCatalog .fold > .panel-head { transition: margin-bottom 0.25s ease; }
+#dappCatalog .folded > .list { height: 0; }
+#dappCatalog .folded > .panel-head { margin-bottom: 0; }
