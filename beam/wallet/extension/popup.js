@@ -1470,7 +1470,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // a coin no transaction of this wallet made, as a received transfer: when (its block's time), how much, and that
   // it was found on the chain (another wallet of the same phrase made the transfer)
   const blockTime = new Map();
-  const coinTx = (c, time) => ({ income: true, create_time: time, value: c.amount, status: 3, status_string: 'received', found: true, asset_id: c.asset_id, coinHeight: c.maturity });
+  const coinTx = (c, time) => ({ income: true, create_time: time, value: c.amount, status: 3, status_string: 'received', found: true, own: c.own, asset_id: c.asset_id, coinHeight: c.maturity });
   let actSeq = 0;
   async function activity() {
     const box = $('actList'), seq = ++actSeq, wid = W() && W().id, stale = () => seq !== actSeq || !isOpen(wid);
@@ -1480,14 +1480,19 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
         box.innerHTML = '<div class="empty">loading…</div>';
         // the wallet's transactions, and the coins it holds that no transaction of its made: another wallet of the
         // same phrase (the mobile one) took them, so this one has the coins but no record of the transfer
-        const [txs, coins] = await Promise.all([host('beam', W().id, 'tx_list', { count: 1000 }), host('beam', W().id, 'get_utxo', { count: 1000 }).catch(() => [])]);
+        // (the newest coins first: by default Beam lists them oldest first, and a wallet that mined has thousands)
+        const [txs, coins] = await Promise.all([host('beam', W().id, 'tx_list', { count: 1000 }),
+          host('beam', W().id, 'get_utxo', { count: 500, sort: { field: 'maturity', direction: 'desc' } }).catch(() => [])]);
         if (stale()) return;
-        const ids = new Set(txs.map((t) => t.txId));
-        const found = (Array.isArray(coins) ? coins : []).filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0);
+        const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
+        // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the
+        // wallet CLI): still a receipt for the address it went to, said so
+        const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
+        const found = cs.filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0).slice(0, 60);
         await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
           host('beam', W().id, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
         if (stale()) return;
-        const rows = [...txs.map((t) => ({ t: t.create_time || 0, tx: t })), ...found.map((c) => ({ t: blockTime.get(c.maturity) || 0, coin: c }))]
+        const rows = [...txs.map((t) => ({ t: t.create_time || 0, tx: t })), ...found.map((c) => ({ t: blockTime.get(c.maturity) || 0, coin: { ...c, own: ownSent.has(c.createTxId) } }))]
           .sort((x, y) => y.t - x.t).slice(0, 50);
         const list = rows.map((r) => r.tx || coinTx(r.coin, r.t));
         box.innerHTML = list.map((t) => {
@@ -1497,7 +1502,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
           const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a class="text-link" href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
           const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? ` · <a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
           return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
-            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}${t.found ? ` · <span class="tipped" title="Found on the chain at block ${t.coinHeight}: another wallet of this seed phrase (the mobile or desktop one) took this transfer, so this wallet has the coins but no record of it">found on the chain</span>` : ''}</span></span>
+            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}${t.found ? ` · <span class="tipped" title="${t.own ? `Block ${t.coinHeight}: sent by a wallet of this seed phrase (a pool's payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took. This wallet has the coins but no record of the transfer` : `Block ${t.coinHeight}: another wallet of this seed phrase (the mobile or desktop one) took this transfer, so this wallet has the coins but no record of it`}">${t.own ? 'from a wallet of this seed' : 'found on the chain'}</span>` : ''}</span></span>
             <span class="amt ${t.income ? 'pos' : ''}">${t.value ? `${t.income ? '+' : '−'}${amt(t.value)}` : ''}</span><span class="badge ${cls}">${esc(t.status_string || label)}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
       } catch (e) { if (!stale()) box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
