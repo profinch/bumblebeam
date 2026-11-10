@@ -37,7 +37,7 @@
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
       <!-- Connected sites' network: in the same place -->
   <div class="wsub split" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
-  <div class="wsub" id="actBar" hidden><div class="seg mini" id="actNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
+  <div class="wsub" id="actBar" hidden><div class="subtabs" id="actNet"><button type="button" class="on" data-n="beam"><i class="chain beam"></i>Beam</button><button type="button" data-n="eth"><i class="chain eth"></i>Ethereum</button></div></div>
 </header>
 
 <main>
@@ -269,9 +269,10 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
   <!-- ================= bridge ================= -->
   <section id="t-bridge" class="screen tab" hidden>
-    <div class="seg dir" id="bridgeDir">
-      <button class="on" data-d="toEth">BEAM → WBEAM</button>
-      <button data-d="fromEth">WBEAM → BEAM</button>
+    <div class="subtabs" id="bridgeDir">
+      <button type="button" class="on" data-d="toEth">BEAM → WBEAM</button>
+      <button type="button" data-d="fromEth">WBEAM → BEAM</button>
+      <button type="button" class="end" data-swap title="The other way round">⇄</button>
     </div>
 
     <div id="b-toEth">

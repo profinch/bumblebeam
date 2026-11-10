@@ -83,6 +83,15 @@
 }
 .main-nav a:hover { color: var(--text); text-decoration: none; }
 .main-nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+/* opt-in: quiet tabs, a second row under the main ones (a page's own choice: a network, a direction): smaller, the
+   chosen one underlined as the main tabs are; an .end button sits at the right (a swap ⇄) */
+.subtabs { display: flex; align-items: flex-end; gap: 22px; border-bottom: 1px solid var(--border-dim); }
+.subtabs button { padding: 4px 0 7px; margin-bottom: -1px; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
+  font: 700 11px var(--font-mono); letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.subtabs button.end { margin-left: auto; padding-left: 6px; padding-right: 2px; font-size: 14px; letter-spacing: 0; border-bottom-color: transparent; }
+.subtabs button.end:hover { color: var(--accent); }
 
 /* "Start mining" sits in the menu as a button, not a tab */
 .main-nav a.nav-cta {

@@ -471,3 +471,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* a done message fades away (popup.js actOk, 5 s after it shows) */
 .act-msg { transition: opacity 0.6s ease; }
 .act-msg.going { opacity: 0; }
+/* the quiet tabs (ui .subtabs): Activity's networks in the header's bar, the bridge's direction at the top of
+   its page; a network's dot before its name */
+.subtabs .chain { margin-right: 7px; width: 7px; height: 7px; }
+#bridgeDir { margin: 4px 0 14px; }

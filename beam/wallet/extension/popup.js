@@ -254,10 +254,13 @@
     $('lockBtn').hidden = !(st && st.phase === 'unlocked');
     window.scrollTo(0, 0); document.querySelector('main').scrollTop = 0;
   }
+  // the last of the main tabs (Wallet, Bridge, Activity, any later one): where Settings and dApps go back to
+  let mainTab = 'home';
   function tab(name) {
     // another tab: Beam's tokens folded away at once, so the wallet tab comes back as it was before them
     if (name !== 'home') beamTokens(false, true);
     curTab = name;
+    if (name !== 'settings') mainTab = name;
     qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
     show(`t-${name}`);
     paint(name);
@@ -279,8 +282,9 @@
   $('lockBtn').onclick = async () => { await host('lock'); };
   $('backBtn').onclick = () => tab(curTab === 'settings' ? 'settings' : 'home');
   // the cube: dApps (the connected sites, the catalog)
-  $('dappsBtn').onclick = () => ($('x-dapps').hidden ? sheet('dapps') : tab('home'));      // again: the wallet's main screen, as the gear does from Settings
-  $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? 'home' : 'settings');
+  // the cube and the gear open dApps and Settings; again, back to the main tab they were opened from
+  $('dappsBtn').onclick = () => ($('x-dapps').hidden ? sheet('dapps') : tab(mainTab));
+  $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? mainTab : 'settings');
 
   // The lock leaves nothing typed behind: Send on both networks, the bridge and the token field go back to
   // empty (a fee to its default), the lists to their first choice, the lines under them and any error away.
@@ -567,13 +571,14 @@
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
+    // the same place in the wallet chosen: its tab (Wallet, Bridge, Activity) or dApps, drawn for it; Settings, or a
+    // Receive or Send page (the other wallet's addresses), goes to the Wallet tab. Where one is is read before
+    // the switch: the events of the switch (the new wallet's Beam part starting) come in while it is made
+    const shown = qa('.screen').find((x) => !x.hidden), was = shown ? shown.id : 't-home';
     try { await host('switchWallet', v); } catch (e) { return ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }); }
     await load();
-    // the same place in the wallet chosen: its tab (Wallet, Bridge, Activity, Settings) or dApps, drawn for it; a
-    // Receive or Send page (the other wallet's addresses) goes back to the Wallet tab
-    const open = qa('.screen.sheet').find((x) => !x.hidden);
-    if (open && open.id === 'x-dapps') sheet('dapps');
-    else tab(open ? 'home' : curTab);
+    if (was === 'x-dapps') sheet('dapps');
+    else tab(was.startsWith('t-') && was !== 't-settings' ? was.slice(2) : 'home');      // from Settings: the Wallet tab
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
@@ -1590,11 +1595,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   let dir = 'toEth';
   function setDir(d) {
     dir = d;
-    qa('#bridgeDir button').forEach((b) => b.classList.toggle('on', b.dataset.d === d));
+    qa('#bridgeDir button[data-d]').forEach((b) => b.classList.toggle('on', b.dataset.d === d));
     $('b-toEth').hidden = d !== 'toEth'; $('b-fromEth').hidden = d !== 'fromEth';
     if (d === 'toEth') fee(); else fromEthOpen();
   }
-  $('bridgeDir').onclick = (e) => { const b = e.target.closest('button'); if (b) setDir(b.dataset.d); };
+  // a direction picked, or ⇄ turns it round
+  $('bridgeDir').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; setDir(b.hasAttribute('data-swap') ? (dir === 'toEth' ? 'fromEth' : 'toEth') : b.dataset.d); };
 
   const accountOptions = (extra) => {
     const out = [];
@@ -1788,7 +1794,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
 
   // ---------- Activity ----------
   let actNet = 'beam';
-  $('actNet').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); activity(); };
+  $('actNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); activity(); };
   const BEAM_STATUS = { 0: ['pending', 'pending'], 1: ['pending', 'in progress'], 2: ['bad', 'cancelled'], 3: ['ok', 'completed'], 4: ['bad', 'failed'], 5: ['pending', 'registering'] };
   // a coin no transaction of this wallet made, as a received transfer: when (its block's time), how much, and that
   // it was found on the chain (another wallet of the same phrase made the transfer)

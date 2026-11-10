@@ -115,14 +115,17 @@
   showed "—" until it was opened again. A value not known yet is left blank, not a dash.
 - The lock clears what was typed: Send on both networks, the bridge and the token field go back to empty, their
   lists to the first choice.
-- Choosing another wallet keeps you where you are (Wallet, Bridge, Activity, Settings, dApps), drawn for that
-  wallet; a Receive or Send page goes back to the Wallet tab. It always opened the Wallet tab.
+- Choosing another wallet keeps you where you are (Wallet, Bridge, Activity, dApps), drawn for that wallet;
+  Settings, or a Receive or Send page, goes to the Wallet tab. It always opened the Wallet tab.
 - No screen shows another wallet's data after a switch. Receive clears at once; Activity and Bridge drop
   answers for a wallet no longer open; a switch made in another window closes Receive or Send.
 - On a sheet (Receive, Send, on both networks) the way back is an arrow in the header beside the
   lock; the sheet starts with its title. The bar under the tabs is gone.
 - Every screen that can scroll (all but the wallet tab) keeps the scroll bar's room from the start, its content
   on the wallet tab's lines: a bar that shows (a field stretched, a list grown) moves nothing.
+- Activity's networks and the bridge's direction are quiet tabs (the design library's new opt-in `.subtabs`):
+  smaller than the main tabs, the chosen one underlined; a network's dot before its name; ⇄ at the right turns
+  the bridge round.
 - Fields are as high as the lists (28 px); All looks like the small buttons (Add, New).
 - The asset lists (Send, both networks) show 10 rows, then scroll.
 - Fixed: a list inside a field's label (Send's Asset, Settings' Lock after idle and Time format) opened again
@@ -145,8 +148,8 @@
 - A window that asks for something (Add an address, renaming an account or a wallet, importing into a wallet,
   creating Ethereum accounts) checks it in place: what is wrong shows in it in yellow and it stays open, instead
   of closing and opening a second window ("Not added").
-- dApps has no back arrow: its cube closes it to the wallet's main screen, from wherever it was opened, as the gear
-  closes Settings.
+- dApps has no back arrow: its cube closes it, as the gear closes Settings, back to the main tab either was opened
+  from (Wallet, Bridge, Activity).
 - An action that went says so in a few words right of its button, in the accent, as its errors do: "transaction
   12e55bb4… sent" (Send on both networks, the bridge both ways), and fades away after 5 s; one still in progress ("sending…")
   stays until the next word. It was a card at the bottom, out of sight.
