@@ -99,6 +99,8 @@
   // ---------- state ----------
   let st = null, rates = null, beamStatus = null, ethData = null, feeData = null;
   const W = () => st && st.wallets && st.wallets.find((w) => w.id === st.active);
+  // an answer that comes after a switch is another wallet's: drawn only while its wallet is still the open one
+  const isOpen = (wid) => !!W() && W().id === wid;
   const acct = () => {
     const w = W();
     if (!w || !w.accounts.length) return null;
@@ -540,7 +542,16 @@
         if (st && st.phase === 'unlocked') load().then(() => {
           const switched = st.active !== before || (acct() && acct().address) !== acctBefore;
           if (switched || m.wallet === st.active) { renderBeam(); renderEth(); if (curTab === 'home') { beamSoon(); if (switched) ethRefresh(); } }
+          // another wallet opened (here or in another window): no screen keeps the one before's data
+          if (switched) {
+            const sheet = qa('.screen.sheet').find((x) => !x.hidden && x.id !== 'x-dapps');
+            if (sheet) tab('home');
+            else if (curTab === 'activity' && !$('t-activity').hidden) activity();
+            else if (curTab === 'bridge' && !$('t-bridge').hidden) bridgeOpen();
+          }
           if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen();
+          // Receive opened while the Beam part was starting: filled once it runs
+          if (!$('x-beamRecv').hidden && !shownAddr && beamHere()) recvOpen();
         });
         break;
       }
@@ -919,6 +930,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   let favs = new Set();
   // Beam's own list, and the addresses added manually (the host keeps them): those are this wallet's only as far
   // as a payment to them shows it, so each is verified once its history has an incoming transfer that names it
+  // true when drawn; false when another wallet was opened meanwhile (its answer is not drawn)
   async function loadAddrs() {
     const wid = W().id;
     const [list, fav, ext] = await Promise.all([host('beam', wid, 'addr_list', { own: true }), host('addrFavs', wid).catch(() => []), host('addrExt', wid).catch(() => [])]);
@@ -926,17 +938,40 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const own = new Set(list.map((x) => x.address));
     let txs = [];
     if (ext.length) txs = (await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => [])).filter((t) => t.income).map((t) => JSON.stringify(t));
+    if (!isOpen(wid)) return false;
+    // a public offline address is this wallet's when it carries the wallet's own offline key (Beam makes every
+    // public offline address of a wallet from one key of its seed): the same long run of bytes as one it made
+    const mine = list.filter((x) => x.type === 'public_offline').map((x) => b58(x.address));
     const added = ext.filter((e) => !own.has(e.address)).map((e) => {
       const n = txs.filter((j) => j.includes(e.address)).length;
-      return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: n > 0, n };
+      const key = e.type === 'public_offline' && mine.some((m) => sameRun(m, b58(e.address)) >= 64);
+      return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: key || n > 0, n, key };
     });
     addrs = [...list, ...added].sort(byFav);
     renderAddrs();
+    return true;
   }
   // favourites first, in their order (the last marked on top, or as dragged), then the others oldest first: a new
   // address goes to the end
   let favOrder = [];
   const favAt = (a) => { const i = favOrder.indexOf(a); return i < 0 ? Infinity : i; };
+  // base58 to bytes, and the longest run two byte strings share (checked 2026-11-10: two public offline addresses of
+  // one wallet share 206 bytes, of two wallets at most 12)
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const b58 = (str) => {
+    let v = 0n; for (const ch of str) { const i = B58.indexOf(ch); if (i < 0) return new Uint8Array(0); v = v * 58n + BigInt(i); }
+    const out = []; while (v > 0n) { out.unshift(Number(v & 255n)); v >>= 8n; }
+    return Uint8Array.from(out);
+  };
+  const sameRun = (a, b) => {
+    let best = 0;
+    for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) {
+      if (a[i] !== b[j] || (i && j && a[i - 1] === b[j - 1])) continue;
+      let k = 0; while (i + k < a.length && j + k < b.length && a[i + k] === b[j + k]) k++;
+      if (k > best) best = k;
+    }
+    return best;
+  };
   const byFav = (p1, p2) => (favAt(p1.address) - favAt(p2.address)) || (p1.create_time || 0) - (p2.create_time || 0);
   const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
   const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
@@ -965,7 +1000,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('beamAddrLen').textContent = String(x.address.length);      // how long it is: 67 for a regular one, hundreds for the offline kinds
     // an address added manually: whether a payment to it showed it is this wallet's
     $('beamAddrStK').hidden = $('beamAddrSt').hidden = !x.ext;
-    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? 'verified'
+    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? (x.key ? '<span class="tipped" title="It carries this wallet\'s own offline key: Beam makes every public offline address of a wallet from one key of its seed">verified</span>' : 'verified')
       : '<span class="tipped" title="Added manually: Beam cannot tell whether an address belongs to this wallet. It becomes verified once this wallet\'s history has a payment to it">not verified</span>';
     $('beamAddrSt').classList.toggle('warn', !!x.ext && !x.verified);
     BB.qr($('beamQr'), x.address, QR_SIZE);
@@ -974,15 +1009,20 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   const QR_SIZE = BB.qrSizes.s;                       // the receive cards' QR: ui's size S (180 px), the popup's width
   async function newAddress(type) {
     const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
-    await loadAddrs();
+    if (!(await loadAddrs())) return;
     showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0 });
   }
   // Receive opens on the address shown last since the unlock (the host remembers it), else the first in the list
   // that is not an unverified one added manually (a favourite, else the oldest); with none, a regular one is made
   async function recvOpen() {
     note('x-beamRecv', 'bad', '');
+    // nothing of the wallet shown before stays on screen while this one's addresses come
+    addrs = []; shownAddr = null; $('beamQrWrap').hidden = true; $('addrList').innerHTML = '<div class="empty">loading…</div>';
+    // its Beam part still starting (the popup opened straight on Receive): no error, it opens by itself once it runs
+    if (!beamHere()) { $('addrList').innerHTML = '<div class="empty">Beam is starting… the addresses show once it runs</div>'; return; }
     try {
-      const [sel] = await Promise.all([host('recvSel', W().id).catch(() => null), loadAddrs()]);
+      const [sel, fresh] = await Promise.all([host('recvSel', W().id).catch(() => null), loadAddrs()]);
+      if (!fresh) return;
       const ok = (y) => !(y.ext && !y.verified);          // never an unverified one by default, even the one shown last
       const x = addrs.find((y) => y.address === sel && ok(y)) || addrs.find(ok);
       if (!x) return showType('regular');
@@ -1000,7 +1040,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('addrHint').textContent = ADDR_HINT[type];
     try {
       if (!fresh) {
-        await loadAddrs();
+        if (!(await loadAddrs())) return;
         const have = addrs.find((x) => sameType(x, type) && !x.expired && !x.ext);
         if (have) return showAddr(have);
       }
@@ -1023,7 +1063,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try {
       if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000 });
       else await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input });
-      await loadAddrs(); showAddr(addrs.find((y) => y.address === x.address) || x);
+      if (!(await loadAddrs())) return; showAddr(addrs.find((y) => y.address === x.address) || x);
     }
     catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
@@ -1039,19 +1079,28 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
     } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
   }
-  // "+": an address of this wallet that Beam does not list, checked to be a valid Beam address, its type from it
+  // Add: an address of this wallet that Beam does not list, checked before it is added. Only a public offline
+  // address can be checked: Beam makes every public offline address of a wallet from one key of its seed, so it
+  // must carry the same key as one this wallet makes. The other kinds come from keys numbered by the wallet that
+  // made them, so whose they are cannot be told: they are not added.
   $('addAddr').onclick = async () => {
     const r = await ask({ title: 'Add an address', input: { label: 'Address', value: '' },
-      note: 'Beam cannot tell whether an address belongs to this wallet: the wallet checks only that it is a valid Beam address. It is listed as not verified, and becomes verified once this wallet\'s history has a payment to it.', yes: 'Add' });
+      note: 'Only a public offline address can be added: the wallet checks that it belongs to this wallet\'s seed phrase. Beam cannot tell whose an address of another kind is.', yes: 'Add' });
     if (!r.ok) return;
-    const a = String(r.input || '').trim();
+    const a = String(r.input || '').trim(), wid = W().id;
+    const no = (note) => ask({ title: 'Not added', note, yes: 'OK', no: null });
     try {
-      const v = await host('beam', W().id, 'validate_address', { address: a });
-      if (!v || !v.is_valid) return ask({ title: 'Not added', note: 'That is not a valid Beam address.', yes: 'OK', no: null });
-      if (addrs.some((x) => x.address === a)) return ask({ title: 'Already listed', note: 'This address is in the list already.', yes: 'OK', no: null });
-      await host('setAddrExt', W().id, { address: a, name: '', type: v.type || '', at: Date.now() });
-      await loadAddrs();
-      const x = addrs.find((y) => y.address === a); if (x) showAddr(x);
+      const v = await host('beam', wid, 'validate_address', { address: a });
+      if (!v || !v.is_valid) return no('That is not a valid Beam address.');
+      if (addrs.some((x) => x.address === a)) return no('This address is in the list already.');
+      if (v.type !== 'public_offline') return no(`This is ${/^[aeiou]/.test(TYPE_NAME[v.type] || '') ? 'an' : 'a'} ${TYPE_NAME[v.type] || v.type || 'other'} address. Only a public offline address can be checked to belong to this seed phrase.`);
+      // one of this wallet's own public offline addresses to compare with (made if it has none yet)
+      let mine = addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address);
+      if (!mine.length) mine = [await host('beam', wid, 'create_address', { type: 'public_offline', expiration: 'never', comment: '' })];
+      if (!mine.some((m) => sameRun(b58(m), b58(a)) >= 64)) return no('This public offline address belongs to another seed phrase, not this wallet\'s.');
+      await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now() });
+      if (!(await loadAddrs())) return;
+      const x = addrs.find((y) => y.address === a); if (x) { pickType(x); showAddr(x); }
     } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
   $('delBeamAddr').onclick = () => removeAddr(addrs.find((y) => y.address === shownAddr));
@@ -1372,7 +1421,9 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   async function bridgeLists() {
     note('inErr', 'bad', ''); note('bErr', 'bad', '');
     if (beamHere()) {
-      host('incoming', W().id).then((list) => {
+      const wid = W().id;
+      host('incoming', wid).then((list) => {
+        if (!isOpen(wid)) return;
         $('inList').innerHTML = list.map((m) => `<div class="li"><span class="ic in">${SVG_IN}</span><span class="what">Message #${esc(m.MsgId)}<span class="sub">from Ethereum</span></span>
           <span class="amt pos">${amt(Number(m.amount))} BEAM</span><button class="btn solid small" data-msg="${esc(m.MsgId)}" data-amount="${esc(m.amount)}">Claim</button></div>`).join('')
           || '<div class="empty">nothing waiting</div>';
@@ -1416,12 +1467,29 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   let actNet = 'beam';
   $('actNet').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); activity(); };
   const BEAM_STATUS = { 0: ['pending', 'pending'], 1: ['pending', 'in progress'], 2: ['bad', 'cancelled'], 3: ['ok', 'completed'], 4: ['bad', 'failed'], 5: ['pending', 'registering'] };
+  // a coin no transaction of this wallet made, as a received transfer: when (its block's time), how much, and that
+  // it was found on the chain (another wallet of the same phrase made the transfer)
+  const blockTime = new Map();
+  const coinTx = (c, time) => ({ income: true, create_time: time, value: c.amount, status: 3, status_string: 'received', found: true, asset_id: c.asset_id, coinHeight: c.maturity });
+  let actSeq = 0;
   async function activity() {
-    const box = $('actList');
+    const box = $('actList'), seq = ++actSeq, wid = W() && W().id, stale = () => seq !== actSeq || !isOpen(wid);
     if (actNet === 'beam') {
       if (!beamHere()) { box.innerHTML = '<div class="empty">this wallet has no running Beam part</div>'; return; }
       try {
-        const list = await host('beam', W().id, 'tx_list', { count: 50 });
+        box.innerHTML = '<div class="empty">loading…</div>';
+        // the wallet's transactions, and the coins it holds that no transaction of its made: another wallet of the
+        // same phrase (the mobile one) took them, so this one has the coins but no record of the transfer
+        const [txs, coins] = await Promise.all([host('beam', W().id, 'tx_list', { count: 1000 }), host('beam', W().id, 'get_utxo', { count: 1000 }).catch(() => [])]);
+        if (stale()) return;
+        const ids = new Set(txs.map((t) => t.txId));
+        const found = (Array.isArray(coins) ? coins : []).filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0);
+        await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
+          host('beam', W().id, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
+        if (stale()) return;
+        const rows = [...txs.map((t) => ({ t: t.create_time || 0, tx: t })), ...found.map((c) => ({ t: blockTime.get(c.maturity) || 0, coin: c }))]
+          .sort((x, y) => y.t - x.t).slice(0, 50);
+        const list = rows.map((r) => r.tx || coinTx(r.coin, r.t));
         box.innerHTML = list.map((t) => {
           const contract = t.tx_type_string === 'contract';
           const what = contract ? (t.comment || 'contract') : t.income ? 'Received' : 'Sent';
@@ -1429,16 +1497,17 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
           const link = t.kernel && !/^0+$/.test(t.kernel) ? ` · <a class="text-link" href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
           const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? ` · <a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
           return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
-            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}</span></span>
+            <span class="what">${esc(what)}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? ` · fee ${amt(t.fee, 3)}` : ''}${link}${cancel}${t.found ? ` · <span class="tipped" title="Found on the chain at block ${t.coinHeight}: another wallet of this seed phrase (the mobile or desktop one) took this transfer, so this wallet has the coins but no record of it">found on the chain</span>` : ''}</span></span>
             <span class="amt ${t.income ? 'pos' : ''}">${t.value ? `${t.income ? '+' : '−'}${amt(t.value)}` : ''}</span><span class="badge ${cls}">${esc(t.status_string || label)}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
-      } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
+      } catch (e) { if (!stale()) box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
     } else {
       const a = acct();
       if (!a) { box.innerHTML = '<div class="empty">this wallet has no Ethereum part</div>'; return; }
       box.innerHTML = '<div class="empty">loading…</div>';
       try {
         const list = await host('ethHistory', a.address);
+        if (stale() || !acct() || acct().address !== a.address) return;
         box.innerHTML = list.map((t) => {
           const v = t.token ? `${num(units(t.token.value, t.token.decimals), 4)} ${t.token.symbol}` : units(t.value, 18) > 0 ? `${num(units(t.value, 18), 5)} ETH` : '';
           const what = t.method && !t.token ? t.method : t.out ? 'Sent' : 'Received';

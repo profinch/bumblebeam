@@ -35,9 +35,13 @@
   - My addresses as a list (a star for favourites, which come first, the last marked on top, and can be
     dragged into any order, then the others in the order they were made, the name or the address, the type), the
     shown one lit;
-  - an address of this wallet that Beam does not list (made before a restore, or the one a miner pays to) can be
-    added by hand: it is checked to be a Beam address, and shows as not verified until a payment to it is found;
+  - a public offline address of this wallet that Beam does not list (made before a restore, or by the wallet CLI)
+    can be added: it is checked first to carry this wallet's own offline key (Beam makes every public offline
+    address of a wallet from one key of its seed), and refused when it does not; addresses of the other kinds
+    cannot be checked, so they are not added;
   - "Remove unused" is gone.
+- Activity also lists the coins this wallet holds that no transaction of its made (another wallet of the same
+  phrase, the mobile one, took the transfer), marked found on the chain.
 - Contract confirmations show amounts and fees in coins (they were divided by 10^8 a second time).
 - Only the open wallet's Beam part runs, the others stop once their transfers are done.
 - A second copy of each Beam database is kept in OPFS, so a lost database comes back. "Restore Beam" rebuilds a
