@@ -14,14 +14,15 @@
      var d = BB.dropdown(document.getElementById('x'), function (v) { ... });  // onPick(value)
      d.set('a');  d.value();  d.options([{ v: 'a', label: 'First' }, { group: 'Group' }, ...], 'a');
    Opt-in: an option's html (trusted markup, e.g. a name and an address on one line) shows in the list while its
-   label goes on the button; { sep: true } is a thin line between groups.
+   label goes on the button; { sep: true } is a thin line between groups; { disabled: true } an option shown but
+   not picked (greyed, skipped by the keys and the pointer; a title gives it a tip).
    A classic script; works in Chromium 83 and the MV3 extension like the rest of ui/. */
 (function () {
   'use strict';
   function dropdown(root, onPick) {
     var btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
     var active = -1;
-    function items() { return Array.prototype.slice.call(list.querySelectorAll('[role="option"]')); }
+    function items() { return Array.prototype.slice.call(list.querySelectorAll('[role="option"]:not([aria-disabled="true"])')); }
     function isOpen() { return !list.hidden; }
     function mark(i) {
       var its = items();
@@ -88,6 +89,8 @@
           li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v));
           if (o.html != null) { li.innerHTML = o.html; li.setAttribute('data-label', o.label); } else li.textContent = o.label;
           if (o.btn != null) li.setAttribute('data-btn', o.btn);
+          if (o.disabled) li.setAttribute('aria-disabled', 'true');
+          if (o.title) li.title = o.title;
         }
         list.appendChild(li);
       });

@@ -13,6 +13,33 @@
   // the request window (popup.html?win=1): the popup's layout at the window's own size, not the popup's 400 x 600
   if (new URLSearchParams(location.search).has('win')) document.documentElement.classList.add('win');
 
+  // ---------- what comes in later fades in ----------
+  // Anything on the wallet's screens that fills in as it loads appears gradually instead of at once: a value
+  // written where there was none (empty, '—', '…', a 'loading…' or 'syncing…' placeholder), and a row of a card
+  // that was hidden until its data came (the Ethereum card's nonce, ENS, avatar…). A value that only changes, or
+  // a list drawn again, does not blink. Screens and dropdown lists are left alone.
+  const BLANK = new Set(['', '—', '…', '-']);
+  const blank = (nodes) => [...nodes].every((n) => (n.nodeType === 1 && n.classList.contains('empty')) || BLANK.has((n.textContent || '').trim()));
+  const fadeIn = (el) => { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); };
+  new MutationObserver((list) => {
+    const done = new Set();
+    for (const m of list) {
+      const el = m.target;
+      if (el.nodeType !== 1 || done.has(el) || el.closest('.dd-list, #bb-tip, dialog, .tabs')) continue;
+      if (m.type === 'attributes') {
+        // a card's row or line shown once its data came (not a screen, a tab or a whole card)
+        if (!el.hidden && el.closest('.panel') && !el.matches('.screen, .panel, section')) { done.add(el); fadeIn(el); }
+        continue;
+      }
+      // blank before: what was taken out was blank, or nothing was there (all it holds came in now)
+      const was = m.removedNodes.length ? blank(m.removedNodes) : m.addedNodes.length && el.childNodes.length === m.addedNodes.length;
+      if (!was) continue;
+      const now = (el.textContent || '').trim();
+      if (BLANK.has(now) || (el.children.length === 1 && el.firstElementChild.classList.contains('empty'))) continue;
+      done.add(el); fadeIn(el);
+    }
+  }).observe(document.querySelector('main') || document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden'] });
+
   // ---------- small things ----------
   const $ = (id) => document.getElementById(id);
   const qa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -36,6 +63,45 @@
   const fdt = (t) => `${fdate(t)} ${ftime(t)}`;
   const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : fdate(t); };
   const msg = (e) => (e && e.message ? e.message : String(e));
+  // what is wrong with an amount as typed ('' when nothing): said at once under the field, in place of Available
+  const amtIssue = (x, dec, max) => {
+    const t = String(x).trim().replace(',', '.');
+    if (!t) return '';
+    if (!/^\d*\.?\d*$/.test(t) || t === '.') return 'digits and one decimal point only';
+    if ((t.split('.')[1] || '').length > dec) return `at most ${dec} decimals`;
+    if (max != null && Number(t) > max) return 'more than available';
+    return '';
+  };
+  // the left of the line under an amount: Available, or what is wrong with the amount (the field outlined)
+  const amtLine = (input, left, availHtml, issue) => {
+    input.classList.toggle('bad', !!issue);
+    left.innerHTML = issue ? `<span class="warn-own">⚠️ ${esc(issue)}</span>` : availHtml;
+  };
+  // An action's error: in yellow right of its button (or under the field a Save/Add button sits in), the field it
+  // is about outlined in red, both gone once that field is edited or the action runs again. The field: the one the
+  // error was thrown for (fieldErr), else the first of `guess` whose pattern matches the message.
+  const fieldErr = (field, text) => Object.assign(new Error(text), { field });
+  function actErr(btn, e, guess = {}) {
+    const row = btn.closest('.row'), fld = btn.closest('.field');
+    let m = row ? row.querySelector('.act-msg') : fld && fld.nextElementSibling && fld.nextElementSibling.classList.contains('act-msg') ? fld.nextElementSibling : null;
+    if (!m) {
+      m = document.createElement(row ? 'span' : 'p'); m.className = row ? 'act-msg' : 'act-msg under';
+      if (row) row.appendChild(m); else (fld || btn).after(m);
+    }
+    const box = btn.closest('section, .panel') || document;
+    qa('.err', box).forEach((x) => x.classList.remove('err'));
+    m.textContent = e ? `⚠️ ${msg(e)}` : '';
+    if (!e) return;
+    let id = e.field;
+    if (!id) for (const [k, re] of Object.entries(guess)) if (re.test(msg(e))) { id = k; break; }
+    if (!id && !row && fld) { const i = fld.querySelector('input, textarea'); id = i && i.id; }
+    const el = id && $(id), target = el && el.classList.contains('dd') ? el.querySelector('.dd-btn') : el;
+    if (target) {
+      target.classList.add('err');
+      const clear = () => { target.classList.remove('err'); m.textContent = ''; };
+      if (el.matches('input, textarea')) el.addEventListener('input', clear, { once: true });
+    }
+  }
   const toGroth = (x) => {
     const t = String(x).trim().replace(',', '.');
     if (!/^\d*\.?\d{0,8}$/.test(t) || t === '' || t === '.') throw new Error('an amount with at most 8 decimals');
@@ -116,6 +182,8 @@
   // measured where it shows (fonts differ between systems), so dApps scrolled to its end ends on the same line
   let homeOver = 2;
   function show(id) {
+    // a screen left behind takes its action errors with it
+    qa(".err").forEach((x) => x.classList.remove("err")); qa(".act-msg").forEach((x) => { x.textContent = ""; });
     if (!$('t-home').hidden) {
       const mm = document.querySelector('main'), e = $('ethCard').getBoundingClientRect();
       if (e.height) homeOver = e.bottom - (mm.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(mm).paddingBottom) || 0));
@@ -550,6 +618,8 @@
             else if (curTab === 'bridge' && !$('t-bridge').hidden) bridgeOpen();
           }
           if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen();
+          // a wallet's address for My wallets came (read in the background): the open Send lists it
+          if (!$('x-beamSend').hidden) bsOwnFill();
           // Receive opened while the Beam part was starting: filled once it runs
           if (!$('x-beamRecv').hidden && !shownAddr && beamHere()) recvOpen();
         });
@@ -916,9 +986,9 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // ---------- sheets ----------
   const ADDR_HINT = {
     regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
-    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The sender pays 0.011 BEAM and the coins arrive shielded. For many payments use public.',
+    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The coins arrive shielded. For many payments use public offline.',
     max_privacy: 'One payment, maximum anonymity (the shielded pool). The coins mature over a while before they can be spent.',
-    public_offline: 'Public offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The sender pays 0.011 BEAM, the coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
+    public_offline: 'Public offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
   };
   // Receive shows the newest address of the chosen type (made once if there is none); "New address" makes
   // another. "My addresses" lists every address this wallet made, with the payments that came in to each
@@ -993,7 +1063,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}${favs.has(x.address) ? ' fav-row' : ''}" data-k="${k}"${favs.has(x.address) ? ' draggable="true"' : ''}>
       <button type="button" class="cp fav${favs.has(x.address) ? ' is' : ''}" data-fav="${k}" title="${favs.has(x.address) ? 'A favourite: first in the list. Click to unmark' : 'Mark as a favourite: first in the list'}">${STAR}</button>
       <span class="a-name${x.ext && !x.verified ? ' unver' : ''}"${x.ext && !x.verified ? ' title="⚠️ Added manually, not verified: no payment to it found in this wallet yet"' : ''}>${esc(x.comment || short6(x.address))}</span>
-      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp a-x" data-del="${k}" title="${x.ext ? 'Take it off this list' : 'Remove this address'}">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
+      <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp a-x" data-del="${k}" title="${x.ext ? 'Remove it from this list' : 'Remove this address'}">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
   }
   function showAddr(x) {
     shownAddr = x.address;
@@ -1046,7 +1116,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   $('newAddr').onclick = async () => {
     const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
     const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
-    const r = await ask({ title: 'New address', html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create' });
+    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create' });
     if (!r.ok) return;
     const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
     try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
@@ -1055,6 +1125,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const b = e.target.closest('#newType button'); if (!b) return;
     qa('#newType button').forEach((x) => x.classList.toggle('on', x === b));
     qa('#newTypeHint span').forEach((x) => x.classList.toggle('off', x.dataset.t !== b.dataset.t));
+    $('dTitle').textContent = `New ${TYPE_NAME[b.dataset.t]} address`;      // the window's title names the type chosen
   });
   $('saveBeamQr').onclick = () => { const x = addrs.find((y) => y.address === shownAddr); BB.qrSave($('beamAddr').textContent, `beam-${(x && x.type) || 'address'}-address`, 'png'); };
   $('nameBeamAddr').onclick = async (e) => {
@@ -1073,8 +1144,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // removes an address once asked (it stops taking payments): the list's trash and the card's
   async function removeAddr(x) {
     if (!x) return;
-    const r = await ask({ title: x.ext ? 'Take it off the list' : 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]],
-      note: x.ext ? 'Only this list forgets it: payments to it are not affected.' : 'It stops taking payments. Coins it already brought stay in the wallet.', yes: x.ext ? 'Take off' : 'Remove' });
+    const r = await ask({ title: x.ext ? 'Remove it from the list' : 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || '—'], ['Type', TYPE_NAME[x.type] || x.type]],
+      note: x.ext ? 'Only this list forgets it: payments to it are not affected.' : 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
     if (!r.ok) return;
     try {
       if (x.ext) await host('setAddrExt', W().id, null, x.address);
@@ -1155,62 +1226,126 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   function bsOwnFill() {
     const others = st.wallets.filter((w) => w.beam && w.id !== st.active);
     const ready = others.filter((w) => w.beamAddress);
-    bsOwn.options([{ v: '', label: 'My wallets…' }, ...ready.map((w) => ({ v: w.beamAddress, label: w.name }))], '');
-    $('bsOwn').hidden = $('bsOwnL').hidden = !ready.length;
-    const missing = others.filter((w) => !w.beamAddress).map((w) => w.name);
-    $('bsOwnHint').textContent = missing.length ? `${missing.join(', ')}: shown here once opened (switched to) once — a wallet makes its address while it runs.` : '';
+    // a wallet is offered by its public offline address, which is read while that wallet runs; one with none
+    // known is listed greyed
+    const missing = others.filter((w) => !w.beamAddress);
+    bsOwn.options([{ v: '', label: 'My wallets…' }, ...ready.map((w) => ({ v: w.beamAddress, label: w.name })),
+      ...missing.map((w) => ({ v: `-${w.id}`, label: w.name, disabled: true, html: `${esc(w.name)} · no address yet` }))], '');
+    $('bsOwn').hidden = $('bsOwnL').hidden = !others.length;
   }
+  // the asset to send: BEAM, then every asset this wallet holds (named as on the card); the fee is BEAM's
+  const bsAsset = BB.dropdown($('bsAsset'), () => { $('bsAmt').value = ''; bsAvail(); });
+  const bsHeld = () => ((beamStatus && beamStatus.totals) || []).filter((t) => Number(t.asset_id) !== 0 && t.available);
+  async function bsAssetFill() {
+    const w = W(), held = bsHeld(), ids = held.map((t) => Number(t.asset_id));
+    const opts = (m) => [{ v: '0', label: 'BEAM' }, ...held.map((t) => ({ v: String(t.asset_id), label: assetSym(m.get(Number(t.asset_id))) || `asset ${t.asset_id}` }))];
+    const keep = held.some((t) => String(t.asset_id) === bsAsset.value()) ? bsAsset.value() : '0';
+    bsAsset.options(opts((w && assetMetaDone.get(w.id)) || new Map()), keep);
+    $('bsAsset').classList.toggle('one', !held.length);
+    if (w && ids.length) { const m = await assetMeta(w.id, ids); if (W() === w) bsAsset.options(opts(m), bsAsset.value() || keep); }
+    bsAvail();
+  }
+  const bsAid = () => Number(bsAsset.value() || 0);
+  const bsSym = () => { const o = $('bsAsset').querySelector('.dd-btn'); return (o && o.textContent.trim()) || 'BEAM'; };
+  const bsHave = () => { const aid = bsAid(); if (!aid) return (beamStatus && beamStatus.available) || 0; const t = bsHeld().find((x) => Number(x.asset_id) === aid); return t ? t.available : 0; };
+  function bsAvail() {
+    const have = bsHave(), max = beamStatus ? Math.max(0, have - (bsAid() ? 0 : beamFee())) / GROTH : null;
+    amtLine($('bsAmt'), $('bsLeft'), `Available: <b>${beamStatus ? esc(`${amt(have, 8)} ${bsSym()}`) : '—'}</b>`, amtIssue($('bsAmt').value, 8, max));
+    $('bsFee').textContent = `${amt(beamFee(), 8)} BEAM`;
+  }
+  $('bsAmt').oninput = () => bsAvail();
   let bsType = null;
+  const kindRow = (k, v, more = '') => `<span class="k">${esc(k)}:</span> <span class="v">${esc(v)}</span>${more ? ` <span class="k">${esc(more)}</span>` : ''}`;
   $('bsAddr').oninput = async () => {
     const a = $('bsAddr').value.trim();
-    bsType = null; $('bsKind').textContent = '';
+    bsType = null; $('bsKind').textContent = ''; bsAvail();
     if (!a || !beamHere()) return;
     // Beam's validate_address calls almost any word a valid token, so the shape is checked first: an SBBS
     // address is 60-70 hex characters, a token (offline, max privacy, the new regular) a long base58 string
-    if (!/^[0-9a-fA-F]{60,70}$/.test(a) && !/^[1-9A-HJ-NP-Za-km-z]{80,}$/.test(a)) { $('bsKind').textContent = 'not a Beam address'; return; }
+    if (!/^[0-9a-fA-F]{60,70}$/.test(a) && !/^[1-9A-HJ-NP-Za-km-z]{80,}$/.test(a)) { $('bsKind').innerHTML = '<span class="warn-own">⚠️ not a Beam address</span>'; return; }
     try {
       const v = await host('beam', W().id, 'validate_address', { address: a });
       if ($('bsAddr').value.trim() !== a) return;          // an older answer for an address since changed
-      if (!v.is_valid) { $('bsKind').textContent = 'not a valid Beam address'; return; }
+      if (!v.is_valid) { $('bsKind').innerHTML = '<span class="warn-own">⚠️ not a valid Beam address</span>'; return; }
       bsType = v.type;
-      $('bsKind').textContent = `${({ max_privacy: 'max-privacy', regular_new: 'regular', public_offline: 'public offline' })[v.type] || v.type || 'regular'} address${v.is_mine ? ', one of this wallet\'s own' : ''}${v.payments != null ? ` · ${v.payments} payment(s) left` : ''}`;
+      // an address of the open wallet itself (Beam lists it, or one added manually and verified): the coins
+      // would come back to it, so it is said with a caution
+      // Beam says is_mine for its own SBBS addresses only, not for its tokens (offline, max privacy, public
+      // offline): those are looked up in the wallet's own list, and among those added manually and verified
+      // one added manually and not verified yet is said so ("unverified")
+      let mine = v.is_mine ? 'yes' : '';
+      if (!mine) {
+        const [own, ext] = await Promise.all([host('beam', W().id, 'addr_list', { own: true }).catch(() => []), host('addrExt', W().id).catch(() => [])]);
+        const x = (ext || []).find((y) => y.address === a);
+        mine = (own || []).some((y) => y.address === a) || (x && x.verified) ? 'yes' : x ? 'unverified' : '';
+      }
+      if ($('bsAddr').value.trim() !== a) return;
+      // the type, then a caution for one's own wallet, then what the address has left, each by its emoji
+      const left = v.payments != null ? `${v.payments} payment${v.payments === 1 ? '' : 's'} left` : '';
+      $('bsKind').innerHTML = kindRow('Address type', TYPE_NAME[v.type] || v.type || 'regular')
+        + (mine ? ` <span class="warn-own">⚠️ your current wallet${mine === 'unverified' ? ' (unverified)' : ''}</span>` : '') + (left ? ` <span class="k">ℹ️ ${esc(left)}</span>` : '');
+      bsAvail();
     } catch {}
   };
   const beamFee = () => (bsType === 'offline' || bsType === 'max_privacy' || bsType === 'public_offline' ? 1100000 : 100000);
-  $('bsMax').onclick = () => { const a = (beamStatus && beamStatus.available) || 0; $('bsAmt').value = Math.max(0, (a - beamFee()) / GROTH).toFixed(8).replace(/\.?0+$/, ''); };
+  // All: the whole of a token (the fee is paid in BEAM), BEAM less the fee
+  $('bsMax').onclick = () => { const a = bsHave(), keep = bsAid() ? 0 : beamFee(); $('bsAmt').value = Math.max(0, (a - keep) / GROTH).toFixed(8).replace(/\.?0+$/, '') || '0'; bsAvail(); };
   $('doBeamSend').onclick = async () => {
-    clearNotes('x-beamSend');
+    clearNotes('x-beamSend'); actErr($('doBeamSend'), null);
     if ($('doBeamSend').disabled) return;
     $('doBeamSend').disabled = true;
     try {
       const address = $('bsAddr').value.trim();
-      if (!address) throw new Error('paste the address');
+      if (!address) throw fieldErr('bsAddr', 'paste the address');
       await $('bsAddr').oninput();
-      if (bsType === null) throw new Error('not a valid Beam address');
-      const value = toGroth($('bsAmt').value), fee = beamFee();
-      if (value + fee > ((beamStatus && beamStatus.available) || 0)) throw new Error(`not enough: ${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
-      if (!(await confirmBox('Send BEAM', [['From wallet', W().name], ['Amount', `${amt(value, 8)} BEAM`], ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', bsType || 'regular']],
+      if (bsType === null) throw fieldErr('bsAddr', 'not a valid Beam address');
+      const value = toGroth($('bsAmt').value), fee = beamFee(), aid = bsAid(), sym = bsSym(), beam = (beamStatus && beamStatus.available) || 0;
+      if (!(value > 0)) throw new Error('the amount must be above zero');
+      if (!aid && value + fee > beam) throw new Error(`not enough: ${amt(beam, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
+      if (aid && value > bsHave()) throw new Error(`not enough: ${amt(bsHave(), 8)} ${sym} available`);
+      if (aid && fee > beam) throw new Error(`the fee is paid in BEAM: ${amt(fee, 8)} needed, ${amt(beam, 8)} available`);
+      if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
         bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : ''))) return;
-      const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: 0, comment: $('bsNote').value.trim() || undefined });
+      const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
       note('x-beamSend', 'ok', `Sent: transaction ${r.txId}. It shows under Activity.`);
-      $('bsAmt').value = ''; $('bsNote').value = '';
+      $('bsAmt').value = ''; $('bsNote').value = ''; bsAvail();
       beamRefresh();
-    } catch (e) { note('x-beamSend', 'bad', msg(e)); }
+    } catch (e) { actErr($('doBeamSend'), e, { bsAmt: /amount|enough|decimal|available|zero|fee/i, bsAddr: /address|token/i }); }
     finally { $('doBeamSend').disabled = false; }
   };
 
-  const esAsset = BB.dropdown($('esAsset'), () => esAvail());
+  const esAsset = BB.dropdown($('esAsset'), () => { esQuote = null; esAvail(); esFee(true); });
   function esTokens() {
     const list = [{ v: 'ETH', label: 'ETH', dec: 18, bal: ethData ? ethData.eth : '0', token: null }];
     for (const t of (ethData ? ethData.tokens : [])) list.push({ v: t.address, label: t.symbol, dec: t.decimals, bal: t.balance || '0', token: { address: t.address, decimals: t.decimals, symbol: t.symbol } });
     return list;
   }
   const esCur = () => esTokens().find((x) => x.v === esAsset.value()) || esTokens()[0];
-  function esAvail() { const c = esCur(); $('esAvail').textContent = `Available ${num(units(c.bal, c.dec), 8)} ${c.label}${c.token ? ' · gas is paid in ETH' : ' · keep some ETH for gas'}`; }
+  // the fee, from the chain (the host's ethFeeQuote): asked when the screen opens, the asset or the address
+  // changes; paid in ETH whatever is sent
+  let esQuote = null, esQSeq = 0, esQT = 0;
+  function esFee(now) {
+    clearTimeout(esQT);
+    esQT = setTimeout(async () => {
+      const a = acct(), c = esCur(), seq = ++esQSeq;
+      if (!a) return;
+      const to = $('esTo').value.trim();
+      try { const q = await host('ethFeeQuote', a.address, isEthAddress(to) ? to : '', c.token ? c.token.address : null); if (seq === esQSeq) { esQuote = q; esAvail(); } }
+      catch { if (seq === esQSeq) { esQuote = null; esAvail(); } }
+    }, now ? 0 : 400);
+  }
+  function esAvail() {
+    const c = esCur(), f = esQuote ? units(esQuote.feeNow, 18) : null;
+    $('esAvail').innerHTML = `<span id="esLeft"></span><span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Network fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} ETH`}</b></span>`;
+    amtLine($('esAmt'), $('esLeft'), `Available: <b>${esc(num(units(c.bal, c.dec), 8))} ${esc(c.label)}</b>`, amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
+  }
+  $('esAmt').oninput = () => esAvail();
+  // All: the whole of a token; of ETH, all but the most the transfer may cost (its quote, else 0.002 ETH)
   $('esMax').onclick = () => {
     const c = esCur();
     if (c.token) $('esAmt').value = exact(c.bal, c.dec);
-    else { const keepWei = 2n * 10n ** 15n; const v = BigInt(c.bal) > keepWei ? BigInt(c.bal) - keepWei : 0n; $('esAmt').value = exact(v.toString(), 18); }
+    else { const keepWei = esQuote ? BigInt(esQuote.feeMax) : 2n * 10n ** 15n; const v = BigInt(c.bal) > keepWei ? BigInt(c.bal) - keepWei : 0n; $('esAmt').value = exact(v.toString(), 18); }
+    esAvail();
   };
   // my own accounts as receivers (every wallet's, but the sender)
   const esOwn = BB.dropdown($('esOwn'), (v) => { if (v) { $('esTo').value = v; $('esTo').oninput(); } });
@@ -1229,15 +1364,20 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   $('esTo').oninput = () => {
     const t = $('esTo').value.trim();
     const own = allAccounts().find((a) => a.address.toLowerCase() === t.toLowerCase());
-    $('esToHint').textContent = !t ? '' : !isEthAddress(t) ? '0x and 40 hex characters' : own ? `your own: ${own.wallet.name} · ${own.name}` : Object.values(st.contracts).includes(t.toLowerCase()) ? 'a contract, not a person: tokens sent to it are lost. For the bridge use the Bridge tab' : '';
+    esFee();
+    // one's own account: another wallet's by its name (grey label, white name); the open wallet's own, in
+    // yellow as on BEAM Send
+    $('esToHint').innerHTML = !t ? '' : !isEthAddress(t) ? '<span class="warn-own">⚠️ 0x and 40 hex characters</span>'
+      : own ? (own.wallet.id === st.active ? '<span class="warn-own">⚠️ your current wallet</span>' : `<span class="k">Your wallet:</span> <span class="v">${esc(own.wallet.name)}</span>`)
+      : Object.values(st.contracts).includes(t.toLowerCase()) ? '<span class="warn-own">⚠️ a contract, not a person: tokens sent to it are lost. For the bridge use the Bridge tab</span>' : '';
   };
   $('doEthSend').onclick = async () => {
-    clearNotes('x-ethSend');
+    clearNotes('x-ethSend'); actErr($('doEthSend'), null);
     $('doEthSend').disabled = true;
     try {
       const c = esCur(), a = acct(), to = $('esTo').value.trim();
-      if (!isEthAddress(to)) throw new Error('the address must be 0x and 40 hex characters');
-      if (Object.values(st.contracts).includes(to.toLowerCase())) throw new Error('that is the WBEAM token or the bridge contract: tokens sent there are lost. Use the Bridge tab');
+      if (!isEthAddress(to)) throw fieldErr('esTo', 'the address must be 0x and 40 hex characters');
+      if (Object.values(st.contracts).includes(to.toLowerCase())) throw fieldErr('esTo', 'that is the WBEAM token or the bridge contract: tokens sent there are lost. Use the Bridge tab');
       const p = await host('ethPrepare', { from: a.address, to, amount: $('esAmt').value, token: c.token });
       const feeNow = units(p.feeNow, 18), feeMax = units(p.feeMax, 18);
       const ok = await confirmBox(`Send ${p.symbol}`, [
@@ -1248,15 +1388,15 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       if (!ok) return;
       const hash = await host('ethSend', p.id);
       note('x-ethSend', 'ok', `Sent: <a href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(short(hash))}</a>. It shows under Activity once mined.`, true);
-      $('esAmt').value = '';
+      $('esAmt').value = ''; esAvail();
       setTimeout(ethRefresh, 15000);
-    } catch (e) { note('x-ethSend', 'bad', msg(e)); }
+    } catch (e) { actErr($('doEthSend'), e, { esAmt: /amount|enough|decimal|number|separator|zero/i, esTo: /address|contract|0x/i }); }
     finally { $('doEthSend').disabled = false; }
   };
 
   const SHEETS = {
     beamRecv: () => recvOpen(),
-    beamSend: () => { bsOwnFill(); $('bsAvail').textContent = `${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM`; },
+    beamSend: () => { bsOwnFill(); bsAssetFill(); },
     ethRecv: () => {
       const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethRecvName').textContent = a.name;
       // its nonce (transactions sent) and ENS name (when it has one), from the network
@@ -1288,7 +1428,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       BB.qr($('ethQr'), a.address, QR_SIZE);
     },
     dapps: () => { dappListOpen(); dappLogOpen(); },
-    ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
+    ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esQuote = null; esAvail(); esOwnFill(); $('esTo').oninput(); esFee(true); },
   };
   // the account's own actions, as in its menu: renamed (the card shows the new name), removed (back to the wallet)
   $('renEthAcct').onclick = async () => { try { await renameAccount(); } catch (e) { return ask({ title: 'Not renamed', note: msg(e), yes: 'OK', no: null }); } await load(); renderEth(); const a = acct(); if (a) $('ethRecvName').textContent = a.name; };
@@ -1367,7 +1507,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('teAmt').value = Math.max(0, Math.floor((av - f - 0.02) * 1e4) / 1e4);
   };
   $('doToEth').onclick = async () => {
-    clearNotes('b-toEth');
+    clearNotes('b-toEth'); actErr($('doToEth'), null);
     if ($('doToEth').disabled) return;
     $('doToEth').disabled = true;
     try {
@@ -1396,7 +1536,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       note('b-toEth', 'ok', `Sent: Beam transaction ${txid}. It shows under Transfers once a block confirms it.`);
       $('teAmt').value = '';
       beamRefresh(); setTimeout(bridgeLists, 90000);
-    } catch (e) { note('b-toEth', 'bad', msg(e)); }
+    } catch (e) { actErr($('doToEth'), e, { teFee: /^fee|relayer fee|the fee/i, teAmt: /amount|enough|decimal|available|zero/i, teOther: /address|0x/i }); }
     finally { $('doToEth').disabled = false; }
   };
 
@@ -1428,7 +1568,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('feAmt').value = v > 0n ? exact(v.toString(), 8) : '0';
   };
   $('doFromEth').onclick = async () => {
-    clearNotes('b-fromEth');
+    clearNotes('b-fromEth'); actErr($('doFromEth'), null);
     $('doFromEth').disabled = true;
     try {
       if (!beamHere()) throw new Error('this wallet has no running Beam part to receive');
@@ -1450,7 +1590,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       note('b-fromEth', 'ok', `Confirmed on Ethereum: <a href="https://etherscan.io/tx/${esc(rec.hash)}" target="_blank" rel="noopener">${esc(short(rec.hash))}</a>. The relayer brings it to Beam; then claim it below.`, true);
       $('feAmt').value = '';
       feBal(); bridgeLists();
-    } catch (e) { note('b-fromEth', 'bad', msg(e)); }
+    } catch (e) { actErr($('doFromEth'), e, { feFee: /^fee|relayer fee|the fee/i, feAmt: /amount|enough wbeam|decimal|zero|number/i, feFrom: /account|gas/i }); }
     finally { $('doFromEth').disabled = false; }
   };
 
@@ -1864,13 +2004,13 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       } });
     if (r2.ok) await ask({ title: 'Password changed', note: 'The new password opens the wallet from now on.', yes: 'OK', no: null });
   };
-  $('saveNode').onclick = async () => { note('netErr', 'bad', ''); try { st.node = await host('setNode', $('node').value.trim()); $('node').value = st.node; } catch (e) { note('netErr', 'bad', msg(e)); } };
+  $('saveNode').onclick = async () => { actErr($('saveNode'), null); try { st.node = await host('setNode', $('node').value.trim()); $('node').value = st.node; } catch (e) { actErr($('saveNode'), e); } };
   $('saveBackups').onclick = async () => {
-    note('netErr', 'bad', '');
-    try { const l = await host('setBackupNodes', $('backupNodes').value); $('backupNodes').value = l.join(', '); } catch (e) { note('netErr', 'bad', msg(e)); }
+    actErr($('saveBackups'), null);
+    try { const l = await host('setBackupNodes', $('backupNodes').value); $('backupNodes').value = l.join(', '); } catch (e) { actErr($('saveBackups'), e); }
   };
   $('saveRpc').onclick = async () => {
-    note('netErr', 'bad', '');
+    actErr($('saveRpc'), null);
     const url = $('ethRpc').value.trim();
     try {
       if (url) {
@@ -1878,11 +2018,11 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
         if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('the browser did not allow that address');
       }
       await host('setEthRpc', url); st.ethRpc = url;
-    } catch (e) { note('netErr', 'bad', msg(e)); }
+    } catch (e) { actErr($('saveRpc'), e); }
   };
   $('addTok').onclick = async () => {
-    note('tokErr', 'bad', '');
-    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); settingsOpen(); } catch (e) { note('tokErr', 'bad', msg(e)); }
+    actErr($('addTok'), null);
+    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); settingsOpen(); } catch (e) { actErr($('addTok'), e); }
   };
   $('tokList').onclick = async (e) => { const t = e.target.closest('[data-tok]'); if (!t) return; e.preventDefault(); await host('removeToken', t.dataset.tok); await load(); settingsOpen(); };
   $('dropSnap').onclick = async (e) => { e.preventDefault(); await host('dropSnapshot'); settingsOpen(); };

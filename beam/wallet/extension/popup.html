@@ -185,10 +185,10 @@ while the wallet is locked.</p>
 
   <!-- sheets: one action at a time over the wallet tab -->
   <section id="x-beamRecv" class="screen sheet" hidden>
-    <div class="sheet-head"><h2 class="screen-title">Receive BEAM</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
+    <div class="sheet-head"><h2 class="screen-title">BEAM Receive</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
     <div class="panel addr-panel">
-      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span class="seg mini"><button type="button" id="addAddr" title="Add a public offline address of this wallet that is not listed">Add</button><button type="button" id="newAddr" title="Make a new address: its type is chosen in the window">New</button></span></span></div>
-      <p class="hint">Every address this wallet made, your favourites (the star) first, then the others in the order they were made. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
+      <div class="panel-head"><h3 class="panel-title"><span class="tipped" data-tip-wide title="Every address this wallet made: your favourites (the star) first, then the others in the order they were made. All lead to the same balance.
+Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.">My addresses</span></h3><span class="panel-meta"><span class="seg mini"><button type="button" id="addAddr" title="Add a public offline address of this wallet that is not listed">Add</button><button type="button" id="newAddr" title="Make a new address: its type is chosen in the window">New</button></span></span></div>
       <div class="list" id="addrList"><div class="empty">loading…</div></div>
     </div>
     <p class="note bad" hidden></p>
@@ -211,14 +211,15 @@ while the wallet is locked.</p>
   </section>
 
   <section id="x-beamSend" class="screen sheet" hidden>
-    <div class="sheet-head"><h2 class="screen-title">Send BEAM</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
+    <div class="sheet-head"><h2 class="screen-title">BEAM Send</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
+    <div class="field">Asset
+      <div class="dd compact" id="bsAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
     <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your other Beam wallets (to the offline address it keeps for this)"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
-    <p class="hint" id="bsOwnHint"></p>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
-    <p class="hint" id="bsKind"></p>
-    <label class="field">Amount, BEAM<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><button class="btn ghost small" id="bsMax">All</button></span></label>
-    <p class="hint">Available <b id="bsAvail">—</b>. Plus the network fee: 0.001 BEAM, 0.011 to an offline or max-privacy address.</p>
-    <label class="field">Comment (only in your history)<input id="bsNote" maxlength="64"></label>
+    <p class="hint after" id="bsKind"></p>
+    <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="bsMax">All</button></span></span></label>
+    <p class="hint after split"><span id="bsLeft">Available: <b id="bsAvail">—</b></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">Network fee</span>: <b id="bsFee" class="fee-v">0.001 BEAM</b></span></p>
+    <label class="field">Comment (only in your history)<input id="bsNote" maxlength="64" placeholder="optional"></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>
@@ -246,13 +247,13 @@ while the wallet is locked.</p>
 
   <section id="x-ethSend" class="screen sheet" hidden>
     <div class="sheet-head"><h2 class="screen-title">Send on Ethereum</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
-    <label class="field">Asset
-      <div class="dd" id="esAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></label>
+    <div class="field">Asset
+      <div class="dd compact" id="esAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
     <label class="field own-label" id="esOwnL">To one of my accounts</label><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<input id="esTo" autocomplete="off" spellcheck="false" placeholder="0x…"></label>
-    <p class="hint" id="esToHint"></p>
-    <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"><button class="btn ghost small" id="esMax">All</button></span></label>
-    <p class="hint" id="esAvail"></p>
+    <p class="hint after" id="esToHint"></p>
+    <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="esMax">All</button></span></span></label>
+    <p class="hint after split" id="esAvail"></p>
     <div class="row"><button class="btn solid" id="doEthSend">Review</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>
@@ -286,7 +287,7 @@ while the wallet is locked.</p>
           <div class="end"><div class="caps">To</div><div class="dd compact" id="teTo"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
         </div>
         <label class="field" id="teOtherBox" hidden>Ethereum address<input id="teOther" placeholder="0x…" autocomplete="off" spellcheck="false"></label>
-        <label class="field">WBEAM to receive<span class="inline"><input id="teAmt" inputmode="decimal" placeholder="0"><button class="btn ghost small" id="teMax">All</button></span></label>
+        <label class="field">WBEAM to receive<span class="inline"><input id="teAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="teMax">All</button></span></span></label>
         <div class="field">Relayer fee, BEAM</div>
         <div class="gas" id="teGas">pricing the relayer fee…</div>
         <div class="feeopts" id="teOpts"></div>
@@ -340,20 +341,20 @@ while the wallet is locked.</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Security</h3></div>
-      <label class="field">Lock after idle
+      <div class="field">Lock after idle
         <div class="dd" id="autoLock" data-value="60"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
             <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
-            <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></label>
+            <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></div>
       <p class="hint">Only the open wallet's Beam part runs: its regular addresses are online while it is unlocked. The other wallets take payments to their offline, public and max-privacy addresses all the time. Their regular addresses wait until they are opened. Locking takes Beam offline (a transfer still being made finishes first). Closing the browser locks it.</p>
       <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Display</h3></div>
-      <label class="field">Time format
+      <div class="field">Time format
         <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
-            <li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></label>
+            <li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></div>
       <p class="hint">Dates are always day.month.year (06.11.2026).</p>
     </div>
     <div class="panel">
@@ -374,8 +375,8 @@ while the wallet is locked.</p>
       <div class="panel-head"><h3 class="panel-title">About</h3></div>
       <dl class="kv">
         <dt>Version</dt><dd id="ver"></dd>
-        <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548 (after HF6)</dd>
-        <dt>Bridge</dt><dd>official: pipe e63bd26c…e835 on Beam, 0x6063…a670 on Ethereum</dd>
+        <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548<br>after HF6</dd>
+        <dt>Bridge</dt><dd>official pipe <span title="e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835">e63bd2…dbe835</span> on Beam<br>and <span title="0x6063024646E8A1561970840a4b0e0f1082f5a670">0x6063…f5a670</span> on Ethereum</dd>
         <dt>Snapshot</dt><dd><span id="snapInfo">—</span> <a href="#" class="text-link" id="dropSnap">remove</a></dd>
         <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
       </dl>

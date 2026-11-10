@@ -278,6 +278,22 @@
   // locked: every wallet stops, each once its own transfers are done
   const stopIdle = () => Promise.all([...slots.keys()].map(sweep));
 
+  // My wallets knows every wallet's address without that wallet being opened first: a wallet whose public
+  // offline address is not known yet has its Beam part started for a moment (in its own queue), the address
+  // read from its list, and stopped again (unless it was opened meanwhile). Once per wallet and unlock, one at
+  // a time, after the open wallet has started.
+  const scanned = new Set();
+  async function ownAddressAll() {
+    for (const w of (data ? data.wallets : [])) {
+      const id = w.id;
+      if (!data || !beamCfg(id) || id === settings.active || settings.beamAddr[id] || scanned.has(id)) continue;
+      scanned.add(id);
+      await withWallet(id, () => (data && !live(id) ? start(id, 0) : null)).catch(() => {});
+      if (live(id)) await ownAddress(id).catch(() => {});
+      await sweep(id);
+    }
+  }
+
   // Each Beam wallet keeps one public offline address of its own for the others: Send offers it under "my
   // wallets". Public offline (as pools and exchanges are paid): any number of payments, and the wallet that
   // receives need not run. A plain offline address holds a few one-time vouchers (10), each payment uses one;
@@ -502,7 +518,7 @@
   }
 
   function lock() {
-    data = null; vk = null; pendingPhrase = null; recvSel = {};
+    data = null; vk = null; pendingPhrase = null; recvSel = {}; scanned.clear();
     setTimeout(() => dappTellAll(), 0);
     lockIcon();
     for (const p of prepared.values()) clearTimeout(p.t);
@@ -835,6 +851,7 @@
       serial(async () => {
         try { await migrate(); } catch (e) { broadcast({ type: 'event', method: 'bb_error', result: `moving a Beam database: ${e.message}` }); }
         await startOpen();
+        ownAddressAll().catch(() => {});
       }).catch(() => {});
     },
     lock,
@@ -1171,7 +1188,10 @@
     // ---------- Beam ----------
     beam(walletId, method, params) {
       if (!BEAM_READ.has(method) && !BEAM_WRITE.has(method)) throw new Error(`not allowed: ${method}`);
-      return beamFor(walletId).e.call(method, params);
+      const r = beamFor(walletId).e.call(method, params);
+      // a public offline address made or removed: the one My wallets offers for this wallet follows at once
+      if (method === 'create_address' || method === 'delete_address') r.then(() => ownAddress(walletId)).catch(() => {});
+      return r;
     },
 
     // ---------- Ethereum ----------
@@ -1257,6 +1277,26 @@
       if (have < want) throw new Error(`not enough ${sym}: ${Eth.fromUnits(want, dec)} to send, ${Eth.fromUnits(have, dec)} there`);
       const p = await Eth.price(tx);
       return { id: keep({ kind: 'send', wallet: w.id, p }), ...p, to, symbol: sym, amountExact: Eth.fromUnits(want, dec) };
+    },
+    // the Send screen's fee line, before anything is signed: what the transfer costs now (its gas x (base fee +
+    // the tip the last blocks paid)) and the most it may cost (20 % more gas x 2 x base fee + tip), which All keeps
+    // back from the ETH. ETH to an address: its estimate (21000 to a plain account, more to a contract); a token:
+    // its transfer of the smallest unit to that address, estimated; with no address yet, 21000 and 65000.
+    async ethFeeQuote(from, to, token) {
+      if (!Eth.isAddress(from)) throw new Error('not an Ethereum address');
+      const est = (tx, d) => Eth.rpc('eth_estimateGas', [tx]).then((g) => BigInt(g)).catch(() => d);
+      const toOk = Eth.isAddress(to || '');
+      const [h, gas] = await Promise.all([
+        Eth.rpc('eth_feeHistory', ['0x5', 'latest', [50]]),
+        token ? (toOk && Eth.isAddress(token) ? est({ from, to: token, data: Eth.ERC20.transfer(to, 1n), value: '0x0' }, 65000n) : 65000n)
+          : (toOk ? est({ from, to, value: '0x0' }, 21000n) : 21000n),
+      ]);
+      const base = BigInt(h.baseFeePerGas[h.baseFeePerGas.length - 1]);
+      const tips = (h.reward || []).map((x) => BigInt(x[0])).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      let tip = tips.length ? tips[tips.length >> 1] : 100000000n;
+      tip = tip < 50000000n ? 50000000n : tip > 3000000000n ? 3000000000n : tip;
+      const limit = (gas * 6n) / 5n + 1000n;
+      return { gas: gas.toString(), feeNow: (gas * (base + tip)).toString(), feeMax: (limit * (2n * base + tip)).toString() };
     },
     async ethSend(prepId) {
       const x = take(prepId, 'send');

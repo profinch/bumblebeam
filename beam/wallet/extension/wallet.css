@@ -397,3 +397,43 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .kv-key { display: grid; }
 .kv-key > span { grid-area: 1 / 1; }
 .kv-w { visibility: hidden; }
+/* the screens' fields as high as their lists (28 px), the text a size down with them */
+.screen .field input:not([type="file"]) { height: 28px; font-size: 12px; }
+.screen .field textarea { font-size: 12px; }
+/* a hint under a field (an address's type, what is available and the fee): clear of the field, as a label is */
+.hint.after { margin-top: 6px; }
+.hint.after:empty { margin: 0; }
+/* "Address type: public offline": the label grey, the value white */
+.hint .k { color: var(--muted); }
+.hint .v { color: var(--text); }
+.hint b { color: var(--text); font-weight: 600; }
+/* the Send screens' asset lists: 10 rows (26 px each in a compact list), then they scroll */
+#bsAsset .dd-list, #esAsset .dd-list { max-height: calc(10 * 26px + 8px); }
+/* the address's type line keeps its room (one line) whether or not an address is in: nothing under it moves */
+#bsKind { min-height: 18px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#bsKind:empty { margin: 6px 0 12px; }
+.warn-own { color: var(--color-yellow); }
+/* the line under Ethereum Send's address keeps its room too (one line, more for the contract warning) */
+#esToHint { min-height: 18px; }
+#esToHint:empty { margin: 6px 0 12px; }
+/* Available left, the network fee right on the same line (the fee drops under it, still right, if both do not fit) */
+.hint.split { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 12px; }
+.hint.split > :last-child { margin-left: auto; }
+/* the fee's value in a room of its own, right-aligned, figures of one width: "Network fee" stays put whatever
+   the amount (0.001 or 0.011 BEAM; Ethereum's while it loads and after) */
+.fee-v { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; min-width: 10.5ch; }
+.fee-v.eth { min-width: 15ch; }
+/* what fills in as it loads fades in (popup.js: the "fades in" observer) */
+@keyframes bb-fade { from { opacity: 0; } to { opacity: 1; } }
+.fade { animation: bb-fade 0.4s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
+/* an amount that cannot be sent as typed: the field outlined, the reason in place of Available */
+.field input.bad, .field input.bad:focus { border-color: rgba(var(--red-rgb), 0.6); }
+/* an action's error: in yellow right of its button (or under the field its Save/Add sits in); the field it is
+   about outlined in red until it is edited */
+.row:has(> .act-msg) { display: flex; align-items: center; gap: 12px; }
+.act-msg { font-size: 12px; line-height: 1.4; color: var(--color-yellow); min-width: 0; }
+.act-msg:empty { display: none; }
+.act-msg.under { margin: 6px 0 0; }
+.field input.err, .field textarea.err, .dd-btn.err, .field input.err:focus, .field textarea.err:focus { border-color: rgba(var(--red-rgb), 0.7); }
+.row > .act-msg { flex: 1 1 0; }      /* beside the button, its text wrapping there rather than under it */

@@ -282,6 +282,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 
 /* a compact list for table filters in a panel head */
+.dd-list [role="option"][aria-disabled="true"] { color: var(--muted); opacity: 0.6; cursor: default; }
 .dd.compact { min-width: 130px; }
 .dd.compact .dd-btn { height: 28px; font-size: 12px; }
 .dd.compact .dd-list [role="option"] { padding: 6px 10px 6px 14px; font-size: 12px; }
