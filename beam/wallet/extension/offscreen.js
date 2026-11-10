@@ -282,16 +282,19 @@
   // wallets". Public offline (as pools and exchanges are paid): any number of payments, and the wallet that
   // receives need not run. A plain offline address holds a few one-time vouchers (10), each payment uses one;
   // its extra privacy does not matter between one's own wallets. An older offline one is replaced.
+  // None is made for it (no address appears by itself): one the wallet already has is taken (every public offline
+  // address of a wallet carries the same key, so any will do); with none, Send does not offer this wallet.
   async function ownAddress(id) {
     const s = live(id);
     if (!s) return;
     const have = settings.beamAddr[id];
-    if (have) {
-      const v = await s.e.call('validate_address', { address: have.address }).catch(() => null);
-      if (v && v.is_valid && v.is_mine && v.type === 'public_offline') return;
-    }
-    const address = await s.e.call('create_address', { type: 'public_offline', expiration: 'never', comment: 'for my other wallets' });
-    settings.beamAddr[id] = { address, at: Date.now() };
+    const list = await s.e.call('addr_list', { own: true }).catch(() => null);
+    if (!Array.isArray(list)) return;
+    const pub = list.filter((a) => a.type === 'public_offline' && !a.expired);
+    if (have && pub.some((a) => a.address === have.address)) return;
+    const next = pub[0] ? { address: pub[0].address, at: Date.now() } : null;
+    if (!next && !have) return;
+    if (next) settings.beamAddr[id] = next; else delete settings.beamAddr[id];
     await saveSettings();
     broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } });
   }
@@ -986,7 +989,7 @@
       slots.delete(id);
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
       delete settings.activeEth[id]; delete settings.beamAddr[id];
-      for (const k of ['dappsW', 'beamSitesW', 'addrFav', 'addrExt']) if (settings[k]) delete settings[k][id];      // its sites and address lists go with it
+      for (const k of ['dappsW', 'beamSitesW', 'addrFav', 'addrExt', 'offlineRef']) if (settings[k]) delete settings[k][id];      // its sites and address lists go with it
       await saveSettings();
       startOpen();
       broadcast({ type: 'event', method: 'bb_changed' });
@@ -1055,6 +1058,18 @@
     // a wallet's favourite Beam addresses (Receive's list keeps them first): wallet id -> [address]
     addrFavs: (id) => (settings.addrFav && settings.addrFav[id]) || [],
     // the favourites in the order dragged into (Receive's list): only addresses already favourites
+    // one public offline address of the wallet, kept as a reference (public data): every public offline address of
+    // a wallet carries the same offline key, so one added manually is checked against it. Made once, then deleted
+    // from Beam's list, so it does not show among the user's addresses.
+    async offlineRef(id) {
+      const m = settings.offlineRef || (settings.offlineRef = {});
+      if (m[id]) return m[id];
+      const e = beamFor(id).e;
+      const a = await e.call('create_address', { type: 'public_offline', expiration: 'never', comment: '' });
+      await e.call('delete_address', { address: a }).catch(() => {});
+      m[id] = a; await saveSettings();
+      return a;
+    },
     recvSel: (id) => recvSel[id] || null,
     setRecvSel: (id, address) => { recvSel[id] = address ? String(address) : null; return null; },
     async setAddrFavOrder(id, list) {
@@ -1080,7 +1095,7 @@
       need();
       const m = settings.addrExt || (settings.addrExt = {});
       const l = (m[id] || []).filter((x) => x.address !== (drop || rec.address));
-      if (!drop) l.push({ address: String(rec.address), name: String(rec.name || '').slice(0, 64), type: String(rec.type || ''), at: Number(rec.at) || Date.now() });
+      if (!drop) l.push({ address: String(rec.address), name: String(rec.name || '').slice(0, 64), type: String(rec.type || ''), at: Number(rec.at) || Date.now(), ...(rec.verified ? { verified: String(rec.verified) } : {}) });      // verified: 'key' | 'payment', kept once found
       m[id] = l;
       await saveSettings();
       return l;
@@ -1165,6 +1180,54 @@
     beamAssets: (walletId, ids) => beamAssets(walletId, ids),
     // each address's tokens are kept (chrome.storage 'ethTokens'): a Blockscout that fails or answers an empty
     // list leaves them in place, read on the chain, instead of showing ETH and WBEAM alone
+    // the receive card's extras: how many transactions the account has sent (its nonce), and its ENS name when it
+    // has one: the address's primary name (its .addr.reverse record), shown only when the name resolves back to this
+    // address. A record's resolver may sit on a parent name and answer through resolve() (ENSIP-10: the primary
+    // names of today come from the resolver on "reverse", ENSIP-19), so the resolver is looked for up the name.
+    // Also its EIP-7702 delegation: the code an account carries once it has signed one (0xef0100 + the
+    // delegate's address), null when it has none; and the ENS name's avatar record (a URL, ipfs:// or an NFT),
+    // read only for a name that resolves back.
+    async ethInfo(address) {
+      if (!Eth.isAddress(address)) throw new Error('not an Ethereum address');
+      const [nonceHex, code] = await Promise.all([
+        Eth.rpc('eth_getTransactionCount', [address, 'latest']),
+        Eth.rpc('eth_getCode', [address, 'latest']).catch(() => null),
+      ]);
+      const nonce = parseInt(nonceHex, 16);
+      const m = /^0xef0100([0-9a-f]{40})$/i.exec(code || '');
+      const delegate = code == null ? undefined : m ? ethers.getAddress('0x' + m[1]) : null;
+      let ens = null, avatar = null;
+      try {
+        const REG = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e', abi = ethers.AbiCoder.defaultAbiCoder();
+        const call = (to, data) => Eth.rpc('eth_call', [{ to, data }, 'latest']);
+        const zero = (a) => !a || /^0x0+$/.test(a);
+        // what a name's resolver answers to a call (an inner calldata): directly when the resolver is the name's
+        // own, through resolve(dnsname, call) when it is a parent's
+        const ask = async (name, inner) => {
+          for (let n = name; n; n = n.includes('.') ? n.slice(n.indexOf('.') + 1) : '') {
+            const res = abi.decode(['address'], await call(REG, '0x0178b8bf' + ethers.namehash(n).slice(2)))[0];
+            if (zero(res)) continue;
+            if (n === name) return call(res, inner);
+            return abi.decode(['bytes'], await call(res, '0x9061b923' + abi.encode(['bytes', 'bytes'], [ethers.dnsEncode(name), inner]).slice(2)))[0];
+          }
+          return null;
+        };
+        const rname = `${address.slice(2).toLowerCase()}.addr.reverse`;
+        const nameOut = await ask(rname, '0x691f3431' + ethers.namehash(rname).slice(2));
+        const name = nameOut && nameOut !== '0x' ? abi.decode(['string'], nameOut)[0] : '';
+        if (name) {
+          const addrOut = await ask(name, '0x3b3b57de' + ethers.namehash(name).slice(2));
+          const back = addrOut && addrOut !== '0x' ? abi.decode(['address'], addrOut)[0] : null;
+          if (back && back.toLowerCase() === address.toLowerCase()) ens = name;
+        }
+        if (ens) {
+          const node = ethers.namehash(ens);
+          const out = await ask(ens, '0x59d1d43c' + abi.encode(['bytes32', 'string'], [node, 'avatar']).slice(2)).catch(() => null);
+          avatar = (out && out !== '0x' ? abi.decode(['string'], out)[0] : '').trim() || null;
+        }
+      } catch {}
+      return { nonce, ens, avatar, delegate };
+    },
     async ethBalances(address) {
       const key = String(address).toLowerCase();
       const all = (await kv.get('ethTokens').catch(() => null)) || {};

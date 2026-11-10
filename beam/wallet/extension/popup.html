@@ -35,9 +35,7 @@
     <a href="#" data-tab="activity">Activity</a>
   </nav>
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
-  <!-- Receive BEAM's address type: in the same place, the way back on its line -->
-  <div class="wsub split" id="recvBar" hidden><div class="seg mini" id="addrType"><button class="on" data-t="regular" title="Online: works while this wallet is the open one and unlocked. The transfer completes while both wallets are online">regular</button><button data-t="offline" title="Offline: takes payments while this wallet is off, up to 10. The sender's wallet completes them alone">offline</button><button data-t="public_offline" title="Public offline: one address for any number of payments, also while this wallet is off (a pool's payouts, an exchange, donations). Less private: every payment goes to the same public key">public offline</button><button data-t="max_privacy" title="Maximum anonymity: the coins go through the shielded pool. One payment per address">max privacy</button></div> <div class="seg mini"><button type="button" data-close>← Back</button></div></div>
-  <!-- Connected sites' network: in the same place -->
+      <!-- Connected sites' network: in the same place -->
   <div class="wsub split" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
   <div class="wsub" id="actBar" hidden><div class="seg mini" id="actNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div></div>
 </header>
@@ -187,8 +185,13 @@ while the wallet is locked.</p>
 
   <!-- sheets: one action at a time over the wallet tab -->
   <section id="x-beamRecv" class="screen sheet" hidden>
-    <div class="sheet-head"><h2 class="screen-title">Receive BEAM</h2></div>
-    <p class="hint" id="addrHint"></p>
+    <div class="sheet-head"><h2 class="screen-title">Receive BEAM</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
+    <div class="panel addr-panel">
+      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span class="seg mini"><button type="button" id="addAddr" title="Add a public offline address of this wallet that is not listed">Add</button><button type="button" id="newAddr" title="Make a new address: its type is chosen in the window">New</button></span></span></div>
+      <p class="hint">Every address this wallet made, your favourites (the star) first, then the others in the order they were made. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
+      <div class="list" id="addrList"><div class="empty">loading…</div></div>
+    </div>
+    <p class="note bad" hidden></p>
     <div class="panel recv" id="beamQrWrap" hidden>
       <div class="recv-top">
         <div class="qr" id="beamQr"></div>
@@ -199,23 +202,16 @@ while the wallet is locked.</p>
             <button type="button" class="cp" id="copyBeamAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
             <button type="button" class="cp" id="saveBeamQr" title="Share: the QR code as a picture"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="cp" id="nameBeamAddr" title="Rename: a name only you see, who it was given to"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button type="button" class="cp" id="newBeamAddr" title="New address of the same type. All lead to the same balance. A new one per sender keeps senders from telling they pay the same person"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11zM8 5.5v5M5.5 8h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="cp" id="delBeamAddr" title="Remove this address: it stops taking payments"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
       <div class="hash box" id="beamAddr"></div>
     </div>
-    <p class="note bad" hidden></p>
-    <div class="panel addr-panel">
-      <div class="panel-head"><h3 class="panel-title">My addresses</h3><span class="panel-meta"><span class="seg mini"><button type="button" id="addAddr" title="Add a public offline address of this wallet that is not listed">Add</button></span></span></div>
-      <p class="hint">Every address this wallet made, your favourites (the star) first, then the others in the order they were made. All lead to the same balance. Beam keeps no addresses on its chain, so addresses made in another wallet (before a restore) are not listed, though their coins are here.</p>
-      <div class="list" id="addrList"><div class="empty">loading…</div></div>
-    </div>
   </section>
 
   <section id="x-beamSend" class="screen sheet" hidden>
-    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Send BEAM</h2></div>
+    <div class="sheet-head"><h2 class="screen-title">Send BEAM</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
     <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your other Beam wallets (to the offline address it keeps for this)"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <p class="hint" id="bsOwnHint"></p>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
@@ -228,17 +224,19 @@ while the wallet is locked.</p>
   </section>
 
   <section id="x-ethRecv" class="screen sheet" hidden>
-    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Receive on Ethereum</h2></div>
+    <div class="sheet-head"><h2 class="screen-title">Receive on Ethereum</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
     <p class="hint">ETH, WBEAM and any ERC-20 token on Ethereum mainnet. Not other networks: tokens sent on BNB Chain, Arbitrum or Base to this address are not seen here.</p>
     <div class="panel recv">
       <div class="recv-top">
         <div class="qr" id="ethQr"></div>
         <div class="recv-side">
           <div class="recv-name" id="ethRecvName"></div>
-          <div class="recv-kv"><div class="caps">Type</div><div class="recv-v">Ethereum mainnet</div><div class="caps">Expiry</div><div class="recv-v">never</div><div class="caps">Symbols</div><div class="recv-v">42</div></div>
+          <div class="recv-kv"><div class="caps kv-key"><span>Type</span><span class="kv-w" aria-hidden="true">EIP-7702</span></div><div class="recv-v"><span class="tipped" title="Ethereum mainnet: ETH and its ERC-20 tokens. Not other networks (BNB Chain, Arbitrum, Base)">Ethereum</span></div><div class="caps" id="ethRecvDelK" hidden>EIP-7702</div><div class="recv-v" id="ethRecvDel" hidden></div><div class="caps" id="ethRecvNonceK" hidden>Nonce</div><div class="recv-v" id="ethRecvNonce" hidden></div><div class="caps" id="ethRecvEnsK" hidden>ENS</div><div class="recv-v" id="ethRecvEns" hidden></div><div class="caps" id="ethRecvAvaK" hidden>Avatar</div><div class="recv-v" id="ethRecvAva" hidden><img class="ens-ava" id="ethRecvAvaImg" alt="" crossorigin="anonymous" referrerpolicy="no-referrer"></div></div>
           <div class="recv-icons">
             <button type="button" class="cp" id="copyEthAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
             <button type="button" class="cp" id="saveEthQr" title="Share: the QR code as a picture"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="renEthAcct" title="Rename this account"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="delEthAcct" title="Remove this account"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
       </div>
@@ -247,7 +245,7 @@ while the wallet is locked.</p>
   </section>
 
   <section id="x-ethSend" class="screen sheet" hidden>
-    <div class="sheet-head"><span class="seg mini"><button type="button" data-close>← Back</button></span><h2 class="screen-title">Send on Ethereum</h2></div>
+    <div class="sheet-head"><h2 class="screen-title">Send on Ethereum</h2><span class="seg mini"><button type="button" data-close>← Back</button></span></div>
     <label class="field">Asset
       <div class="dd" id="esAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></label>
     <label class="field own-label" id="esOwnL">To one of my accounts</label><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>

@@ -352,7 +352,7 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .recv-name { min-height: 18px; font-weight: 700; font-size: var(--fs-base); line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recv-kv { margin-top: 9px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: baseline; }
 .recv-v { font: var(--fs-m) var(--font-mono); color: var(--text); }
-.recv-icons { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
+.recv-icons { margin-top: auto; display: flex; gap: 15px; align-items: flex-end; }      /* a fixed step, from the left: the same on Beam's card and Ethereum's */
 .recv-icons .cp svg { width: 16px; height: 16px; }
 .recv .hash.box { margin-top: 12px; }
 /* a hint under a sheet's title: 8 px under it and 12 px over what follows, as under a card's title everywhere */
@@ -381,3 +381,19 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 #dappCatalog .fold > .panel-head { transition: margin-bottom 0.25s ease; }
 #dappCatalog .folded > .list { height: 0; }
 #dappCatalog .folded > .panel-head { margin-bottom: 0; }
+/* a sheet's title left, the way back right on its line */
+.sheet-head > .seg { margin-left: auto; }
+/* the ENS avatar in the Ethereum receive card: a small round picture on its own row */
+#ethRecvAvaK, #ethRecvAva { align-self: start; }      /* the label and the picture level at their top */
+#ethRecvAva { padding-top: 2px; }      /* the picture's top on the label letters' top (their line has 2 px above them) */
+.ens-ava { display: block; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--line, rgba(255,255,255,.15)); }
+/* the New address window: every type's hint in one cell, only the chosen one seen, so the window keeps the
+   tallest one's height and the name field stays put when the type changes */
+.type-hints { display: grid; }
+.type-hints > span { grid-area: 1 / 1; }
+.type-hints > span.off { visibility: hidden; }
+/* a card's labels keep the width of the widest that may come later (the Ethereum card's EIP-7702 arrives
+   from the network): the first label also holds that one, unseen, so the values do not move when it shows */
+.kv-key { display: grid; }
+.kv-key > span { grid-area: 1 / 1; }
+.kv-w { visibility: hidden; }

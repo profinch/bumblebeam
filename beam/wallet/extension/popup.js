@@ -129,7 +129,6 @@
     $('backBtn').hidden = !adding;
     $('actBar').hidden = id !== 't-activity';
     $('dappBar').hidden = id !== 'x-dapps';
-    $('recvBar').hidden = id !== 'x-beamRecv';
     // Connected sites keeps the scroll bar's room on both sides (wallet.css): its own padding less by as much,
     // so its cards line up with every other screen's
     const m = document.querySelector('main');
@@ -189,6 +188,7 @@
       $('dPassBox').hidden = !password; $('dPass').value = ''; $('dPassLabel').textContent = passLabel;
       $('dInputBox').hidden = !input; $('dInput').value = input ? input.value || '' : '';
       $('dInputLabel').textContent = input ? input.label : '';
+      $('dInput').placeholder = (input && input.placeholder) || '';
       $('dInput').classList.toggle('secret', !!(input && input.secret));
       note('dErr', 'bad', '');
       $('dYes').textContent = yes; $('dNo').textContent = no; $('dNo').hidden = !no;
@@ -914,7 +914,6 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   };
 
   // ---------- sheets ----------
-  let addrType = 'regular';
   const ADDR_HINT = {
     regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
     offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The sender pays 0.011 BEAM and the coins arrive shielded. For many payments use public.',
@@ -936,15 +935,23 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const [list, fav, ext] = await Promise.all([host('beam', wid, 'addr_list', { own: true }), host('addrFavs', wid).catch(() => []), host('addrExt', wid).catch(() => [])]);
     favs = new Set(fav); favOrder = fav.slice();
     const own = new Set(list.map((x) => x.address));
+    // an address once verified stays so: only the others are checked
+    const open = ext.filter((e) => !e.verified);
     let txs = [];
-    if (ext.length) txs = (await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => [])).filter((t) => t.income).map((t) => JSON.stringify(t));
+    if (open.length) txs = (await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => [])).filter((t) => t.income).map((t) => JSON.stringify(t));
     if (!isOpen(wid)) return false;
     // a public offline address is this wallet's when it carries the wallet's own offline key (Beam makes every
     // public offline address of a wallet from one key of its seed): the same long run of bytes as one it made
+    // (and against the wallet's kept reference: the list may have none of its own)
     const mine = list.filter((x) => x.type === 'public_offline').map((x) => b58(x.address));
+    if (open.some((e) => e.type === 'public_offline')) { const ref = await host('offlineRef', wid).catch(() => null); if (ref) mine.push(b58(ref)); }
+    if (!isOpen(wid)) return false;
     const added = ext.filter((e) => !own.has(e.address)).map((e) => {
+      if (e.verified) return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: true, key: e.verified === 'key', n: 0 };
       const n = txs.filter((j) => j.includes(e.address)).length;
       const key = e.type === 'public_offline' && mine.some((m) => sameRun(m, b58(e.address)) >= 64);
+      // verified now: kept, never checked again
+      if (key || n > 0) host('setAddrExt', wid, { ...e, verified: key ? 'key' : 'payment' }).catch(() => {});
       return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: key || n > 0, n, key };
     });
     addrs = [...list, ...added].sort(byFav);
@@ -994,7 +1001,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('beamAddr').textContent = x.address; $('beamQrWrap').hidden = false;
     // right of the QR: its name (Unnamed in grey when it has none), its type, when it was made, when it expires, its length
     $('beamAddrName').textContent = x.comment || 'Unnamed'; $('beamAddrName').classList.toggle('dim', !x.comment);
-    $('beamAddrType').textContent = TYPE_NAME[x.type] || x.type;
+    const tKey = Object.keys(ADDR_HINT).find((t) => sameType(x, t));
+    $('beamAddrType').innerHTML = tKey ? `<span class="tipped" title="${esc(ADDR_HINT[tKey])}">${esc(TYPE_NAME[x.type] || x.type)}</span>` : esc(TYPE_NAME[x.type] || x.type);
     $('beamAddrMade').textContent = ago2(x.create_time);
     $('beamAddrExp').textContent = expiry(x);
     $('beamAddrLen').textContent = String(x.address.length);      // how long it is: 67 for a regular one, hundreds for the offline kinds
@@ -1007,13 +1015,14 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     renderAddrs();
   }
   const QR_SIZE = BB.qrSizes.s;                       // the receive cards' QR: ui's size S (180 px), the popup's width
-  async function newAddress(type) {
-    const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment: '' });
+  async function newAddress(type, comment = '') {
+    const a = await host('beam', W().id, 'create_address', { type, expiration: type === 'public_offline' ? 'never' : 'auto', comment });
     if (!(await loadAddrs())) return;
-    showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment: '', create_time: Date.now() / 1000, duration: 0 });
+    showAddr(addrs.find((x) => x.address === a) || { address: a, type, comment, create_time: Date.now() / 1000, duration: 0 });
   }
-  // Receive opens on the address shown last since the unlock (the host remembers it), else the first in the list
-  // that is not an unverified one added manually (a favourite, else the oldest); with none, a regular one is made
+  // Receive opens on (in this order) the address shown last since the unlock (the host remembers it), else the
+  // first favourite, else the first in the list; never an unverified one added manually, even shown last or a
+  // favourite. No address is ever made by itself: with none, New makes one.
   async function recvOpen() {
     note('x-beamRecv', 'bad', '');
     // nothing of the wallet shown before stays on screen while this one's addresses come
@@ -1023,37 +1032,31 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try {
       const [sel, fresh] = await Promise.all([host('recvSel', W().id).catch(() => null), loadAddrs()]);
       if (!fresh) return;
-      const ok = (y) => !(y.ext && !y.verified);          // never an unverified one by default, even the one shown last
-      const x = addrs.find((y) => y.address === sel && ok(y)) || addrs.find(ok);
-      if (!x) return showType('regular');
-      pickType(x); showAddr(x);
+      openDefault(sel);
     } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   }
-  // the filter on the shown address's type, and its words
-  function pickType(x) {
-    addrType = Object.keys(ADDR_HINT).find((t) => sameType(x, t)) || addrType;
-    qa('#addrType button').forEach((b) => b.classList.toggle('on', b.dataset.t === addrType));
-    $('addrHint').textContent = ADDR_HINT[addrType] || '';
+  function openDefault(sel) {
+    const ok = (y) => !(y.ext && !y.verified);
+    const x = addrs.find((y) => y.address === sel && ok(y)) || addrs.find((y) => favs.has(y.address) && ok(y)) || addrs.find(ok);
+    if (x) return showAddr(x);
+    shownAddr = null; $('beamQrWrap').hidden = true;
+    if (!addrs.length) $('addrList').innerHTML = '<div class="empty">no address yet: New makes one</div>';
   }
-  async function showType(type, fresh = false) {
-    note('x-beamRecv', 'bad', '');
-    $('addrHint').textContent = ADDR_HINT[type];
-    try {
-      if (!fresh) {
-        if (!(await loadAddrs())) return;
-        const have = addrs.find((x) => sameType(x, type) && !x.expired && !x.ext);
-        if (have) return showAddr(have);
-      }
-      await newAddress(type);
-    } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
-  }
-  $('addrType').onclick = (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    qa('#addrType button').forEach((x) => x.classList.toggle('on', x === b));
-    addrType = b.dataset.t; showType(addrType);
+  // New: a window to choose the type (each with what it is), and a name if wanted
+  $('newAddr').onclick = async () => {
+    const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
+    const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
+    const r = await ask({ title: 'New address', html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create' });
+    if (!r.ok) return;
+    const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
+    try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
-  $('newBeamAddr').onclick = () => showType(addrType, true);
-  $('saveBeamQr').onclick = () => BB.qrSave($('beamAddr').textContent, `beam-${addrType}-address`, 'png');
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('#newType button'); if (!b) return;
+    qa('#newType button').forEach((x) => x.classList.toggle('on', x === b));
+    qa('#newTypeHint span').forEach((x) => x.classList.toggle('off', x.dataset.t !== b.dataset.t));
+  });
+  $('saveBeamQr').onclick = () => { const x = addrs.find((y) => y.address === shownAddr); BB.qrSave($('beamAddr').textContent, `beam-${(x && x.type) || 'address'}-address`, 'png'); };
   $('nameBeamAddr').onclick = async (e) => {
     e.preventDefault();
     const x = addrs.find((y) => y.address === shownAddr);
@@ -1061,7 +1064,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save' });
     if (!r.ok) return;
     try {
-      if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000 });
+      if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
       else await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input });
       if (!(await loadAddrs())) return; showAddr(addrs.find((y) => y.address === x.address) || x);
     }
@@ -1076,7 +1079,9 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     try {
       if (x.ext) await host('setAddrExt', W().id, null, x.address);
       else await host('beam', W().id, 'delete_address', { address: x.address });
-      if (x.address === shownAddr) { shownAddr = null; await showType(addrType); } else await loadAddrs();
+      const was = x.address === shownAddr;
+      if (!(await loadAddrs())) return;
+      if (was) openDefault(null);
     } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
   }
   // Add: an address of this wallet that Beam does not list, checked before it is added. Only a public offline
@@ -1094,13 +1099,12 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       if (!v || !v.is_valid) return no('That is not a valid Beam address.');
       if (addrs.some((x) => x.address === a)) return no('This address is in the list already.');
       if (v.type !== 'public_offline') return no(`This is ${/^[aeiou]/.test(TYPE_NAME[v.type] || '') ? 'an' : 'a'} ${TYPE_NAME[v.type] || v.type || 'other'} address. Only a public offline address can be checked to belong to this seed phrase.`);
-      // one of this wallet's own public offline addresses to compare with (made if it has none yet)
-      let mine = addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address);
-      if (!mine.length) mine = [await host('beam', wid, 'create_address', { type: 'public_offline', expiration: 'never', comment: '' })];
+      // this wallet's own public offline addresses and its kept reference to compare with
+      const mine = [...addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address), await host('offlineRef', wid)];
       if (!mine.some((m) => sameRun(b58(m), b58(a)) >= 64)) return no('This public offline address belongs to another seed phrase, not this wallet\'s.');
-      await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now() });
+      await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now(), verified: 'key' });
       if (!(await loadAddrs())) return;
-      const x = addrs.find((y) => y.address === a); if (x) { pickType(x); showAddr(x); }
+      const x = addrs.find((y) => y.address === a); if (x) showAddr(x);
     } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
   $('delBeamAddr').onclick = () => removeAddr(addrs.find((y) => y.address === shownAddr));
@@ -1141,7 +1145,6 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     const row = e.target.closest('[data-k]'); if (!row) return;
     const x = addrs[Number(row.dataset.k)];
     if (!x) return;
-    pickType(x);
     showAddr(x);
     $('beamQrWrap').scrollIntoView({ block: 'nearest' });
   };
@@ -1256,10 +1259,44 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     beamSend: () => { bsOwnFill(); $('bsAvail').textContent = `${amt((beamStatus && beamStatus.available) || 0, 8)} BEAM`; },
     ethRecv: () => {
       const a = acct(); $('ethRecvAddr').textContent = a.address; $('ethRecvName').textContent = a.name;
+      // its nonce (transactions sent) and ENS name (when it has one), from the network
+      // (shown once they come: nothing while they load, nothing if the network does not answer)
+      // its EIP-7702 delegation (the contract its account runs, or none), and the ENS name's avatar: a row only
+      // with the name and only when the record is there and its picture loads (drawn by ENS's metadata service,
+      // which reads every kind of record: a link, ipfs://, an NFT)
+      const pair = (k) => [$(k + 'K'), $(k)];
+      for (const k of ['ethRecvNonce', 'ethRecvEns', 'ethRecvAva', 'ethRecvDel']) for (const e of pair(k)) e.hidden = true;
+      $('ethRecvAvaImg').removeAttribute('src');
+      host('ethInfo', a.address).then((i) => {
+        if (!acct() || acct().address !== a.address) return;
+        const show = (k) => { for (const e of pair(k)) e.hidden = false; };
+        $('ethRecvNonce').textContent = String(i.nonce); show('ethRecvNonce');
+        if (i.ens) { $('ethRecvEns').textContent = i.ens; show('ethRecvEns'); }
+        if (i.ens && i.avatar) {
+          const img = $('ethRecvAvaImg');
+          img.onload = () => { if (acct() && acct().address === a.address) show('ethRecvAva'); };
+          img.onerror = () => {};
+          img.src = `https://metadata.ens.domains/mainnet/avatar/${encodeURIComponent(i.ens)}`;
+        }
+        if (i.delegate !== undefined) {
+          $('ethRecvDel').innerHTML = i.delegate
+            ? `<a class="text-link" href="https://etherscan.io/address/${esc(i.delegate)}" target="_blank" rel="noopener" title="Delegated by EIP-7702: this account runs the code of ${esc(i.delegate)}">${esc(short(i.delegate))}</a>`
+            : '<span class="tipped" title="EIP-7702: the account runs no contract&#39;s code, it is a plain account">none</span>';
+          show('ethRecvDel');
+        }
+      }, () => {});
       BB.qr($('ethQr'), a.address, QR_SIZE);
     },
     dapps: () => { dappListOpen(); dappLogOpen(); },
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); esOwnFill(); $('esTo').oninput(); },
+  };
+  // the account's own actions, as in its menu: renamed (the card shows the new name), removed (back to the wallet)
+  $('renEthAcct').onclick = async () => { try { await renameAccount(); } catch (e) { return ask({ title: 'Not renamed', note: msg(e), yes: 'OK', no: null }); } await load(); renderEth(); const a = acct(); if (a) $('ethRecvName').textContent = a.name; };
+  $('delEthAcct').onclick = async () => {
+    const w = W(), before = acct() && acct().address;
+    try { await removeAccount(w); } catch (e) { return ask({ title: 'Not removed', note: msg(e), yes: 'OK', no: null }); }
+    await load(); renderEth(); ethRefresh();
+    if (!acct() || acct().address !== before) tab('home');
   };
   $('saveEthQr').onclick = () => BB.qrSave($('ethRecvAddr').textContent, 'ethereum-address', 'png');
   $('copyEthAddr').onclick = () => copyFlash($('copyEthAddr'), $('ethRecvAddr').textContent);

@@ -31,9 +31,12 @@
   - sorted by value.
   The list folds when another tab or wallet opens.
 - Receive:
-  - address types in the bar under the tabs (regular, offline, public offline, max privacy);
-  - a card with the QR, the address's name, type, creation and expiry dates, its length, and icons to copy,
-    share the QR, rename, make a new address, remove;
+  - My addresses on top, the card under it; New next to Add makes an address, its type (regular, offline,
+    public offline, max privacy) chosen in its window; no address is ever made by itself;
+  - it opens on the address last shown since the unlock, else the first favourite, else the first in the list;
+    an added address not yet verified is never opened by itself;
+  - a card with the QR, the address's name, type (its meaning on hover), creation and expiry dates, its length,
+    and icons to copy, share the QR, rename, remove;
   - My addresses as a list (a star for favourites, which come first, the last marked on top, and can be
     dragged into any order, then the others in the order they were made, the name or the address, the type), the
     shown one lit;
@@ -57,15 +60,21 @@
 - The account menu scrolls past 4 accounts and has icons for its actions.
 - The account button reads `name | address`, with the address left out when it does not fit.
 - WBEAM is priced at its Uniswap market.
+- The receive card shows the account's nonce (transactions sent) and its ENS name when it has one (the reverse
+  record, shown only when the name resolves back to the address), the name's avatar on a row of its own (only
+  with the name, and only when it has one), and its EIP-7702 delegation (the contract it runs, or none).
 
 ### Everywhere
 - QR codes come from the design library (`ui/components/qr.js`), in the puzzle invite's look:
   - our logo in the middle;
   - one size for every address;
   - checked readable on Beam's longest addresses.
+- Tooltips go with their element: a click, the element gone or hidden, the pointer or the window gone (they
+  stayed up when the screen changed under them), and a window closing no longer brings one up.
 - Links are the library's two kinds only (a plain link, `.text-link`).
 - Explorer links fall back to explorer.beam.mw when ours does not answer.
 - Addresses are shortened to their first 3 and last 6 characters.
+- Every sheet (Receive, Send) has its title and Back on one line; the bar under the tabs is gone.
 - Dates read dd.mm.yyyy, the time in 24 or 12 hours (Settings → Display).
 - The total's 24 h change is shown.
 - The toolbar icon turns grey while the wallet is locked.
