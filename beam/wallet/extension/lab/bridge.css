@@ -1,0 +1,69 @@
+/* the Bridge lab (lab/bridge.html): the swap card, on its own while it is worked on */
+/* ---- the bridge as a swap card: You send over You receive, a round ⇅ between them ---- */
+.bx { position: relative; display: grid; gap: 6px; margin-top: 2px; }
+.bx-side { border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); padding: 10px 14px 12px; }
+.bx-side.eth-side { --side: #8c9eff; }
+.bx-l1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bx-av { display: inline-flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.bx-max { padding: 1px 6px; font: 700 10px var(--font-mono); letter-spacing: 0.04em; color: var(--accent); background: none; border: 1px solid rgba(var(--accent-rgb), 0.5); border-radius: 5px; cursor: pointer; }
+.bx-max:hover { background: rgba(var(--accent-rgb), 0.12); }
+.bx-l2 { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-height: 34px; }
+.bx-l2 input { flex: 1 1 auto; min-width: 0; width: 0; padding: 0; background: none; border: 0; outline: none; color: var(--text); font: 700 24px var(--font-mono); }
+.bx-l2 input::placeholder { color: var(--muted); }
+.bx-l2 input.bad { color: var(--color-red); }
+.bx-get { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 700 24px var(--font-mono); color: var(--text); }
+.bx-get.dim { color: var(--muted); }
+.bx-unit { flex: none; font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
+.bx-who { flex: 0 1 auto; min-width: 0; margin-left: 6px; display: flex; justify-content: flex-end; }
+.bx-wallet { display: inline-flex; align-items: center; white-space: nowrap; font: 700 var(--fs-m) var(--font-mono); }
+.bx-wallet .chain { margin-right: 7px; }
+.bx-who .dd { min-width: 0; width: 160px; }
+.bx-swap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 58px; height: 26px; padding: 0; border-radius: 999px;
+  background: transparent; border: 1px solid var(--border); cursor: pointer; transition: border-color 0.2s; }      /* its own oval, no fill: the cards are cut round it */
+.bx-swap:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+/* the two networks' dots, in the order the coins go; a turn makes them hop over each other */
+.bx-swap i { position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; transition: left 0.45s cubic-bezier(0.5, -0.4, 0.4, 1.4); }
+.bx-swap .bx-b { left: 10px; background: var(--color-green); box-shadow: 0 0 8px var(--color-green); }
+.bx-swap .bx-e { left: 36px; background: #8c9eff; box-shadow: 0 0 8px #8c9eff; }
+.bx-swap.back .bx-b { left: 36px; }
+.bx-swap.back .bx-e { left: 10px; }
+.bx-fee { margin-top: 14px; }
+.bx-fee > .caps { margin-bottom: 6px; }
+.bx-fee .feeopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.bx-fee .feeopts[hidden] { display: none; }
+.bx-fee .feeopt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border: 0; border-right: 1px solid var(--border); border-radius: 0; background: none; cursor: pointer; color: var(--muted); }
+.bx-fee .feeopt:last-child { border-right: 0; }
+.bx-fee .feeopt .t { font: 11px var(--font-mono); letter-spacing: 0; text-transform: none; color: inherit; }
+.bx-fee .feeopt .f { font: 700 12px var(--font-mono); color: var(--text); }
+.bx-fee .feeopt.on { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
+.bx-sum { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font: 11px var(--font-mono); color: var(--muted); }
+.bx-sum b { color: var(--text-dim); font-weight: 400; }
+.bx-go { margin-top: 14px; flex-wrap: wrap; }
+.bx-go .btn { flex: 1 1 100%; padding: 11px 0; font-size: 13px; text-align: center; justify-content: center; }
+.bx-go .act-msg { flex: 1 1 100%; text-align: center; }
+#t-bridge > .panel { margin-top: 16px; }
+#t-bridge #bErr { margin: 6px 0 0; }
+/* the lab header as the wallet's inside: no brand, the wallet picker its usual width */
+#brand { display: none !important; }
+#walletDd { flex: 0 1 200px; margin-right: auto; }
+/* the cards cut round the switch: each loses a notch of the switch's shape and 5 px more (a pill 68 x 36: a middle
+   rectangle and two circles), the top card at its bottom, the lower one at its top; the notch's edge is drawn as the
+   cards' border, the 6 px gap between the cards left open, so each card's border bends round the switch */
+.bx { --nw: 68px; --nh: 36px; --nr: 18px; }
+#bxSend { --ny: calc(100% + 3px); }
+#bxRecv { --ny: -3px; }
+#bxSend, #bxRecv {
+  mask-image: linear-gradient(#000, #000),
+    radial-gradient(circle at calc(50% - var(--nw) / 2 + var(--nr)) var(--ny), #000 calc(var(--nr) - 0.5px), transparent var(--nr)),
+    radial-gradient(circle at calc(50% + var(--nw) / 2 - var(--nr)) var(--ny), #000 calc(var(--nr) - 0.5px), transparent var(--nr)),
+    linear-gradient(#000, #000);
+  mask-size: 100% 100%, 100% 100%, 100% 100%, calc(var(--nw) - 2 * var(--nr)) var(--nh);
+  mask-repeat: no-repeat;
+  mask-composite: subtract, add, add;
+}
+#bxSend { mask-position: 0 0, 0 0, 0 0, 50% calc(100% + 3px + var(--nh) / 2); }
+#bxRecv { mask-position: 0 0, 0 0, 0 0, 50% calc(-3px - var(--nh) / 2); }
+/* the notch's edge: a ring of the cards' border round the switch, its middle band (the gap) left out */
+.bx-swap::before { content: ''; position: absolute; left: -5px; right: -5px; top: -5px; bottom: -5px; border: 1px solid var(--border); border-radius: 999px; pointer-events: none;
+  -webkit-mask-image: linear-gradient(#000 0 calc(50% - 3px), transparent calc(50% - 3px) calc(50% + 3px), #000 calc(50% + 3px));
+  mask-image: linear-gradient(#000 0 calc(50% - 3px), transparent calc(50% - 3px) calc(50% + 3px), #000 calc(50% + 3px)); }

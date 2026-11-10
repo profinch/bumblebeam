@@ -100,6 +100,11 @@
   transfer's gas estimate at today's base fee and tip. All keeps back the most the transfer can cost, not a
   fixed 0.002 ETH.
 
+### Bridge
+- Its next design, a swap card (You send over You receive, the networks' dots that change places between them),
+  is worked on in a lab page of its own (`lab/bridge.html`, made-up figures, nothing is sent); the tab keeps its
+  form meanwhile.
+
 ### dApps
 - Each wallet keeps its own site connections, Beam and Ethereum. A site connected in one wallet saw another
   wallet's Beam balance after a switch, and kept its Ethereum account. After a switch:
