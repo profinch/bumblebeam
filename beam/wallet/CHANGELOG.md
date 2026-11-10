@@ -92,10 +92,13 @@
   button name | address, the address left out when the name fills it.
 - ETH's price in its row of the token list, in the amount column (right-aligned as the tokens' amounts), as
   plain figures after a ×: 0.0101 ETH … × $2 023.75 … $20.48.
-- Send's confirmation: the amount in dollars after it (0.001 ETH | ≈ $2.02), the gas as 26 200 limit | base
-  0.31 gwei.
-- Send shows the network fee before the review, right of Available on its line, read from the chain: the transfer's gas estimate at today's base
-  fee and tip, in ETH and dollars. All keeps back the most the transfer can cost, not a fixed 0.002 ETH.
+- Send's confirmation: the amount in dollars after it (0.001 ETH | ≈ $2.03), rows of their own for the
+  net fee (≈ 0.000006 ETH | $0.01), the max fee, the gas base (0.31 gwei) and the gas limit (26 200), all
+  aligned on one column; a whole address fits on one line.
+- Windows are 8 px from the popup's sides (the browser's own narrower limit taken off).
+- Send shows the net fee before the review, right of Available on its line, read from the chain: the
+  transfer's gas estimate at today's base fee and tip. All keeps back the most the transfer can cost, not a
+  fixed 0.002 ETH.
 
 ### dApps
 - Each wallet keeps its own site connections, Beam and Ethereum. A site connected in one wallet saw another
@@ -103,6 +106,7 @@
   - the sites are told;
   - Connected sites lists the open wallet's;
   - connections made before this version move to their account's wallet, and Beam ones are asked again.
+- Recent requests (the sites' last calls) is gone, on the page and in the wallet's memory.
 - Catalog: the groups are "Beam official" (it folds, folded at first, the choice kept, sliding open and shut)
   and "BumbleBeam whitelisted".
 
@@ -111,6 +115,8 @@
   showed "—" until it was opened again. A value not known yet is left blank, not a dash.
 - The lock clears what was typed: Send on both networks, the bridge and the token field go back to empty, their
   lists to the first choice.
+- Choosing another wallet keeps you where you are (Wallet, Bridge, Activity, Settings, dApps), drawn for that
+  wallet; a Receive or Send page goes back to the Wallet tab. It always opened the Wallet tab.
 - No screen shows another wallet's data after a switch. Receive clears at once; Activity and Bridge drop
   answers for a wallet no longer open; a switch made in another window closes Receive or Send.
 - On a sheet (Receive, Send, on both networks) the way back is an arrow in the header beside the
@@ -142,7 +148,8 @@
 - dApps has no back arrow: its cube closes it to the wallet's main screen, from wherever it was opened, as the gear
   closes Settings.
 - An action that went says so in a few words right of its button, in the accent, as its errors do: "transaction
-  12e55bb4… sent" (Send on both networks, the bridge both ways). It was a card at the bottom, out of sight.
+  12e55bb4… sent" (Send on both networks, the bridge both ways), and fades away after 5 s; one still in progress ("sending…")
+  stays until the next word. It was a card at the bottom, out of sight.
 - A comma is a decimal point everywhere, Ethereum's amounts too ("0,001" was refused as a thousands separator).
 - An amount is checked as it is typed and on Send (digits and one decimal point, the decimals allowed, not more
   than available, not empty): the reason shows in yellow in place of Available, never beside the button, the

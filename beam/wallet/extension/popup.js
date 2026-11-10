@@ -106,7 +106,7 @@
     }
     const box = btn.closest('section, .panel') || document;
     qa('.err', box).forEach((x) => x.classList.remove('err'));
-    m.classList.remove('ok');
+    clearTimeout(m._fade); m.classList.remove('ok', 'going');
     m.textContent = e ? msg(e) : '';
     if (!e) return;
     let id = e.field;
@@ -122,11 +122,19 @@
       if (el.matches('input, textarea')) el.addEventListener('input', clear, { once: true });
     }
   }
-  // An action that went: said in a few words right of its button, as its errors are, in the accent (html: a link)
-  function actOk(btn, html) {
+  // An action that went: said in a few words right of its button, as its errors are, in the accent (html: a link).
+  // It fades away after 5 s; one still in progress (stay: "sending…") stays until the next word replaces it.
+  function actOk(btn, html, stay = false) {
     actErr(btn, null);
     const m = (btn.closest('.row') || btn.parentElement).querySelector('.act-msg');
-    if (m) { m.innerHTML = html; m.classList.add('ok'); }
+    if (!m) return;
+    clearTimeout(m._fade); m.classList.remove('going');
+    m.innerHTML = html; m.classList.add('ok');
+    if (stay) return;
+    m._fade = setTimeout(() => {
+      m.classList.add('going');
+      m._fade = setTimeout(() => { if (m.classList.contains('going')) { m.textContent = ''; m.classList.remove('going', 'ok'); } }, 600);
+    }, 5000);
   }
   const toGroth = (x) => {
     const t = String(x).trim().replace(',', '.');
@@ -351,8 +359,11 @@
     return p;
   }
   // warn: a caution in yellow under the rows (a transfer to the open wallet's own address)
+  // A null among the rows starts a group of its own: each group's values line up on its own longest label, so a
+  // whole address fits beside short labels (Amount, From, To) while the fee's rows keep theirs
+  const kvGroups = (rows) => rows.reduce((g, r) => { if (r === null) g.push([]); else g[g.length - 1].push(r); return g; }, [[]]).filter((g) => g.length);
   const confirmBox = async (title, rows, n, warn = '') => (await ask({ title, note: n,
-    html: `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${warn ? `<p class="warn-own dlg-warn">⚠️ ${esc(warn)}</p>` : ''}` })).ok;
+    html: `${kvGroups(rows).map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`).join('')}${warn ? `<p class="warn-own dlg-warn">⚠️ ${esc(warn)}</p>` : ''}` })).ok;
 
   // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
   // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
@@ -557,7 +568,12 @@
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
     try { await host('switchWallet', v); } catch (e) { return ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }); }
-    await load(); tab('home');                      // a chosen wallet always opens on its Wallet tab
+    await load();
+    // the same place in the wallet chosen: its tab (Wallet, Bridge, Activity, Settings) or dApps, drawn for it; a
+    // Receive or Send page (the other wallet's addresses) goes back to the Wallet tab
+    const open = qa('.screen.sheet').find((x) => !x.hidden);
+    if (open && open.id === 'x-dapps') sheet('dapps');
+    else tab(open ? 'home' : curTab);
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
@@ -681,13 +697,13 @@
       case 'bb_locked': st = null; resetForms(); route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
-      case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappLogOpen(); } break;
+      case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappListOpen(); } break;
       // a request ended or a site was disconnected (here or in another window): the request window shows
       // what is still waiting (it closes when nothing is); a popup its site's state, the sites list, the balances
       case 'bb_dapp_done':
         if (inWin) { if (!dpBusy && st && st.phase === 'unlocked') dappScreen(); break; }
         dappRefresh();
-        if (!$('x-dapps').hidden) { dappListOpen(); dappLogOpen(); }
+        if (!$('x-dapps').hidden) dappListOpen();
         if (curTab === 'home' && !$('t-home').hidden) ethRefresh();
         break;
       case 'ev_sync_progress':
@@ -1441,7 +1457,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // its two parts made once; then each written only when its text changes, so typing an amount does not
     // redraw the line (it blinked: the fade took each redraw for new data)
     if (!$('esLeft')) $('esAvail').innerHTML = '<span id="esLeft"></span><span id="esRight"></span>';
-    const rightHtml = `<span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Network fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} <span class="unit">ETH</span>`}</b></span>`;
+    const rightHtml = `<span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Net fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} <span class="unit">ETH</span>`}</b></span>`;
     if ($('esRight').innerHTML !== rightHtml) $('esRight').innerHTML = rightHtml;
     amtLine($('esAmt'), $('esLeft'), ethData ? `Available: <b>${esc(num(units(c.bal, c.dec), 8))}</b> <span class="unit">${esc(c.label)}</span>` : '', amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
   }
@@ -1507,9 +1523,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const inUsd = unitUsd ? ` | ≈ ${usd(Number(p.amountExact) * unitUsd)}` : '';
       const ok = await confirmBox(`Send ${p.symbol}`, [
         ['Amount', `${p.amountExact} ${p.symbol}${inUsd}`], ['From', `${a.name} ${short(a.address)}`], ['To', p.to],
-        ['Network fee', `≈ ${num(feeNow, 6)} ETH ${rates ? usd(feeNow * rates.eth) : ''} (at most ${num(feeMax, 6)})`],
-        ['Gas', `${Number(p.gasLimit).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')} limit | base ${p.baseGwei.toFixed(2)} gwei`]],
-        'Signed here and sent through a public Ethereum RPC. It cannot be undone.',
+        // the fee it should cost (gas estimate x today's base fee + tip), and the most it can (gas limit x max fee per gas)
+        ['Net fee', `≈ ${num(feeNow, 6)} ETH${rates ? ` | ${usd(feeNow * rates.eth)}` : ''}`],
+        ['Max fee', `${num(feeMax, 6)} ETH${rates ? ` | ${usd(feeMax * rates.eth)}` : ''}`],
+        // under them what each goes by: the gas price (the fee), the gas limit (the max fee)
+        ['Gas base', `${p.baseGwei.toFixed(2)} gwei`], ['Gas limit', Number(p.gasLimit).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')]],
+        'Signed here and sent through a public Ethereum RPC.\nIt cannot be undone.',
         a.address.toLowerCase() === p.to.toLowerCase() ? 'the account you send from: the tokens come back to it, only the gas is spent' : '');
       if (!ok) return;
       const hash = await host('ethSend', p.id);
@@ -1553,7 +1572,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       }, () => {});
       BB.qr($('ethQr'), a.address, QR_SIZE);
     },
-    dapps: () => { dappListOpen(); dappLogOpen(); },
+    dapps: () => dappListOpen(),
     ethSend: () => { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esQuote = null; esAvail(); esOwnFill(); $('esTo').oninput(); esFee(true); },
   };
   // the account's own actions, as in its menu: renamed (the card shows the new name), removed (back to the wallet)
@@ -1658,7 +1677,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM`],
           ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? 0).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); ×${(f / GROTH / fd.min).toFixed(1)} today's minimum`],
           ['To', own ? `${own.wallet.name} · ${own.name} ${rcv}` : `${rcv} (not one of this wallet's accounts)`]],
-        note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour. It cannot be undone.',
+        note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour.\nIt cannot be undone.',
       }, a, rcv, f);
       actOk($('doToEth'), `transaction ${esc(txid)} sent`);
       $('teAmt').value = '';
@@ -1712,7 +1731,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         ['Gas', `≈ ${num(fn, 6)} ETH ${rates ? usd(fn * rates.eth) : ''} (at most ${num(fm, 6)})`]],
         'The approval is for exactly this amount. Once the relayer has brought it to Beam (usually under an hour), claim it under "Arrived on Beam".');
       if (!ok) return;
-      actOk($('doFromEth'), p.approve ? 'approving WBEAM, then sending…' : 'sending…');
+      actOk($('doFromEth'), p.approve ? 'approving WBEAM, then sending…' : 'sending…', true);
       const rec = await host('fromEthSend', p.id);
       actOk($('doFromEth'), `transaction <a class="text-link" href="https://etherscan.io/tx/${esc(rec.hash)}" target="_blank" rel="noopener">${esc(short(rec.hash))}</a> confirmed`);
       $('feAmt').value = '';
@@ -2037,17 +2056,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     l._t = setTimeout(() => { l.style.height = ''; }, 260);
     try { localStorage.setItem(`bb.catalog.${p.dataset.fold}`, open ? 'open' : 'folded'); } catch {}
   };
-  async function dappLogOpen() {
-    if (dappNet === 'cat') { $('dappLogCard').hidden = true; return; }
-    // the network shown above: Beam's calls (beam_connect, beam: …) or Ethereum's (the rest)
-    const l = (await host('dappLog').catch(() => [])).filter((r) => /^beam[_:]/.test(r.method) === (dappNet === 'beam'));
-    const tm = (t) => new Date(t).toLocaleTimeString('en-GB');
-    $('dappLog').innerHTML = l.map((r) => `<div class="li log"><span class="what">${esc(r.method)}<span class="sub">${esc(new URL(r.origin).host)} · ${tm(r.at)}</span></span><span class="sub ${r.out === 'ok' ? '' : r.out ? 'bad' : 'warn'}">${esc(r.out || 'waiting…')}${r.end ? `${r.out === 'ok' ? ':' : ' ·'} ${((r.end - r.at) / 1000).toFixed(1)} s` : ''}</span></div>`).join('');
-    $('dappLogCard').hidden = !l.length;            // none on this network: no card at all
-  }
-  // read again every 2 s while the page is open: a call's end shows by itself
-  setInterval(() => { if (!$('x-dapps').hidden) dappLogOpen(); }, 2000);
-  $('dappBar').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); dappLogOpen(); } };
+  $('dappBar').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { dappNet = b.dataset.n; dappListOpen(); } };
   $('dappList').onclick = async (e) => {
     const a = e.target.closest('[data-dapp]');
     if (!a) return;
