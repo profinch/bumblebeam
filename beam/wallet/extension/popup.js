@@ -19,6 +19,7 @@
   // that was hidden until its data came (the Ethereum card's nonce, ENS, avatar…). A value that only changes, or
   // a list drawn again, does not blink. Screens and dropdown lists are left alone.
   const BLANK = new Set(['', '—', '…', '-']);
+  // a QR code drawn again (another address) counts as new too: it fades in each time
   const blank = (nodes) => [...nodes].every((n) => (n.nodeType === 1 && n.classList.contains('empty')) || BLANK.has((n.textContent || '').trim()));
   const fadeIn = (el) => { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); };
   new MutationObserver((list) => {
@@ -32,10 +33,12 @@
         continue;
       }
       // blank before: what was taken out was blank, or nothing was there (all it holds came in now)
-      const was = m.removedNodes.length ? blank(m.removedNodes) : m.addedNodes.length && el.childNodes.length === m.addedNodes.length;
+      // (nothing there: the first nodes put in had no neighbours on either side)
+      const was = m.removedNodes.length ? blank(m.removedNodes) : m.addedNodes.length && !m.previousSibling && !m.nextSibling;
       if (!was) continue;
-      const now = (el.textContent || '').trim();
-      if (BLANK.has(now) || (el.children.length === 1 && el.firstElementChild.classList.contains('empty'))) continue;
+      // content is text, or a picture (a QR code's canvas, an image, an icon)
+      const now = (el.textContent || '').trim(), pic = !!el.querySelector('canvas, img');
+      if ((BLANK.has(now) && !pic) || (el.children.length === 1 && el.firstElementChild.classList.contains('empty'))) continue;
       done.add(el); fadeIn(el);
     }
   }).observe(document.querySelector('main') || document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden'] });
@@ -72,10 +75,18 @@
     if (max != null && Number(t) > max) return 'more than available';
     return '';
   };
+  // Send's amount, checked before anything is sent: what is wrong with it shows only on its own line (in place of
+  // Available), never beside the button; an empty one asks for it. true: it can go
+  // (asked once, the empty field keeps asking through any redraw of its line until something is typed)
+  const amtReady = (input, left, redraw) => {
+    input.dataset.need = '1'; redraw();
+    return !input.classList.contains('bad');
+  };
   // the left of the line under an amount: Available, or what is wrong with the amount (the field outlined)
   const amtLine = (input, left, availHtml, issue) => {
+    if (!issue && input.dataset.need && !input.value.trim()) issue = 'enter an amount';
     input.classList.toggle('bad', !!issue);
-    left.innerHTML = issue ? `<span class="warn-own">⚠️ ${esc(issue)}</span>` : availHtml;
+    left.innerHTML = issue ? `<span class="warn-own">${esc(issue)}</span>` : availHtml;
   };
   // An action's error: in yellow right of its button (or under the field a Save/Add button sits in), the field it
   // is about outlined in red, both gone once that field is edited or the action runs again. The field: the one the
@@ -90,11 +101,14 @@
     }
     const box = btn.closest('section, .panel') || document;
     qa('.err', box).forEach((x) => x.classList.remove('err'));
-    m.textContent = e ? `⚠️ ${msg(e)}` : '';
+    m.textContent = e ? msg(e) : '';
     if (!e) return;
     let id = e.field;
     if (!id) for (const [k, re] of Object.entries(guess)) if (re.test(msg(e))) { id = k; break; }
     if (!id && !row && fld) { const i = fld.querySelector('input, textarea'); id = i && i.id; }
+    // a field with a line of its own under it (an address's): the error goes there, not beside the button
+    const UNDER = { bsAddr: 'bsKind', esTo: 'esToHint' };
+    if (id && UNDER[id]) { m.textContent = ''; $(UNDER[id]).innerHTML = `<span class="warn-own">${esc(msg(e))}</span>`; }
     const el = id && $(id), target = el && el.classList.contains('dd') ? el.querySelector('.dd-btn') : el;
     if (target) {
       target.classList.add('err');
@@ -117,7 +131,7 @@
     const el = typeof scope === 'string' ? (/\b(note|msg)\b/.test($(scope).className) ? $(scope) : $(scope).querySelector(`.note.${kind}`)) : scope;
     if (!el) return;
     if (html) el.innerHTML = text || ''; else el.textContent = text || '';
-    el.hidden = !text;
+    el.hidden = !text && !el.classList.contains('keep');      // .keep: its room stays, empty
   };
   const clearNotes = (id) => qa('.note', $(id)).forEach((n) => { n.hidden = true; n.textContent = ''; });
   const copy = async (btn, text) => {
@@ -184,6 +198,7 @@
   function show(id) {
     // a screen left behind takes its action errors with it
     qa(".err").forEach((x) => x.classList.remove("err")); qa(".act-msg").forEach((x) => { x.textContent = ""; });
+    qa('[data-need]').forEach((x) => { delete x.dataset.need; });
     if (!$('t-home').hidden) {
       const mm = document.querySelector('main'), e = $('ethCard').getBoundingClientRect();
       if (e.height) homeOver = e.bottom - (mm.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(mm).paddingBottom) || 0));
@@ -194,17 +209,19 @@
     // adding a wallet from an open one: the way back and Settings beside the lock
     const adding = id === 's-welcome' && !!(st && st.phase === 'unlocked');
     $('setBtn').hidden = !inside && !adding;
-    $('backBtn').hidden = !adding;
+    // a sheet (Receive, Send): the way back is the header's arrow beside the lock; dApps, as Settings, closes by
+    // its own icon again
+    $('backBtn').hidden = !adding && !(id.startsWith('x-') && id !== 'x-dapps');
     $('actBar').hidden = id !== 't-activity';
     $('dappBar').hidden = id !== 'x-dapps';
-    // Connected sites keeps the scroll bar's room on both sides (wallet.css): its own padding less by as much,
-    // so its cards line up with every other screen's
+    // every screen but the wallet tab keeps the scroll bar's room on both sides (wallet.css): main's padding less
+    // by as much, so the content lines up with the wallet tab's
     const m = document.querySelector('main');
     m.style.paddingLeft = m.style.paddingRight = m.style.paddingBottom = '';
-    if ((id === 'x-dapps' || id === 'x-beamRecv') && document.documentElement.classList.contains('popup')) {
+    if (id !== 't-home' && document.documentElement.classList.contains('popup')) {
       const g = (m.offsetWidth - m.clientWidth) / 2, pad = parseFloat(getComputedStyle(m).paddingLeft) || 0;
       m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
-      m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
+      if (id === 'x-dapps' || id === 'x-beamRecv') m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
     }
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
@@ -241,9 +258,22 @@
   });
   $('lockBtn').onclick = async () => { await host('lock'); };
   $('backBtn').onclick = () => tab(curTab === 'settings' ? 'settings' : 'home');
-  // the cube: dApps (the connected sites, the catalog); again: back to the tab it came from
-  $('dappsBtn').onclick = () => ($('x-dapps').hidden ? sheet('dapps') : tab(curTab));
+  // the cube: dApps (the connected sites, the catalog)
+  $('dappsBtn').onclick = () => ($('x-dapps').hidden ? sheet('dapps') : tab('home'));      // again: the wallet's main screen, as the gear does from Settings
   $('setBtn').onclick = () => tab(curTab === 'settings' && !$('t-settings').hidden ? 'home' : 'settings');
+
+  // The lock leaves nothing typed behind: Send on both networks, the bridge and the token field go back to
+  // empty (a fee to its default), the lists to their first choice, the lines under them and any error away.
+  function resetForms() {
+    for (const el of qa('#x-beamSend input, #x-beamSend textarea, #x-ethSend input, #x-ethSend textarea, #t-bridge input, #t-bridge textarea, #tokAddr')) {
+      el.value = el.defaultValue || ''; el.classList.remove('bad', 'err'); delete el.dataset.need; delete el.dataset.touched;
+    }
+    for (const id of ['bsKind', 'esToHint']) if ($(id)) $(id).textContent = '';
+    qa('.err').forEach((x) => x.classList.remove('err')); qa('.act-msg').forEach((x) => { x.textContent = ''; });
+    try { bsOwn.set(''); esOwn.set(''); bsAsset.set('0'); esAsset.set('ETH'); } catch {}
+    bsType = null; bsMine = ''; esQuote = null;
+    clearNotes('x-beamSend'); clearNotes('x-ethSend'); clearNotes('t-bridge');
+  }
 
   // ---------- the dialog: confirm, password, one input ----------
   let dlgBusy = Promise.resolve();
@@ -258,7 +288,9 @@
       $('dInputLabel').textContent = input ? input.label : '';
       $('dInput').placeholder = (input && input.placeholder) || '';
       $('dInput').classList.toggle('secret', !!(input && input.secret));
-      note('dErr', 'bad', '');
+      // a dialog that takes something typed keeps the room for its error, so nothing moves when one shows
+      $('dErr').classList.toggle('keep', !!(input || password || check));
+      note('dErr', 'bad', ''); $('dInput').classList.remove('err'); $('dPass').classList.remove('err');
       $('dYes').textContent = yes; $('dNo').textContent = no; $('dNo').hidden = !no;
       $('dlg').showModal();
       (password ? $('dPass') : input ? $('dInput') : $('dYes')).focus();
@@ -274,7 +306,13 @@
           $('dYes').disabled = true;
           let res;
           try { res = await check({ pass: $('dPass').value, input: inVal() }); }
-          catch (e) { note('dErr', 'bad', msg(e)); $('dYes').disabled = false; return; }
+          catch (e) {
+            // in yellow above the buttons, the field outlined in red until it is edited, as on the screens
+            note('dErr', 'bad', msg(e)); $('dYes').disabled = false;
+            const f = !$('dInputBox').hidden ? $('dInput') : !$('dPassBox').hidden ? $('dPass') : null;
+            if (f) { f.classList.add('err'); f.addEventListener('input', () => { f.classList.remove('err'); note('dErr', 'bad', ''); }, { once: true }); }
+            return;
+          }
           $('dYes').disabled = false;
           if (res && res.html != null) {
             shown = true;
@@ -300,7 +338,9 @@
     dlgBusy = p.catch(() => {});
     return p;
   }
-  const confirmBox = async (title, rows, n) => (await ask({ title, rows, note: n })).ok;
+  // warn: a caution in yellow under the rows (a transfer to the open wallet's own address)
+  const confirmBox = async (title, rows, n, warn = '') => (await ask({ title, note: n,
+    html: `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${warn ? `<p class="warn-own dlg-warn">⚠️ ${esc(warn)}</p>` : ''}` })).ok;
 
   // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
   // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
@@ -552,9 +592,9 @@
   async function renameAccount() {
     const w = W(), a = acct();
     if (!a) return;
-    const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name }, yes: 'Save' });
-    if (!r.ok || !r.input) return;
-    try { await host('renameEthAccount', w.id, a.i, r.input); } catch (e) { return ask({ title: 'Not renamed', note: msg(e), yes: 'OK', no: null }); }
+    const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name }, yes: 'Save',
+      check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameEthAccount', w.id, a.i, input); } });
+    if (!r.ok) return;
     await load(); ethRefresh();
   }
 
@@ -626,7 +666,7 @@
         break;
       }
       case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
-      case 'bb_locked': st = null; route(); break;
+      case 'bb_locked': st = null; resetForms(); route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
       case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappLogOpen(); } break;
@@ -900,11 +940,16 @@ ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</sp
     // the rows at once (named from what is known), again once the names come; a name still missing is
     // asked for again in 15 s while the list is open
     const known = w && assetMetaDone.get(w.id), ids = list.map((t) => Number(t.asset_id));
-    const draw = (meta) => { $('beamAssets').innerHTML = list.map((t) => {
+    // a name that comes in place of 'asset N' fades in, as anything that loads later
+    const draw = (meta) => {
+      const before = new Map(qa('#beamAssets .sym[data-aid]').map((x) => [x.dataset.aid, x.textContent]));
+      $('beamAssets').innerHTML = list.map((t) => {
       const aid = Number(t.asset_id), sym = assetSym(meta.get(aid)) || `asset ${aid}`;
       return `<div class="asset"><span class="tok"><a class="cp" href="https://explorer.bumblebeam.org/asset/${aid}" target="_blank" rel="noopener" title="Open in the explorer">${LINK}</a><button type="button" class="cp" data-cp="${aid}" title="Copy the asset id
-${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="amt">${num((t.available || 0) / GROTH)}</span><span class="usd">${usd(beamTokUsd(aid, t.available))}</span></div>`;
-    }).join(''); };
+${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</span><span class="amt">${num((t.available || 0) / GROTH)}</span><span class="usd">${usd(beamTokUsd(aid, t.available))}</span></div>`;
+      }).join('');
+      for (const x of qa('#beamAssets .sym[data-aid]')) if (/^asset \d+$/.test(before.get(x.dataset.aid) || '') && !/^asset \d+$/.test(x.textContent)) fadeIn(x);
+    };
     draw(known || new Map());
     if (!w) return;
     let meta = known;
@@ -963,23 +1008,24 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
 
   $('ethAddNew').onclick = async () => {
     const w = W();
-    const r = await ask({ title: 'Create Ethereum accounts', note: 'A new Ethereum seed phrase for this wallet. It is shown once now: write it down. Settings → Wallets shows it again with the password.', yes: 'Create' });
+    // made in the window itself (an error shows there in yellow), which then shows the phrase
+    const r = await ask({ title: 'Create Ethereum accounts', note: 'A new Ethereum seed phrase for this wallet. It is shown once now: write it down. Settings → Wallets shows it again with the password.', yes: 'Create',
+      check: async () => {
+        const phrase = await host('addEthPart', w.id, { kind: 'new' });
+        return phrase ? { title: 'Your Ethereum seed phrase', html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, note: 'It restores this wallet\'s Ethereum accounts here, in MetaMask or Rabby. The Beam part has its own phrase (or backup file).', yes: 'Written down' } : null;
+      } });
     if (!r.ok) return;
-    let phrase;
-    try { phrase = await host('addEthPart', w.id, { kind: 'new' }); }
-    catch (e) { return ask({ title: 'Not created', note: msg(e), yes: 'OK', no: null }); }
     await load(); ethRefresh();
-    if (phrase) await ask({ title: 'Your Ethereum seed phrase', html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, note: 'It restores this wallet\'s Ethereum accounts here, in MetaMask or Rabby. The Beam part has its own phrase (or backup file).', yes: 'Written down', no: null });
   };
   $('ethAddImport').onclick = async () => {
     const w = W();
     const r = await ask({ title: 'Import into this wallet', input: { label: 'An Ethereum seed phrase (12 or 24 words) or a private key', secret: true }, yes: 'Import',
-      check: async ({ input }) => { if (!(await host('isEthKey', input)) && !(await host('checkPhrase', input)).eth) throw new Error('neither a BIP-39 phrase nor a 64-hex private key'); } });
+      check: async ({ input }) => {
+        const isKey = await host('isEthKey', input);
+        if (!isKey && !(await host('checkPhrase', input)).eth) throw new Error('neither a BIP-39 phrase nor a 64-hex private key');
+        await host('addEthPart', w.id, isKey ? { kind: 'key', key: input } : { kind: 'phrase', phrase: input });
+      } });
     if (!r.ok) return;
-    try {
-      const isKey = await host('isEthKey', r.input);
-      await host('addEthPart', w.id, isKey ? { kind: 'key', key: r.input } : { kind: 'phrase', phrase: r.input });
-    } catch (e) { return ask({ title: 'Not imported', note: msg(e), yes: 'OK', no: null }); }
     await load(); ethRefresh();
   };
 
@@ -1052,6 +1098,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   const byFav = (p1, p2) => (favAt(p1.address) - favAt(p2.address)) || (p1.create_time || 0) - (p2.create_time || 0);
   const sameType = (x, type) => x.type === type || (type === 'regular' && x.type === 'regular_new');
   const ago2 = (sec) => (sec ? fdate(sec * 1000) : '');
+  // an address past its expiry (Beam says so, or its time is up): its row tinted red (ui .li.bad)
+  const addrExpired = (x) => !x.ext && (!!x.expired || (x.duration > 0 && (x.create_time + x.duration) * 1000 < Date.now()));
   const expiry = (x) => (x.ext ? (x.type === 'public_offline' ? 'never' : 'unknown') : x.expired ? 'expired' : !x.duration ? 'never' : fdate((x.create_time + x.duration) * 1000));
   // My addresses: a row each (one added manually and not verified: its name in yellow): a star (a favourite: filled,
   // first in the list, the last marked on top or as dragged), its name (else the address,
@@ -1060,7 +1108,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   const STAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.2 4.4 13.1l.7-4L2.2 6.3l4-.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
   const short6 = (a) => (a && a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-6)}` : a || '');      // in this list: 6 + 6
   function renderAddrs() {
-    $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}${favs.has(x.address) ? ' fav-row' : ''}" data-k="${k}"${favs.has(x.address) ? ' draggable="true"' : ''}>
+    $('addrList').innerHTML = addrs.map((x, k) => `<div class="li addr${x.address === shownAddr ? ' on' : ''}${addrExpired(x) ? ' bad' : ''}${favs.has(x.address) ? ' fav-row' : ''}" data-k="${k}"${favs.has(x.address) ? ' draggable="true"' : ''}>
       <button type="button" class="cp fav${favs.has(x.address) ? ' is' : ''}" data-fav="${k}" title="${favs.has(x.address) ? 'A favourite: first in the list. Click to unmark' : 'Mark as a favourite: first in the list'}">${STAR}</button>
       <span class="a-name${x.ext && !x.verified ? ' unver' : ''}"${x.ext && !x.verified ? ' title="⚠️ Added manually, not verified: no payment to it found in this wallet yet"' : ''}>${esc(x.comment || short6(x.address))}</span>
       <span class="a-t">${esc(TYPE_NAME[x.type] || x.type)}</span><button type="button" class="cp a-x" data-del="${k}" title="${x.ext ? 'Remove it from this list' : 'Remove this address'}">${XI}</button></div>`).join('') || '<div class="empty">none yet</div>';
@@ -1113,10 +1161,13 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     if (!addrs.length) $('addrList').innerHTML = '<div class="empty">no address yet: New makes one</div>';
   }
   // New: a window to choose the type (each with what it is), and a name if wanted
+  // two addresses never share a name (an empty one, Unnamed, may repeat); the case does not make it another
+  const nameTaken = (name, except) => { const n = String(name || '').trim().toLowerCase(); return n ? addrs.find((x) => x.address !== except && String(x.comment || '').trim().toLowerCase() === n) : null; };
+  const nameCheck = (except) => ({ input }) => { const x = nameTaken(input, except); if (x) throw new Error(`another address is named "${String(x.comment).trim()}" already`); };
   $('newAddr').onclick = async () => {
     const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
     const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
-    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create' });
+    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create', check: nameCheck(null) });
     if (!r.ok) return;
     const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
     try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
@@ -1132,7 +1183,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     e.preventDefault();
     const x = addrs.find((y) => y.address === shownAddr);
     if (!x) return;
-    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save' });
+    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save', check: nameCheck(x.address) });
     if (!r.ok) return;
     try {
       if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
@@ -1160,22 +1211,26 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   // must carry the same key as one this wallet makes. The other kinds come from keys numbered by the wallet that
   // made them, so whose they are cannot be told: they are not added.
   $('addAddr').onclick = async () => {
+    // checked in the window itself: what is wrong shows there in yellow, the window stays open
+    const wid = W().id;
     const r = await ask({ title: 'Add an address', input: { label: 'Address', value: '' },
-      note: 'Only a public offline address can be added: the wallet checks that it belongs to this wallet\'s seed phrase. Beam cannot tell whose an address of another kind is.', yes: 'Add' });
+      note: 'Only a public offline address can be added: the wallet checks that it belongs to this wallet\'s seed phrase. Beam cannot tell whose an address of another kind is.', yes: 'Add',
+      check: async ({ input }) => {
+        const a = String(input || '').trim();
+        if (!a) throw new Error('paste the address');
+        const v = await host('beam', wid, 'validate_address', { address: a });
+        if (!v || !v.is_valid) throw new Error('that is not a valid Beam address');
+        if (addrs.some((x) => x.address === a)) throw new Error('this address is in the list already');
+        if (v.type !== 'public_offline') throw new Error(`this is ${/^[aeiou]/.test(TYPE_NAME[v.type] || '') ? 'an' : 'a'} ${TYPE_NAME[v.type] || v.type || 'other'} address: only a public offline one can be checked to belong to this seed phrase`);
+        // this wallet's own public offline addresses and its kept reference to compare with
+        const mine = [...addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address), await host('offlineRef', wid)];
+        if (!mine.some((m) => sameRun(b58(m), b58(a)) >= 64)) throw new Error('this public offline address belongs to another seed phrase, not this wallet\'s');
+        await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now(), verified: 'key' });
+      } });
     if (!r.ok) return;
-    const a = String(r.input || '').trim(), wid = W().id;
-    const no = (note) => ask({ title: 'Not added', note, yes: 'OK', no: null });
     try {
-      const v = await host('beam', wid, 'validate_address', { address: a });
-      if (!v || !v.is_valid) return no('That is not a valid Beam address.');
-      if (addrs.some((x) => x.address === a)) return no('This address is in the list already.');
-      if (v.type !== 'public_offline') return no(`This is ${/^[aeiou]/.test(TYPE_NAME[v.type] || '') ? 'an' : 'a'} ${TYPE_NAME[v.type] || v.type || 'other'} address. Only a public offline address can be checked to belong to this seed phrase.`);
-      // this wallet's own public offline addresses and its kept reference to compare with
-      const mine = [...addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address), await host('offlineRef', wid)];
-      if (!mine.some((m) => sameRun(b58(m), b58(a)) >= 64)) return no('This public offline address belongs to another seed phrase, not this wallet\'s.');
-      await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now(), verified: 'key' });
       if (!(await loadAddrs())) return;
-      const x = addrs.find((y) => y.address === a); if (x) showAddr(x);
+      const x = addrs.find((y) => y.address === r.input); if (x) showAddr(x);
     } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
   $('delBeamAddr').onclick = () => removeAddr(addrs.find((y) => y.address === shownAddr));
@@ -1253,20 +1308,23 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     amtLine($('bsAmt'), $('bsLeft'), `Available: <b>${beamStatus ? esc(`${amt(have, 8)} ${bsSym()}`) : '—'}</b>`, amtIssue($('bsAmt').value, 8, max));
     $('bsFee').textContent = `${amt(beamFee(), 8)} BEAM`;
   }
-  $('bsAmt').oninput = () => bsAvail();
-  let bsType = null;
+  $('bsAmt').oninput = () => { delete $('bsAmt').dataset.need; bsAvail(); };
+  let bsType = null, bsMine = '';      // the address's type; whether it is the open wallet's own ('yes', 'unverified')
   const kindRow = (k, v, more = '') => `<span class="k">${esc(k)}:</span> <span class="v">${esc(v)}</span>${more ? ` <span class="k">${esc(more)}</span>` : ''}`;
   $('bsAddr').oninput = async () => {
     const a = $('bsAddr').value.trim();
-    bsType = null; $('bsKind').textContent = ''; bsAvail();
+    // My wallets follows the field: another wallet's address picks its name, anything else "My wallets…"
+    const ow = st.wallets.find((w) => w.id !== st.active && w.beamAddress && w.beamAddress === a);
+    bsOwn.set(ow ? ow.beamAddress : '');
+    bsType = null; bsMine = ''; $('bsKind').textContent = ''; bsAvail();
     if (!a || !beamHere()) return;
     // Beam's validate_address calls almost any word a valid token, so the shape is checked first: an SBBS
     // address is 60-70 hex characters, a token (offline, max privacy, the new regular) a long base58 string
-    if (!/^[0-9a-fA-F]{60,70}$/.test(a) && !/^[1-9A-HJ-NP-Za-km-z]{80,}$/.test(a)) { $('bsKind').innerHTML = '<span class="warn-own">⚠️ not a Beam address</span>'; return; }
+    if (!/^[0-9a-fA-F]{60,70}$/.test(a) && !/^[1-9A-HJ-NP-Za-km-z]{80,}$/.test(a)) { $('bsKind').innerHTML = '<span class="warn-own">not a Beam address</span>'; return; }
     try {
       const v = await host('beam', W().id, 'validate_address', { address: a });
       if ($('bsAddr').value.trim() !== a) return;          // an older answer for an address since changed
-      if (!v.is_valid) { $('bsKind').innerHTML = '<span class="warn-own">⚠️ not a valid Beam address</span>'; return; }
+      if (!v.is_valid) { $('bsKind').innerHTML = '<span class="warn-own">not a valid Beam address</span>'; return; }
       bsType = v.type;
       // an address of the open wallet itself (Beam lists it, or one added manually and verified): the coins
       // would come back to it, so it is said with a caution
@@ -1280,6 +1338,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
         mine = (own || []).some((y) => y.address === a) || (x && x.verified) ? 'yes' : x ? 'unverified' : '';
       }
       if ($('bsAddr').value.trim() !== a) return;
+      bsMine = mine;
       // the type, then a caution for one's own wallet, then what the address has left, each by its emoji
       const left = v.payments != null ? `${v.payments} payment${v.payments === 1 ? '' : 's'} left` : '';
       $('bsKind').innerHTML = kindRow('Address type', TYPE_NAME[v.type] || v.type || 'regular')
@@ -1299,16 +1358,18 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       if (!address) throw fieldErr('bsAddr', 'paste the address');
       await $('bsAddr').oninput();
       if (bsType === null) throw fieldErr('bsAddr', 'not a valid Beam address');
+      if (!amtReady($('bsAmt'), $('bsLeft'), bsAvail)) return;
       const value = toGroth($('bsAmt').value), fee = beamFee(), aid = bsAid(), sym = bsSym(), beam = (beamStatus && beamStatus.available) || 0;
       if (!(value > 0)) throw new Error('the amount must be above zero');
       if (!aid && value + fee > beam) throw new Error(`not enough: ${amt(beam, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
       if (aid && value > bsHave()) throw new Error(`not enough: ${amt(bsHave(), 8)} ${sym} available`);
       if (aid && fee > beam) throw new Error(`the fee is paid in BEAM: ${amt(fee, 8)} needed, ${amt(beam, 8)} available`);
       if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
-        bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : ''))) return;
+        bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : '',
+        bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee` : ''))) return;
       const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
       note('x-beamSend', 'ok', `Sent: transaction ${r.txId}. It shows under Activity.`);
-      $('bsAmt').value = ''; $('bsNote').value = ''; bsAvail();
+      $('bsAmt').value = ''; delete $('bsAmt').dataset.need; $('bsNote').value = ''; bsAvail();
       beamRefresh();
     } catch (e) { actErr($('doBeamSend'), e, { bsAmt: /amount|enough|decimal|available|zero|fee/i, bsAddr: /address|token/i }); }
     finally { $('doBeamSend').disabled = false; }
@@ -1339,7 +1400,7 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
     $('esAvail').innerHTML = `<span id="esLeft"></span><span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Network fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} ETH`}</b></span>`;
     amtLine($('esAmt'), $('esLeft'), `Available: <b>${esc(num(units(c.bal, c.dec), 8))} ${esc(c.label)}</b>`, amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
   }
-  $('esAmt').oninput = () => esAvail();
+  $('esAmt').oninput = () => { delete $('esAmt').dataset.need; esAvail(); };
   // All: the whole of a token; of ETH, all but the most the transfer may cost (its quote, else 0.002 ETH)
   $('esMax').onclick = () => {
     const c = esCur();
@@ -1363,32 +1424,38 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
   }
   $('esTo').oninput = () => {
     const t = $('esTo').value.trim();
+    // My accounts follows the field: one of one's accounts picks its name, anything else "My accounts…"
+    const oa = allAccounts().find((x) => x.address.toLowerCase() === t.toLowerCase() && (!acct() || x.address.toLowerCase() !== acct().address.toLowerCase()));
+    esOwn.set(oa ? oa.address : '');
     const own = allAccounts().find((a) => a.address.toLowerCase() === t.toLowerCase());
     esFee();
     // one's own account: another wallet's by its name (grey label, white name); the open wallet's own, in
     // yellow as on BEAM Send
-    $('esToHint').innerHTML = !t ? '' : !isEthAddress(t) ? '<span class="warn-own">⚠️ 0x and 40 hex characters</span>'
+    $('esToHint').innerHTML = !t ? '' : !isEthAddress(t) ? '<span class="warn-own">0x and 40 hex characters</span>'
       : own ? (own.wallet.id === st.active ? '<span class="warn-own">⚠️ your current wallet</span>' : `<span class="k">Your wallet:</span> <span class="v">${esc(own.wallet.name)}</span>`)
-      : Object.values(st.contracts).includes(t.toLowerCase()) ? '<span class="warn-own">⚠️ a contract, not a person: tokens sent to it are lost. For the bridge use the Bridge tab</span>' : '';
+      : Object.values(st.contracts).includes(t.toLowerCase()) ? '<span class="warn-own">a contract, not a person: tokens sent to it are lost. For the bridge use the Bridge tab</span>' : '';
   };
   $('doEthSend').onclick = async () => {
     clearNotes('x-ethSend'); actErr($('doEthSend'), null);
     $('doEthSend').disabled = true;
     try {
       const c = esCur(), a = acct(), to = $('esTo').value.trim();
-      if (!isEthAddress(to)) throw fieldErr('esTo', 'the address must be 0x and 40 hex characters');
+      if (!to) throw fieldErr('esTo', 'paste the address');
+      if (!isEthAddress(to)) throw fieldErr('esTo', '0x and 40 hex characters');
       if (Object.values(st.contracts).includes(to.toLowerCase())) throw fieldErr('esTo', 'that is the WBEAM token or the bridge contract: tokens sent there are lost. Use the Bridge tab');
+      if (!amtReady($('esAmt'), $('esLeft'), esAvail)) return;
       const p = await host('ethPrepare', { from: a.address, to, amount: $('esAmt').value, token: c.token });
       const feeNow = units(p.feeNow, 18), feeMax = units(p.feeMax, 18);
       const ok = await confirmBox(`Send ${p.symbol}`, [
         ['Amount', `${p.amountExact} ${p.symbol}`], ['From', `${a.name} ${short(a.address)}`], ['To', p.to],
         ['Network fee', `≈ ${num(feeNow, 6)} ETH ${rates ? usd(feeNow * rates.eth) : ''} (at most ${num(feeMax, 6)})`],
         ['Gas', `${Number(p.gasLimit).toLocaleString('en-US')} limit · base ${p.baseGwei.toFixed(2)} gwei`]],
-        'Signed here and sent through a public Ethereum RPC. It cannot be undone.');
+        'Signed here and sent through a public Ethereum RPC. It cannot be undone.',
+        allAccounts().some((x) => x.wallet.id === st.active && x.address.toLowerCase() === p.to.toLowerCase()) ? 'your current wallet: the tokens stay in it, only the gas is spent' : '');
       if (!ok) return;
       const hash = await host('ethSend', p.id);
       note('x-ethSend', 'ok', `Sent: <a href="https://etherscan.io/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(short(hash))}</a>. It shows under Activity once mined.`, true);
-      $('esAmt').value = ''; esAvail();
+      $('esAmt').value = ''; delete $('esAmt').dataset.need; esAvail();
       setTimeout(ethRefresh, 15000);
     } catch (e) { actErr($('doEthSend'), e, { esAmt: /amount|enough|decimal|number|separator|zero/i, esTo: /address|contract|0x/i }); }
     finally { $('doEthSend').disabled = false; }
@@ -1949,8 +2016,9 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
         return;
       }
       if (act === 'rename') {
-        const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name }, yes: 'Save' });
-        if (r.ok && r.input) { await host('renameWallet', w.id, r.input); await load(); settingsOpen(); }
+        const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name }, yes: 'Save',
+          check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameWallet', w.id, input); } });
+        if (r.ok) { await load(); settingsOpen(); }
       }
       if (act === 'phrase' || act === 'ethPhrase') {
         await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
@@ -2004,6 +2072,8 @@ ${aid}">${CPI}</button></span><span class="sym">${esc(sym)}</span><span class="a
       } });
     if (r2.ok) await ask({ title: 'Password changed', note: 'The new password opens the wallet from now on.', yes: 'OK', no: null });
   };
+  // the Save and Add buttons beside a field: the room for their message under the field from the start
+  for (const b of ['saveNode', 'saveBackups', 'saveRpc', 'addTok']) if ($(b)) actErr($(b), null);
   $('saveNode').onclick = async () => { actErr($('saveNode'), null); try { st.node = await host('setNode', $('node').value.trim()); $('node').value = st.node; } catch (e) { actErr($('saveNode'), e); } };
   $('saveBackups').onclick = async () => {
     actErr($('saveBackups'), null);

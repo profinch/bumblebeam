@@ -20,7 +20,9 @@
   - a star marks favourites; they come first, the last one marked on top, and they can be dragged into any
     order; the others follow in the order they were made;
   - each row shows the name (Unnamed in grey when there is none, the address in the list), then the type;
-  - no address count, no dates.
+  - no address count, no dates;
+  - an expired address's row is tinted red, with a red edge on its left (the design library's new opt-in
+    `.li.bad` / `tr.bad`).
 - The card shows:
   - the name;
   - the type, its meaning on hover;
@@ -35,6 +37,8 @@
   - Another seed's address is refused, and so is any other kind, since whose it is cannot be told.
   - Once verified, the mark is kept and the address is not checked again.
   - An unverified one shows its name in yellow.
+- Two addresses cannot share a name (case aside; Unnamed may repeat): New and renaming say so in yellow in their
+  window, the name field outlined in red.
 - Receive opened while Beam is starting says so and fills itself in once Beam runs (it was a red error).
 
 ### Beam: Send
@@ -51,6 +55,8 @@
   background, its address read, and stopped again. Making or removing a public offline address updates it at
   once. A wallet with none is listed greyed, not selectable.
 - The comment is marked optional.
+- My wallets follows the address field: an address edited away from the wallet's shows "My wallets…" again, and
+  another wallet's address pasted in shows that wallet's name (My accounts on Ethereum Send alike).
 
 ### Beam: Activity
 - It also lists coins this wallet holds that no transaction of its own made: another wallet of the same phrase,
@@ -86,11 +92,15 @@
   and "BumbleBeam whitelisted".
 
 ### Everywhere
+- The lock clears what was typed: Send on both networks, the bridge and the token field go back to empty, their
+  lists to the first choice.
 - No screen shows another wallet's data after a switch. Receive clears at once; Activity and Bridge drop
   answers for a wallet no longer open; a switch made in another window closes Receive or Send.
-- Each sheet (Receive, Send, on both networks) has its title and Back on one line. The bar under the tabs is
-  gone.
-- Fields are as high as the lists (28 px); All looks like Back.
+- On a sheet (Receive, Send, on both networks) the way back is an arrow in the header beside the
+  lock; the sheet starts with its title. The bar under the tabs is gone.
+- Every screen that can scroll (all but the wallet tab) keeps the scroll bar's room from the start, its content
+  on the wallet tab's lines: a bar that shows (a field stretched, a list grown) moves nothing.
+- Fields are as high as the lists (28 px); All looks like the small buttons (Add, New).
 - The asset lists (Send, both networks) show 10 rows, then scroll.
 - Fixed: a list inside a field's label (Send's Asset, Settings' Lock after idle and Time format) opened again
   as soon as an option was picked: the label passed the click on to the list's button.
@@ -104,15 +114,24 @@
 - "Take off" reads Remove.
 - Errors where they are made: an action's error shows in yellow right of its button (Send, Review, the bridge's
   buttons) or under the field its Save or Add sits in (Settings), and the field it is about is outlined in red
-  until it is edited; a wrong address shows in yellow under its field. They were a red card at the bottom of
-  the screen, often out of sight.
-- An amount is checked as it is typed (digits and one decimal point, the decimals allowed, not more than
-  available): the reason shows in yellow in place of Available, the field outlined in red.
-- What fills in as it loads (balances, prices, the receive card's rows, lists) fades in instead of appearing at
-  once.
+  until it is edited; a wrong address shows in yellow under its field. A dialog's error shows the same way, above
+  its buttons, and a window keeps the room for it, so nothing moves. They were a red card at the bottom of the
+  screen, often out of sight.
+- A window that asks for something (Add an address, renaming an account or a wallet, importing into a wallet,
+  creating Ethereum accounts) checks it in place: what is wrong shows in it in yellow and it stays open, instead
+  of closing and opening a second window ("Not added").
+- dApps has no back arrow: its cube closes it to the wallet's main screen, from wherever it was opened, as the gear
+  closes Settings.
+- An amount is checked as it is typed and on Send (digits and one decimal point, the decimals allowed, not more
+  than available, not empty): the reason shows in yellow in place of Available, never beside the button, the
+  field outlined in red.
+- What fills in as it loads (balances, prices, QR codes, the receive card's rows, lists, a Beam token's name in
+  place of "asset N") fades in instead of appearing at once.
 - BEAM Send: one's own address is recognised for every type (tokens looked up in the wallet's list), one added
-  manually and not verified marked "(unverified)"; the
-  payments an offline address has left show as ℹ️ in grey.
+  manually and not verified marked "(unverified)"; the payments an offline address has left show as ℹ️ in
+  grey. A transfer to the open wallet's own address (or account, on Ethereum) is cautioned in yellow in the
+  confirmation too.
+- The caution sign ⚠️ marks only "your current wallet"; error messages go without it.
 
 ## 0.3.0 (2026-11-09)
 

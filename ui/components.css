@@ -502,6 +502,11 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .badge.warn { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.1); }
 .note.warn { border-color: rgba(var(--yellow-rgb), 0.35); background: rgba(var(--yellow-rgb), 0.07); }
 .note.bad { border-color: rgba(var(--red-rgb), 0.35); background: rgba(var(--red-rgb), 0.07); }
+/* opt-in: a list row or table row that is no good any more (expired, failed), tinted red (stronger than .note.bad: rows lie on a panel), a little
+   more under the pointer or when chosen */
+.li.bad, tr.bad > td { background: rgba(var(--red-rgb), 0.14); box-shadow: inset 2px 0 0 rgba(var(--red-rgb), 0.8); }
+tr.bad > td:not(:first-child) { box-shadow: none; }
+.li.bad:hover, .li.bad.on, tr.bad:hover > td { background: rgba(var(--red-rgb), 0.2); }
 .field textarea {
   min-height: 72px; padding: 8px 10px; resize: vertical; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
   background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;

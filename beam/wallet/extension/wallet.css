@@ -245,6 +245,7 @@ dialog .row { margin-top: 14px; }
 #addrList { margin: 0 -8px; }
 .li.addr { grid-template-columns: 16px minmax(0, 1fr) 15ch 16px; gap: 0 10px; align-items: center; font: var(--fs-s) var(--font-mono); padding: 6px 8px; cursor: pointer; }      /* 6 px above and below as a token row */
 .li.addr:hover, .li.addr.on { background: rgba(255, 255, 255, 0.03); }
+.li.addr.bad:hover, .li.addr.bad.on { background: rgba(var(--red-rgb), 0.2); }      /* an expired one stays red under the pointer and when shown (ui .li.bad) */
 .li.addr .a-name { font: var(--fs-m) var(--font-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .li.addr.on .a-name { color: var(--accent); }
 .li.addr .a-t { font: var(--fs-s) var(--font-mono); color: var(--text-dim); text-align: right; white-space: nowrap; }
@@ -332,7 +333,9 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #dappLog .sub.warn { color: var(--color-yellow); }
 /* Connected sites: the scroll bar's room kept from the start (both sides, so the cards stay centred), so
    nothing moves when the requests grow past the popup */
-html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv:not([hidden])) { scrollbar-gutter: stable both-edges; }
+/* every screen that may scroll (all but the wallet tab) keeps the scroll bar's room from the start, on both sides
+   (popup.js takes as much off main's padding): a bar that shows (a field stretched, a list grown) moves nothing */
+html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: stable both-edges; }
 /* the catalog: a dApp (it connects to this wallet) marked right of its name */
 .cat-tag { font: 700 10px var(--font-mono); color: var(--accent); letter-spacing: 0.04em; }
 /* dApps: the cards 10 px apart as on the wallet tab, nothing after the last one (hidden ones do not count):
@@ -437,3 +440,9 @@ html.popup main:has(> #x-dapps:not([hidden])), html.popup main:has(> #x-beamRecv
 .act-msg.under { margin: 6px 0 0; }
 .field input.err, .field textarea.err, .dd-btn.err, .field input.err:focus, .field textarea.err:focus { border-color: rgba(var(--red-rgb), 0.7); }
 .row > .act-msg { flex: 1 1 0; }      /* beside the button, its text wrapping there rather than under it */
+/* a caution in a confirmation: under its rows, in yellow */
+.dlg-warn { margin: 10px 0 0; font-size: 12px; }
+/* room kept for a message that may come (a dialog's error, a Save/Add field's), so nothing moves when it does */
+.act-msg.under { min-height: 17px; }
+.act-msg.under:empty { display: block; }
+#dErr.keep { min-height: 17px; }
