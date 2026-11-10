@@ -425,7 +425,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* the fee's value in a room of its own, right-aligned, figures of one width: "Network fee" stays put whatever
    the amount (0.001 or 0.011 BEAM; Ethereum's while it loads and after) */
 .fee-v { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; min-width: 10.5ch; }
-.fee-v.eth { min-width: 15ch; }
+.fee-v.eth { min-width: 0; }      /* Ethereum's fee: no fixed room, right-aligned on its line (it is not redrawn while one looks) */
 /* what fills in as it loads fades in (popup.js: the "fades in" observer) */
 @keyframes bb-fade { from { opacity: 0; } to { opacity: 1; } }
 .fade { animation: bb-fade 0.4s ease-out both; }
@@ -446,3 +446,27 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .act-msg.under { min-height: 17px; }
 .act-msg.under:empty { display: block; }
 #dErr.keep { min-height: 17px; }
+/* a unit after its amount (Available, Network fee): grey, not bold */
+.hint .unit { color: var(--muted); font-weight: 400; }
+/* the BEAM price chip by the card's name (ui .price-chip); its change after the price, red down, green up */
+#beamCard .panel-head .price-chip { margin: 0 0 0 -6px; align-self: flex-start; padding: 2px 7px; font-size: 11px; letter-spacing: 0; }      /* right after the name, on the line of the name and the block */
+#beamCard .panel-head .price-chip b { width: auto; min-width: 0; letter-spacing: 0; }
+/* ETH's price in its row: in the amount column, right-aligned as the tokens' amounts; the amount and unit left of it */
+#ethAssets .asset.native .lead { grid-column: 1 / span 2; }
+#ethAssets .asset.native .price-plain { grid-area: amt; text-align: right; font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.price-plain b { font-weight: 400; color: var(--text-dim); }
+/* an action that went: right of its button as its errors, in the accent */
+.act-msg.ok { color: var(--accent); word-break: break-all; }
+/* a transfer's comment in Activity: grey after Sent / Received, cut with … */
+.li .what .cmt { display: inline-block; max-width: 70%; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; font-weight: 400; color: var(--muted); }
+/* Ethereum Send's My accounts: rows and button as the wallet tab's account picker (name left, 0x+6…6 right; on
+   the button name | address, the address dropped when the name fills it) */
+#esOwn .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; }
+#esOwn .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#esOwn .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+#esOwn .dd-list [aria-selected="true"] .ad { color: inherit; }
+#esOwn .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
+#esOwn .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#esOwn .acc-b .ad { flex: none; white-space: nowrap; }
+#esOwn .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
+.price-plain .x { font-style: normal; font-size: 14px; margin-right: 6px; }      /* the × a little bigger than the price, a pixel closer than a space */

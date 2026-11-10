@@ -483,6 +483,9 @@
   // An account's key: its own (imported by key or by another phrase) or the wallet's phrase at index i.
   // Imported accounts take ids from 1000 up, so the phrase's own indices stay 0, 1, 2, …
   const IMPORTED = 1000;
+  // an account of wallet w (but index except) with that name, the case aside; a name none has, from base
+  const nameUsed = (w, name, except) => (w.eth ? w.eth.accounts : []).find((a) => a.i !== except && String(a.name).trim().toLowerCase() === String(name).trim().toLowerCase());
+  const freeName = (w, base) => { let nm = base; for (let k = 2; nameUsed(w, nm); k++) nm = `${base} (${k})`; return nm; };
   const ethSecret = (w, i) => {
     if (!w.eth) throw new Error('this wallet has no Ethereum part');
     const a = w.eth.accounts.find((x) => x.i === i);
@@ -1022,14 +1025,15 @@
       else throw new Error('unknown kind');
       return w.eth.phrase && w.eth.phrase !== w.phrase ? w.eth.phrase : null;
     }),
-    // the lowest index not shown, so an account taken off the list comes back with "add"
+    // the lowest index not shown, so an account taken off the list comes back with "add"; its name one no other
+    // account of the wallet has (Account 3, else Account 3 (2)…)
     async addEthAccount(id) {
       const i = await mutate((d) => {
         const w = wallet(id, d);
         if (!w.eth || !w.eth.phrase) throw new Error('only a wallet with a seed phrase gives more accounts: import one instead');
         let n = 0;
         while (w.eth.accounts.some((a) => a.i === n)) n++;
-        w.eth.accounts.push({ i: n, name: `Account ${n + 1}`, address: Eth.addressOf({ phrase: w.eth.phrase, i: n }) });
+        w.eth.accounts.push({ i: n, name: freeName(w, `Account ${n + 1}`), address: Eth.addressOf({ phrase: w.eth.phrase, i: n }) });
         w.eth.accounts.sort((a, b) => a.i - b.i);
         return n;
       });
@@ -1047,22 +1051,28 @@
         acc.phrase = Eth.normPhrase(o.phrase); acc.pi = 0; acc.address = Eth.addressOf({ phrase: acc.phrase, i: 0 });
       }
       for (const w of data.wallets) for (const a of (w.eth ? w.eth.accounts : [])) {
-        if (a.address.toLowerCase() === acc.address.toLowerCase()) throw new Error(`already here: ${w.name} · ${a.name}`);
+        if (a.address.toLowerCase() === acc.address.toLowerCase()) throw new Error(`already here: ${w.name} | ${a.name}`);
       }
       const i = await mutate((d) => {
         const w = wallet(id, d);
         if (!w.eth) w.eth = { accounts: [] };
         let n = IMPORTED;
         while (w.eth.accounts.some((a) => a.i === n)) n++;
-        w.eth.accounts.push({ ...acc, i: n, name: acc.name || `Imported ${n - IMPORTED + 1}` });
+        if (acc.name && nameUsed(w, acc.name)) throw new Error(`another account of this wallet is named "${acc.name}" already`);
+        w.eth.accounts.push({ ...acc, i: n, name: acc.name || freeName(w, `Imported ${n - IMPORTED + 1}`) });
         return n;
       });
       settings.activeEth[id] = i; await saveSettings();
       return i;
     },
+    // two accounts of one wallet never share a name (the case aside), as two Beam addresses do not
     renameEthAccount: (id, i, name) => mutate((d) => {
-      const a = (wallet(id, d).eth || { accounts: [] }).accounts.find((x) => x.i === i);
-      if (a) a.name = String(name).trim().slice(0, 32) || a.name;
+      const w = wallet(id, d), a = (w.eth || { accounts: [] }).accounts.find((x) => x.i === i);
+      const nm = String(name).trim().slice(0, 32);
+      if (!a || !nm) return;
+      const other = nameUsed(w, nm, i);
+      if (other) throw new Error(`another account of this wallet is named "${other.name}" already`);
+      a.name = nm;
     }),
     // off the list (a phrase account: "+ Add an account" brings the same one back; an imported one: its key
     // is gone from here). The password again, and never the last account of a wallet.
@@ -1343,7 +1353,7 @@
       const [bal, allow] = await Promise.all([
         Eth.callBig(Bridge.WBEAM, Eth.ERC20.balanceOf(a.address)), Eth.callBig(Bridge.WBEAM, Eth.ERC20.allowance(a.address, Bridge.ETH_PIPE)),
       ]);
-      if (bal < total) throw new Error(`not enough WBEAM on ${a.address.slice(0, 8)}…: ${Number(total) / 1e8} needed, ${Number(bal) / 1e8} there`);
+      if (bal < total) throw new Error(`not enough WBEAM on ${a.address.slice(0, 8)}…${a.address.slice(-6)}: ${Number(total) / 1e8} needed, ${Number(bal) / 1e8} there`);
       const send = { from: a.address, to: Bridge.ETH_PIPE, data: Bridge.sendFundsData(value, fee, key), value: 0n };
       let approve = null, sendP;
       if (allow < total) {

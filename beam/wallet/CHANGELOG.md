@@ -58,7 +58,13 @@
 - My wallets follows the address field: an address edited away from the wallet's shows "My wallets…" again, and
   another wallet's address pasted in shows that wallet's name (My accounts on Ethereum Send alike).
 
+### Beam: the card
+- BEAM's price in a chip right after the card's name, on the line of the block (the design library's price
+  chip, as on the pool and the explorer).
+
 ### Beam: Activity
+- A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after Sent or
+  Received, cut with … when long, whole in its tip.
 - It also lists coins this wallet holds that no transaction of its own made: another wallet of the same phrase,
   such as the mobile one, took the transfer. They are marked found on the chain.
 - A receipt sent by a wallet of the same seed (a pool's payouts, the wallet CLI) is shown, marked "from a
@@ -77,8 +83,17 @@
 
   Nothing shows while these rows load, and the values do not move when they arrive. The card has rename and
   remove icons, no Expiry and no Symbols.
-- Send: under the address, "Your wallet: Main" for another wallet's account (label grey, name white), or
-  "⚠️ your current wallet" in yellow for the open wallet's; the line keeps its room.
+- Send: under the address, "Your wallet: Main" for another wallet's account, "Your account: Account 2" for
+  another account of the open wallet (label grey, name white), or "⚠️ the account you send from" in yellow when
+  it is the sending account itself (in the confirmation too); the line keeps its room.
+- Two accounts of one wallet cannot share a name (case aside), as Beam addresses: renaming or importing says so
+  in yellow in its window; a new account whose usual name is taken gets "Account 3 (2)".
+- Send's My accounts reads as the wallet tab's account picker: the name left, 0x+6…6 right, by wallet; on the
+  button name | address, the address left out when the name fills it.
+- ETH's price in its row of the token list, in the amount column (right-aligned as the tokens' amounts), as
+  plain figures after a ×: 0.0101 ETH … × $2 023.75 … $20.48.
+- Send's confirmation: the amount in dollars after it (0.001 ETH | ≈ $2.02), the gas as 26 200 limit | base
+  0.31 gwei.
 - Send shows the network fee before the review, right of Available on its line, read from the chain: the transfer's gas estimate at today's base
   fee and tip, in ETH and dollars. All keeps back the most the transfer can cost, not a fixed 0.002 ETH.
 
@@ -92,6 +107,8 @@
   and "BumbleBeam whitelisted".
 
 ### Everywhere
+- A screen opened before its balances came (Send on either network, the bridge) fills them in as they come; it
+  showed "—" until it was opened again. A value not known yet is left blank, not a dash.
 - The lock clears what was typed: Send on both networks, the bridge and the token field go back to empty, their
   lists to the first choice.
 - No screen shows another wallet's data after a switch. Receive clears at once; Activity and Bridge drop
@@ -112,6 +129,8 @@
   - a window that closes no longer brings one up;
   - this is fixed in the design library, so every BumbleBeam site gets it.
 - "Take off" reads Remove.
+- Every shortened address reads one way: an Ethereum one 0x + its first 6 … its last 6 (0x709979…dc79C8), a
+  Beam address, a key or a transaction id its first 6 … its last 6.
 - Errors where they are made: an action's error shows in yellow right of its button (Send, Review, the bridge's
   buttons) or under the field its Save or Add sits in (Settings), and the field it is about is outlined in red
   until it is edited; a wrong address shows in yellow under its field. A dialog's error shows the same way, above
@@ -122,6 +141,9 @@
   of closing and opening a second window ("Not added").
 - dApps has no back arrow: its cube closes it to the wallet's main screen, from wherever it was opened, as the gear
   closes Settings.
+- An action that went says so in a few words right of its button, in the accent, as its errors do: "transaction
+  12e55bb4… sent" (Send on both networks, the bridge both ways). It was a card at the bottom, out of sight.
+- A comma is a decimal point everywhere, Ethereum's amounts too ("0,001" was refused as a thousands separator).
 - An amount is checked as it is typed and on Send (digits and one decimal point, the decimals allowed, not more
   than available, not empty): the reason shows in yellow in place of Available, never beside the button, the
   field outlined in red.
@@ -129,9 +151,11 @@
   place of "asset N") fades in instead of appearing at once.
 - BEAM Send: one's own address is recognised for every type (tokens looked up in the wallet's list), one added
   manually and not verified marked "(unverified)"; the payments an offline address has left show as ℹ️ in
-  grey. A transfer to the open wallet's own address (or account, on Ethereum) is cautioned in yellow in the
-  confirmation too.
+  grey. A transfer to the open wallet's own address is cautioned in yellow in the confirmation too.
 - The caution sign ⚠️ marks only "your current wallet"; error messages go without it.
+- Thousands are set apart by a thin space (kept on one line), not a comma, so they are not mixed up with the
+  decimal point:
+  132 796.34 BEAM.
 
 ## 0.3.0 (2026-11-09)
 

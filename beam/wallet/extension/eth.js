@@ -208,7 +208,9 @@ const Eth = (() => {
   // A comma is a decimal point ("1,5"), but "1,000" could be a thousand: refused rather than guessed.
   function toUnits(s, dec) {
     const raw = String(s).trim();
-    if (/^\d{1,3}(,\d{3})+$/.test(raw) || (raw.includes(',') && raw.includes('.'))) throw new Error(`"${raw}": write the amount without thousands separators, with one decimal point`);
+    // a comma is a decimal point as a point is (the wallet sets thousands apart by a space, never a comma);
+    // with both in one amount, which one was meant cannot be told
+    if (raw.includes(',') && raw.includes('.')) throw new Error(`"${raw}": one decimal point (a point or a comma), no thousands separators`);
     const t = raw.replace(',', '.');
     if (!/^\d*\.?\d*$/.test(t) || t === '' || t === '.') throw new Error('not a number');
     const [i, f = ''] = t.split('.');

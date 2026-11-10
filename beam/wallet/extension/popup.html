@@ -147,7 +147,7 @@ while the wallet is locked.</p>
     <div class="total-row">
       <div class="total">
         <div class="caps">Total</div>
-        <div class="total-line"><span class="total-v" id="totalUsd">—</span><span class="total-ch" id="totalCh"></span></div>
+        <div class="total-line"><span class="total-v" id="totalUsd"></span><span class="total-ch" id="totalCh"></span></div>
       </div>
       <!-- the site of the open tab: whether it is connected to this wallet -->
       <div class="dapp-wrap">
@@ -157,7 +157,7 @@ while the wallet is locked.</p>
     </div>
 
     <div class="panel net beam nodata" id="beamCard">
-      <div class="panel-head"><h3 class="panel-title"><i class="chain beam" id="beamDot"></i>Beam</h3><span class="panel-meta" id="beamMeta"></span></div>
+      <div class="panel-head"><h3 class="panel-title"><i class="chain beam" id="beamDot"></i>Beam</h3><span class="price-chip" id="beamPx" title="The price of one BEAM, from Beam's on-chain price oracle" hidden><b id="beamPxV"></b></span><span class="panel-meta" id="beamMeta"></span></div>
       <div id="beamBody">
         <div class="bigamt"><span class="amt" id="beamAvail"></span><span class="unit">BEAM</span><span class="usd" id="beamUsd"></span></div>
         <div class="minor" id="beamMinor"></div>
@@ -214,11 +214,11 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <div class="sheet-head"><h2 class="screen-title">BEAM Send</h2></div>
     <div class="field">Asset
       <div class="dd compact" id="bsAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
-    <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your other Beam wallets (to the offline address it keeps for this)"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
+    <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
     <p class="hint after" id="bsKind"></p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="bsMax">All</button></span></span></label>
-    <p class="hint after split"><span id="bsLeft">Available: <b id="bsAvail">—</b></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">Network fee</span>: <b id="bsFee" class="fee-v">0.001 BEAM</b></span></p>
+    <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">Network fee</span>: <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
     <label class="field">Comment (only in your history)<input id="bsNote" maxlength="64" placeholder="optional"></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
@@ -377,7 +377,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
         <dt>Version</dt><dd id="ver"></dd>
         <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548<br>after HF6</dd>
         <dt>Bridge</dt><dd>official pipe <span title="e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835">e63bd2…dbe835</span> on Beam<br>and <span title="0x6063024646E8A1561970840a4b0e0f1082f5a670">0x6063…f5a670</span> on Ethereum</dd>
-        <dt>Snapshot</dt><dd><span id="snapInfo">—</span> <a href="#" class="text-link" id="dropSnap">remove</a></dd>
+        <dt>Snapshot</dt><dd><span id="snapInfo"></span> <a href="#" class="text-link" id="dropSnap">remove</a></dd>
         <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
       </dl>
     </div>
