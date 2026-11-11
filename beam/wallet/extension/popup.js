@@ -1723,8 +1723,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('bxRecv').appendChild(bk);
       const k = w && keyOf[w.id];
       // the whole key in its copy button's tip, as a token's contract address on the wallet tab
-      bk.innerHTML = `<span class="tipped" title="The bridge key of this wallet's Beam part: the Ethereum side sends to it">key</span> ${k ? esc(short(k)) : beamHere() ? '…' : 'no running Beam part'}`
-        + (k ? `<button type="button" class="cp" data-cp="${esc(k)}" data-tip-wide title="Copy the bridge key\n${esc(k)}">${CPI}</button>` : '');
+      bk.innerHTML = (k ? `<button type="button" class="cp" data-cp="${esc(k)}" data-tip-wide title="Copy the bridge key\n${esc(k)}">${CPI}</button>` : '')
+        + `<span class="tipped" title="The bridge key of this wallet's Beam part: the Ethereum side sends to it">key</span> ${k ? esc(short(k)) : beamHere() ? '…' : 'no running Beam part'}`;
       // on TO ● BEAM's line, measured (their sizes differ, and so do fonts)
       const base = (el) => { el.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>'); const y = el.lastElementChild.getBoundingClientRect().top; el.lastElementChild.remove(); return y; };
       bk.style.transform = '';
