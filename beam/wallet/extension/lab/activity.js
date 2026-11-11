@@ -124,7 +124,7 @@
 
   function row(r) {
     const [c, svg] = ic(r), live = r.st === 'pending';
-    const state = r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
+    const state = r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
     const sub = [r.group ? '' : fdt(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${fdate(r.t)} ${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
     const shownV = r.kind === 'dapp' && r.got ? r.got : [r.v, r.sym];
     const amt = r.kind === 'approve' ? `<span class="amt zero">${num(r.v)}<u>${esc(r.sym)}</u></span>`
@@ -151,6 +151,7 @@
     rows.push(['When', fdt(r.t)]);
     // where it is, while it is under way: in the opened card, not on the row
     if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
+    if (r.st === 'failed') rows.push(['Why', `<span class="st bad">failed: ${esc(r.why)}</span>`]);      // the row is red; why, here only
     // the address in a group of its own: its column as wide as its short label lets it, a whole address on one line
     if (r.peer && r.peer !== 'beam' && !r.from) rows.push(null, [r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', addrDd(r.peer)], null);
     if (r.kind === 'br-out' && net === 'eth') rows.push(null, ['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12'], null);
@@ -159,7 +160,6 @@
     if (r.relayer) rows.push(['Relayer fee', `${num(r.relayer)} BEAM`]);
     if (r.fee) rows.push([net === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${net === 'beam' ? 'BEAM' : 'ETH'}${RATE[net === 'beam' ? 'BEAM' : 'ETH'] ? ` | ${usd(r.fee * RATE[net === 'beam' ? 'BEAM' : 'ETH'])}` : ''}`]);
     if (r.comment) rows.push(['Comment', esc(r.comment)]);
-    if (r.st === 'failed') rows.push(['Why', esc(r.why)]);
     if (net === 'beam') {
       // on the chain only once it is in a block: then its kernel, in our explorer
       if (r.st !== 'pending' && r.st !== 'cancelled' && r.st !== 'failed') rows.push(['Transaction', `${esc(sh(r.kern))}${ln(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer')}`], ['Block', String(r.block)]);

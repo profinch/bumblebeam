@@ -86,3 +86,4 @@
 .ar-more .kv dd .st { color: var(--color-yellow); }
 
 .ar-more .kv + .kv { margin-top: 6px; }      /* its groups a row's gap apart, as a confirmation's */
+.ar-more .kv dd .st.bad { color: var(--color-red); }
