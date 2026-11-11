@@ -365,7 +365,7 @@ while the wallet is locked.</p>
         <p class="hint">A backup of BumbleBeam Wallet itself, opened only by BumbleBeam: one file with every wallet in it, their phrases and keys, names, accounts and settings, encrypted with the wallet password. For other Beam wallets: Export wallet data in a wallet's card (Wallets).</p>
         <label class="check"><input type="checkbox" id="bkDb"><span>with Beam history and address names <b id="bkSize"></b></span></label>
         <input type="file" id="bkFile" accept=".bbk,application/json" hidden>
-        <input type="file" id="bdFile" accept=".json,application/json" hidden>
+        <input type="file" id="bdFile" accept=".json,.dat,application/json" hidden>
         <div class="row"><button type="button" class="sbtn" id="bkSave">Make a backup</button><button type="button" class="sbtn" id="bkDown">Download a backup</button><button type="button" class="sbtn" id="bkImport">Import a backup</button></div>
         <p class="act-msg under" id="bkMsg" role="status"></p>
         <p class="hint">An import adds the wallets the file has and this extension does not. It asks for the password the file was saved with. Nothing here is changed or removed.</p>
