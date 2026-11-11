@@ -1420,17 +1420,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // two addresses never share a name (an empty one, Unnamed, may repeat); the case does not make it another
   const nameTaken = (name, except) => { const n = String(name || '').trim().toLowerCase(); return n ? addrs.find((x) => x.address !== except && String(x.comment || '').trim().toLowerCase() === n) : null; };
   const nameCheck = (except) => ({ input }) => { const x = nameTaken(input, except); if (x) throw new Error(`another address is named "${String(x.comment).trim()}" already`); };
+  let newType = 'regular';      // the type picked in New's window (the window's content is gone once it closes)
   $('newAddr').onclick = async () => {
+    newType = 'regular';
     const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
     const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
     const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (visible only to you)', value: '', placeholder: 'optional', max: NAME_MAX }, yes: 'Create', check: nameCheck(null) });
     if (!r.ok) return;
-    const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
-    try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
+    try { await newAddress(newType, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
   };
   document.addEventListener('click', (e) => {
     const b = e.target.closest('#newType button'); if (!b) return;
-    qa('#newType button').forEach((x) => x.classList.toggle('on', x === b));
+    qa('#newType button').forEach((x) => x.classList.toggle('on', x === b)); newType = b.dataset.t;
     qa('#newTypeHint span').forEach((x) => x.classList.toggle('off', x.dataset.t !== b.dataset.t));
     $('dTitle').textContent = `New ${TYPE_NAME[b.dataset.t]} address`;      // the window's title names the type chosen
   });
