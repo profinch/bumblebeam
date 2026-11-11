@@ -112,7 +112,7 @@
     if (r.kind === 'approve') return '';
     if (r.found) return 'found on the chain';
     if (r.from) return `from <b>${esc(r.from)}</b>`;
-    if (r.pool) return r.peer === BADDR.pool ? 'from <span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour (as the explorer's); another pool: its count alone
+    if (r.pool) return r.peer === BADDR.pool ? '<span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour (as the explorer's); another pool: its count alone
     const nm = name(r.peer);
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nm || sh(r.peer))}</b>`;
   };

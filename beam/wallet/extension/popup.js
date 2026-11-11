@@ -2323,7 +2323,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const actWho = (r) => {
     if (r.kind === 'br-out' || r.kind === 'br-in' || r.kind === 'approve') return '';
     if (r.kind === 'dapp') return r.app ? `in <b>${esc(r.app)}</b>` : '';
-    if (r.pool) return r.ours ? 'from <span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
+    if (r.pool) return r.ours ? '<span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
     if (r.found) return `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`;
     if (r.from) return `from <b>${esc(r.from)}</b>`;
     if (!r.peer) return '';
