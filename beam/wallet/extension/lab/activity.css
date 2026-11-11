@@ -47,7 +47,8 @@
 .ar-r .amt u { text-decoration: none; font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }
 .ar-r .usd { display: block; font: 11px var(--font-mono); color: var(--muted); margin-top: 3px; }
 .ar.dim .what, .ar.dim .ar-r .amt { opacity: 0.5; }      /* cancelled: there, but nothing moved */
-.ar.bad .ar-r .amt { text-decoration: line-through; text-decoration-color: rgba(var(--red-rgb), 0.7); }
+#actList .li.ar.bad { border-radius: 0; box-shadow: none; background: rgba(var(--red-rgb), 0.14); }
+#actList .li.ar.bad:hover, #actList .li.ar.bad.open { background: rgba(var(--red-rgb), 0.2); }      /* failed: the wallet's red fill only (ui .li.bad), square, no bar at its left, the amount as it is */
 
 /* the icons: in / out as the wallet's, the bridge's two arrows, a dApp's cube, an approval's tick, a pool's stack */
 .ic.br { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.1); }
