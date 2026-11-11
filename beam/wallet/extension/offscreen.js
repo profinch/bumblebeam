@@ -285,10 +285,12 @@
   // read from its list, and stopped again (unless it was opened meanwhile). Once per wallet and unlock, one at
   // a time, after the open wallet has started.
   const scanned = new Set();
+  const ADDRS_V = 2;                                // the kinds kept for My wallets: offline, public offline, max privacy, regular
   async function ownAddressAll() {
     for (const w of (data ? data.wallets : [])) {
       const id = w.id;
-      if (!data || !beamCfg(id) || id === settings.active || (settings.beamAddr[id] && (settings.beamAddrs || {})[id]) || scanned.has(id)) continue;
+      // read again when what is kept was read by an earlier version (it took fewer kinds of address)
+      if (!data || !beamCfg(id) || id === settings.active || (settings.beamAddr[id] && (settings.beamAddrs || {})[id] && (settings.beamAddrsV || {})[id] === ADDRS_V) || scanned.has(id)) continue;
       scanned.add(id);
       await withWallet(id, () => (data && !live(id) ? start(id, 0) : null)).catch(() => {});
       if (live(id)) await ownAddress(id).catch(() => {});
@@ -312,7 +314,7 @@
     // while this wallet does not run; a regular one, once it is opened while the sender still runs)
     const offl = list.filter((a) => ['public_offline', 'offline', 'max_privacy', 'regular'].includes(a.type) && !a.expired).map((a) => ({ address: a.address, type: a.type, name: a.comment || '' }));
     const was = JSON.stringify((settings.beamAddrs || {})[id] || null);
-    if (JSON.stringify(offl) !== was) { (settings.beamAddrs ||= {})[id] = offl; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } }); }
+    if (JSON.stringify(offl) !== was || (settings.beamAddrsV || {})[id] !== ADDRS_V) { (settings.beamAddrs ||= {})[id] = offl; (settings.beamAddrsV ||= {})[id] = ADDRS_V; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } }); }
     const pub = list.filter((a) => a.type === 'public_offline' && !a.expired);
     if (have && pub.some((a) => a.address === have.address)) return;
     const next = pub[0] ? { address: pub[0].address, at: Date.now() } : null;

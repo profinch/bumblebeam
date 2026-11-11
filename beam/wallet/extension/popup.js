@@ -1333,7 +1333,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // why it counts as this wallet's: the tip says how it was verified (or how it would be)
     const vTip = x.own && !x.key ? 'Added manually, then taken by Beam as this wallet\'s own from imported wallet data: Beam checked its key number against this seed phrase'
       : x.key ? 'Added manually: a public offline address carrying this wallet\'s own offline key (Beam makes every public offline address of a wallet from one key of its seed phrase)'
-      : 'Added manually: a payment to it shows in this wallet\'s history';
+      : 'Added manually: a payment to it arrived and shows in this wallet\'s history (one sent from another of your wallets counts the same: only this wallet can take it)';
     $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? `<span class="tipped" title="${esc(vTip)}">verified</span>`
       : '<span class="tipped" title="Added manually: whose an address of this kind is cannot be checked. It becomes verified once a payment to it shows in this wallet\'s history, or imported wallet data makes it Beam\'s own">not verified</span>';
     $('beamAddrSt').classList.toggle('warn', !!x.ext && !x.verified);
