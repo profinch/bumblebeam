@@ -635,7 +635,7 @@
   async function removeAccount(w, a = acct()) {
     if (!a) return;
     if (w.accounts.length < 2) return ask({ title: 'The last account stays', note: 'A wallet keeps at least one Ethereum account. To remove the whole wallet: Settings → Wallets → remove.', yes: 'OK', no: null });
-    const rows = [['Account', `${a.name} ${a.address}`]];
+    const rows = [['Account', `${a.name}\n${a.address}`]];      // the name, the whole address on a line of its own
     if (ethData && ethFor === a.address) {
       const held = [`${num(units(ethData.eth, 18), 6)} ETH`, ...ethData.tokens.filter((t) => units(t.balance, t.decimals) > 0).map((t) => `${num(units(t.balance, t.decimals), 4)} ${t.symbol}`)].filter((x) => !/^0 ETH$/.test(x));
       if (held.length) rows.push(['On it now', held.join(', ')]);
