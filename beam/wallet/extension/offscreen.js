@@ -872,6 +872,7 @@
             backup: !!(e && x.nodeIx > 0), sync: x.sync || null, progress: progress && progress.wallet === w.id ? progress : null }];
         })),
         nodes: nodeList(),
+        lastBackup: settings.lastBackup || null,
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
           beam: !!w.beam, eth: !!w.eth, hd: !!(w.eth && w.eth.phrase),
@@ -1250,6 +1251,61 @@
       const clean = (Array.isArray(list) ? list : String(list || '').split(/[\s,]+/)).map((x) => String(x).trim()).filter((x) => /^[\w.-]+:\d{1,5}$/.test(x));
       settings.backupNodes = [...new Set(clean)].slice(0, 5); await saveSettings();
       return settings.backupNodes;
+    },
+    // the Beam nodes as one list: the first is used, the others tried in turn from the top (Settings, dragged to order)
+    async setNodes(list) {
+      need();
+      const clean = [...new Set((Array.isArray(list) ? list : []).map((x) => String(x).trim()).filter((x) => /^[\w.-]+:\d{1,5}$/.test(x)))].slice(0, 6);
+      if (!clean.length) throw new Error('keep at least one node');
+      settings.backupNodes = clean.slice(1); await saveSettings();
+      if (clean[0] !== node) await api.setNode(clean[0]);
+      return nodeList();
+    },
+
+    // ---------- the backup: one file with every wallet ----------
+    // The vault record as it is stored (sealed with the wallet password), the non-secret settings, and, if asked,
+    // each wallet's Beam database (its checked copy in this browser, else read from the stopped engine)
+    async beamDbSize() {
+      need(); let n = 0;
+      for (const w of data.wallets) if (w.beam) { const b = await copyRead(w.id); if (b) n += b.length; }
+      return n;
+    },
+    async backupMake(pass, withBeam) {
+      await verify(pass);
+      const out = { kind: 'bumblebeam-backup', v: 1, at: Date.now(), vault: vaultRec,
+        settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {} };
+      if (withBeam) for (const w of data.wallets) if (w.beam) out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await api.exportBeam(w.id, pass)).b64;
+      settings.lastBackup = out.at; await saveSettings();
+      return { b64: toB64(new TextEncoder().encode(JSON.stringify(out))), at: out.at };
+    },
+    // An import adds the wallets the file has and this extension does not (the same phrase, or the same first
+    // Ethereum account, is the same wallet); nothing here is changed. A Beam part comes from the file's database,
+    // else from its phrase through the recovery snapshot (minutes). Opened with the file's password, kept with this one's.
+    async backupImport(text, filePass, pass) {
+      await verify(pass);
+      let f = null;
+      try { f = JSON.parse(text); } catch {}
+      if (!f || f.kind !== 'bumblebeam-backup' || !f.vault) throw new Error('not a BumbleBeam backup file');
+      let d;
+      try { d = (await Vault.open(f.vault, filePass)).data; } catch { throw new Error('the file\'s password does not open it'); }
+      const first = (w) => (w.eth && w.eth.accounts && w.eth.accounts[0] ? String(w.eth.accounts[0].address).toLowerCase() : '');
+      const here = (fw) => data.wallets.some((w) => (fw.phrase && w.phrase === fw.phrase) || (first(fw) && first(w) === first(fw)));
+      const added = [], skipped = [];
+      for (const fw of d.wallets || []) {
+        if (here(fw)) { skipped.push(fw.name); continue; }
+        const id = newId(), w = { ...structuredClone(fw), id, beam: null };
+        if (fw.beam) {
+          const db = Engines.dbOf(id), made = await Engines.fresh(id);
+          try {
+            if (f.beam && f.beam[fw.id]) { await made.rpc('importDb', [db, fromB64(f.beam[fw.id]), fw.beam.pass]); w.beam = { db, pass: fw.beam.pass }; }
+            else if (fw.phrase) { const p2 = Vault.randomHex(24); await made.rpc('create', [db, fw.phrase, p2, node, RECOVERY_URL], 40 * 60 * 1000); w.beam = { db, pass: p2 }; }
+          } finally { await made.close().catch(() => {}); }
+        }
+        await mutate((dd) => { dd.wallets.push(w); });
+        added.push(fw.name);
+      }
+      broadcast({ type: 'event', method: 'bb_changed' });
+      return { added, skipped };
     },
 
     // ---------- Beam ----------

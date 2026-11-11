@@ -196,6 +196,25 @@
   the right end, an open book before it, no taller than the letters so the bar is as high as Activity's); they
   were two button bars.
 
+### Settings (worked out in lab/settings.html)
+- Quiet tabs in the header instead of one long page: Wallets, General, Networks, Storage, About; the wallet's
+  small buttons (as All) and compact pickers throughout.
+- Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current; the header's
+  picker switches). A click opens its card: This wallet (Rename, Seed phrase) and Ethereum (its own Seed phrase when
+  added by one, Private key) side by side, the account picker under them as the wallet tab's (with add, import,
+  rename, remove; it opens at the wallet tab's account and does not change it), Remove last. Use, the Beam backup
+  file and the manual Beam restore are gone from here.
+- General: Security; Display with how the time and the decimals show under their pickers; Backup: one file with
+  every wallet (the vault as stored, sealed with the wallet password, the settings, and Beam's databases if asked),
+  saved into Downloads; an import adds the wallets the file has and the extension does not (a Beam part from its
+  database, else from its phrase through the snapshot), changing nothing here.
+- Networks: Beam's nodes as one list (the first is used, the others in turn; drag to order, the list's cross,
+  WebSocket only), each probed for whether it answers and how fast, a click shows what is behind it; our two
+  nodes explained in a fold. Ethereum: one's own RPC above the public ones (four, asked in turn), the block from
+  them; the tokens added by hand (to move to the wallet tab).
+- Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing.
+- About: the version as a link to the changelog, the bridge's contracts with copy and explorer icons.
+
 ### Everywhere
 - Send on both networks: Available is All, as the bridge's balance (its figures light under the pointer, a click
   takes all of it but the fee); the All button is gone. Ethereum Send says Network fee, as Beam's.

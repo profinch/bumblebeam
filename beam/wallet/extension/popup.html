@@ -38,6 +38,8 @@
       <!-- Connected sites' network: in the same place -->
   <div class="wsub" id="dappBar" hidden><div class="subtabs" id="dappNet"><button type="button" class="on" data-n="beam"><i class="chain beam"></i>Beam</button><button type="button" data-n="eth"><i class="chain eth"></i>Ethereum</button><button type="button" class="cat" data-n="cat"><svg class="cat-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5c3-1.5 7-1.5 10 1 3-2.5 7-2.5 10-1v14c-3-1.5-7-1.5-10 1-3-2.5-7-2.5-10-1z"/><path d="M12 6v14"/></svg>Catalog</button></div></div>
   <div class="wsub" id="actBar" hidden><div class="subtabs" id="actNet"><button type="button" class="on" data-n="beam"><i class="chain beam"></i>Beam</button><button type="button" data-n="eth"><i class="chain eth"></i>Ethereum</button><span class="act-acct" id="actAcct" hidden></span></div></div>
+  <!-- Settings' sections, in the same place -->
+  <div class="wsub" id="setBar" hidden><div class="subtabs" id="setNav"><button type="button" class="on" data-s="wallets">Wallets</button><button type="button" data-s="general">General</button><button type="button" data-s="networks">Networks</button><button type="button" data-s="storage">Storage</button><button type="button" data-s="about">About</button></div></div>
 </header>
 
 <main>
@@ -328,65 +330,89 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
   <!-- ================= settings ================= -->
   <section id="t-settings" class="screen tab" hidden>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Wallets</h3><span class="panel-meta"><button class="btn small" id="addWallet">+ Add a wallet</button></span></div>
-      <div class="wlist" id="wList"></div>
+    <!-- (worked out in lab/settings.html) Wallets: one row each, a click opens its card -->
+    <div class="sp-sec" data-s="wallets">
+      <div class="list" id="wList"></div>
+      <div class="more"><button type="button" class="sbtn" id="addWallet">+ Add a wallet</button></div>
     </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Security</h3></div>
-      <div class="field"><span id="autoLockL">Lock after idle</span>
-        <div class="dd" id="autoLock" data-value="60"><button type="button" class="dd-btn" id="autoLockB" aria-labelledby="autoLockL autoLockB" aria-haspopup="listbox" aria-expanded="false"></button>
-          <ul class="dd-list" role="listbox" tabindex="-1" hidden>
-            <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
-            <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></div>
-      <p class="hint">Only the open wallet's Beam part runs: its regular addresses are online while it is unlocked. The other wallets take payments to their offline, public and max-privacy addresses all the time. Their regular addresses wait until they are opened. Locking takes Beam offline (a transfer still being made finishes first). Closing the browser locks it.</p>
-      <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Display</h3></div>
-      <div class="field"><span id="timeFmtL">Time format</span>
-        <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" id="timeFmtB" aria-labelledby="timeFmtL timeFmtB" aria-haspopup="listbox" aria-expanded="false"></button>
-          <ul class="dd-list" role="listbox" tabindex="-1" hidden>
-            <li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></div>
-      <p class="hint">Dates are always day.month.year (06.11.2026).</p>
-      <div class="field"><span id="decFmtL">Decimals shown</span>
-        <div class="dd" id="decFmt" data-value="6"><button type="button" class="dd-btn" id="decFmtB" aria-labelledby="decFmtL decFmtB" aria-haspopup="listbox" aria-expanded="false"></button>
-          <ul class="dd-list" role="listbox" tabindex="-1" hidden>
-            <li role="option" data-v="2">2 (0.12)</li><li role="option" data-v="4">4 (0.1234)</li><li role="option" data-v="6">6 (0.123456)</li><li role="option" data-v="8">8 (0.12345678, all of them)</li></ul></div></div>
-      <p class="hint">On the wallet tab, the bridge, Send and Activity. Confirmations always show every decimal.</p>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Activity's memory</h3></div>
-      <p class="hint">What Activity worked out once and keeps in this browser, so it is not lost later: a transfer's kernel and block found when Beam gave none, our pool's payouts, blocks' times, and each list as last shown (it opens at once and refreshes behind). Kept per wallet; a removed wallet's goes by itself.</p>
-      <div class="field"><span id="keepAgeL">Clear</span>
-        <div class="inline">
-          <div class="dd" id="keepAge" data-value="90"><button type="button" class="dd-btn" id="keepAgeB" aria-labelledby="keepAgeL keepAgeB" aria-haspopup="listbox" aria-expanded="false"></button>
+
+    <div class="sp-sec" data-s="general" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Security</h3></div>
+        <div class="field"><span id="autoLockL">Lock after idle</span>
+          <div class="dd compact" id="autoLock" data-value="60"><button type="button" class="dd-btn" id="autoLockB" aria-labelledby="autoLockL autoLockB" aria-haspopup="listbox" aria-expanded="false"></button>
             <ul class="dd-list" role="listbox" tabindex="-1" hidden>
-              <li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">all of it</li></ul></div>
-          <button class="btn ghost small" id="keepClear">Clear</button></div></div>
-      <p class="hint" id="keepInfo"></p>
+              <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
+              <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">never (until the browser closes)</li></ul></div></div>
+        <p class="hint">Locking takes Beam offline, a transfer being made finishes first. Closing the browser locks it too. Only the open wallet's regular addresses are online.</p>
+        <div class="row"><button type="button" class="sbtn" id="chPass">Change the password</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Display</h3></div>
+        <div class="two">
+          <div class="field"><span id="timeFmtL">Time</span>
+            <div class="dd compact" id="timeFmt" data-value="24"><button type="button" class="dd-btn" id="timeFmtB" aria-labelledby="timeFmtL timeFmtB" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div><span class="ex" id="timeEx"></span></div>
+          <div class="field"><span id="decFmtL">Decimals</span>
+            <div class="dd compact" id="decFmt" data-value="6"><button type="button" class="dd-btn" id="decFmtB" aria-labelledby="decFmtL decFmtB" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="2">2 (0.12)</li><li role="option" data-v="4">4 (0.1234)</li><li role="option" data-v="6">6 (0.123456)</li><li role="option" data-v="8">8 (all)</li></ul></div><span class="ex" id="decEx"></span></div>
+        </div>
+        <p class="hint">Used on the wallet tab, the bridge, Send and Activity. Confirmations always show every decimal.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Backup</h3><span class="panel-meta" id="bkLast"></span></div>
+        <p class="hint">One file with every wallet of this extension: phrases and keys, names, accounts and settings, encrypted with the wallet password.</p>
+        <label class="check"><input type="checkbox" id="bkDb"><span>with Beam history and address names <b id="bkSize"></b></span></label>
+        <div class="row"><button type="button" class="sbtn" id="bkSave">Save a backup now</button><button type="button" class="sbtn" id="bkImport">Import a backup</button><span class="act-msg" id="bkMsg"></span></div>
+        <input type="file" id="bkFile" accept=".bbk,application/json" hidden>
+        <p class="hint">An import adds the wallets the file has and this extension does not. It asks for the password the file was saved with. Nothing here is changed or removed.</p>
+      </div>
     </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Networks</h3></div>
-      <label class="field">Beam node (wss, host:port)<span class="inline"><input id="node" spellcheck="false"><button class="btn ghost small" id="saveNode">Save</button></span></label>
-      <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>
-      <label class="field">Ethereum RPC (https, empty = public ones)<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button class="btn ghost small" id="saveRpc">Save</button></span></label>
+
+    <div class="sp-sec" data-s="networks" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title"><i class="chain beam"></i>Beam</h3><span class="panel-meta" id="beamNet"></span></div>
+        <div class="nodes" id="nodes"></div>
+        <label class="field">Add a node (WebSocket only, wss)<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button type="button" class="sbtn" id="nodeAdd">Add</button></span></label>
+        <p class="hint">The first in the list is used. When it stops answering for a minute, the next ones are tried from the top down. Drag to change the order, click one to see what is behind it.</p>
+        <div class="fold" id="beamWhat"><a href="#" class="text-link fold-h">What our two nodes are</a><span class="fold-arrow"></span>
+          <div class="fold-b">
+            <p><b>wss.bumblebeam.org</b> is our own Beam node, on our server, reached through our WebSocket door. It is the fastest, and it sees our pool's blocks first.</p>
+            <p><b>wsb.bumblebeam.org</b> is the backup door, run by Cloudflare, not by our server. It passes the wallet through to BeamMW's public nodes and sunpool's, in a random order, with our node last. It keeps the wallet working when our server is down.</p>
+            <p>A browser can only open WebSockets, so a node works here only with a WebSocket door (wss). Beam's plain node ports (8100, 10000) do not.</p>
+          </div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title"><i class="chain eth"></i>Ethereum</h3><span class="panel-meta" id="ethNet"></span></div>
+        <div class="nodes" id="rpcs"></div>
+        <label class="field">Your own RPC<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button type="button" class="sbtn" id="rpcAdd">Add</button></span></label>
+        <p class="hint">With an RPC of your own, it is used first, then the public ones.</p>
+        <div class="field"><span>Tokens added</span></div>
+        <div class="list" id="tokList"></div>
+        <label class="field">Add a token<span class="inline"><input id="tokAddr" maxlength="42" placeholder="0x… its contract" spellcheck="false"><button type="button" class="sbtn" id="addTok">Add</button></span></label>
+      </div>
     </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">Tokens</h3></div>
-      <p class="hint">ETH and WBEAM always show. Other tokens with a market price show by themselves. Add any other ERC-20 by its contract address.</p>
-      <div class="list" id="tokList"></div>
-      <label class="field">Token contract<span class="inline"><input id="tokAddr" maxlength="42" placeholder="0x…" spellcheck="false"><button class="btn ghost small" id="addTok">Add</button></span></label>
+
+    <div class="sp-sec" data-s="storage" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Recovery snapshot</h3><span class="panel-meta" id="snapSize"></span></div>
+        <p class="hint" id="snapInfo"></p>
+        <div class="row" id="snapRow"><button type="button" class="sbtn" id="dropSnap">Remove it</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Activity's memory</h3><span class="panel-meta" id="keepSize"></span></div>
+        <div class="field"><span id="keepAgeL">Clear</span>
+          <div class="inline wide">
+            <div class="dd compact" id="keepAge" data-value="90"><button type="button" class="dd-btn" id="keepAgeB" aria-labelledby="keepAgeL keepAgeB" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">everything</li></ul></div>
+            <button type="button" class="sbtn" id="keepClear">Clear</button></div></div>
+        <dl class="kv keep" id="keepInfo"></dl>
+        <p class="hint">What Activity worked out once, and each list as last shown: kernels and blocks Beam did not give, our pool's payouts, blocks' times, spent coins with no record of their own. A removed wallet's goes by itself.</p>
+      </div>
     </div>
-    <div class="panel">
-      <div class="panel-head"><h3 class="panel-title">About</h3></div>
-      <dl class="kv">
-        <dt>Version</dt><dd id="ver"></dd>
-        <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548<br>after HF6</dd>
-        <dt>Bridge</dt><dd>official pipe <span title="e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835">e63bd2…dbe835</span> on Beam<br>and <span title="0x6063024646E8A1561970840a4b0e0f1082f5a670">0x6063…f5a670</span> on Ethereum</dd>
-        <dt>Snapshot</dt><dd><span id="snapInfo"></span> <a href="#" class="text-link" id="dropSnap">remove</a></dd>
-        <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
-      </dl>
+
+    <div class="sp-sec" data-s="about" hidden>
+      <div class="panel"><dl class="kv about" id="aboutKv"></dl></div>
     </div>
   </section>
 </main>

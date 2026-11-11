@@ -245,6 +245,7 @@
     $('backBtn').hidden = !adding && !(id.startsWith('x-') && id !== 'x-dapps');
     $('actBar').hidden = id !== 't-activity';
     $('dappBar').hidden = id !== 'x-dapps';
+    $('setBar').hidden = id !== 't-settings';
     // every screen but the wallet tab keeps the scroll bar's room on both sides (wallet.css): main's padding less
     // by as much, so the content lines up with the wallet tab's
     const m = document.querySelector('main');
@@ -252,7 +253,7 @@
     if (id !== 't-home' && document.documentElement.classList.contains('popup')) {
       const g = (m.offsetWidth - m.clientWidth) / 2, pad = parseFloat(getComputedStyle(m).paddingLeft) || 0;
       m.style.paddingLeft = m.style.paddingRight = `${Math.max(0, pad - g)}px`;
-      if (id === 'x-dapps' || id === 'x-beamRecv') m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
+      if (id === 'x-dapps' || id === 'x-beamRecv' || id === 't-settings') m.style.paddingBottom = `${Math.max(0, (parseFloat(getComputedStyle(m).paddingBottom) || 0) - homeOver)}px`;
     }
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
@@ -631,8 +632,7 @@
   }
   // remove the account shown: a phrase account comes back with "+ Add an account", an imported one only
   // from its own key or phrase; a balance on it is said first
-  async function removeAccount(w) {
-    const a = acct();
+  async function removeAccount(w, a = acct()) {
     if (!a) return;
     if (w.accounts.length < 2) return ask({ title: 'The last account stays', note: 'A wallet keeps at least one Ethereum account. To remove the whole wallet: Settings → Wallets → remove.', yes: 'OK', no: null });
     const rows = [['Account', `${a.name} ${a.address}`]];
@@ -649,8 +649,7 @@
   }
 
   // rename the account shown
-  async function renameAccount() {
-    const w = W(), a = acct();
+  async function renameAccount(w = W(), a = acct()) {
     if (!a) return;
     const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name, max: NAME_MAX }, yes: 'Save',
       check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameEthAccount', w.id, a.i, input); } });
@@ -2243,10 +2242,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const keepTidy = async () => { const k = await keepAll(), ids = new Set(((st && st.wallets) || []).map((w) => w.id)); let n = 0; for (const id of Object.keys(k)) if (!ids.has(id)) { delete k[id]; n++; } if (n) keepSave(); };
   async function keepInfo() {
     if (!$('keepInfo')) return;
-    const k = await keepAll(); let tx = 0, bt = 0, ls = 0;
-    for (const w of Object.values(k)) { tx += Object.keys(w.tx || {}).length + Object.keys(w.coins || {}).length; bt += Object.keys(w.bt || {}).length; ls += Object.keys(w.ls || {}).length; }
-    const kb = Math.ceil(JSON.stringify(k).length / 1024);
-    $('keepInfo').textContent = tx + bt + ls ? `Kept now: ${tx} transfers, ${bt} blocks' times, ${ls} lists (${kb} KB).` : 'Nothing kept yet.';
+    const k = await keepAll(); let tx = 0, coins = 0, bt = 0, ls = 0;
+    for (const w of Object.values(k)) { tx += Object.keys(w.tx || {}).length; coins += Object.keys(w.coins || {}).length; bt += Object.keys(w.bt || {}).length; ls += Object.keys(w.ls || {}).length; }
+    $('keepSize').textContent = `${Math.ceil(JSON.stringify(k).length / 1024)} KB`;
+    $('keepInfo').innerHTML = `<dt>Transfers</dt><dd>${tx}</dd><dt>Spent coins</dt><dd>${coins}</dd><dt>Blocks' times</dt><dd>${bt}</dd><dt>Lists</dt><dd>${ls}</dd>`;
   }
   const keepAge = BB.dropdown($('keepAge'), () => {});
   keepAge.set('90');
@@ -2577,40 +2576,264 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('actList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.ar')) { e.preventDefault(); e.target.click(); } };
 
   // ---------- Settings ----------
+  // (worked out in lab/settings.html) Quiet tabs in the header: Wallets, General, Networks, Storage, About
+  let setSec = 'wallets';
+  $('setNav').onclick = (e) => {
+    const b = e.target.closest('button[data-s]'); if (!b) return;
+    setSec = b.dataset.s;
+    qa('#setNav button').forEach((x) => x.classList.toggle('on', x === b));
+    qa('#t-settings .sp-sec').forEach((s) => { s.hidden = s.dataset.s !== setSec; });
+    document.querySelector('main').scrollTop = 0;
+    setSecOpen();
+  };
   const autoLockDd = BB.dropdown($('autoLock'), (v) => host('setAutoLock', Number(v)));
-  const timeDd = BB.dropdown($('timeFmt'), (v) => { time12 = v === '12'; chrome.storage.local.set({ time12 }).catch(() => {}); });
+  // under each display picker, how it shows: white, BEAM grey
+  const dispEx = () => {
+    const t = new Date(2026, 10, 11, 14, 5).getTime();
+    $('timeEx').textContent = fdt(t);
+    $('decEx').innerHTML = `${esc(amt(123412345679, decShown))} <span class="u">BEAM</span>`;
+  };
+  const timeDd = BB.dropdown($('timeFmt'), (v) => { time12 = v === '12'; chrome.storage.local.set({ time12 }).catch(() => {}); dispEx(); });
   chrome.storage.local.get('time12').then((v) => { time12 = !!v.time12; }).catch(() => {});
   // how many decimals amounts show: drawn again at once where they are (the wallet tab, the bridge)
   const decDd = BB.dropdown($('decFmt'), (v) => {
     decShown = Number(v) || 6; chrome.storage.local.set({ decShown }).catch(() => {});
+    dispEx();
     try { renderBeam(); ethRows(); bxCalc(); transfers(); } catch {}
   });
   chrome.storage.local.get('decShown').then((v) => { if ([2, 4, 6, 8].includes(v.decShown)) decShown = v.decShown; decDd.set(String(decShown)); }).catch(() => {});
   async function settingsOpen() {
-    $('ver').textContent = chrome.runtime.getManifest().version;
-    $('node').value = st.node; $('ethRpc').value = st.ethRpc || '';
-    $('backupNodes').value = (st.nodes || []).filter((n) => n !== st.node).join(', ');
     autoLockDd.set(String(st.autoLock));
-    timeDd.set(time12 ? '12' : '24'); decDd.set(String(decShown));
+    timeDd.set(time12 ? '12' : '24'); decDd.set(String(decShown)); dispEx();
     keepTidy().then(keepInfo);
-    $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
-      <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
-        ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
-      <div class="wacts">
-        ${w.id !== st.active ? '<a href="#" class="text-link" data-a="use">use</a>' : ''}
-        <a href="#" class="text-link" data-a="rename">rename</a>
-        ${w.phraseKnown ? '<a href="#" class="text-link" data-a="phrase">seed phrase</a>' : ''}
-        ${w.ethKind === 'phrase' ? '<a href="#" class="text-link" data-a="ethPhrase">Ethereum phrase</a>' : ''}
-        ${w.eth ? '<a href="#" class="text-link" data-a="ethKey">private key</a>' : ''}
-        ${w.beam ? '<a href="#" class="text-link" data-a="backup">Beam backup</a>' : ''}
-        ${w.beam && st.beam && st.beam[w.id] && ['missing', 'failed'].includes(st.beam[w.id].status) ? '<a href="#" class="text-link" data-a="restoreBeam">restore Beam</a>' : ''}
-        <a href="#" class="text-link danger" data-a="remove">remove</a>
-      </div></div>`).join('');
-    $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
-      || '<div class="empty">no tokens added</div>';
-    host('snapshotInfo').then((s) => { $('snapInfo').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB, ${ago(s.at)}` : 'none kept'; $('dropSnap').hidden = !s; });
+    drawWallets();
+    setSecOpen();
+  }
+  // what a section reads when it is shown
+  function setSecOpen() {
+    if (setSec === 'general') bkInfo();
+    if (setSec === 'networks') { drawNodes(); drawRpcs(); drawToks(); probeAll(); }
+    if (setSec === 'storage') { snapInfo(); keepTidy().then(keepInfo); }
+    if (setSec === 'about') drawAbout();
   }
   $('addWallet').onclick = () => welcome();
+
+  // ---------- Settings: Wallets ----------
+  // one row each: its networks' dots, its name, what it holds, the open one marked current (the header's picker
+  // switches); a click opens its card: This wallet (Rename, Seed phrase) and Ethereum (its own Seed phrase when added
+  // by one, Private key) side by side, the account picker under them as the wallet tab's, Remove last
+  const wOpen = new Set(), wPick = {};
+  function drawWallets() {
+    $('wList').innerHTML = st.wallets.map((w) => {
+      const on = w.id === st.active, isOpen = wOpen.has(w.id);
+      const holds = [w.beam ? 'Beam' : '', w.eth ? `Ethereum ×${w.accounts.length}` : ''].filter(Boolean).join('<i class="sp"></i>');
+      return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${esc(w.id)}" tabindex="0" role="button" aria-expanded="${isOpen}">
+        <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
+        ${on ? '<span class="end">current</span>' : '<span></span>'}</div>${isOpen ? wCard(w) : ''}`;
+    }).join('');
+    for (const d of qa('#wList [data-acct]')) wAcctDd(d, st.wallets.find((x) => x.id === d.dataset.acct));
+  }
+  function wCard(w) {
+    const g = (cap, acts) => `<div class="grp"><div class="cap">${cap}</div><div class="acts">${acts.join('')}</div></div>`;
+    const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
+    const mine = [b('rename', 'Rename'), w.phraseKnown ? b('phrase', 'Seed phrase') : ''].filter(Boolean);
+    const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
+    const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
+    return `<div class="wcard2"><div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
+  }
+  // the card's account picker, as the wallet tab's (its accounts, then add / import / rename / remove), opened on the
+  // wallet tab's account; picked here, it is the card's only (the wallet tab keeps its own); its address runs and settles
+  function wAcctDd(d, w) {
+    const at = wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i;
+    const act = (v, icon, text) => ({ v, label: text, html: `<span class="mi">${icon}</span><span>${esc(text)}</span>` });
+    const dd = BB.dropdown(d, async (v) => {
+      try {
+        if (v === '__add') await host('addEthAccount', w.id);
+        else if (v === '__import') { if (!(await importAccount(w))) return; }
+        else if (v === '__rename') await renameAccount(w, w.accounts.find((x) => x.i === (wPick[w.id] ?? at)));
+        else if (v === '__remove') await removeAccount(w, w.accounts.find((x) => x.i === (wPick[w.id] ?? at)));
+        else {
+          const was = wPick[w.id] ?? at; wPick[w.id] = Number(v);
+          const a = w.accounts.find((x) => x.i === Number(v)), ad = d.querySelector('.dd-btn .ad');
+          if (a && ad && Number(v) !== was) BB.decode(ad, short(a.address));
+          return;
+        }
+      } catch (e) { await ask({ title: 'Not done', note: msg(e), yes: 'OK', no: null }); }
+      await load(); drawWallets();
+    });
+    dd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${short(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${short(x.address)}</span>`,
+      btn: `<span class="acc-b"><span class="nm">${esc(x.name)}</span><span class="ad">${short(x.address)}</span></span>` })),
+      { sep: true },
+      ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
+      act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(at));
+  }
+  $('wList').onclick = (e) => {
+    const a = e.target.closest('[data-a]');
+    if (a) { const w = st.wallets.find((x) => x.id === a.closest('.wcard2').previousElementSibling.dataset.w); return walletAct(w, a.dataset.a); }
+    if (e.target.closest('.wcard2')) return;
+    const li = e.target.closest('.li.wr'); if (!li) return;
+    if (wOpen.has(li.dataset.w)) wOpen.delete(li.dataset.w); else wOpen.add(li.dataset.w);
+    drawWallets();
+  };
+  $('wList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.wr')) { e.preventDefault(); e.target.click(); } };
+
+  // ---------- Settings: Backup ----------
+  // one file with every wallet (the vault as stored, sealed with the wallet password), Beam's databases if asked
+  async function bkInfo() {
+    $('bkLast').innerHTML = st.lastBackup ? `<span>last: <b>${esc(fdt(st.lastBackup))}</b></span>` : '<span>none yet</span>';
+    try { const n = await host('beamDbSize'); $('bkSize').textContent = n ? `~${Math.max(1, Math.round(n / 2 ** 20))} MB now` : ''; } catch {}
+  }
+  $('bkSave').onclick = async () => {
+    let out = null;
+    const r = await ask({ title: 'Save a backup', password: true, yes: 'Save the file',
+      note: `Every wallet of this extension in one file, encrypted with the wallet password${$('bkDb').checked ? ', with Beam history and address names' : ''}. It opens only with the password it was saved with.`,
+      check: async ({ pass }) => { out = await host('backupMake', pass, $('bkDb').checked); } });
+    if (!r.ok || !out) return;
+    const d = new Date(out.at), name = `bumblebeam-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.bbk`;
+    const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
+    if (r2 && r2.error) return ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
+    st.lastBackup = out.at; bkInfo(); actOk($('bkSave'), 'saved into Downloads');
+  };
+  $('bkImport').onclick = () => { $('bkFile').value = ''; $('bkFile').click(); };
+  $('bkFile').onchange = async () => {
+    const f = $('bkFile').files && $('bkFile').files[0]; if (!f) return;
+    const text = await f.text();
+    let res = null, filePass = '';
+    const r1 = await ask({ title: 'Import a backup', input: { label: 'The password the file was saved with', secret: true }, yes: 'Next', note: f.name,
+      check: async ({ input }) => { filePass = input; if (!input) throw new Error('its password, please'); } });
+    if (!r1.ok) return;
+    const r2 = await ask({ title: 'Import a backup', password: true, yes: 'Import', note: 'The wallets it has and this extension does not are added. A Beam part without its database in the file comes back from its phrase through the recovery snapshot, which takes a few minutes.',
+      check: async ({ pass }) => { res = await host('backupImport', text, filePass, pass); } });
+    if (!r2.ok || !res) return;
+    await load(); drawWallets();
+    ask({ title: res.added.length ? 'Imported' : 'Nothing new', rows: [['Added', res.added.join('\n') || 'none'], ...(res.skipped.length ? [['Already here', res.skipped.join('\n')]] : [])], yes: 'OK', no: null });
+  };
+
+  // ---------- Settings: Networks ----------
+  // Beam's nodes as one list (the first is used, the others in turn from the top), each probed for whether it answers
+  // and how fast; Ethereum's own RPC above the public ones. A click opens what is behind a row
+  const XI2 = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+  const BEHIND = {
+    'wss.bumblebeam.org:443': [['What', 'our own Beam node, on our server'], ['Through', 'our WebSocket door (nginx)'], ['Also', 'the BumbleBeam pool\'s node']],
+    'wsb.bumblebeam.org:443': [['What', 'the backup door, a Cloudflare Worker\nto BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
+  };
+  const PUBLIC_RPCS = ['ethereum-rpc.publicnode.com', 'eth.llamarpc.com', 'eth.drpc.org', '1rpc.io/eth'];
+  const probe = {}, nOpen = new Set();
+  const behind = (key, rows) => (nOpen.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
+  const stOf = (p) => (!p ? '' : p.bad ? 'bad' : p.ms > 500 ? 'slow' : 'ok');
+  const msOf = (p) => (!p ? '…' : p.bad ? 'no answer' : `${p.ms} ms`);
+  function drawNodes() {
+    const list = st.nodes || [st.node];
+    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${msOf(probe[h])}</span><button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button></div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
+    const h = beamStatus && beamStatus.current_height;
+    $('beamNet').innerHTML = h ? `<span>block: <b>${esc(h.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
+  }
+  function drawRpcs() {
+    const own = st.ethRpc || '';
+    $('rpcs').innerHTML = (own ? `<div class="node use${nOpen.has(own) ? ' open' : ''}" data-k="${esc(own)}"><i class="st ${stOf(probe[own])}"></i><span class="h">${esc(own.replace(/^https:\/\//, ''))}</span><span class="meta">${msOf(probe[own])}</span><button type="button" class="cp a-x" data-rx="1" title="Remove this RPC">${XI2}</button></div>${behind(own, [['What', 'an RPC added by you, asked first']])}` : '')
+      + `<div class="node${own ? '' : ' use'}${nOpen.has('public') ? ' open' : ''}" data-k="public"><i class="st ${stOf(probe.public)}"></i><span class="h">public RPCs</span><span class="meta end"><span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">${PUBLIC_RPCS.length}</span></span></div>${behind('public', [['Asked in turn', PUBLIC_RPCS.join('\n')], ['Activity from', 'eth.blockscout.com']])}`;
+    const b = probe.ethBlock;
+    $('ethNet').innerHTML = b ? `<span>block: <b>${esc(b.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
+  }
+  // whether each answers: a node by opening its WebSocket, an RPC by asking its last block (5 s at most)
+  const probeWs = (h) => new Promise((res) => {
+    const t0 = performance.now(); let ws, done = false;
+    const end = (p) => { if (done) return; done = true; try { ws.close(); } catch {} res(p); };
+    try { ws = new WebSocket(`wss://${h}`); } catch { return res({ bad: true }); }
+    ws.onopen = () => end({ ms: Math.round(performance.now() - t0) });
+    ws.onerror = () => end({ bad: true });
+    setTimeout(() => end({ bad: true }), 5000);
+  });
+  const probeRpc = async (url) => {
+    const t0 = performance.now();
+    try {
+      const c = new AbortController(), t = setTimeout(() => c.abort(), 5000);
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }), signal: c.signal });
+      clearTimeout(t);
+      const j = await r.json(); if (!j.result) throw new Error('no answer');
+      return { ms: Math.round(performance.now() - t0), block: parseInt(j.result, 16) };
+    } catch { return { bad: true }; }
+  };
+  async function probeAll() {
+    for (const h of st.nodes || []) probeWs(h).then((p) => { probe[h] = p; if (setSec === 'networks') drawNodes(); });
+    const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...PUBLIC_RPCS.map((x) => `https://${x}`)];
+    let pubDone = false;
+    for (const u of urls) probeRpc(u).then((p) => {
+      if (u === st.ethRpc) probe[u] = p;
+      else if (!pubDone && !p.bad) { pubDone = true; probe.public = p; }
+      if (p.block) probe.ethBlock = Math.max(probe.ethBlock || 0, p.block);
+      if (setSec === 'networks') drawRpcs();
+    });
+  }
+  const setNodes = async (list) => { try { st.nodes = await host('setNodes', list); st.node = st.nodes[0]; } catch (e) { await ask({ title: 'Not changed', note: msg(e), yes: 'OK', no: null }); } drawNodes(); probeAll(); };
+  // dragged as Beam's addresses: a line above or below the row it would go to
+  let nDrag = null;
+  const nMarks = () => qa('#nodes .drop-above, #nodes .drop-below').forEach((r) => r.classList.remove('drop-above', 'drop-below'));
+  $('nodes').addEventListener('dragstart', (e) => { const r = e.target.closest('.node'); if (!r) return; nDrag = Number(r.dataset.i); r.classList.add('dragging'); });
+  $('nodes').addEventListener('dragend', () => { nMarks(); qa('#nodes .dragging').forEach((r) => r.classList.remove('dragging')); });
+  $('nodes').addEventListener('dragover', (e) => {
+    e.preventDefault(); const r = e.target.closest('.node'); nMarks(); if (!r || Number(r.dataset.i) === nDrag) return;
+    const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
+  });
+  $('nodes').addEventListener('drop', (e) => {
+    e.preventDefault(); const r = e.target.closest('.node'); if (!r || nDrag == null) return nMarks();
+    const above = r.classList.contains('drop-above'); nMarks();
+    const list = (st.nodes || []).slice(); let to = Number(r.dataset.i) + (above ? 0 : 1); const [n] = list.splice(nDrag, 1); if (nDrag < to) to--; list.splice(to, 0, n); nDrag = null;
+    setNodes(list);
+  });
+  $('nodes').onclick = (e) => {
+    const x = e.target.closest('[data-x]');
+    if (x) { const list = (st.nodes || []).slice(); list.splice(Number(x.dataset.x), 1); return setNodes(list); }
+    const r = e.target.closest('.node'); if (!r) return; const k = r.dataset.k; if (nOpen.has(k)) nOpen.delete(k); else nOpen.add(k); drawNodes();
+  };
+  $('nodeAdd').onclick = async () => {
+    actErr($('nodeAdd'), null);
+    const v = $('nodeIn').value.trim().replace(/^wss:\/\//, '').replace(/\/$/, '');
+    if (!/^[\w.-]+:\d{1,5}$/.test(v)) return actErr($('nodeAdd'), new Error('host:port, a WebSocket door'));
+    $('nodeIn').value = ''; await setNodes([...(st.nodes || []), v]);
+  };
+  $('rpcs').onclick = async (e) => {
+    if (e.target.closest('[data-rx]')) { try { await host('setEthRpc', ''); st.ethRpc = ''; } catch (err) { actErr($('rpcAdd'), err); } drawRpcs(); return; }
+    const r = e.target.closest('.node[data-k]'); if (!r) return; const k = r.dataset.k; if (nOpen.has(k)) nOpen.delete(k); else nOpen.add(k); drawRpcs();
+  };
+  $('rpcAdd').onclick = async () => {
+    actErr($('rpcAdd'), null);
+    const url = $('ethRpc').value.trim();
+    try {
+      if (!url) throw new Error('an https:// address');
+      const origin = new URL(url).origin + '/*';
+      if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('the browser did not allow that address');
+      await host('setEthRpc', url); st.ethRpc = url; $('ethRpc').value = ''; drawRpcs(); probeAll();
+    } catch (e) { actErr($('rpcAdd'), e); }
+  };
+  // the tokens added by hand (to move to the wallet tab's list later)
+  function drawToks() {
+    $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
+      || '<div class="empty">none added</div>';
+  }
+
+  // ---------- Settings: Storage and About ----------
+  async function snapInfo() {
+    const s = await host('snapshotInfo').catch(() => null);
+    $('snapSize').textContent = s ? `${(s.size / 2 ** 20).toFixed(0)} MB` : '';
+    $('snapInfo').innerHTML = s ? `Beam's snapshot kept from the last restore: <b>${esc(fdate(s.at))}</b><br>A restore from a seed phrase starts from it instead of downloading it again (<b>~320 MB</b>, a few minutes).` : 'None kept: a restore from a seed phrase downloads it (~320 MB, a few minutes).';
+    $('snapRow').hidden = !s;
+  }
+  function drawAbout() {
+    const PIPE = 'e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835', ETHP = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
+    const s7 = (a) => `${a.slice(0, 7)}…${a.slice(-7)}`;
+    const cpI2 = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${CPI}</button>`;
+    const lnI2 = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${LINK}</a>`;
+    $('aboutKv').innerHTML = `<dt>Version</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md" target="_blank" rel="noopener">${esc(chrome.runtime.getManifest().version)}</a> changelog</dd>
+      <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548\nafter HF6</dd>
+      <dt>Bridge</dt><dd>${esc(s7(PIPE))}<span class="ar-ics">${cpI2(PIPE, 'the bridge\'s contract id')}${lnI2(`https://explorer.bumblebeam.org/contract/${PIPE}`, 'Open the contract in the explorer')}</span> on Beam\n${esc(short(ETHP))}<span class="ar-ics">${cpI2(ETHP, 'the bridge\'s contract address')}${lnI2(`https://etherscan.io/address/${ETHP}`, 'Open the contract on Etherscan')}</span> on Ethereum</dd>
+      <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
+      <dt>Licence</dt><dd>Apache-2.0</dd>`;
+  }
+  $('aboutKv').onclick = (e) => { const c = e.target.closest('[data-cp]'); if (c) copyFlash(c, c.dataset.cp); };
+  // the explanations fold open and shut by their link and arrow (the catalog's)
+  qa('#t-settings .fold-arrow').forEach((a) => { a.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'; });
+  $('t-settings').addEventListener('click', (e) => { const h = e.target.closest('.fold-h, .fold-arrow'); if (h) { e.preventDefault(); h.parentElement.classList.toggle('open'); } });
 
   // ---------- dApps ----------
   const six = short;
@@ -2812,32 +3035,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     e.preventDefault();
     await host('dappDisconnect', a.dataset.dapp, dappNet); dappListOpen(); dappRefresh();
   };
-  $('wList').onclick = (e) => {
-    const a = e.target.closest('[data-a]');
-    if (!a) return;
-    e.preventDefault();
-    const w = st.wallets.find((x) => x.id === a.closest('[data-w]').dataset.w);
-    const act = a.dataset.a;
-    walletAct(w, act);
-  };
   async function walletAct(w, act) {
     try {
-      if (act === 'use') { await host('switchWallet', w.id); await load(); settingsOpen(); }
-      if (act === 'restoreBeam') {
-        // the Beam part rebuilt from the seed phrase: the stored one, or typed for a wallet that has none
-        const r = await ask({ title: `Restore Beam: ${w.name}`, password: true, yes: 'Restore',
-          input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '' },
-          note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back, the history and address names do not. Only when its Beam database is gone.` });
-        if (!r.ok) return;
-        // it runs in the host (the popup may close); the wallet's card shows its progress
-        await host('switchWallet', w.id); await load(); tab('home');
-        host('restoreBeam', w.id, r.pass, r.input || '').catch((err) => ask({ title: 'Not restored', note: msg(err), yes: 'OK', no: null }));
-        return;
-      }
       if (act === 'rename') {
         const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name, max: NAME_MAX }, yes: 'Save',
           check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameWallet', w.id, input); } });
-        if (r.ok) { await load(); settingsOpen(); }
+        if (r.ok) { await load(); drawWallets(); }
       }
       if (act === 'phrase' || act === 'ethPhrase') {
         await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
@@ -2849,26 +3052,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
           } });
       }
       if (act === 'ethKey') {
-        const a2 = w.accounts.find((x) => x.i === (st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];
+        const a2 = w.accounts.find((x) => x.i === (wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];      // the card's picked account
         await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', note: `${a2.address}. Whoever has the key controls this account; import it only into a wallet you trust.`,
           check: async ({ pass }) => ({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(await host('reveal', w.id, pass, 'ethKey', a2.i))}</div>` }) });
-      }
-      if (act === 'backup') {
-        let out = null;
-        // the file's password, if it is not the wallet's, in the same dialog; then the file, saved by the service
-        // worker (Chrome's download bubble takes the focus and may close the popup: the file is saved anyway)
-        const r = await ask({ title: `Back up ${w.name}`, password: true, yes: 'Save the file',
-          note: 'Saves the Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Opening it later is instant, unlike a seed restore.',
-          check: async (x) => {
-            out = await host('exportBeam', w.id, x.pass);
-            if (out.samePassword) return null;
-            const dbp = await host('reveal', w.id, x.pass, 'beamPass');
-            return { title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, yes: 'Save the file', note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.' };
-          } });
-        if (!r.ok || !out) return;
-        const name = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
-        const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
-        if (r2 && r2.error) await ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
       }
       if (act === 'remove') {
         const r = await ask({ title: `Remove ${w.name}`, password: true, yes: 'Remove', rows: [['Parts', [w.beam && 'Beam', w.eth && 'Ethereum'].filter(Boolean).join(' + ')]],
@@ -2891,30 +3077,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       } });
     if (r2.ok) await ask({ title: 'Password changed', note: 'The new password opens the wallet from now on.', yes: 'OK', no: null });
   };
-  // the Save and Add buttons beside a field: the room for their message under the field from the start
-  for (const b of ['saveNode', 'saveBackups', 'saveRpc', 'addTok']) if ($(b)) actErr($(b), null);
-  $('saveNode').onclick = async () => { actErr($('saveNode'), null); try { st.node = await host('setNode', $('node').value.trim()); $('node').value = st.node; } catch (e) { actErr($('saveNode'), e); } };
-  $('saveBackups').onclick = async () => {
-    actErr($('saveBackups'), null);
-    try { const l = await host('setBackupNodes', $('backupNodes').value); $('backupNodes').value = l.join(', '); } catch (e) { actErr($('saveBackups'), e); }
-  };
-  $('saveRpc').onclick = async () => {
-    actErr($('saveRpc'), null);
-    const url = $('ethRpc').value.trim();
-    try {
-      if (url) {
-        const origin = new URL(url).origin + '/*';
-        if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('the browser did not allow that address');
-      }
-      await host('setEthRpc', url); st.ethRpc = url;
-    } catch (e) { actErr($('saveRpc'), e); }
-  };
+  // the Add buttons beside a field: the room for their message under the field from the start
+  for (const b of ['nodeAdd', 'rpcAdd', 'addTok']) if ($(b)) actErr($(b), null);
   $('addTok').onclick = async () => {
     actErr($('addTok'), null);
-    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); settingsOpen(); } catch (e) { actErr($('addTok'), e); }
+    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); drawToks(); } catch (e) { actErr($('addTok'), e); }
   };
-  $('tokList').onclick = async (e) => { const t = e.target.closest('[data-tok]'); if (!t) return; e.preventDefault(); await host('removeToken', t.dataset.tok); await load(); settingsOpen(); };
-  $('dropSnap').onclick = async (e) => { e.preventDefault(); await host('dropSnapshot'); settingsOpen(); };
+  $('tokList').onclick = async (e) => { const t = e.target.closest('[data-tok]'); if (!t) return; e.preventDefault(); await host('removeToken', t.dataset.tok); await load(); drawToks(); };
+  $('dropSnap').onclick = async () => { await host('dropSnapshot'); snapInfo(); };
 
   // the auto-lock counts only what the user does here: a click or a key tells the host, at most every 15 s
   let touched = 0;
