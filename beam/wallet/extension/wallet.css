@@ -771,3 +771,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .file-pick { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .file-pick .fname { text-transform: none; letter-spacing: 0; font: 12px var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-pick .fname.on { color: var(--text); }
+.wcard2 .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.wcard2 .cols .acts { flex-wrap: wrap; row-gap: 6px; }      /* a third button goes under, in its column */
+.wr .w-ren { margin-left: 6px; vertical-align: -1px; }
+.wr .w-ren svg { width: 13px; height: 13px; }

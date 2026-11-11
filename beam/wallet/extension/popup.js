@@ -2628,13 +2628,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const wOpen = new Set(), wPick = {};
   // drawn again in place: a row or a card is replaced only when what it shows changed (a switch changes two rows'
   // marks), so an open card's picker does not blink
+  const WPEN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';      // the rename pencil, as a Beam address's
   const wRowSig = (w) => JSON.stringify([w.name, !!w.beam, !!w.eth, w.accounts.length, w.id === st.active]);
   const wCardSig = (w) => JSON.stringify([w.accounts.map((a) => [a.i, a.name, a.address, a.kind]), w.phraseKnown, w.ethKind, !!w.eth, w.hd]);
   function wRowHtml(w) {
     const isOpen = wOpen.has(w.id);
     const holds = [w.beam ? 'Beam' : '', w.eth ? `Ethereum ×${w.accounts.length}` : ''].filter(Boolean).join('<i class="sp"></i>');
     return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${esc(w.id)}" data-sig="${esc(wRowSig(w))}" tabindex="0" role="button" aria-expanded="${isOpen}">
-      <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
+      <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<button type="button" class="cp w-ren" data-ren="${esc(w.id)}" title="Rename the wallet">${WPEN}</button><span class="sub">${holds}</span></span>
       ${w.id === st.active ? '<span class="end">current</span>' : '<span></span>'}</div>`;
   }
   const html1 = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; };
@@ -2659,11 +2660,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function wCard(w) {
     const g = (cap, acts) => `<div class="grp"><div class="cap">${cap}</div><div class="acts">${acts.join('')}</div></div>`;
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
-    const mine = [b('rename', 'Rename'), w.phraseKnown ? b('phrase', 'Seed phrase') : ''].filter(Boolean);
+    // the Beam file: this wallet's Beam part alone as a wallet.db (what Open a Beam backup file takes)
+    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethPhrase', 'Seed phrase'), b('ethKey', 'Private key')] : [];
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
-    return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
+    return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${mine.length ? g('This wallet', mine) : '<div></div>'}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
   }
   const hasEthPhrase = (w, i) => { const a = w.accounts.find((x) => x.i === i); return !!a && (a.kind === 'phrase' || (a.kind === 'hd' && w.ethKind === 'phrase')); };
   // the Ethereum Seed phrase button only for an account that has one
@@ -2696,6 +2698,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(at));
   }
   $('wList').onclick = (e) => {
+    const rn = e.target.closest('[data-ren]');
+    if (rn) return walletAct(st.wallets.find((x) => x.id === rn.dataset.ren), 'rename');
     const a = e.target.closest('[data-a]');
     if (a) { const w = st.wallets.find((x) => x.id === a.closest('.wcard2').previousElementSibling.dataset.w); return walletAct(w, a.dataset.a); }
     if (e.target.closest('.wcard2')) return;
@@ -3096,6 +3100,23 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         const a2 = w.accounts.find((x) => x.i === (wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];      // the card's picked account
         await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', html: `<p class="key-addr">${esc(a2.address)}</p>`, note: 'Whoever has the key controls this account. Import it only into a wallet you trust.',
           check: async ({ pass }) => ({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(await host('reveal', w.id, pass, 'ethKey', a2.i))}</div>` }) });
+      }
+      if (act === 'backup') {
+        let out = null;
+        // the file's password, if it is not the wallet's, in the same dialog; then the file, saved by the service
+        // worker (Chrome's download bubble takes the focus and may close the popup: the file is saved anyway)
+        const r = await ask({ title: `Beam file of ${w.name}`, password: true, yes: 'Save the file',
+          note: 'Saves this wallet\'s Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Open a Beam backup file opens it later at once, unlike a seed restore.',
+          check: async (x) => {
+            out = await host('exportBeam', w.id, x.pass);
+            if (out.samePassword) return null;
+            const dbp = await host('reveal', w.id, x.pass, 'beamPass');
+            return { title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, yes: 'Save the file', note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.' };
+          } });
+        if (!r.ok || !out) return;
+        const name = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
+        const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
+        if (r2 && r2.error) await ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
       }
       if (act === 'remove') {
         const r = await ask({ title: `Remove ${w.name}`, password: true, yes: 'Remove', rows: [['Parts', [w.beam && 'Beam', w.eth && 'Ethereum'].filter(Boolean).join(' + ')]],
