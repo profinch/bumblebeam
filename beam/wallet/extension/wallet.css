@@ -433,7 +433,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .subtabs .chain { margin-right: 7px; width: 7px; height: 7px; }
 /* Connected sites' bar: the quiet tabs as Activity's (Beam, Ethereum), the catalog at the right end */
 #dappNet button.cat { margin-left: auto; }
-#dappNet .cat-i { display: inline-block; width: 12px; height: 12px; margin: -3px 6px -3px 0; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }      /* the catalog's icon, an open book: 12 px as the wallet's small icons (copy, explorer), its margins pulled in so the bar keeps Activity's height */
+#dappNet .cat-i { display: inline-block; width: 12px; height: 12px; margin: -3px 6px -3px 0; vertical-align: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }      /* the catalog's icon, an open book: 12 px as the wallet's small icons (copy, explorer), its margins pulled in so the bar keeps Activity's height; centred on the capitals (measured) */
 
 /* ---------- Bridge: two cards, From over To, the switch between them (the two networks' dots in their own oval);
    the cards are cut round it, the cut's edge drawn as their border. One set of numbers drives it: the switch's size,
