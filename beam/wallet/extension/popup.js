@@ -74,7 +74,7 @@
   const amtIssue = (x, dec, max) => {
     const t = String(x).trim().replace(',', '.');
     if (!t) return '';
-    if (!/^\d*\.?\d*$/.test(t) || t === '.') return 'digits and one decimal point only';
+    if (t === '.') return '';                                      // a point alone: an amount on its way (BB.amountField lets nothing else in)
     if ((t.split('.')[1] || '').length > dec) return `at most ${dec} decimals`;
     if (max != null && Number(t) > max) return 'more than available';
     return '';
@@ -1377,6 +1377,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const a = $('bsAddr').value.trim();
     // My wallets follows the field: another wallet's address picks its name, anything else "My wallets…"
     const ow = st.wallets.find((w) => w.id !== st.active && w.beamAddress && w.beamAddress === a);
+  // every amount field takes only digits and one point (or comma), BB.amountField: nothing else gets in to be
+  // complained about; at most 8 digits before the point (up to 99 999 999). Beam's and WBEAM's amounts at most
+  // 8 decimals (a groth); Ethereum's Send by its token's decimals, said under it as before (the bridge's amount: its
+  // own section)
+  ['bsAmt'].forEach((id) => BB.amountField($(id), 8, 8));
+  BB.amountField($('esAmt'), null, 8);
     bsOwn.set(ow ? ow.beamAddress : '');
     bsType = null; bsMine = ''; $('bsKind').textContent = ''; bsAvail();
     if (!a || !beamHere()) return;
