@@ -182,7 +182,6 @@
     const acts = [];
     if (r.cancel) acts.push('<button type="button" class="btn warn">Cancel</button>');
     if (r.kind === 'out' && r.peer && r.st !== 'pending') acts.push('<button type="button" class="btn">Send again</button>');
-    if (r.kind === 'br-out' || r.kind === 'br-in') acts.push('<button type="button" class="btn">In the Bridge</button>');
     if (r.peer && !r.from && !name(r.peer) && r.peer.length > 20 && r.kind !== 'br-out') acts.push('<button type="button" class="btn">Name it</button>');
     const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
     return `<div class="ar-more">${groups.map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`).join('')}${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;

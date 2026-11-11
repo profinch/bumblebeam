@@ -2382,7 +2382,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const acts = [];
     if (r.cancel) acts.push(`<button type="button" class="btn warn" data-cancel="${esc(r.id)}">Cancel</button>`);
     if (r.kind === 'out' && r.peer && r.st !== 'pending') acts.push(`<button type="button" class="btn" data-again="${esc(r.peer)}">Send again</button>`);
-    if (r.kind === 'br-out' || r.kind === 'br-in') acts.push(`<button type="button" class="btn" data-tobridge="${r.kind === 'br-out' && actNet === 'beam' ? 'toEth' : 'fromEth'}">In the Bridge</button>`);
     const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
     return `<div class="ar-more">${groups.map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`).join('')}${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;
   }
@@ -2459,8 +2458,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       else { sheet('ethSend'); $('esTo').value = ag.dataset.again; $('esTo').oninput(); }
       return;
     }
-    const tb = e.target.closest('[data-tobridge]');
-    if (tb) { tab('bridge'); setDir(tb.dataset.tobridge); return; }
     if (e.target.closest('.ar-more') || e.target.closest('a')) return;
     const li = e.target.closest('.li.ar'); if (!li) return;
     if (actOpen.has(li.dataset.id)) actOpen.delete(li.dataset.id); else actOpen.add(li.dataset.id);

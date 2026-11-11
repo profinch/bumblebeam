@@ -6,7 +6,7 @@
 #walletDd { flex: 0 1 200px; margin-right: auto; }
 
 /* what to see, and the search: one line under the network's tabs */
-.af-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.af-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }      /* right under the network tabs, as close as the wallet tab's first card */
 .af { display: flex; gap: 6px; flex-wrap: nowrap; }
 .af[hidden] { display: none; }
 .af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;

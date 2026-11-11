@@ -599,7 +599,7 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 /* ---------- Activity (worked out in lab/activity.html): the history by day, each row who and what in words, the
    amount with its unit and its dollars; a row opens to its card (the details, the ids, the explorers, what can be
    done); All / In / Out / Bridge / dApps, and a search in their place ---------- */
-.af-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.af-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }      /* right under the network tabs, as close as the wallet tab's first card */
 .af { display: flex; gap: 6px; flex-wrap: nowrap; }
 .af[hidden], .af-search[hidden] { display: none; }
 .af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
