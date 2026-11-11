@@ -2,7 +2,7 @@
 // saved. It moves into the wallet once it is right.
 //   - quiet tabs in the header (Wallets, General, Networks, Storage, About) instead of one long page
 //   - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current, the others
-//     switched by the header's picker); a click opens its card: This wallet (Rename, Seed phrase, Beam file); Ethereum when
+//     switched by the header's picker); a click opens its card: This wallet (Rename, Seed phrase); Ethereum when
 //     it has accounts (its own Seed phrase when added by one, an account's Private key, the account picked); Remove
 //     apart, last
 //   - General: security (short) and display side by side, with an example of both
@@ -59,8 +59,9 @@
   function card(w) {
     const g = (cap, acts, extra = '') => `<div class="grp"><div class="cap">${cap}</div>${extra}<div class="acts">${acts.join('')}</div></div>`;
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
-    // this wallet: its name, its seed phrase (Beam and Ethereum from the same words), its Beam part as a file
-    const mine = [b('rename', 'Rename'), w.phrase ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : ''].filter(Boolean);
+    // this wallet: its name, its seed phrase (Beam and Ethereum from the same words). Its Beam part's file goes with
+    // General's backup
+    const mine = [b('rename', 'Rename'), w.phrase ? b('phrase', 'Seed phrase') : ''].filter(Boolean);
     // Ethereum, when it has accounts: its own phrase (one added by a phrase, not by a key) and an account's key
     const acct = w.accounts.length > 1 ? `<div class="acct">the private key of<div class="dd compact" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
