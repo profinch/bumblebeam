@@ -603,8 +603,11 @@
       if (!r || r === from || !rowInfo(r) || rowInfo(r).wallet !== rowInfo(from).wallet) return;
       const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
       // the line on whole pixels (the rows sit at fractions): sharp ends, no bevel
-      r.style.setProperty('--dl', `${Math.ceil(b.left) - b.left}px`); r.style.setProperty('--dr', `${b.right - Math.floor(b.right)}px`);      // inward: never past the row (the list clips it)
-      r.style.setProperty('--dt', `${Math.ceil(b.top) - b.top}px`); r.style.setProperty('--db', `${b.bottom - Math.floor(b.bottom)}px`);
+      // on the screen's own pixels (Windows scales by 1.25 and the like): inward, never past the row (the list clips it)
+      const k = window.devicePixelRatio || 1, up = (x) => Math.ceil(x * k) / k, dn = (x) => Math.floor(x * k) / k;
+      r.style.setProperty('--dl', `${up(b.left) - b.left}px`); r.style.setProperty('--dr', `${b.right - dn(b.right)}px`);
+      r.style.setProperty('--dt', `${up(b.top) - b.top}px`); r.style.setProperty('--db', `${b.bottom - dn(b.bottom)}px`);
+      r.style.setProperty('--dh', `${Math.max(1, Math.round(2 * k)) / k}px`);
     });
     const end = async (e) => {
       if (!from) return;

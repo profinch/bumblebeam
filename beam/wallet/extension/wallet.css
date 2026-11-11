@@ -785,7 +785,8 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .bk-show svg { width: 13px; height: 13px; }
 /* an account's row dragged in a picker: a line where it goes (as Beam's addresses), the row itself faded */
 .dd-list [role="option"].drop-above, .dd-list [role="option"].drop-below { position: relative; border-radius: 0; }      /* square while the line is on it: no bevel at its ends */
-.dd-list [role="option"].drop-above::after, .dd-list [role="option"].drop-below::after { content: ''; position: absolute; left: var(--dl, 0); right: var(--dr, 0); height: 2px; background: var(--accent); pointer-events: none; }      /* a straight line, not the row's rounded corners */
+.dd-list [role="option"].drop-above::after, .dd-list [role="option"].drop-below::after { content: ''; position: absolute; left: var(--dl, 0); right: var(--dr, 0); height: var(--dh, 2px); background: var(--accent); pointer-events: none; }      /* a straight line, not the row's rounded corners */
 .dd-list [role="option"].drop-above::after { top: var(--dt, 0); }
 .dd-list [role="option"].drop-below::after { bottom: var(--db, 0); }      /* inside the row: the list box clips what goes past it */
 .dd-list [role="option"].dragging { opacity: 0.4; }
+:is(#acctDd, #bxAcct, .wcard2 .dd.acct) .dd-list [role="option"]:is(.drop-above, .drop-below) { border-radius: 0; }
