@@ -108,3 +108,4 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 /* the public RPCs' count at the row's right end, where the others' cross is */
 .node.solo .meta.end { grid-column: 3 / span 2; justify-self: end; }
 .kv.about .sp { display: inline-block; width: 12px; }
+.sp-sec .kv.keep + .hint { margin-top: 16px; }      /* the explanation apart from the figures, at the card's end */
