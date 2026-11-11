@@ -438,7 +438,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* ---------- Bridge: two cards, From over To, the switch between them (the two networks' dots in their own oval);
    the cards are cut round it, the cut's edge drawn as their border. One set of numbers drives it: the switch's size,
    the room round it, the gap between the cards. (Worked out in lab/bridge.html.) */
-#t-bridge { --px: 9px; }      /* the cards' content from their sides: its letters as far from the side as from the top and the bottom (10 px) */
+#t-bridge { --px: 9px; --net-y: 11px; }      /* the cards' content from their sides: its letters as far from the side as from the top and the bottom (10 px) */
 .bx {
   --sw: 58px; --sh: 26px;            /* the switch's oval */
   --room: 5px;                       /* from the oval to the cut's edge */
@@ -453,6 +453,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-l2 input { flex: 1 1 auto; min-width: 0; width: 0; height: 34px; line-height: 34px; padding: 0; background: none; border: 0; outline: none; color: var(--text); font: 700 24px var(--font-mono); }      /* the line's whole height: a field of the font's own cut the figures' feet in some fonts (Consolas) */
 .bx-l2 input::placeholder { color: var(--muted); }
 .bx-l2 input.bad { color: var(--color-red); }
+.bx-side.err { color: inherit; border-color: rgba(var(--red-rgb), 0.7); }      /* the amount asked for (popup.js actErr): the card outlined, as a field is */
 /* the cut: each card without a pill of the cut's size centred on the seam: the card's own mask less that pill */
 .bx-side {
   --pill: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 68 36'%3E%3Crect width='68' height='36' rx='18'/%3E%3C/svg%3E");
@@ -464,6 +465,10 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-swap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--sw); height: var(--sh); padding: 0;
   background: transparent; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; transition: border-color 0.2s; }
 .bx-swap:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+/* the whole cut is the switch's: it lies over the cards (their cut is a mask, which takes the pointer all the
+   same) and catches the pointer out to the cut's edge, so the ring round the oval lights it too */
+.bx-swap { z-index: 2; }
+.bx-swap::after { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border-radius: 999px; }
 .bx-swap::before { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border: 1px solid var(--border); border-radius: 999px; pointer-events: none;
   mask-image: linear-gradient(#000 0 calc(50% - var(--seam) / 2), transparent 0 calc(50% + var(--seam) / 2), #000 0); }
 /* the two networks' dots, in the order the coins go; a turn makes them hop over each other */
@@ -477,14 +482,14 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
 .bx-strip { position: absolute; inset: 0; padding: inherit; }
 .bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
-.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net.low { visibility: hidden; }
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net { visibility: hidden; }
 .bx-strip .bx-l1 > .caps { visibility: hidden; }
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
-.bx-net { flex: none; margin-left: auto; display: inline-flex; align-items: center; white-space: nowrap; font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
+.bx-net { position: absolute; right: var(--px); top: calc(var(--net-y) + 1px); display: inline-flex; align-items: center; white-space: nowrap; font: 700 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 16px; }      /* as the wallet tab's card title: its dot, BEAM; in its card's corner, mirrored top and bottom (+1 on top: capitals sit high in their line, so the letters are as far from either edge) */
 .bx-net:empty { display: none; }
-.bx-net .chain { margin: 0 0 0 7px; }
-.bx-net.low { position: absolute; right: var(--px); bottom: 11px; line-height: 16px; }
+.bx-net .chain { margin: 0 8px 0 0; }
+.bx-net.low { top: auto; bottom: var(--net-y); }
 /* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */
 .bx-key { position: absolute; left: var(--px); bottom: 15px; line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .bx-key .tipped { color: var(--text-dim); cursor: help; }

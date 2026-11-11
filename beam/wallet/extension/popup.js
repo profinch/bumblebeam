@@ -1707,12 +1707,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     pick(l[(k + (e.deltaY > 0 ? 1 : -1) + l.length) % l.length].address);
   }, { passive: false });
 
-  // each side in its card: Beam's name (and its key when it receives), Ethereum's picker
+  // each side in its card: Beam's dot and name in its corner, as the wallet tab's card title (and its key when it
+  // receives), Ethereum's picker
   function bxPlace() {
     const eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), nb = $('bxNetB'), bk = $('bxKey'), w = W();
-    if (dir === 'toEth') $('bxSend').querySelector('.bx-l1').appendChild(nb); else $('bxRecv').appendChild(nb);
+    (dir === 'toEth' ? $('bxSend') : $('bxRecv')).appendChild(nb);
     nb.classList.toggle('low', dir !== 'toEth');
-    nb.innerHTML = `${esc(w ? w.name : 'Beam')}<i class="chain beam"></i>`;
+    nb.innerHTML = '<i class="chain beam"></i>Beam';      // as the wallet tab's Beam card names itself
     bk.hidden = dir === 'toEth';
     if (dir !== 'toEth') {
       $('bxRecv').appendChild(bk);
@@ -1974,6 +1975,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   }
   $('bxGo').onclick = async () => {
     actErr($('bxGo'), null);
+    // no amount (empty, or 0): said as Send says it, the amount's card outlined, the words under the button
+    if (!(amount() > 0)) return actErr($('bxGo'), fieldErr('bxSend', 'enter an amount'));
     $('bxGo').disabled = true;
     try { if (dir === 'toEth') await goToEth(); else await goFromEth(); }
     catch (e) {
