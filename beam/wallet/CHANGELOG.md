@@ -14,6 +14,16 @@
 - A request just shown in the window keeps Approve off for 0.6 s: a quick second click meant for the request
   before cannot agree to it.
 - An Ethereum node set by hand is taken only if it is Ethereum mainnet.
+- A wallet's Beam contract calls run one at a time (a site's, the wallet's own bridge send and claim): Beam's
+  approval does not say whose call it is, and two at once could show one site's name for another's transaction.
+- A site cannot flood the request window: one connect request and 5 requests in all waiting from it, and none for
+  10 s after a no or a closed window.
+- One bridge transfer to Beam per account at a time (a second approval meanwhile left the first without its
+  allowance); the ETH for its gas is checked again when it is sent.
+- An Ethereum transaction is taken for dropped (its nonce used again) only when still unknown 3 s later.
+- A stopped Beam part's database password is not kept in memory.
+- In a site's window the name it gives itself reads "Calls itself", under the site Chrome names; a Beam asset
+  named as a well-known coin (BEAM, BTC, ETH, USDT…) is flagged in a contract's confirmation.
 
 ### Beam: Receive
 - The screen is BEAM Receive: My addresses on top, the shown address's card under it. What the list holds is
@@ -215,6 +225,10 @@
 - The Ethereum token list keeps the scroll bar's room when it does not scroll, so the rows stand where they do
   when it does.
 - A list's option too long for it ends with … instead of being cut mid-letter (the design library).
+- The lists are named by their captions for screen readers, the dialog by its title, the tabs are tabs, and the
+  bridge's fee gauge moves with the arrow keys.
+- The bridge's turn copies its cards once per half (it copied them every frame); an account's ENS name and avatar
+  are kept 10 minutes.
 - Prices are asked only as needed: ETH from Chainlink alone while it answers, BEAM from the oracle checked against
   one market; one asking at a time; a service that refused for being asked too often is left alone for 10 minutes;
   the 24 h change no longer holds the prices up (it could take 45 s).
