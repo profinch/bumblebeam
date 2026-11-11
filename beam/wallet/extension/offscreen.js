@@ -537,7 +537,7 @@
   // (a bridge's sendFunds and a send priced while its approval mined would otherwise share one).
   // If the chain has fewer pending than this host sent and its last one is gone from the network (dropped),
   // the count goes back to the chain's: no gap that every later transaction would wait behind.
-  const nonceNext = new Map(), lastSent = new Map(), signChain = new Map(), inFlight = new Set();
+  const nonceNext = new Map(), lastSent = new Map(), signChain = new Map(), inFlight = new Set(), fromEthBusy = new Set();      // fromEthBusy: accounts with a bridge send on its way
   function signSend(secret, p) {
     const a = p.from.toLowerCase();
     const run = async () => {
@@ -1398,6 +1398,7 @@
     // WBEAM -> BEAM from one of this wallet's Ethereum accounts to the running Beam wallet's bridge key:
     // approve (if the pipe may not take enough yet) and sendFunds, priced together, signed after a yes
     async fromEthPrepare(o) {
+      if (Eth.isAddress(o.from) && fromEthBusy.has(o.from.toLowerCase())) throw new Error('a bridge transfer from this account is still on its way: send this one once it is sent');
       const { w, a } = findEth(o.from);
       const bw = beamFor(o.wallet).w;                  // the Beam wallet that receives: the one the popup named
       const key = await Bridge.beamKey(beamFor(o.wallet).e);
@@ -1431,6 +1432,15 @@
     async fromEthSend(prepId) {
       const x = take(prepId, 'fromEth');
       const { secret } = findEth(x.from);
+      // one bridge send per account at a time: an approve sets the allowance (it does not add to it), so a second
+      // one meanwhile left the first sendFunds without its allowance (reverted, its gas lost)
+      const acc = x.from.toLowerCase();
+      if (fromEthBusy.has(acc)) throw new Error('a bridge transfer from this account is still on its way: send this one once it is sent');
+      // the ETH for the gas checked again: time may have passed since the confirmation
+      const ethNow = BigInt(await Eth.rpc('eth_getBalance', [x.from, 'latest']));
+      const gasMax = BigInt(x.sendFeeMax) + (x.approve ? BigInt(x.approve.feeMax) : 0n);
+      if (ethNow < gasMax) throw new Error(`not enough ETH for the gas now: up to ${Eth.fromUnits(gasMax, 18)} ETH, ${Eth.fromUnits(ethNow, 18)} there`);
+      fromEthBusy.add(acc);
       const rec = { from: x.from, value: x.value, fee: x.fee, key: x.key, time: Date.now(), approve: null, hash: null, state: 'approving' };
       inFlight.add(rec.time);
       const tell = async () => { await logIn(rec); broadcast({ type: 'event', method: 'bb_bridge', result: rec }); };
@@ -1465,7 +1475,7 @@
         rec.state = out && !/failed/.test(e.message) ? 'unconfirmed' : 'failed';
         rec.error = e.message; await tell();
         throw e;
-      } finally { inFlight.delete(rec.time); }
+      } finally { inFlight.delete(rec.time); fromEthBusy.delete(acc); }
     },
     // the log, with what was left unconfirmed looked up again on the chain
     // (a record this host is not working on and left half way: the browser closed between approve and send)
