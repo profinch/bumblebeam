@@ -775,7 +775,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .wcard2 .cols .acts { flex-wrap: wrap; row-gap: 6px; }      /* a third button goes under, in its column */
 .wr .w-ren { margin-left: 6px; vertical-align: -1px; }
 .wr .w-ren svg { width: 13px; height: 13px; }
-#wList .li.wr:last-child { border-bottom: 1px solid var(--border-dim); }      /* (.li:last-child takes it off elsewhere) */
+#wList > .li.wr:last-child, #wList > .wcard2:last-child { border-bottom: 0; }      /* the last wallet (or its open card) without a line under it */
 .node .meta .re { margin-right: 8px; vertical-align: -2px; }      /* a check by hand, left of the time */
 .node .meta .re svg { width: 12px; height: 12px; }
 .node .meta .re.turning svg { animation: ar-spin 0.8s linear infinite; }
@@ -784,6 +784,8 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .bk-show { margin-left: 6px; vertical-align: -2px; }
 .bk-show svg { width: 13px; height: 13px; }
 /* an account's row dragged in a picker: a line where it goes (as Beam's addresses), the row itself faded */
-.dd-list [role="option"].drop-above { box-shadow: inset 0 2px 0 var(--accent); }
-.dd-list [role="option"].drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+.dd-list [role="option"].drop-above, .dd-list [role="option"].drop-below { position: relative; }
+.dd-list [role="option"].drop-above::after, .dd-list [role="option"].drop-below::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; }      /* a straight line, not the row's rounded corners */
+.dd-list [role="option"].drop-above::after { top: 0; }
+.dd-list [role="option"].drop-below::after { bottom: 0; }      /* inside the row: the list box clips what goes past it */
 .dd-list [role="option"].dragging { opacity: 0.4; }
