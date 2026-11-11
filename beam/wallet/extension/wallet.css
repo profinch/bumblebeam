@@ -91,7 +91,7 @@ html.popup .seed { columns: 2; }
 .bigamt .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
 .bigamt .usd { margin-left: auto; font-size: var(--fs-s); color: var(--muted); }
 .panel-head .panel-meta { margin-left: auto; }
-.panel-title .chain, .ep .chain { margin-right: 8px; }
+.panel-title .chain { margin-right: 8px; }
 .chain { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; }
 .chain.beam { background: var(--color-green); box-shadow: 0 0 6px var(--color-green); }
 .chain.eth { background: #8c9eff; box-shadow: 0 0 6px #8c9eff; }
@@ -126,7 +126,7 @@ html.popup .seed { columns: 2; }
 #ethAssets .tok, #beamAssets .tok { grid-area: tok; display: flex; gap: 6px; align-self: center; margin-right: -6px; }
 html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 /* ETH has no contract: as Beam's balance, its amount then its symbol, from where the others' icons start */
-#ethAssets .asset.native .lead { grid-column: 1 / span 3; grid-row: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+#ethAssets .asset.native .lead { grid-column: 1 / span 2; grid-row: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 #ethAssets .asset.native .lead .amt { grid-area: auto; text-align: left; }
 #ethAssets .asset.native .lead .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
 #ethAssets .more { padding: 8px 10px 4px 0; }
@@ -164,16 +164,12 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .addr-line { margin: 2px 0 4px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .own-label { margin-top: 12px; }
 .dd.own { margin-top: 6px; }
-#bsOwnHint:empty { display: none; }
 .addr-line .hash { font-size: var(--fs-s); color: var(--muted); white-space: nowrap; }
-.copy.copied { color: var(--accent); }
 
 /* receive */
 
 .box { margin-top: 10px; padding: 10px; font-size: var(--fs-m); text-align: left; color: var(--text-dim); background: var(--surface3); border: 1px solid var(--border-dim); border-radius: var(--radius-m); }
 .seg { flex-wrap: wrap; }
-.seg.dir { display: flex; margin: 12px 0; }
-.seg.dir button { flex: 1; padding: 9px 6px; font-size: var(--fs-m); }
 
 /* lists: transfers, history, tokens */
 .list { display: flex; flex-direction: column; }
@@ -216,8 +212,6 @@ dialog .field { margin-top: 12px; }      /* a field (Address, the password) 12 p
 dialog .row { margin-top: 14px; }
 
 /* Receive: the shown address's name and type, the list of addresses */
-.addr-meta { margin-top: 10px; font: var(--fs-m) var(--font-mono); color: var(--muted); }
-.addr-meta b { color: var(--text); }
 .addr-panel { margin-top: 16px; }
 /* My addresses: the star, name (or the address), the type right (15 ch of the row's mono font, so every row's
    line up), the trash; the rows light up under the
@@ -284,12 +278,13 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 #ethCard { transition: opacity 0.2s ease, visibility 0s linear 0s; }
 #ethCard.under { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.2s ease, visibility 0s linear 0.2s; }
 .acts .btn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
-/* the account's button: its name | its short address; when both do not fit, the address (with its bar) goes
-   to a second line that is cut off, so only the name shows (cut with … if even it is too long) */
-:is(#acctDd, #bxAcct) .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
-:is(#acctDd, #bxAcct) .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:is(#acctDd, #bxAcct) .acc-b .ad { flex: none; white-space: nowrap; }
-:is(#acctDd, #bxAcct) .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
+/* an account's button (the wallet tab's, the bridge's and its still copy, Ethereum Send's My accounts): its name |
+   its short address; when both do not fit, the address (with its bar) goes to a second line that is cut off, so
+   only the name shows (cut with … if even it is too long) */
+.acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
+.acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-b .ad { flex: none; white-space: nowrap; }
+.acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
 #beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
 /* Connected sites: Beam | Ethereum as in Activity, with the way back on their line */
 /* a bar under the tabs (dApps' networks, Receive's address types) with the way back right on its line: one line
@@ -360,7 +355,6 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 #dappCatalog .folded > .list { height: 0; }
 #dappCatalog .folded > .panel-head { margin-bottom: 0; }
 /* a sheet's title left, the way back right on its line */
-.sheet-head > .seg { margin-left: auto; }
 /* the ENS avatar in the Ethereum receive card: a small round picture on its own row */
 #ethRecvAvaK, #ethRecvAva { align-self: start; }      /* the label and the picture level at their top */
 #ethRecvAva { padding-top: 2px; }      /* the picture's top on the label letters' top (their line has 2 px above them) */
@@ -427,7 +421,6 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 #beamCard .panel-head .price-chip { margin: 0 0 0 -6px; align-self: flex-start; padding: 2px 7px; font-size: 11px; letter-spacing: 0; }      /* right after the name, on the line of the name and the block */
 #beamCard .panel-head .price-chip b { width: auto; min-width: 0; letter-spacing: 0; }
 /* ETH's price in its row: in the amount column, right-aligned as the tokens' amounts; the amount and unit left of it */
-#ethAssets .asset.native .lead { grid-column: 1 / span 2; }
 #ethAssets .asset.native .price-plain { grid-area: amt; text-align: right; font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .price-plain b { font-weight: 400; color: var(--text-dim); }
 /* an action that went: right of its button as its errors, in the accent */
@@ -440,10 +433,6 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 #esOwn .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #esOwn .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
 #esOwn .dd-list [aria-selected="true"] .ad { color: inherit; }
-#esOwn .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
-#esOwn .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#esOwn .acc-b .ad { flex: none; white-space: nowrap; }
-#esOwn .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
 .price-plain .x { font-style: normal; font-size: 14px; margin-right: 6px; }      /* the × a little bigger than the price, a pixel closer than a space */
 /* a confirmation's groups of rows (popup.js kvGroups), each aligned on its own labels, one row's gap apart */
 .dbody .kv + .kv { margin-top: 8px; }
@@ -509,7 +498,6 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-net.low { position: absolute; right: var(--px); bottom: 11px; line-height: 16px; }
 /* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */
 .bx-key { position: absolute; left: var(--px); bottom: 15px; line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
-.bx-key[hidden] { display: none; }
 .bx-key .tipped { color: var(--text-dim); cursor: help; }
 /* the upper card: "available" over the balance at its bottom right; the balance is the "all" button */
 .bx-l3 { margin-left: auto; text-align: right; font: 11px var(--font-mono); color: var(--muted); }
@@ -533,23 +521,16 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-gearbox { position: absolute; right: calc(var(--px) - 2px); bottom: 7px; width: 256px; visibility: hidden; }
 #bxSend .bx-gearbox { bottom: auto; top: 6px; }
 .bx-strip .bx-gearbox { visibility: visible; }
-.bx-gearbox .dd-btn { background-attachment: scroll; background-size: var(--gw) var(--gh); background-position: var(--gx) var(--gy); }      /* the page's gradient where the copy stands (popup.js bxLay) */
-.bx-gearbox .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
-.bx-gearbox .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bx-gearbox .acc-b .ad { flex: none; white-space: nowrap; }
-.bx-gearbox .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
-.bx > #bxAcct { position: absolute; z-index: 5; margin: 0; }
+.bx-gearbox .dd-btn { background-attachment: scroll; background-size: var(--gw) var(--gh); background-position: var(--gx) var(--gy); }      .bx > #bxAcct { position: absolute; z-index: 5; margin: 0; }
 .bx.turning > #bxAcct { visibility: hidden; }
 #bxAcct .dd-group { padding: 8px 10px 3px; }
 /* an address typed in, in the picker's place */
 #bxAcct.typing .dd-btn { display: none; }
 .bx-addrin { display: block; width: 100%; height: 28px; padding: 0 10px; font: 12px var(--font-mono); color: var(--text); background: var(--field-fill); border: 1px solid rgba(var(--accent-rgb), 0.5); border-radius: 6px; outline: none; }
-.bx-addrin[hidden] { display: none; }
 .bx-addrin.bad { border-color: var(--color-red); }
 /* the fee line, one height both ways: a gauge (cheap, normal, safe) this way, the fixed fee the other; what it is for */
 .bx-feeline { display: flex; align-items: center; gap: 10px; margin-top: 14px; height: 30px; padding: 0 calc(var(--px) + 1px); white-space: nowrap; }      /* in from both sides as the cards' content (their border + --px) */
 .bx-fee3 { display: inline-flex; align-items: center; gap: 8px; font: 11px var(--font-mono); color: var(--muted); }
-.bx-fee3[hidden] { display: none; }
 .bx-fee3 .lv .w { display: inline-block; width: 6ch; }      /* cheap, normal, safe in one width: the figure stays put */
 .bx-gauge { width: 46px; height: 26px; flex: none; cursor: pointer; touch-action: none; overflow: visible; }
 .bx-gauge .arc { fill: none; stroke: var(--border); stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.25s; }
@@ -587,5 +568,4 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 .bx-tr .end .badge, .bx-tr .end .btn { flex: 1; text-align: center; justify-content: center; }
 .bx-tr .end .btn { padding: 4px 0; font-size: 11px; }
 .bx-more { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 0 2px; border-top: 1px solid var(--border-dim); }
-.bx-more[hidden] { display: none; }
 .bx-more span { font: 11px var(--font-mono); color: var(--muted); }
