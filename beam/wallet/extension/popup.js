@@ -602,6 +602,9 @@
       const el = document.elementFromPoint(e.clientX, e.clientY), r = el && el.closest('[role="option"]');
       if (!r || r === from || !rowInfo(r) || rowInfo(r).wallet !== rowInfo(from).wallet) return;
       const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
+      // the line on whole pixels (the rows sit at fractions): sharp ends, no bevel
+      r.style.setProperty('--dl', `${Math.ceil(b.left) - b.left}px`); r.style.setProperty('--dr', `${b.right - Math.floor(b.right)}px`);      // inward: never past the row (the list clips it)
+      r.style.setProperty('--dt', `${Math.ceil(b.top) - b.top}px`); r.style.setProperty('--db', `${b.bottom - Math.floor(b.bottom)}px`);
     });
     const end = async (e) => {
       if (!from) return;
