@@ -2258,6 +2258,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
     // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the wallet CLI)
     const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
+    // a transaction's block from the coins it made, when Beam gives it no height (some receipts come with no kernel and no height)
+    const madeAt = new Map(cs.filter((c) => c.createTxId && c.maturity > 0).map((c) => [c.createTxId, c.maturity]));
     const found = cs.filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0).slice(0, 60);
     await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
       host('beam', wid, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
@@ -2274,7 +2276,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
         peer: contract ? null : (t.income ? t.sender : t.receiver) || null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
-        st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || null,
+        st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
           : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
         why: s === 'failed' ? (t.failure_reason || ss || 'failed') : s === 'cancelled' ? (t.income ? 'by the sender' : 'by you before the receiver signed') : '',
@@ -2401,9 +2403,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.comment && !r.ours) rows.push(['Comment', esc(r.comment)]);
     // the transaction in our explorer by its kernel; Beam gives a receipt none at times (then this wallet's own id, to copy)
     if (actNet === 'beam' && r.kern) rows.push(['Transaction', `${esc(short(r.kern))}${ics(lnI(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer'))}`]);
+    // no kernel: its block in the explorer (from the coins it made), else this wallet's own id to copy
+    else if (actNet === 'beam' && r.block && !r.st) rows.push(['Transaction', `in block ${r.block}${ics(lnI(`${EXPL}/block/${r.block}`, 'Open its block in the explorer (Beam gave no kernel to open the transaction by)'))}`]);
     else if (actNet === 'beam' && r.id && !r.found && !String(r.id).startsWith('coin-')) rows.push(['Transaction', `${esc(short(r.id))}${ics(cpI(r.id, 'this wallet\'s id of the transaction (Beam gave no kernel to look it up by)'))}`]);
     if (actNet === 'eth' && r.hash) rows.push(['Transaction', `${esc(short(r.hash))}${ics(lnI(`${SCAN}/tx/${r.hash}`, 'Open the transaction on Etherscan'))}`]);
-    if (r.block && !r.st) rows.push(['Block', `${r.block}${ics(lnI(actNet === 'beam' ? `${EXPL}/block/${r.block}` : `${SCAN}/block/${r.block}`, actNet === 'beam' ? 'Open the block in the explorer' : 'Open the block on Etherscan'))}`]);
+    if (r.block && !r.st && !(actNet === 'beam' && !r.kern)) rows.push(['Block', `${r.block}${ics(lnI(actNet === 'beam' ? `${EXPL}/block/${r.block}` : `${SCAN}/block/${r.block}`, actNet === 'beam' ? 'Open the block in the explorer' : 'Open the block on Etherscan'))}`]);
     const acts = [];
     if (r.cancel) acts.push(`<button type="button" class="btn warn" data-cancel="${esc(r.id)}">Cancel</button>`);
     const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
