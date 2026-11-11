@@ -469,8 +469,14 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
    same) and catches the pointer out to the cut's edge, so the ring round the oval lights it too */
 .bx-swap { z-index: 2; }
 .bx-swap::after { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border-radius: 999px; }
-.bx-swap::before { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border: 1px solid var(--border); border-radius: 999px; pointer-events: none;
-  mask-image: linear-gradient(#000 0 calc(50% - var(--seam) / 2), transparent 0 calc(50% + var(--seam) / 2), #000 0); }
+.bx-swap::before { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border: 1px solid transparent; border-radius: 999px; pointer-events: none;
+  /* its upper half the upper card's edge, its lower half the lower card's (each takes its card's colour: red when the
+     card is outlined); drawn as a fill cut to the border's ring, less the seam's band */
+  background: linear-gradient(var(--cut-top, var(--border)) 0 50%, var(--cut-bottom, var(--border)) 0) border-box;
+  mask-image: linear-gradient(#000 0 calc(50% - var(--seam) / 2), transparent 0 calc(50% + var(--seam) / 2), #000 0), linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: border-box, padding-box, border-box; mask-composite: intersect, exclude; }
+.bx:has(#bxSend.err) .bx-swap { --cut-top: rgba(var(--red-rgb), 0.7); }
+.bx:has(#bxRecv.err) .bx-swap { --cut-bottom: rgba(var(--red-rgb), 0.7); }
 /* the two networks' dots, in the order the coins go; a turn makes them hop over each other */
 .bx-swap i { position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; transition: left 0.45s cubic-bezier(0.5, -0.4, 0.4, 1.4); }
 .bx-swap .bx-b { left: 9px; background: var(--color-green); box-shadow: 0 0 8px var(--color-green); }
