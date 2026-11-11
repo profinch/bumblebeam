@@ -796,3 +796,6 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 /* a dialog's buttons without the focus ring: the dialog gives its first button the focus on opening, and after a
    key pressed the browser rings it as if reached by Tab */
 dialog .btn:focus-visible { outline: none; }
+#bsOwn .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; }
+#bsOwn .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#bsOwn .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }

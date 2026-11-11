@@ -288,7 +288,7 @@
   async function ownAddressAll() {
     for (const w of (data ? data.wallets : [])) {
       const id = w.id;
-      if (!data || !beamCfg(id) || id === settings.active || settings.beamAddr[id] || scanned.has(id)) continue;
+      if (!data || !beamCfg(id) || id === settings.active || (settings.beamAddr[id] && (settings.beamAddrs || {})[id]) || scanned.has(id)) continue;
       scanned.add(id);
       await withWallet(id, () => (data && !live(id) ? start(id, 0) : null)).catch(() => {});
       if (live(id)) await ownAddress(id).catch(() => {});
@@ -308,6 +308,11 @@
     const have = settings.beamAddr[id];
     const list = await s.e.call('addr_list', { own: true }).catch(() => null);
     if (!Array.isArray(list)) return;
+    // every offline and public offline address of it, by name, for Send's My wallets (both take a payment while
+    // this wallet does not run)
+    const offl = list.filter((a) => (a.type === 'public_offline' || a.type === 'offline') && !a.expired).map((a) => ({ address: a.address, type: a.type, name: a.comment || '' }));
+    const was = JSON.stringify((settings.beamAddrs || {})[id] || null);
+    if (JSON.stringify(offl) !== was) { (settings.beamAddrs ||= {})[id] = offl; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } }); }
     const pub = list.filter((a) => a.type === 'public_offline' && !a.expired);
     if (have && pub.some((a) => a.address === have.address)) return;
     const next = pub[0] ? { address: pub[0].address, at: Date.now() } : null;
@@ -892,6 +897,8 @@
           beam: !!w.beam, eth: !!w.eth, hd: !!(w.eth && w.eth.phrase),
           ethKind: w.eth ? (w.eth.key ? 'key' : !w.eth.phrase ? 'imported' : w.eth.phrase === w.phrase ? 'same' : 'phrase') : null,
           // its public offline address as last read while it ran; else one added by hand and verified by its offline key
+          // its offline and public offline addresses (read while it ran), and the added ones of those kinds that are verified
+          beamAddresses: [...((settings.beamAddrs || {})[w.id] || []), ...((settings.addrExt || {})[w.id] || []).filter((e) => e.verified && (e.type === 'public_offline' || e.type === 'offline')).map((e) => ({ address: e.address, type: e.type, name: e.name || '' }))].filter((a, k, l) => l.findIndex((b) => b.address === a.address) === k),
           beamAddress: (settings.beamAddr[w.id] || {}).address || (((settings.addrExt || {})[w.id] || []).find((e) => e.type === 'public_offline' && e.verified === 'key') || {}).address || null,
           accounts: ethAccounts(w),
         })),
@@ -1093,7 +1100,7 @@
       });
       slots.delete(id);
       if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
-      delete settings.activeEth[id]; delete settings.beamAddr[id];
+      delete settings.activeEth[id]; delete settings.beamAddr[id]; if (settings.beamAddrs) delete settings.beamAddrs[id];
       for (const k of ['dappsW', 'beamSitesW', 'addrFav', 'addrExt', 'offlineRef']) if (settings[k]) delete settings[k][id];      // its sites and address lists go with it
       await saveSettings();
       startOpen();

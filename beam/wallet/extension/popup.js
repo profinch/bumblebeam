@@ -1489,12 +1489,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const bsOwn = BB.dropdown($('bsOwn'), (v) => { if (v) { $('bsAddr').value = v; $('bsAddr').oninput(); } });
   function bsOwnFill() {
     const others = st.wallets.filter((w) => w.beam && w.id !== st.active);
-    const ready = others.filter((w) => w.beamAddress);
-    // a wallet is offered by its public offline address, which is read while that wallet runs; one with none
-    // known is listed greyed
-    const missing = others.filter((w) => !w.beamAddress);
-    bsOwn.options([{ v: '', label: 'My wallets…' }, ...ready.map((w) => ({ v: w.beamAddress, label: w.name })),
-      ...missing.map((w) => ({ v: `-${w.id}`, label: w.name, disabled: true, html: `${esc(w.name)}: this wallet has no address yet` }))], '');
+    // each other wallet by its offline and public offline addresses (both take a payment while it does not run),
+    // its name and the address's name left, the kind right; one with none known is listed greyed
+    const rows = [];
+    for (const w of others) {
+      const l = (w.beamAddresses && w.beamAddresses.length) ? w.beamAddresses : w.beamAddress ? [{ address: w.beamAddress, type: 'public_offline', name: '' }] : [];
+      rows.push({ group: w.name });
+      if (!l.length) { rows.push({ v: `-${w.id}`, label: w.name, disabled: true, html: `${esc(w.name)}: no offline address known yet` }); continue; }
+      for (const a of l) rows.push({ v: a.address, label: `${w.name} | ${a.name || TYPE_NAME[a.type] || a.type}`, html: `<span class="nm">${esc(a.name || short(a.address))}</span><span class="ad">${esc(TYPE_NAME[a.type] || a.type)}</span>` });
+    }
+    bsOwn.options([{ v: '', label: 'My wallets…' }, ...rows], '');
     $('bsOwn').hidden = $('bsOwnL').hidden = !others.length;
   }
   // the asset to send: BEAM, then every asset this wallet holds (named as on the card); the fee is BEAM's
