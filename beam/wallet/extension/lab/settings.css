@@ -120,3 +120,4 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .sp-sec .check { align-items: flex-start; }
 .sp-sec .check input { margin-top: 3px; }
 .sp-sec .two + .hint { margin-top: 12px; }
+.sp-sec .hint:empty { display: none; }
