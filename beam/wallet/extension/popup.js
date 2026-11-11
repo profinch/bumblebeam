@@ -1412,7 +1412,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function bsAvail() {
     const have = bsHave(), max = beamStatus ? Math.max(0, have - (bsAid() ? 0 : beamFee())) / GROTH : null;
     // the amount white, its unit grey after it (as on the fee)
-    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `<span class="all" title="Send all of it">Available: <b>${esc(amt(have))}</b> <span class="unit">${esc(bsSym())}</span></span>` : ''), amtIssue($('bsAmt').value, 8, max));
+    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `<span class="all">Available: <b>${esc(amt(have))}</b> <span class="unit">${esc(bsSym())}</span></span>` : ''), amtIssue($('bsAmt').value, 8, max));
     $('bsFee').innerHTML = `${esc(amt(beamFee(), 8))} <span class="unit">BEAM</span>`;
   }
   // every amount field takes only digits and one point (or comma), BB.amountField: nothing else gets in to be
@@ -1517,7 +1517,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!$('esLeft')) $('esAvail').innerHTML = '<span id="esLeft"></span><span id="esRight"></span>';
     const rightHtml = `<span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Network fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} <span class="unit">ETH</span>`}</b></span>`;
     if ($('esRight').innerHTML !== rightHtml) $('esRight').innerHTML = rightHtml;
-    amtLine($('esAmt'), $('esLeft'), ethData ? `<span class="all" title="Send all of it">Available: <b>${esc(num(units(c.bal, c.dec), 8))}</b> <span class="unit">${esc(c.label)}</span></span>` : '', amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
+    amtLine($('esAmt'), $('esLeft'), ethData ? `<span class="all">Available: <b>${esc(num(units(c.bal, c.dec), 8))}</b> <span class="unit">${esc(c.label)}</span></span>` : '', amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
   }
   $('esAmt').oninput = () => { delete $('esAmt').dataset.need; esAvail(); };
   // All: the whole of a token; of ETH, all but the most the transfer may cost (its quote, else 0.002 ETH)
