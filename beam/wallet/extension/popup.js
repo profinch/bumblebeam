@@ -501,6 +501,9 @@
     clearNotes(`s-${what}`);
     show(`s-${what}`);
   }
+  // the backup file chosen by the wallet's own button, its name beside it (the browser's file field fits no design)
+  $('iFileBtn').onclick = () => $('iFile').click();
+  $('iFile').addEventListener('change', () => { const f = $('iFile').files && $('iFile').files[0]; $('iFileName').textContent = f ? f.name : 'none chosen'; $('iFileName').classList.toggle('on', !!f); });
   // Back from a way of adding a wallet: to the choice of ways (the header's arrow there goes back to the wallet)
   qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); welcome(); }; });
 

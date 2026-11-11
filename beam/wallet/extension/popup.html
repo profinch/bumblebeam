@@ -89,8 +89,8 @@
 
   <section id="s-import" class="screen" hidden>
     <h2 class="screen-title">Open a Beam backup file</h2>
-    <p class="hint">A wallet.db saved from Settings → Backup (or the 0.1 wallet's backup). It opens with the password it had when it was saved, and the history comes with it.</p>
-    <label class="field">Backup file<input type="file" id="iFile" accept=".db,application/octet-stream"></label>
+    <p class="hint">A Beam wallet.db (the one this wallet saved before, or the 0.1 wallet's). It opens with the password it had when it was saved, and the history comes with it. A backup of every wallet (.bbk) is imported in Settings → General → Backup.</p>
+    <div class="field"><span>Backup file</span><div class="file-pick"><button type="button" class="sbtn" id="iFileBtn">Choose a file</button><span class="fname" id="iFileName">none chosen</span><input type="file" id="iFile" accept=".db,application/octet-stream" hidden></div></div>
     <label class="field">Password of that file<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="iPass"></label>
     <div class="pw-new"></div>
     <label class="field">Wallet name (up to 32 characters)<input id="iName" maxlength="32" placeholder="Wallet"></label>
