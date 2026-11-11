@@ -87,10 +87,10 @@ html.popup main { scrollbar-gutter: stable; }
 .sp-sec .field + .kv.keep { margin-top: 10px; }
 /* an explanation that folds open under a quiet head with its arrow */
 .fold { margin-top: 8px; }
-.fold-h { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; font: 11px var(--font-mono); color: var(--muted); text-decoration: underline dotted rgba(255, 255, 255, 0.35); text-underline-offset: 3px; }
-.fold-h:hover { color: var(--text); }
-.fold-h::after { content: '▾'; text-decoration: none; display: inline-block; transition: transform 0.2s; }
-.fold.open .fold-h::after { transform: rotate(180deg); }
+.fold-h { font-size: 12px; }      /* a quiet link, as dApps' disconnect */
+.fold-arrow { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 4px; vertical-align: -4px; color: var(--muted); cursor: pointer; transition: transform 0.2s; }
+.fold-arrow svg { width: 14px; height: 14px; }
+.fold.open .fold-arrow { transform: rotate(180deg); }
 .fold-b { display: none; margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .fold.open .fold-b { display: block; }
 .fold-b p { margin: 0 0 6px; }
@@ -98,3 +98,12 @@ html.popup main { scrollbar-gutter: stable; }
 /* the sections end where the wallet tab's Ethereum card does (the last card's margin off) */
 .sp-sec > :last-child { margin-bottom: 0; }
 html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last card 3 px above the footer as the wallet tab's Ethereum card */
+
+/* a node's or the RPCs' card under its row: what is behind it (as a transaction's in Activity) */
+.node { cursor: pointer; }
+.node.open { background: rgba(255, 255, 255, 0.03); }
+.nd-more { margin: 0 8px 6px 25px; padding: 6px 0 8px; }
+.nd-more .kv { gap: 4px 12px; }
+.nd-more .kv dd { white-space: pre-line; font-size: 11px; }
+/* the public RPCs' count at the row's right end, where the others' cross is */
+.node.solo .meta.end { grid-column: 3 / span 2; justify-self: end; }

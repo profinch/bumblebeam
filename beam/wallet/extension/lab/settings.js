@@ -101,9 +101,17 @@
     { h: 'eu-node01.mainnet.beam.mw:8200', st: 'slow', ms: 640 },
     { h: 'old.example.org:8100', st: 'bad' },
   ];
+  // what is behind a node or the public RPCs, shown under its row on a click (as a transaction's card in Activity)
+  const BEHIND = {
+    'wss.bumblebeam.org:443': [['What', 'our own Beam node, on our server'], ['Through', 'our WebSocket door (nginx)'], ['Also', 'the BumbleBeam pool\'s node: it sees our blocks first']],
+    'wsb.bumblebeam.org:443': [['What', 'the backup door, a Cloudflare Worker\nto BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
+  };
+  const openN = new Set();
+  const behind = (key, rows) => (openN.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
+  const nodeRows = (n) => BEHIND[n.h] || [['What', 'a node added by you'], ['Answers', n.st === 'bad' ? 'not now' : `in ${n.ms} ms`]];
   function drawNodes() {
     // the first is the one in use, the others in turn from the top down
-    $('nodes').innerHTML = nodes.map((n, i) => `<div class="node${i === 0 ? ' use' : ''}" draggable="true" data-i="${i}"><i class="st ${n.st}"></i><span class="h">${esc(n.h)}</span><span class="meta">${n.st === 'bad' ? 'no answer' : `${n.ms} ms`}</span><button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI}</button></div>`).join('');
+    $('nodes').innerHTML = nodes.map((n, i) => `<div class="node${i === 0 ? ' use' : ''}${openN.has(n.h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(n.h)}"><i class="st ${n.st}"></i><span class="h">${esc(n.h)}</span><span class="meta">${n.st === 'bad' ? 'no answer' : `${n.ms} ms`}</span><button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI}</button></div>${behind(n.h, nodeRows(n))}`).join('');
     $('beamNet').innerHTML = `<span>block: <b>${(4119939).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')}</b></span>`;      // one item of the meta's flex (its gap is 14 px), as the wallet tab's
   }
   // dragged as Beam's addresses: a line above or below the row it would go to
@@ -120,17 +128,23 @@
     const above = r.classList.contains('drop-above'); clearMarks();
     let to = Number(r.dataset.i) + (above ? 0 : 1); const [n] = nodes.splice(drag, 1); if (drag < to) to--; nodes.splice(to, 0, n); drag = null; drawNodes();
   });
-  $('nodes').onclick = (e) => { const x = e.target.closest('[data-x]'); if (x) { nodes.splice(Number(x.dataset.x), 1); drawNodes(); } };
+  $('nodes').onclick = (e) => {
+    const x = e.target.closest('[data-x]'); if (x) { nodes.splice(Number(x.dataset.x), 1); drawNodes(); return; }
+    const r = e.target.closest('.node'); if (!r) return; const k = r.dataset.k; if (openN.has(k)) openN.delete(k); else openN.add(k); drawNodes();
+  };
   $('nodeAdd').onclick = () => { const v = $('nodeIn').value.trim(); if (!/^[\w.-]+:\d{2,5}$/.test(v)) return; nodes.push({ h: v, st: 'ok', ms: 200 }); $('nodeIn').value = ''; drawNodes(); };
   drawNodes();
   // Ethereum: the public RPCs as one row, lit while there is none of one's own. One's own goes above them, in use
   const rpcs = [];
   function drawRpcs() {
-    $('rpcs').innerHTML = [...rpcs.map((u, i) => `<div class="node${i === 0 ? ' use' : ''}" data-r="${i}"><i class="st ok"></i><span class="h">${esc(u.replace(/^https:\/\//, ''))}</span><span class="meta">96 ms</span><button type="button" class="cp a-x" data-rx="${i}" title="Remove this RPC">${XI}</button></div>`),
-      `<div class="node solo${rpcs.length ? '' : ' use'}"><i class="st ok"></i><span class="h">public RPCs</span><span class="meta"><span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">4</span></span><span></span></div>`].join('');
+    $('rpcs').innerHTML = [...rpcs.map((u, i) => `<div class="node${i === 0 ? ' use' : ''}" data-r="${i}" data-k="${esc(u)}"><i class="st ok"></i><span class="h">${esc(u.replace(/^https:\/\//, ''))}</span><span class="meta">96 ms</span><button type="button" class="cp a-x" data-rx="${i}" title="Remove this RPC">${XI}</button></div>${behind(u, [['What', 'an RPC added by you, asked first']])}`),
+      `<div class="node solo${rpcs.length ? '' : ' use'}${openN.has('public') ? ' open' : ''}" data-k="public"><i class="st ok"></i><span class="h">public RPCs</span><span class="meta end"><span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">4</span></span></div>${behind('public', [['Asked in turn', 'ethereum-rpc.publicnode.com\neth.llamarpc.com\neth.drpc.org\n1rpc.io/eth'], ['Activity from', 'eth.blockscout.com']])}`].join('');
     $('ethNet').innerHTML = `<span>block: <b>${(23781200).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')}</b></span>`;      // one item of the meta's flex (its gap is 14 px), as the wallet tab's
   }
-  $('rpcs').onclick = (e) => { const x = e.target.closest('[data-rx]'); if (x) { rpcs.splice(Number(x.dataset.rx), 1); drawRpcs(); } };
+  $('rpcs').onclick = (e) => {
+    const x = e.target.closest('[data-rx]'); if (x) { rpcs.splice(Number(x.dataset.rx), 1); drawRpcs(); return; }
+    const r = e.target.closest('.node[data-k]'); if (!r) return; const k = r.dataset.k; if (openN.has(k)) openN.delete(k); else openN.add(k); drawRpcs();
+  };
   $('rpcAdd').onclick = () => { const v = $('ethRpc').value.trim(); if (!/^https:\/\/\S+$/.test(v)) return; rpcs.unshift(v); $('ethRpc').value = ''; drawRpcs(); };
   drawRpcs();
 
@@ -147,14 +161,16 @@
 
   // ---------- About ----------
   const PIPE = 'e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835', ETHP = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
-  $('aboutKv').innerHTML = `<dt>Version</dt><dd>0.4.0${ics(ln('https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md', 'What is new (the changelog)'))}</dd>
+  $('aboutKv').innerHTML = `<dt>Version</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md" target="_blank" rel="noopener">0.4.0</a></dd>
     <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548\nafter HF6</dd>
     <dt>Bridge</dt><dd>${esc(sh(PIPE))}${ics(cp(PIPE, 'the bridge\'s contract id'), ln(`https://explorer.bumblebeam.org/contract/${PIPE}`, 'Open the contract in the explorer'))} on Beam\n${esc(sh(ETHP))}${ics(cp(ETHP, 'the bridge\'s contract address'), ln(`https://etherscan.io/address/${ETHP}`, 'Open the contract on Etherscan'))} on Ethereum</dd>
     <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
     <dt>Licence</dt><dd>Apache-2.0</dd>`;
 
   // the explanations fold open and shut by their heads
-  document.addEventListener('click', (e) => { const h = e.target.closest('.fold-h'); if (h) h.parentElement.classList.toggle('open'); });
+  const CHEV = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';      // the catalog's arrow
+  qa('.fold-arrow').forEach((a) => { a.innerHTML = CHEV; });
+  document.addEventListener('click', (e) => { const h = e.target.closest('.fold-h, .fold-arrow'); if (h) { e.preventDefault(); h.parentElement.classList.toggle('open'); } });
 
   // copy, as the wallet's: a tick for 2 s
   document.addEventListener('click', (e) => {
