@@ -111,3 +111,11 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .sp-sec .kv.keep + .hint { margin-top: 16px; }      /* the explanation apart from the figures, at the card's end */
 .two .ex { display: block; margin-top: 6px; font: 12px var(--font-mono); color: var(--text); white-space: nowrap; }      /* how it shows, under its picker */
 .two .ex .u { color: var(--muted); }
+.sp-sec .check { margin: 4px 0 2px; font-size: 12px; }
+.sp-sec .check b { color: var(--text); font-weight: 400; }
+.sp-sec .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sp-sec .check + .field { margin-top: 10px; }
+.sp-sec .row + .hint { margin-top: 8px; }
+.sp-sec .hint .nw { white-space: nowrap; }
+.sp-sec .check { align-items: flex-start; }
+.sp-sec .check input { margin-top: 3px; }

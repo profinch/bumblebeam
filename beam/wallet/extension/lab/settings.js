@@ -98,6 +98,18 @@
   BB.dropdown($('decFmt'), (v) => { ex.d = v; dispEx(); }).set('6');
   dispEx();
 
+  // Backup: one file with every wallet (encrypted with the wallet password), Beam's databases if asked, saved now or
+  // by itself every day / week / month into Downloads; an import adds what the file has and the extension does not
+  const bk = { auto: '0', last: '09.11.2026 21:40' };
+  const bkDraw = () => {
+    $('bkLast').innerHTML = `<span>last: <b>${bk.last}</b></span>`;
+    $('bkWhere').innerHTML = bk.auto === '0' ? 'Saved only when you ask.' : `Saved into Downloads, the next one on <b>${bk.auto === '1' ? '12.11.2026' : bk.auto === '7' ? '16.11.2026' : '09.12.2026'}</b>, as <b class="nw">bumblebeam-backup-${bk.auto === '1' ? '2026-11-12' : bk.auto === '7' ? '2026-11-16' : '2026-12-09'}.bbk</b>. The last 5 are kept.`;
+  };
+  BB.dropdown($('bkAuto'), (v) => { bk.auto = v; bkDraw(); }).set('0');
+  $('bkSave').onclick = () => { bk.last = '11.11.2026 14:05'; bkDraw(); $('bkMsg').textContent = `saved${$('bkDb').checked ? ', with Beam\'s databases' : ''} (lab)`; };
+  $('bkImport').onclick = () => { $('bkMsg').textContent = 'a file, then its password (lab)'; };
+  bkDraw();
+
   // ---------- Networks ----------
   const nodes = [
     { h: 'wss.bumblebeam.org:443', st: 'ok', ms: 42 },

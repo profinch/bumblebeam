@@ -62,6 +62,19 @@
         <div class="row"><button type="button" class="sbtn" id="chPass">Change the password</button></div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Backup</h3><span class="panel-meta" id="bkLast"></span></div>
+        <p class="hint">One file with every wallet of this extension: phrases and keys, names, accounts and settings, encrypted with the wallet password.</p>
+        <label class="check"><input type="checkbox" id="bkDb"><span>With Beam's databases (history and address names, <b>~12 MB</b> now)</span></label>
+        <div class="field"><span>Save it by itself</span>
+          <div class="inline wide">
+            <div class="dd compact" id="bkAuto" data-value="0"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="0">never</li><li role="option" data-v="1">every day</li><li role="option" data-v="7">every week</li><li role="option" data-v="30">every month</li></ul></div>
+          </div></div>
+        <p class="hint" id="bkWhere"></p>
+        <div class="row"><button type="button" class="sbtn" id="bkSave">Save a backup now</button><button type="button" class="sbtn" id="bkImport">Import a backup</button><span class="act-msg" id="bkMsg"></span></div>
+        <p class="hint">An import adds the wallets the file has and this extension does not. It asks for the password the file was saved with. Nothing here is changed or removed.</p>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Display</h3></div>
         <div class="two">
           <div class="field"><span>Time</span>
