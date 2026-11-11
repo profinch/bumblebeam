@@ -1600,6 +1600,12 @@
     settings = { ...settings, ...((await kv.get('settings')) || {}) };
     settings.beamAddr = settings.beamAddr || {};
     if (settings.ethRpc) Eth.setRpc(settings.ethRpc);
+    // our main node removed from the list before it could not be (Settings had a cross on it): back at the top,
+    // the one there before right after it
+    if (node !== DEFAULT_NODE && !(settings.backupNodes || []).includes(DEFAULT_NODE)) {
+      settings.backupNodes = [node, ...(settings.backupNodes || DEFAULT_BACKUPS)].filter((x, k, l) => x && x !== DEFAULT_NODE && l.indexOf(x) === k);
+      node = DEFAULT_NODE; await kv.set('node', node); await kv.set('settings', settings);
+    }
     // the util engine reads the old shared folder: is there a 0.1 wallet.db waiting for its first unlock?
     if (!vaultRec) legacyDb = !!(await (await util()).rpc('exists', ['/beam_wallet/wallet.db']));
     lockIcon();
