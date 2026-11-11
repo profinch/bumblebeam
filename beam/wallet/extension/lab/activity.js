@@ -69,6 +69,10 @@
     { kind: 'in', t: now - 55 * H, v: 1.29, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'out', t: now - 74 * H, v: 40, sym: 'BEAM', peer: BADDR.bob, st: 'failed', why: 'the receiver did not answer in 12 h', fee: 0 },
     { kind: 'in', t: now - 76 * H, v: 310, sym: 'BEAM', peer: null, found: true },
+    // last year's: its days carry the year
+    { kind: 'out', t: new Date(new Date().getFullYear() - 1, 11, 28, 18, 40).getTime(), v: 500, sym: 'BEAM', peer: BADDR.exch, fee: 0.011 },
+    { kind: 'in', t: new Date(new Date().getFullYear() - 1, 11, 28, 9, 15).getTime(), v: 1200, sym: 'BEAM', peer: BADDR.alice, comment: 'happy new year' },
+    { kind: 'in', t: new Date(new Date().getFullYear() - 1, 10, 3, 12, 2).getTime(), v: 2.5, sym: 'BEAM', peer: BADDR.pool, pool: true },
   ];
   const ETHH = [
     { kind: 'br-out', t: now - 9 * M, v: 300, sym: 'WBEAM', peer: 'beam', st: 'pending', stage: '3 / 12 confirmations', fee: 0.00021 },
