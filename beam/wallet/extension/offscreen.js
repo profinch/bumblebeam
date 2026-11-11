@@ -646,7 +646,15 @@
   // it opened is still there: a window that just closed itself, its last request answered, is not)
   function dappWindow() { chrome.runtime.sendMessage({ op: 'dappWindow', near: dappWinOf }).then((r) => { dappWin = r && r.result; }).catch(() => {}); }
   // a request the user answers in the wallet's window
+  // A site cannot flood the window: one connect request and 5 requests in all waiting from it at a time, and none
+  // for 10 s after the user said no or closed the window (each request brings the window to the front).
+  const quiet = new Map();                         // origin -> asking again allowed from
+  const hush = (origin) => quiet.set(origin, Date.now() + 10000);
   function ask(origin, kind, method, params, address, extra = {}) {
+    const waiting = [...dappReq.values()].filter((r) => r.origin === origin);
+    if ((quiet.get(origin) || 0) > Date.now()) return Promise.reject(err(4001, 'the user just turned a request down: ask again in a moment'));
+    if (waiting.length >= 5) return Promise.reject(err(4001, 'too many requests waiting from this site'));
+    if ((kind === 'connect' || kind === 'beamConnect') && waiting.some((r) => r.kind === kind)) return Promise.reject(err(4001, 'a connect request from this site is already waiting'));
     return new Promise((resolve, reject) => {
       const id = dappNext++;
       dappReq.set(id, { id, origin, kind, method, params, address, resolve, reject, at: Date.now(), ...extra });
@@ -812,7 +820,7 @@
       if (!r) throw new Error('this request is gone (answered, or the site closed)');
       dappReq.delete(id);
       try {
-        if (!ok) { if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user rejected the request')); return null; }
+        if (!ok) { hush(r.origin); if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user rejected the request')); return null; }
         try { const v = await dappDo(r, choice); r.resolve(v); return v; } catch (e) { r.reject(err(-32603, e.message)); throw e; }
       } finally { dappDone(r.origin); }
     },
@@ -1558,7 +1566,7 @@
     // the user closed it: a no to all that waits. It closed itself (all answered, dappWinDone): what came
     // meanwhile gets a window of its own
     const self = dappWinSelf; dappWinSelf = false;
-    if (!self) for (const [id, r] of [...dappReq]) { dappReq.delete(id); if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user closed the request')); dappDone(r.origin); }
+    if (!self) for (const [id, r] of [...dappReq]) { dappReq.delete(id); hush(r.origin); if (r.kind === 'beamtx') r.resolve(false); else r.reject(err(4001, 'the user closed the request')); dappDone(r.origin); }
     if (dappReq.size) dappWindow();
   });
 })();
