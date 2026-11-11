@@ -1838,12 +1838,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     qa('#bxFee .arc').forEach((a, k) => { a.classList.toggle('on', !!o && k <= reach && !high); a.classList.toggle('warn', (low && k === 0) || (high && k === keys.length - 1)); a.setAttribute('aria-checked', String(feeOwn == null && k === li)); });
     $('bxNeedle').style.transform = `rotate(${feeOwn != null && feeData ? feeAngle(fN) : (li - 1) * 60}deg)`;
     $('bxFeeLv').innerHTML = o ? `<span class="w">${feeOwn != null ? 'own' : esc(level)}</span> <b>${fN.toFixed(2)}</b>` : '';
-    // the corner field: the fee in force (not while it is being typed in), outlined yellow too low or too high; auto lit
-    // while the level sets it
+    // the corner field: the fee in force (not while it is being typed in), outlined yellow too low or too high; the
+    // level's dots beside it
     $('bxFeeBox').hidden = !toEth;
     if (document.activeElement !== $('bxFeeIn')) $('bxFeeIn').value = fN != null ? fN.toFixed(2) : '';
     $('bxFeeIn').classList.toggle('warn', low || high);
-    $('bxAuto').classList.toggle('on', feeOwn == null);
+    lvlDraw(fN);
     let l1, l2;
     if (toEth) {
       l1 = feeData ? `gas now <b>${feeData.base.toFixed(3)}</b> gwei, ${esc(feeData.level)}` : feeErr ? 'not priced' : 'pricing…';
@@ -1921,7 +1921,39 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('bxFeeIn').oninput = () => { const t = $('bxFeeIn').value.replace(',', '.'); const v = Number(t); if (t !== '' && t !== '.' && isFinite(v)) { feeOwn = v; bxCalc(); } };
   $('bxFeeIn').onblur = () => bxCalc();
   $('bxFeeIn').onkeydown = (e) => { if (e.key === 'Enter') $('bxFeeIn').blur(); if (e.key === 'Escape') { feeOwn = null; $('bxFeeIn').blur(); } };
-  $('bxAuto').onclick = () => { feeOwn = null; bxCalc(); };
+  // the level beside the field: three dots on a circle (Beam's sign), the level's at the top and lit; a click on a dot
+  // takes its level, anywhere else the next one, the wheel steps through them; a figure of your own stops the circle
+  // between, no dot lit
+  function lvlDraw(f) {
+    if (!feeData || f == null) return;
+    const o = feeData.options, k = feeOwn == null ? o.findIndex((x) => x.key === level) : -1;
+    const pos = k >= 0 ? k : f <= o[0].fee ? 0 : f >= o[2].fee ? 2 : f <= o[1].fee ? (f - o[0].fee) / (o[1].fee - o[0].fee) : 1 + (f - o[1].fee) / (o[2].fee - o[1].fee);
+    qa('#bxLvl .vd').forEach((d, i) => d.classList.toggle('on', i === k));
+    $('bxLvl').classList.toggle('own', k < 0);
+    $('bxLvl').title = o.map((x) => `${x.key} ${x.fee.toFixed(2)}`).join(' · ');
+    // its corner to the top, the shorter way round
+    const g = $('bxLvlSpin'), from = g._a ?? -pos * 120;
+    let to = -pos * 120; while (to - from > 180) to -= 360; while (from - to > 180) to += 360;
+    if (Math.abs(to - from) < 0.1) { g._a = to; g.setAttribute('transform', `rotate(${to.toFixed(1)} 9 9)`); return; }
+    const t0 = performance.now(), run = (g._run = (g._run || 0) + 1);
+    const step = (now) => { if (g._run !== run) return; const t = Math.min(1, (now - t0) / 500), e = 1 - Math.pow(1 - t, 3), cur = from + (to - from) * e; g._a = cur;
+      g.setAttribute('transform', `rotate(${cur.toFixed(1)} 9 9)`); if (t < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  const lvlTo = (k) => { if (!feeData) return; level = feeData.options[(k + 3) % 3].key; feeOwn = null; bxCalc(); };
+  $('bxLvl').onclick = (e) => {
+    if (!feeData) return;
+    const d = e.target.closest('.vd');
+    if (d) return lvlTo(+d.dataset.l);
+    const k = feeData.options.findIndex((x) => x.key === level);
+    lvlTo(feeOwn != null ? k : k + 1);
+  };
+  $('bxLvl').addEventListener('wheel', (e) => {
+    if (!feeData) return;
+    e.preventDefault();
+    const k = feeData.options.findIndex((x) => x.key === level);
+    lvlTo(Math.max(0, Math.min(2, k + (e.deltaY < 0 ? 1 : -1))));
+  }, { passive: false });
 
   // a turn: the content (not the titles) tears into strips that jerk sideways, turns to the other way at the middle,
   // and comes back torn, settling

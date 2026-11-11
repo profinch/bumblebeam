@@ -544,10 +544,13 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-feebox input:focus { border-color: rgba(var(--accent-rgb), 0.5); }
 .bx-feebox input.warn { border-color: rgba(var(--yellow-rgb), 0.7); }
 .bx-strip .bx-feebox input { background-attachment: scroll; background-size: var(--gw) var(--gh); background-position: var(--gx) var(--gy); }      /* a torn copy: the page's gradient where the field stands (fixed, it was drawn as if the page were the field: light at its foot) */
-.bx-auto { padding: 2px 6px; font: 10px var(--font-mono); color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: color 0.2s, border-color 0.2s; }
-.bx-auto:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
-.bx-auto.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }      /* lit while the gauge's level sets the fee; a click puts it back */
-.bx-auto:focus { outline: none; }
+.bx-lvl { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; background: none; border: 0; cursor: pointer; }
+.bx-lvl:focus { outline: none; }
+.bx-lvl svg { width: 20px; height: 20px; overflow: visible; }
+.bx-lvl .ring { fill: none; stroke: var(--border); stroke-width: 0.8; stroke-dasharray: 1.2 1.6; }
+.bx-lvl .vd { fill: var(--muted); transition: fill 0.25s; }
+.bx-lvl .vd.on { fill: var(--accent); filter: drop-shadow(0 0 3px var(--accent)); }
+.bx-lvl:hover .vd:not(.on) { fill: rgba(var(--accent-rgb), 0.55); }      /* the level's dots on a circle, as Beam's sign: the level's at the top, lit */
 /* the fee line, one height both ways: a gauge (cheap, normal, safe) this way, the fixed fee the other; what it is for */
 .bx-feeline { display: flex; align-items: center; gap: 10px; margin-top: 14px; height: 30px; padding: 0 calc(var(--px) + 1px); white-space: nowrap; }      /* in from both sides as the cards' content (their border + --px) */
 .bx-fee3 { display: inline-flex; align-items: center; gap: 8px; font: 11px var(--font-mono); color: var(--muted); }

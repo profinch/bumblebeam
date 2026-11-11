@@ -146,7 +146,12 @@
 - The fee towards Ethereum is a small gauge of three levels (cheap, normal, safe), clicked or dragged; beside it
   the level and the fee, at the right in two short lines the gas now (low, usual or high against the day) and how
   far the level covers it, for how many dollars. Towards Beam: 0.02 WBEAM to the relayer and the ETH the gas comes
-  from. Typed in by hand no more. A fee that cannot be priced says so in a few words under the button.
+  from. A fee that cannot be priced says so in a few words under the button.
+- The fee can be typed in the Beam card's top right ("fee [6.38]"), beside it the level as three dots on a circle,
+  as BEAM's sign: the level's dot at the top, lit; a click on a dot takes its level, elsewhere the next, the wheel
+  steps through them, and the circle turns round to bring the level's dot up. A figure of your own stops it between,
+  no dot lit, and the gauge's needle follows the figure. Under the relayer's minimum, or over twice safe, the field
+  and the arcs turn yellow and the line under the button says so; under the minimum it is asked once more.
 - One button, "Bridge 250 BEAM"; its word (sent, an error) under it, in a line kept for it from the start.
 - Transfers: both ways and what arrived to claim in one list (the Arrived on Beam card is gone), what waits for a
   claim on top with its Claim button, then newest first. Each row: the way and its number, whom to or from, the
