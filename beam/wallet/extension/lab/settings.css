@@ -109,7 +109,7 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .node.solo .meta.end { grid-column: 3 / span 2; justify-self: end; }
 .kv.about .sp { display: inline-block; width: 12px; }
 .sp-sec .kv.keep + .hint { margin-top: 16px; }      /* the explanation apart from the figures, at the card's end */
-.two .ex { display: block; margin-top: 6px; font: 12px var(--font-mono); color: var(--text); white-space: nowrap; }      /* how it shows, under its picker */
+.two .ex { display: block; margin-top: 6px; padding-left: 11px; font: 12px var(--font-mono); color: var(--text); white-space: nowrap; }      /* how it shows, under its picker */
 .two .ex .u { color: var(--muted); }
 .sp-sec .check { margin: 4px 0 2px; font-size: 12px; }
 .sp-sec .check b { color: var(--text); font-weight: 400; }
