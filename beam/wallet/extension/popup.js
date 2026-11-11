@@ -1591,7 +1591,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
         bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : '',
         bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee`
-          : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If it is that wallet's, the payment verifies it; if not, the coins go to whoever it belongs to` : ''))) return;
+          : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If the address is that wallet's, this payment verifies it. If not, the coins go to whoever it belongs to.` : ''))) return;
       const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
       actOk($('doBeamSend'), `transaction ${esc(r.txId)} sent`);
       // to a regular address of another of one's wallets: it completes once that wallet is opened (this one keeps
