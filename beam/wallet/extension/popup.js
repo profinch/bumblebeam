@@ -2613,7 +2613,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // what a section reads when it is shown
   function setSecOpen() {
     if (setSec === 'general') bkInfo();
-    if (setSec === 'networks') { drawNodes(); drawRpcs(); probeAll(); }
+    if (setSec === 'networks') { drawNodes(); drawRpcs(); setTimeout(probeAll, 300); }      // after the screen is drawn
     probeLoop();
     if (setSec === 'storage') { snapInfo(); keepTidy().then(keepInfo); }
     if (setSec === 'about') drawAbout();
@@ -2779,7 +2779,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     probeT = setInterval(() => { if ($('t-settings').hidden || setSec !== 'networks') return clearInterval(probeT); probeAll(); }, 30000);
   }
   async function probeAll() {
-    for (const h of st.nodes || []) probeWs(h).then((p) => { probe[h] = p; if (setSec === 'networks') drawNodes(); });
+    // a node: asked twice in a row, the faster answer shown (the first pays for the name lookup and the TLS
+    // handshake, and on opening it waits behind the popup's own start)
+    const twice = async (h) => { const a = await probeWs(h); const b = await probeWs(h); return a.bad && b.bad ? a : { ms: Math.min(a.bad ? Infinity : a.ms, b.bad ? Infinity : b.ms) }; };
+    for (const h of st.nodes || []) twice(h).then((p) => { probe[h] = p; if (setSec === 'networks') drawNodes(); });
     const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...PUBLIC_RPCS.map((x) => `https://${x}`)];
     let pubDone = false;
     for (const u of urls) probeRpc(u).then((p) => {
