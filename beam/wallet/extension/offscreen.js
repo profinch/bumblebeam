@@ -1185,7 +1185,8 @@
       await verify(pass);
       const w = wallet(id);
       if (what === 'phrase') return w.phrase || null;
-      if (what === 'ethPhrase') return w.eth && w.eth.phrase || null;
+      // an account imported by its own phrase gives that phrase; the others the Ethereum part's
+      if (what === 'ethPhrase') { const a = i != null && w.eth ? w.eth.accounts.find((x) => x.i === Number(i)) : null; return (a && a.phrase) || (w.eth && w.eth.phrase) || null; }
       if (what === 'ethKey') return Eth.signer(ethSecret(w, i)).privateKey;
       if (what === 'beamPass') return w.beam ? (w.beam.pass === pass ? '' : w.beam.pass) : null;   // '' = the wallet password
       throw new Error('nothing to show');

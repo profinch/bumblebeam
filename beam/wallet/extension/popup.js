@@ -2631,16 +2631,20 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
         ${on ? '<span class="end">current</span>' : '<span></span>'}</div>${isOpen ? wCard(w) : ''}`;
     }).join('');
-    for (const d of qa('#wList [data-acct]')) wAcctDd(d, st.wallets.find((x) => x.id === d.dataset.acct));
+    for (const d of qa('#wList [data-acct]')) { const w = st.wallets.find((x) => x.id === d.dataset.acct); wAcctDd(d, w); ethPhraseBtn(w); }
   }
   function wCard(w) {
     const g = (cap, acts) => `<div class="grp"><div class="cap">${cap}</div><div class="acts">${acts.join('')}</div></div>`;
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
     const mine = [b('rename', 'Rename'), w.phraseKnown ? b('phrase', 'Seed phrase') : ''].filter(Boolean);
-    const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
+    // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
+    const eth = w.eth && w.accounts.length ? [b('ethPhrase', 'Seed phrase'), b('ethKey', 'Private key')] : [];
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     return `<div class="wcard2"><div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
   }
+  const hasEthPhrase = (w, i) => { const a = w.accounts.find((x) => x.i === i); return !!a && (a.kind === 'phrase' || (a.kind === 'hd' && w.ethKind === 'phrase')); };
+  // the Ethereum Seed phrase button only for an account that has one
+  const ethPhraseBtn = (w) => { const c = qa('#wList .wcard2').find((x) => x.previousElementSibling.dataset.w === w.id), btn = c && c.querySelector('[data-a="ethPhrase"]'); if (btn) btn.hidden = !hasEthPhrase(w, wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i); };
   // the card's account picker, as the wallet tab's (its accounts, then add / import / rename / remove), opened on the
   // wallet tab's account; picked here, it is the card's only (the wallet tab keeps its own); its address runs and settles
   function wAcctDd(d, w) {
@@ -2656,6 +2660,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
           const was = wPick[w.id] ?? at; wPick[w.id] = Number(v);
           const a = w.accounts.find((x) => x.i === Number(v)), ad = d.querySelector('.dd-btn .ad');
           if (a && ad && Number(v) !== was) BB.decode(ad, short(a.address));
+          ethPhraseBtn(w);
           return;
         }
       } catch (e) { await ask({ title: 'Not done', note: msg(e), yes: 'OK', no: null }); }
@@ -3046,7 +3051,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         await ask({ title: act === 'phrase' ? 'Seed phrase' : 'Ethereum seed phrase', password: true, yes: 'Show',
           note: 'Anyone who sees these words owns the wallet. Make sure no one is watching the screen.',
           check: async ({ pass }) => {
-            const phrase = await host('reveal', w.id, pass, act);
+            const phrase = await host('reveal', w.id, pass, act, act === 'ethPhrase' ? (wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i) : undefined);
             if (!phrase) throw new Error('no phrase is kept for this wallet');
             return { title: `${w.name}: ${act === 'phrase' ? 'seed phrase' : 'Ethereum seed phrase'}`, html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` };
           } });
