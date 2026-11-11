@@ -27,7 +27,7 @@
 .ad-day { display: flex; justify-content: space-between; margin: 14px 0 0; padding-bottom: 5px; border-bottom: 1px solid var(--border-dim);
   font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .ad-day .sum { font-weight: 400; letter-spacing: 0; text-transform: none; }
-.ad-day .sum .pos { color: var(--accent); }
+.ad-day .sum b { color: var(--text); font-weight: 400; }      /* a day's net white (+ or −), its unit grey as the heading */
 .ad-day.now { color: var(--color-yellow); }
 
 /* a row: its icon, who and what, the amount right with its dollars under it */
@@ -42,8 +42,8 @@
 .ar .sub .cm { color: var(--text-dim); }
 .ar-r { text-align: right; white-space: nowrap; }
 .ar-r .amt { font: 700 var(--fs-m) var(--font-mono); }
-.ar-r .amt.pos { color: var(--accent); }
 .ar-r .amt.zero { color: var(--muted); font-weight: 400; }
+.ar-r .amt.pos { color: var(--text); }      /* what came white as what went (the wallet colours it elsewhere) */
 .ar-r .amt u { text-decoration: none; font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }
 .ar-r .usd { display: block; font: 11px var(--font-mono); color: var(--muted); margin-top: 3px; }
 .ar.dim .what, .ar.dim .ar-r .amt { opacity: 0.5; }      /* cancelled: there, but nothing moved */
@@ -71,7 +71,8 @@
 /* payouts from one place in a day, as one row: its count, opened to each */
 .ar .what .x { margin-left: 6px; font: 700 10px var(--font-mono); color: var(--muted); }
 .ar-more .sub-li { display: grid; grid-template-columns: minmax(0, 1fr) auto; font: 11px var(--font-mono); color: var(--muted); padding: 3px 0; }
-.ar-more .sub-li b { color: var(--accent); font-weight: 400; }
+.ar-more .sub-li b { color: var(--text); font-weight: 400; }      /* each payout white, BEAM grey */
+.ar-more .sub-li b u { text-decoration: none; color: var(--muted); }
 
 .af-more { display: block; margin: 14px auto 0; }
 #actList .empty { padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }

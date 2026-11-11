@@ -147,7 +147,7 @@
   function more(r) {
     const rows = [];
     if (r.group) {
-      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
+      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} <u>${esc(x.sym)}</u></b></div>`).join('')}
         <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${addrDd(r.peer)}</dd></dl></div>`;
     }
     rows.push(['When', fdt(r.t)]);
@@ -190,7 +190,7 @@
       // the day's net: what came minus what went, BEAM (or the network's main coin) only
       const main = net === 'beam' ? 'BEAM' : 'ETH';
       const sum = rs.filter((r) => r.sym === main && !r.st).reduce((s, r) => s + (r.kind === 'in' || r.kind === 'br-in' ? r.v : r.kind === 'approve' || r.kind === 'dapp' ? 0 : -r.v), 0);
-      html += `<div class="ad-day"><span>${dayName(k)}</span><span class="sum">${sum ? `<span class="${sum > 0 ? 'pos' : ''}">${sum > 0 ? '+' : '−'}${num(Math.abs(sum), 4)}</span> ${main}` : ''}</span></div>${rs.map(row).join('')}`;
+      html += `<div class="ad-day"><span>${dayName(k)}</span><span class="sum">${sum ? `<b>${sum > 0 ? '+' : '−'}${num(Math.abs(sum), 4)}</b> ${main}` : ''}</span></div>${rs.map(row).join('')}`;
     }
     $('actList').innerHTML = html || `<div class="empty">${q || kind !== 'all' ? 'nothing like that here' : 'no transactions yet'}</div>`;
     $('afMore').hidden = rest.length <= shown;
