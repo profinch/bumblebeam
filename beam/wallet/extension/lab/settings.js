@@ -88,7 +88,11 @@
 
   // ---------- General ----------
   const ex = { t: '24', d: '6' };
-  const dispEx = () => { $('dispEx').textContent = `As it shows: 11.11.2026 ${ex.t === '12' ? '2:05 PM' : '14:05'}, ${(1234.123456789).toLocaleString('en-US', { minimumFractionDigits: Math.min(2, ex.d), maximumFractionDigits: Number(ex.d) })} BEAM. Confirmations always show every decimal.`; };
+  // under each picker, how it shows: white, BEAM grey
+  const dispEx = () => {
+    $('timeEx').textContent = `11.11.2026 ${ex.t === '12' ? '2:05 PM' : '14:05'}`;
+    $('decEx').innerHTML = `${(1234.123456789).toLocaleString('en-US', { minimumFractionDigits: Math.min(2, ex.d), maximumFractionDigits: Number(ex.d) }).replace(/,/g, '\u2060\u2009\u2060')} <span class="u">BEAM</span>`;      // thousands apart as the wallet's
+  };
   BB.dropdown($('autoLock'), () => {}).set('60');
   BB.dropdown($('timeFmt'), (v) => { ex.t = v; dispEx(); }).set('24');
   BB.dropdown($('decFmt'), (v) => { ex.d = v; dispEx(); }).set('6');
