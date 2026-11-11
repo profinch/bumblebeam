@@ -793,3 +793,6 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .forgot { margin: 10px 0 0; text-align: center; font-size: 12px; }
 .imp-res { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
 .imp-res b { color: var(--text); font-weight: 400; }      /* the figures white */
+/* a dialog's buttons without the focus ring: the dialog gives its first button the focus on opening, and after a
+   key pressed the browser rings it as if reached by Tab */
+dialog .btn:focus-visible { outline: none; }
