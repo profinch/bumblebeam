@@ -1403,22 +1403,23 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (was) openDefault(null);
     } catch (er) { note('x-beamRecv', 'bad', msg(er)); }
   }
-  // Add: an address of this wallet that Beam does not list, checked before it is added. Only a public offline
-  // address can be checked: Beam makes every public offline address of a wallet from one key of its seed, so it
-  // must carry the same key as one this wallet makes. The other kinds come from keys numbered by the wallet that
-  // made them, so whose they are cannot be told: they are not added.
+  // Add: an address of this wallet that Beam does not list. A public offline address is checked before it is added:
+  // Beam makes every public offline address of a wallet from one key of its seed, so it must carry the same key as
+  // one this wallet makes. The other kinds come from keys numbered by the wallet that made them, so whose they are
+  // cannot be told: added not verified (a payment to it in the history, or an import of wallet data, verifies it)
   $('addAddr').onclick = async () => {
     // checked in the window itself: what is wrong shows there in yellow, the window stays open
     const wid = W().id;
     const r = await ask({ title: 'Add an address', input: { label: 'Address', value: '' },
-      note: 'Only a public offline address can be added: the wallet checks that it belongs to this wallet\'s seed phrase. Beam cannot tell whose an address of another kind is.', yes: 'Add',
+      note: 'A public offline address is checked to belong to this wallet\'s seed phrase. An address of another kind is added not verified (in yellow): it becomes verified once a payment to it shows in this wallet\'s history, or an imported wallet data file makes it Beam\'s own.', yes: 'Add',
       check: async ({ input }) => {
         const a = String(input || '').trim();
         if (!a) throw new Error('paste the address');
         const v = await host('beam', wid, 'validate_address', { address: a });
         if (!v || !v.is_valid) throw new Error('that is not a valid Beam address');
         if (addrs.some((x) => x.address === a)) throw new Error('this address is in the list already');
-        if (v.type !== 'public_offline') throw new Error(`this is ${/^[aeiou]/.test(TYPE_NAME[v.type] || '') ? 'an' : 'a'} ${TYPE_NAME[v.type] || v.type || 'other'} address: only a public offline one can be checked to belong to this seed phrase`);
+        // another kind cannot be checked: added as it is, not verified yet
+        if (v.type !== 'public_offline') { await host('setAddrExt', wid, { address: a, name: '', type: v.type, at: Date.now() }); return; }
         // this wallet's own public offline addresses and its kept reference to compare with
         const mine = [...addrs.filter((x) => !x.ext && x.type === 'public_offline').map((x) => x.address), await host('offlineRef', wid)];
         if (!mine.some((m) => sameRun(b58(m), b58(a)) >= 64)) throw new Error('this public offline address belongs to another seed phrase, not this wallet\'s');

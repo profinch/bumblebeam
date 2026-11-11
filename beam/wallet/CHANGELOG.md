@@ -3,6 +3,10 @@
 ## 0.4.0 (2026-11-10, not yet published)
 
 ### Safety
+- A backup carries each wallet's addresses added by hand (verified or not), its favourites and its offline
+  reference; an import adds the ones a wallet lacks.
+- Add an address takes any kind: a public offline one is checked against the seed as before, another kind is
+  added not verified (in yellow) until a payment to it or an imported wallet data file verifies it.
 - The start screen imports a BumbleBeam backup: with no wallet yet, every wallet in it comes back (the wallet
   password is the one it was made with, Beam from its database or its phrase); from an open wallet, what it has and
   this one does not is added.

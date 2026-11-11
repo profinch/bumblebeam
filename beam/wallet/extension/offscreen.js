@@ -794,6 +794,14 @@
     return signSend(secret, p);
   }
 
+  function listsInto(id, l) {
+    if (!l) return;
+    const ext = (settings.addrExt ||= {})[id] ||= [];
+    for (const e of l.addrExt || []) if (e && e.address && !ext.some((x) => x.address === e.address)) ext.push(e);
+    const fav = (settings.addrFav ||= {})[id] ||= [];
+    for (const a of l.addrFav || []) if (!fav.includes(a)) fav.push(a);
+    if (l.offlineRef && !(settings.offlineRef ||= {})[id]) settings.offlineRef[id] = l.offlineRef;
+  }
   const api = {
     // ---------- dApps ----------
     // the waiting requests, oldest first, as the wallet's window shows them (a transaction priced for it)
@@ -1336,7 +1344,9 @@
     async backupMake(pass, withBeam) {
       await verify(pass);
       const out = { kind: 'bumblebeam-backup', v: 1, at: Date.now(), vault: vaultRec,
-        settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {} };
+        settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {},
+        // each wallet's own lists kept outside the vault: the addresses added by hand (verified or not), the favourites, the offline reference
+        lists: Object.fromEntries(data.wallets.map((w) => [w.id, { addrExt: (settings.addrExt || {})[w.id] || [], addrFav: (settings.addrFav || {})[w.id] || [], offlineRef: (settings.offlineRef || {})[w.id] || null }])) };
       if (withBeam) for (const w of data.wallets) if (w.beam) out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await api.exportBeam(w.id, pass)).b64;
       // kept in this browser (backups/last.bbk) until it is downloaded: Download a backup saves it to disk
       const bytes = new TextEncoder().encode(JSON.stringify(out));
@@ -1356,6 +1366,8 @@
     },
     // the backup's file is on disk (the popup heard it from the download): its download kept, to show it in its folder
     async backupSaved(id) { need(); settings.lastBackupId = id == null ? null : Number(id); settings.lastDownload = Date.now(); await saveSettings(); },
+    // a wallet's lists from a backup, merged: an added address it lacks joins (its verification with it), the
+    // favourites it lacks after its own, the offline reference if it has none
     // The start screen's way: a backup into an extension with no wallet yet. Its vault becomes this one, as it was
     // (the wallet password is then the one the backup was made with); each Beam part from the file's database,
     // else from its phrase through the snapshot. The settings in it come with it
@@ -1383,6 +1395,7 @@
       if (fs.backupNodes) settings.backupNodes = fs.backupNodes;
       if (fs.ethRpc) { settings.ethRpc = fs.ethRpc; Eth.setRpc(fs.ethRpc); }
       if (Array.isArray(fs.tokens)) settings.tokens = fs.tokens;
+      for (const w of d.wallets || []) listsInto(w.id, f.lists && f.lists[w.id]);
       settings.active = (d.wallets[0] && d.wallets[0].id) || null;
       await saveSettings();
       await createVault(o.k, d);
@@ -1404,7 +1417,8 @@
       const here = (fw) => data.wallets.some((w) => (fw.phrase && w.phrase === fw.phrase) || (first(fw) && first(w) === first(fw)));
       const added = [], skipped = [];
       for (const fw of d.wallets || []) {
-        if (here(fw)) { skipped.push(fw.name); continue; }
+        // one here already: the addresses added by hand that it lacks come from the file
+        if (here(fw)) { const w0 = data.wallets.find((w) => (fw.phrase && w.phrase === fw.phrase) || (first(fw) && first(w) === first(fw))); listsInto(w0.id, f.lists && f.lists[fw.id]); skipped.push(fw.name); continue; }
         const id = newId(), w = { ...structuredClone(fw), id, beam: null };
         if (fw.beam) {
           const db = Engines.dbOf(id), made = await Engines.fresh(id);
@@ -1414,8 +1428,10 @@
           } finally { await made.close().catch(() => {}); }
         }
         await mutate((dd) => { dd.wallets.push(w); });
+        listsInto(id, f.lists && f.lists[fw.id]);
         added.push(fw.name);
       }
+      await saveSettings();
       broadcast({ type: 'event', method: 'bb_changed' });
       return { added, skipped };
     },
