@@ -3053,7 +3053,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       }
       if (act === 'ethKey') {
         const a2 = w.accounts.find((x) => x.i === (wPick[w.id] ?? st.activeEth[w.id] ?? w.accounts[0].i)) || w.accounts[0];      // the card's picked account
-        await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', note: `${a2.address}. Whoever has the key controls this account; import it only into a wallet you trust.`,
+        await ask({ title: `Private key of ${a2.name}`, password: true, yes: 'Show', html: `<p class="key-addr">${esc(a2.address)}</p>`, note: 'Whoever has the key controls this account. Import it only into a wallet you trust.',
           check: async ({ pass }) => ({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(await host('reveal', w.id, pass, 'ethKey', a2.i))}</div>` }) });
       }
       if (act === 'remove') {
