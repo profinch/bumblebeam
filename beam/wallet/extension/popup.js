@@ -1930,7 +1930,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const pos = k >= 0 ? k : f <= o[0].fee ? 0 : f >= o[2].fee ? 2 : f <= o[1].fee ? (f - o[0].fee) / (o[1].fee - o[0].fee) : 1 + (f - o[1].fee) / (o[2].fee - o[1].fee);
     qa('#bxLvl .vd').forEach((d, i) => d.classList.toggle('on', i === k));
     $('bxLvl').classList.toggle('own', k < 0);
-    $('bxLvl').title = o.map((x) => `${x.key} ${x.fee.toFixed(2)}`).join(' · ');
     // its corner to the top, the shorter way round
     const g = $('bxLvlSpin'), from = g._a ?? -pos * 120;
     let to = -pos * 120; while (to - from > 180) to -= 360; while (from - to > 180) to += 360;
