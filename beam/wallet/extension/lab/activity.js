@@ -110,6 +110,7 @@
     if (r.kind === 'approve') return '';
     if (r.found) return 'found on the chain';
     if (r.from) return `from <b>${esc(r.from)}</b>`;
+    if (r.peer === BADDR.pool) return 'from <span class="ours">BumbleBeam</span>';      // our pool, by its name in its colour (as the explorer's)
     const nm = name(r.peer);
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nm || sh(r.peer))}</b>`;
   };
@@ -147,7 +148,7 @@
   // the icons after what they are for: copy first, then the explorer, one space apart (and one from the text, kept on its line)
   const ics = (...xs) => `&nbsp;<span class="ics">${xs.filter(Boolean).join('&nbsp;')}</span>`;
   const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
-  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}${ics(cp(a, 'the address'), a.startsWith('0x') && ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
+  const addrDd = (a) => `${name(a) ? `${esc(name(a))}${a === BADDR.pool ? ics(ln('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool')) : ''}\n` : ''}${esc(a)}${ics(cp(a, 'the address'), a.startsWith('0x') && ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
   function more(r) {
     const rows = [];
     if (r.group) {

@@ -93,3 +93,6 @@
 
 /* the scroll bar's room kept before it comes (a short list, a search): nothing moves sideways when it does */
 html.popup main { scrollbar-gutter: stable; }
+
+/* our pool by name, in its colour as the explorer's blocks table has it */
+.ar .what .who .ours { color: #a4e000; font-weight: 700; }
