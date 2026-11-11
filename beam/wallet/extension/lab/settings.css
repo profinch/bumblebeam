@@ -21,8 +21,6 @@ html.popup main { scrollbar-gutter: stable; }
 .wr .sub .sp { display: inline-block; width: 12px; }
 .wr .sub .warn { color: var(--color-yellow); }
 .wr .end { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-.wr .end.use { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 11px; }
-#wList .li.wr:hover .end.use { color: var(--accent); }
 
 /* a wallet's card: groups of actions under a quiet caption each; remove last, apart */
 .wcard2 { margin: 0 8px 4px; padding: 6px 0 12px; border-bottom: 1px solid var(--border-dim); }

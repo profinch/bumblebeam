@@ -1,8 +1,8 @@
 // The Settings lab: the Settings screen's next design, worked on apart from the wallet; made-up wallets, nothing is
 // saved. It moves into the wallet once it is right.
 //   - quiet tabs in the header (Wallets, General, Networks, Storage, About) instead of one long page
-//   - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked; "use" on the others);
-//     a click opens its card: Use / Rename; Keys and backups (seed phrase, Ethereum phrase, an account's private key
+//   - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current, the others
+//     switched by the header's picker); a click opens its card: Rename; Keys and backups (seed phrase, Ethereum phrase, an account's private key
 //     with the account picked, the Beam file); Restore Beam when it is gone; Remove apart, last
 //   - General: security (short) and display side by side, with an example of both
 //   - Networks: Beam's nodes as one list as Beam's addresses (the one in use lit, whether each answers and how fast,
@@ -53,7 +53,7 @@
       const warn = w.beamSt === 'missing' ? '<i class="sp"></i><span class="warn">Beam part gone: restore it</span>' : '';
       return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${w.id}" tabindex="0" role="button" aria-expanded="${isOpen}">
         <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}${warn}</span></span>
-        ${on ? '<span class="end">open</span>' : '<span class="end use" data-a="use">use</span>'}</div>${isOpen ? card(w) : ''}`;
+        ${on ? '<span class="end">current</span>' : '<span></span>'}</div>${isOpen ? card(w) : ''}`;      // the open one marked, the others switched by the header's picker
     }).join('');
   }
   function card(w) {
@@ -66,7 +66,7 @@
     if (w.beam && w.beamSt !== 'missing') keys.push(b('backup', 'Beam file'));
     const acct = w.eth && w.accounts.length > 1 ? `<div class="acct">the private key of<div class="dd compact" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     return `<div class="wcard2">
-      ${g('This wallet', [w.id === active ? '' : b('use', 'Use it'), b('rename', 'Rename')].filter(Boolean))}
+      ${g('This wallet', [b('rename', 'Rename')])}
       ${keys.length ? g('Keys and backups', keys, acct) : ''}
       ${w.beamSt === 'missing' ? g('Beam', [b('restore', 'Restore Beam')], '<div class="note">its database is not in this browser: rebuilt from the seed phrase</div>') : ''}
       ${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}
@@ -74,7 +74,6 @@
   }
   $('wList').onclick = (e) => {
     const a = e.target.closest('[data-a]'), li = e.target.closest('[data-w]');
-    if (a && a.dataset.a === 'use') { const id = (a.closest('[data-w]') || a.closest('.wcard2').previousElementSibling).dataset.w; active = id; wd.set(id); drawWallets(); return; }
     if (a) { a.textContent = `${a.textContent.trim()}: (lab)`; return; }
     if (e.target.closest('.wcard2')) return;
     if (!li) return;
