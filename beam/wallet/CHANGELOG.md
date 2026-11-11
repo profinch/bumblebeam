@@ -101,9 +101,31 @@
   fixed 0.002 ETH.
 
 ### Bridge
-- Its next design, a swap card (You send over You receive, the networks' dots that change places between them),
-  is worked on in a lab page of its own (`lab/bridge.html`, made-up figures, nothing is sent); the tab keeps its
-  form meanwhile.
+- The tab is two cards, From over To, with the switch between them: the two networks' dots in their own oval,
+  the cards cut round it. A click turns the way round; the cards' content tears into strips that jerk sideways
+  and comes back the other way. The direction tabs and ⇄ are gone. The design was worked out in a lab page of
+  its own (`lab/bridge.html`, made-up figures, nothing is sent).
+- From: the amount (up to 99 999 999.9999, its figures smaller when long rather than running under the balance),
+  "available" over the balance at the right. The balance is the All button: under the pointer it lights and its
+  word reads "send all"; a click puts in the most that can go, the fee left for. A problem with the amount
+  ("over balance + fee") shows in yellow under it, on the balance's line.
+- To: what the receiving side holds now ("there now"), and how long it takes: "usually about an hour", or "about
+  an hour, then claim" towards Beam.
+- Beam's side shows the wallet's name and its green dot in its card's corner (top right on top, bottom right
+  below) and, when it receives, its bridge key at the bottom left (the tip on the word "key").
+- Ethereum's side is the wallet tab's account picker: this wallet's accounts, then the other wallets' under their
+  names, scrolling past 4; the mouse wheel over it steps through them. Towards Ethereum, "Enter an address" takes
+  any address. Another account picked, its address runs as random hex and settles on the new one.
+- The fee towards Ethereum is a small gauge of three levels (cheap, normal, safe), clicked or dragged; beside it
+  the level and the fee, at the right in two short lines the gas now (low, usual or high against the day) and how
+  far the level covers it, for how many dollars. Towards Beam: 0.02 WBEAM to the relayer and the ETH the gas comes
+  from. Typed in by hand no more. A fee that cannot be priced says so in a few words under the button.
+- One button, "Bridge 250 BEAM"; its word (sent, an error) under it, in a line kept for it from the start.
+- Transfers: both ways and what arrived to claim in one list (the Arrived on Beam card is gone), what waits for a
+  claim on top with its Claim button, then newest first. Each row: the way and its number, whom to or from, the
+  date in full (an icon right of it opens the transaction on Etherscan), the amount over the fee it paid, its
+  state; the amounts and the states stand in columns down the list. The last 5, then "10 more" at a time. The
+  card reaches down to where the wallet tab's Ethereum card ends.
 
 ### dApps
 - Each wallet keeps its own site connections, Beam and Ethereum. A site connected in one wallet saw another
@@ -114,6 +136,8 @@
 - Recent requests (the sites' last calls) is gone, on the page and in the wallet's memory.
 - Catalog: the groups are "Beam official" (it folds, folded at first, the choice kept, sliding open and shut)
   and "BumbleBeam whitelisted".
+- Beam, Ethereum and Catalog are quiet tabs, as Activity's networks (a network's dot before its name; Catalog at
+  the right end); they were two button bars.
 
 ### Everywhere
 - A screen opened before its balances came (Send on either network, the bridge) fills them in as they come; it
@@ -128,9 +152,8 @@
   lock; the sheet starts with its title. The bar under the tabs is gone.
 - Every screen that can scroll (all but the wallet tab) keeps the scroll bar's room from the start, its content
   on the wallet tab's lines: a bar that shows (a field stretched, a list grown) moves nothing.
-- Activity's networks and the bridge's direction are quiet tabs (the design library's new opt-in `.subtabs`):
-  smaller than the main tabs, the chosen one underlined; a network's dot before its name; ⇄ at the right turns
-  the bridge round.
+- Activity's networks are quiet tabs (the design library's new opt-in `.subtabs`): smaller than the main tabs,
+  the chosen one underlined; a network's dot before its name.
 - Fields are as high as the lists (28 px); All looks like the small buttons (Add, New).
 - The asset lists (Send, both networks) show 10 rows, then scroll.
 - Fixed: a list inside a field's label (Send's Asset, Settings' Lock after idle and Time format) opened again
@@ -171,6 +194,17 @@
 - Thousands are set apart by a thin space (kept on one line), not a comma, so they are not mixed up with the
   decimal point:
   132 796.34 BEAM.
+- An amount field takes only digits and one decimal point (a point or a comma): anything else typed or pasted
+  does not get in, so there is nothing to complain about; at most 8 digits before the point. A pasted
+  "1,234.5" reads 1234.5 (with both, the last one is the decimal point).
+- Another Ethereum account chosen on the wallet tab, its address (on the picker and the line under it) runs as
+  random hex and settles on the new one.
+- The Ethereum token list keeps the scroll bar's room when it does not scroll, so the rows stand where they do
+  when it does.
+- A list's option too long for it ends with … instead of being cut mid-letter (the design library).
+- ETH's price is read from Chainlink's ETH/USD feed on Ethereum first, then CoinGecko and Coinpaprika: the free
+  price services refuse when asked too often (CoinGecko 429, Coinpaprika 402 at 60 an hour), and the bridge's fee
+  could not be priced.
 
 ## 0.3.0 (2026-11-09)
 

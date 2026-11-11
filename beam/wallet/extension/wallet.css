@@ -148,18 +148,18 @@ html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
 .dd.acct { flex: 1 1 auto; min-width: 0; width: auto; margin-left: 15px; }
 /* its list: rows a little closer; an account's name left (cut with …), its address right; the actions with
    their icons in one column, so the words line up */
-#acctDd .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding: 5px 8px; line-height: 16px; margin: 0 10px; border-radius: 4px; }
+:is(#acctDd, #bxAcct) .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding: 5px 8px; line-height: 16px; margin: 0 10px; border-radius: 4px; }
 /* a row's light is as wide as the line between the groups (10 px in from each side), its content 8 px inside it */
 /* the accounts: 4 rows seen (26 px each), more scroll inside the list */
-#acctDd .dd-scroll { list-style: none; }
-#acctDd .dd-scroll ul { list-style: none; margin: 0; padding: 0; max-height: 104px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+:is(#acctDd, #bxAcct) .dd-scroll { list-style: none; }
+:is(#acctDd, #bxAcct) .dd-scroll ul { list-style: none; margin: 0; padding: 0; max-height: 104px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 /* on the wallet tab nothing scrolls: an open list may lie over the bottom of the popup instead */
 html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
-#acctDd .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#acctDd .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
-#acctDd .dd-list [aria-selected="true"] .ad { color: inherit; }
-#acctDd .dd-list .mi { flex: none; display: grid; place-items: center; width: 16px; }
-#acctDd .dd-list .mi svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+:is(#acctDd, #bxAcct) .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+:is(#acctDd, #bxAcct) .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+:is(#acctDd, #bxAcct) .dd-list [aria-selected="true"] .ad { color: inherit; }
+:is(#acctDd, #bxAcct) .dd-list .mi { flex: none; display: grid; place-items: center; width: 16px; }
+:is(#acctDd, #bxAcct) .dd-list .mi svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* the whole address on the right, its copy button before it */
 .addr-line { margin: 2px 0 4px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .own-label { margin-top: 12px; }
@@ -174,26 +174,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .seg { flex-wrap: wrap; }
 .seg.dir { display: flex; margin: 12px 0; }
 .seg.dir button { flex: 1; padding: 9px 6px; font-size: var(--fs-m); }
-
-/* ---- the bridge ---- */
-.route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
-.route .end { min-width: 0; }
-.route .arrow { padding-top: 22px; color: var(--accent); font: 700 16px var(--font-mono); }
-.route .ep { height: 28px; display: flex; align-items: center; margin-top: 6px; font: 700 var(--fs-m) var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.route .dd { margin-top: 6px; width: 100%; }
-.route .sub { margin-top: 5px; overflow-wrap: anywhere; }
-.gas { font-size: var(--fs-m); color: var(--text-dim); margin: 6px 0 8px; line-height: 1.5; }
-.gas b.cheap { color: var(--accent); } .gas b.usual { color: var(--color-blue); } .gas b.expensive { color: var(--color-red); }
-.feeopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.feeopt {
-  display: flex; flex-direction: column; gap: 2px; padding: 8px; text-align: left; cursor: pointer; color: var(--text);
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m);
-}
-.feeopt:hover { border-color: rgba(255, 255, 255, 0.3); }
-.feeopt.on { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
-.feeopt .t { font: 700 var(--fs-xs) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--muted); }
-.feeopt .f { font: 700 14px var(--font-mono); }
-.feeopt .s { font: var(--fs-xs) var(--font-mono); color: var(--muted); }
 
 /* lists: transfers, history, tokens */
 .list { display: flex; flex-direction: column; }
@@ -306,10 +286,10 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 .acts .btn.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); }
 /* the account's button: its name | its short address; when both do not fit, the address (with its bar) goes
    to a second line that is cut off, so only the name shows (cut with … if even it is too long) */
-#acctDd .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
-#acctDd .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#acctDd .acc-b .ad { flex: none; white-space: nowrap; }
-#acctDd .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
+:is(#acctDd, #bxAcct) .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
+:is(#acctDd, #bxAcct) .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(#acctDd, #bxAcct) .acc-b .ad { flex: none; white-space: nowrap; }
+:is(#acctDd, #bxAcct) .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
 #beamCard.still, #ethCard.still { transition: none !important; }      /* folded at once (popup.js beamTokens now) */
 /* Connected sites: Beam | Ethereum as in Activity, with the way back on their line */
 /* a bar under the tabs (dApps' networks, Receive's address types) with the way back right on its line: one line
@@ -471,7 +451,141 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* a done message fades away (popup.js actOk, 5 s after it shows) */
 .act-msg { transition: opacity 0.6s ease; }
 .act-msg.going { opacity: 0; }
-/* the quiet tabs (ui .subtabs): Activity's networks in the header's bar, the bridge's direction at the top of
-   its page; a network's dot before its name */
+/* the quiet tabs (ui .subtabs): Activity's and Connected sites' networks in the header's bar; a network's dot
+   before its name */
 .subtabs .chain { margin-right: 7px; width: 7px; height: 7px; }
-#bridgeDir { margin: 4px 0 14px; }
+/* Connected sites' bar: the quiet tabs as Activity's (Beam, Ethereum), the catalog at the right end */
+#dappNet button.cat { margin-left: auto; }
+
+/* ---------- Bridge: two cards, From over To, the switch between them (the two networks' dots in their own oval);
+   the cards are cut round it, the cut's edge drawn as their border. One set of numbers drives it: the switch's size,
+   the room round it, the gap between the cards. (Worked out in lab/bridge.html.) */
+#t-bridge { --px: 9px; }      /* the cards' content from their sides: its letters as far from the side as from the top and the bottom (10 px) */
+.bx {
+  --sw: 58px; --sh: 26px;            /* the switch's oval */
+  --room: 5px;                       /* from the oval to the cut's edge */
+  --seam: 6px;                       /* the gap between the two cards */
+  --cw: calc(var(--sw) + 2 * var(--room)); --ch: calc(var(--sh) + 2 * var(--room));
+  position: relative; display: grid; grid-auto-rows: 1fr; gap: var(--seam); margin-top: 2px;      /* the two cards one height: the seam (and the switch on it) in the middle */
+}
+.bx-side { position: relative; overflow: clip; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); padding: 10px var(--px) 12px; }      /* clip: a torn strip jerked past the edge is cut there */
+.bx-l1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 16px; }
+.bx-side .bx-l1 { position: relative; top: -5px; }      /* From and To 10 px from the card's top, as the lower card's balance; moved, not reflowed (their torn copies too) */
+.bx-l2 { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-height: 34px; }
+.bx-l2 input { flex: 1 1 auto; min-width: 0; width: 0; height: 34px; line-height: 34px; padding: 0; background: none; border: 0; outline: none; color: var(--text); font: 700 24px var(--font-mono); }      /* the line's whole height: a field of the font's own cut the figures' feet in some fonts (Consolas) */
+.bx-l2 input::placeholder { color: var(--muted); }
+.bx-l2 input.bad { color: var(--color-red); }
+/* the cut: each card without a pill of the cut's size centred on the seam: the card's own mask less that pill */
+.bx-side {
+  --pill: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 68 36'%3E%3Crect width='68' height='36' rx='18'/%3E%3C/svg%3E");
+  mask-image: linear-gradient(#000 0 0), var(--pill); mask-size: 100% 100%, var(--cw) var(--ch); mask-repeat: no-repeat; mask-composite: subtract;
+}
+#bxSend { mask-position: 0 0, 50% calc(100% + var(--seam) / 2 + var(--ch) / 2); }
+#bxRecv { mask-position: 0 0, 50% calc(0px - var(--seam) / 2 - var(--ch) / 2); }
+/* the switch: its own oval, no fill; the cut's edge round it drawn as the cards' border, the seam's band left out */
+.bx-swap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--sw); height: var(--sh); padding: 0;
+  background: transparent; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; transition: border-color 0.2s; }
+.bx-swap:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+.bx-swap::before { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border: 1px solid var(--border); border-radius: 999px; pointer-events: none;
+  mask-image: linear-gradient(#000 0 calc(50% - var(--seam) / 2), transparent 0 calc(50% + var(--seam) / 2), #000 0); }
+/* the two networks' dots, in the order the coins go; a turn makes them hop over each other */
+.bx-swap i { position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; transition: left 0.45s cubic-bezier(0.5, -0.4, 0.4, 1.4); }
+.bx-swap .bx-b { left: 9px; background: var(--color-green); box-shadow: 0 0 8px var(--color-green); }
+.bx-swap .bx-e { left: 35px; background: #8c9eff; box-shadow: 0 0 8px #8c9eff; }
+.bx-swap.back .bx-b { left: 35px; }
+.bx-swap.back .bx-e { left: 9px; }
+/* a turn: the content tears into strips that jerk sideways (popup.js copies it into each strip); the card's own
+   content hidden meanwhile (the titles stay), the strips fading towards the middle */
+.bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
+.bx-strip { position: absolute; inset: 0; padding: inherit; }
+.bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net.low { visibility: hidden; }
+.bx-strip .bx-l1 > .caps { visibility: hidden; }
+.bx-strip .dd-list { display: none; }
+/* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
+.bx-net { flex: none; margin-left: auto; display: inline-flex; align-items: center; white-space: nowrap; font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
+.bx-net:empty { display: none; }
+.bx-net .chain { margin: 0 0 0 7px; }
+.bx-net.low { position: absolute; right: var(--px); bottom: 11px; line-height: 16px; }
+/* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */
+.bx-key { position: absolute; left: var(--px); bottom: 15px; line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.bx-key[hidden] { display: none; }
+.bx-key .tipped { color: var(--text-dim); cursor: help; }
+/* the upper card: "available" over the balance at its bottom right; the balance is the "all" button */
+.bx-l3 { margin-left: auto; text-align: right; font: 11px var(--font-mono); color: var(--muted); }
+.bx-have { flex: none; margin-left: auto; font: 700 var(--fs-m) var(--font-mono); color: var(--text); white-space: nowrap; }
+.bx-have .u { color: var(--muted); font-weight: 700; }
+.bx-right { position: absolute; right: var(--px); bottom: 5px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; line-height: 16px; }
+.bx-right .bx-l3, .bx-right .bx-have { margin: 0; }
+#bxSend > .bx-right { cursor: pointer; }
+#bxSend > .bx-right .bx-have { transition: color 0.2s; }
+#bxSend > .bx-right:hover .bx-have { color: var(--accent); }      /* the figures; the unit stays grey */
+#bxSend > .bx-right:hover .bx-l3 { font-size: 0; }
+#bxSend > .bx-right:hover .bx-l3::after { content: "send all"; font-size: 11px; color: var(--muted); }
+/* what is wrong with the amount: under its figures at the left, on the balance's line (top: popup.js bxFit) */
+.bx-issue { position: absolute; left: var(--px); top: 56px; font: 11px var(--font-mono); line-height: 13px; color: var(--color-yellow); white-space: nowrap; pointer-events: none; }
+/* the lower card: the receiving side's balance at its top right (the upper card's mirrored), how long it takes under To */
+.bx-right2 { position: absolute; top: 7px; right: var(--px); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; line-height: 16px; }
+.bx-right2 .bx-have, .bx-right2 .bx-l3 { margin: 0; }
+.bx-when { position: absolute; left: var(--px); top: 22px; font: 11px var(--font-mono); line-height: 16px; color: var(--muted); white-space: nowrap; }
+/* Ethereum's account: the wallet tab's picker (#bxAcct) over its place in the Ethereum card; the place holds a still
+   copy of it, seen only in the torn strips. As wide as the wallet tab's (256 px in the popup) */
+.bx-gearbox { position: absolute; right: calc(var(--px) - 2px); bottom: 7px; width: 256px; visibility: hidden; }
+#bxSend .bx-gearbox { bottom: auto; top: 6px; }
+.bx-strip .bx-gearbox { visibility: visible; }
+.bx-gearbox .dd-btn { background-attachment: scroll; background-size: var(--gw) var(--gh); background-position: var(--gx) var(--gy); }      /* the page's gradient where the copy stands (popup.js bxLay) */
+.bx-gearbox .acc-b { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; height: 26px; line-height: 26px; overflow: hidden; }
+.bx-gearbox .acc-b .nm { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-gearbox .acc-b .ad { flex: none; white-space: nowrap; }
+.bx-gearbox .acc-b .ad::before { content: "|"; margin-right: 8px; color: var(--muted); }
+.bx > #bxAcct { position: absolute; z-index: 5; margin: 0; }
+.bx.turning > #bxAcct { visibility: hidden; }
+#bxAcct .dd-group { padding: 8px 10px 3px; }
+/* an address typed in, in the picker's place */
+#bxAcct.typing .dd-btn { display: none; }
+.bx-addrin { display: block; width: 100%; height: 28px; padding: 0 10px; font: 12px var(--font-mono); color: var(--text); background: var(--field-fill); border: 1px solid rgba(var(--accent-rgb), 0.5); border-radius: 6px; outline: none; }
+.bx-addrin[hidden] { display: none; }
+.bx-addrin.bad { border-color: var(--color-red); }
+/* the fee line, one height both ways: a gauge (cheap, normal, safe) this way, the fixed fee the other; what it is for */
+.bx-feeline { display: flex; align-items: center; gap: 10px; margin-top: 14px; height: 30px; padding: 0 calc(var(--px) + 1px); white-space: nowrap; }      /* in from both sides as the cards' content (their border + --px) */
+.bx-fee3 { display: inline-flex; align-items: center; gap: 8px; font: 11px var(--font-mono); color: var(--muted); }
+.bx-fee3[hidden] { display: none; }
+.bx-fee3 .lv .w { display: inline-block; width: 6ch; }      /* cheap, normal, safe in one width: the figure stays put */
+.bx-gauge { width: 46px; height: 26px; flex: none; cursor: pointer; touch-action: none; overflow: visible; }
+.bx-gauge .arc { fill: none; stroke: var(--border); stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.25s; }
+.bx-gauge .arc.on { stroke: var(--accent); filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.6)); }
+.bx-gauge .arc:hover:not(.on) { stroke: rgba(var(--accent-rgb), 0.5); }
+.bx-gauge .needle { transform-origin: 37px 38px; transition: transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.bx-gauge .needle path { stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; }
+.bx-gauge .hub { fill: var(--text); }
+.bx-fee3 .lv b, .bx-feeinfo b { color: var(--text); font-weight: 700; }
+.bx-feeinfo { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font: 11px var(--font-mono); line-height: 14px; color: var(--muted); white-space: nowrap; }
+/* one button, its word under it */
+.bx-go { margin-top: 14px; flex-wrap: wrap; }
+.bx-go .btn { flex: 1 1 100%; padding: 11px 0; font-size: 13px; text-align: center; justify-content: center; }
+.bx-go .act-msg { flex: 1 1 100%; text-align: center; min-height: 16px; line-height: 16px; }      /* its line there from the start: a word under the button moves nothing */
+.bx-go .act-msg:empty { display: block; }
+.bx-list { margin-top: 16px; }
+/* the transfers' card down to where the wallet tab's Ethereum card ends (the bottom of the popup's room); a longer
+   list grows past it and the page scrolls */
+html.popup #t-bridge:not([hidden]) { display: flex; flex-direction: column; min-height: 100%; }
+/* under it main's padding 3 px, not 5: the wallet tab's Ethereum card, drawn in full, ends 3 px over the footer (a
+   measure of it, taken while that tab was still being drawn, left ~24 px under the transfers) */
+html.popup main:has(> #t-bridge:not([hidden])) { padding-bottom: 3px; }
+html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
+/* the transfers: the way and its number, whom, when; the amount over its fee, and the state, each in a column of one
+   width down the list (--amtw: popup.js, the widest amount) so the figures and the badges line up */
+#bList .bx-tr { grid-template-columns: minmax(0, 1fr) var(--amtw, auto) 84px; gap: 2px 14px; align-items: start; }
+.bx-tr .what { font: 700 var(--fs-base) var(--font-mono); }
+.bx-tr .what .no { color: var(--muted); font-weight: 400; }
+.bx-tr .what .sub { font: 11px var(--font-mono); margin-top: 4px; line-height: 13px; }
+.bx-tr .what .sub .cp.tx { margin-left: 6px; vertical-align: -1px; }      /* the transaction on Etherscan: an icon right of its date, as the wallet tab's tokens have */
+.bx-tr .money { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; line-height: 17px; }
+.bx-tr .money .amt { font: 700 var(--fs-m) var(--font-mono); }
+.bx-tr .money .fee { font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.bx-tr .end { display: flex; align-self: start; }
+.bx-tr .end .badge, .bx-tr .end .btn { flex: 1; text-align: center; justify-content: center; }
+.bx-tr .end .btn { padding: 4px 0; font-size: 11px; }
+.bx-more { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 0 2px; border-top: 1px solid var(--border-dim); }
+.bx-more[hidden] { display: none; }
+.bx-more span { font: 11px var(--font-mono); color: var(--muted); }
