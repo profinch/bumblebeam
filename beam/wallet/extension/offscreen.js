@@ -699,12 +699,47 @@
         if (!a) throw err(4100, 'connect the site to the wallet first');
         const who = method === 'personal_sign' ? params[1] : method === 'eth_signTypedData_v4' ? params[0] : params[0] && params[0].from;
         if (who && String(who).toLowerCase() !== a.toLowerCase()) throw err(4100, 'that is not the account this site was given');
+        // typed data: what is signed is what the window shows (its primary type the one its types make), and for this
+        // chain only (a permit for another chain, where the same address holds coins, is refused)
+        if (method === 'eth_signTypedData_v4') {
+          let t;
+          try { t = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1]; } catch { throw err(-32602, 'typed data that is not JSON'); }
+          const types = { ...(t && t.types) }; delete types.EIP712Domain;
+          let root;
+          try { root = ethers.TypedDataEncoder.getPrimaryType(types); } catch (e) { throw err(-32602, `typed data: ${e.message}`); }
+          if (t.primaryType && t.primaryType !== root) throw err(-32602, `typed data names ${t.primaryType} but its types make ${root}`);
+          const cid = t.domain && t.domain.chainId;
+          if (cid != null && cid !== '' && BigInt(cid) !== 1n) throw err(4901, `typed data for chain ${String(cid)}: this wallet signs for Ethereum mainnet only`);
+        }
         return ask(origin, method === 'eth_sendTransaction' ? 'send' : 'sign', method, params, a);
       }
       default:
         if (DAPP_READ.has(method)) return Eth.rpc(method, params);
         throw err(4200, `not supported: ${method}`);
     }
+  }
+  // A token call a site asks to send, read out for its window: approve, increaseAllowance, transfer, transferFrom,
+  // setApprovalForAll, with the token's symbol and decimals from its contract (an approval of everything said so).
+  // Anything else: null (the window shows the data's selector and size).
+  const TOKEN_CALLS = new ethers.Interface([
+    'function approve(address spender, uint256 amount)', 'function increaseAllowance(address spender, uint256 added)',
+    'function transfer(address to, uint256 amount)', 'function transferFrom(address from, address to, uint256 amount)',
+    'function setApprovalForAll(address operator, bool approved)',
+  ]);
+  async function tokenCall(tx) {
+    if (!tx || !tx.to || !tx.data || tx.data.length < 10) return null;
+    let d;
+    try { d = TOKEN_CALLS.parseTransaction({ data: tx.data }); } catch { return null; }
+    if (!d) return null;
+    const out = { name: d.name, args: {} };
+    for (const [k, v] of Object.entries(d.args.toObject())) out.args[k] = typeof v === 'bigint' ? v.toString() : v;
+    const amt = d.args.amount ?? d.args.added;
+    if (amt != null) {
+      out.unlimited = amt >= 2n ** 255n;
+      try { const t = await Eth.tokenInfo(tx.to); out.token = { symbol: t.symbol, decimals: t.decimals }; out.amount = Eth.fromUnits(amt, t.decimals); }
+      catch { out.amount = amt.toString(); }
+    }
+    return out;
   }
   // what the user agreed to, done here (the keys never leave this document)
   async function dappDo(r, choice) {
@@ -752,6 +787,8 @@
           v.tx = { to: tx.to || null, value: tx.value ? BigInt(tx.value).toString() : '0', data: tx.data || tx.input || '0x' };
           if (data && !r.priced && !r.priceErr) { try { r.priced = await Eth.price({ from: r.address, to: v.tx.to, data: v.tx.data, value: BigInt(v.tx.value) }); } catch (e) { r.priceErr = e.message; } }
           v.fee = r.priced ? { now: r.priced.feeNow, max: r.priced.feeMax } : null; v.feeErr = r.priceErr || null;
+          if (r.call === undefined) r.call = await tokenCall(v.tx);
+          v.call = r.call;
         }
         if (r.kind === 'connect') v.address = activeAddress();
         if (r.kind === 'beamConnect' || r.kind === 'beamtx') {

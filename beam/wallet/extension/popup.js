@@ -2127,7 +2127,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const six = short;
   const ethAmt = (wei) => `${num(units(wei, 18), 6)} ETH`;
   // the window's screen: the oldest waiting request, what it asks, Approve / Reject; none left: the window closes
-  let dpCur = null;
+  let dpCur = null, dpShown = null;                 // the request in the window; the one last put in it
   async function dappScreen() {
     let list = [];
     try { list = await host('dappPending'); } catch {}
@@ -2178,11 +2178,32 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const rows = [...accRow, ['To', t.to || '(creates a contract)'], ['Value', ethAmt(t.value || '0')],
         ['Data', !t.data || t.data === '0x' ? 'none' : `${t.data.slice(0, 10)}… (${(t.data.length - 2) / 2} bytes)`],
         ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? (/insufficient funds/i.test(r.feeErr) ? 'not enough ETH for the value and the fee' : /revert/i.test(r.feeErr) ? 'the contract refuses it (it would revert)' : `not priced: ${r.feeErr.slice(0, 120)}`) : '…']];
+      // a token call read out (the host decoded it): who may take what, or what moves where
+      const c = r.call, tok = c && c.token ? ` ${c.token.symbol}` : ' (in the token\'s smallest units)';
+      let risky = false;
+      if (c && (c.name === 'approve' || c.name === 'increaseAllowance')) {
+        risky = !!c.unlimited;
+        rows.splice(rows.length - 1, 0, ['Lets spend', c.unlimited ? `all your${tok}, with no limit` : `${c.amount}${tok}`], ['Spender', c.args.spender]);
+      } else if (c && c.name === 'transfer') rows.splice(rows.length - 1, 0, ['Sends', `${c.amount}${tok}`], ['To', c.args.to]);
+      else if (c && c.name === 'transferFrom') rows.splice(rows.length - 1, 0, ['Moves', `${c.amount}${tok}`], ['From', c.args.from], ['To', c.args.to]);
+      else if (c && c.name === 'setApprovalForAll') {
+        risky = !!c.args.approved;
+        rows.splice(rows.length - 1, 0, ['Lets manage', c.args.approved ? 'every token of this collection you hold' : 'nothing (takes the right back)'], ['Operator', c.args.operator]);
+      }
       $('dpBody').innerHTML = kv(rows);
-      $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail. Sending it may only cost the fee.' : 'Sent from this account on Ethereum mainnet once you confirm.';
+      $('dpNote').textContent = r.feeErr ? 'The network says this transaction would fail. Sending it may only cost the fee.'
+        : risky ? 'This lets the spender take all of it at any time, now or later, without asking again. Confirm only for a site you trust.'
+        : 'Sent from this account on Ethereum mainnet once you confirm.';
+      $('dpNote').classList.toggle('warn-own', risky);
       $('dpYes').textContent = 'Send';
     }
-    $('dpYes').disabled = r.kind !== 'connect' && !r.address;
+    const can = r.kind === 'connect' || !!r.address;
+    $('dpYes').disabled = !can;
+    // a request just shown: its button waits 0.6 s, so a quick second click meant for the one before cannot agree to it
+    if (can && r.id !== dpShown) {
+      dpShown = r.id; $('dpYes').disabled = true;
+      setTimeout(() => { if (dpCur && dpCur.id === r.id && !dpBusy) $('dpYes').disabled = false; }, 600);
+    }
     $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
     show('s-dapp');
   }
@@ -2194,7 +2215,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     try { await host('dappAnswer', dpCur.id, ok); }
     catch (e) { note('s-dapp', 'bad', msg(e)); }
     dpBusy = false;
-    $('dpYes').disabled = $('dpNo').disabled = false;
+    $('dpNo').disabled = false;                       // Yes: as dappScreen decides for the next request
     dappScreen();
   }
   $('dpYes').onclick = () => dappReply(true);
