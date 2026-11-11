@@ -1252,7 +1252,18 @@
       if (!w.beam) throw new Error('this wallet has no Beam part');
       return withWallet(id, async () => {
         const s = live(id);
-        const run = (e) => (json == null ? e.rpc('exportData', [], 120000) : e.rpc('importData', [json], 300000));
+        // an import keeps the names given here: Beam writes the file's names over the addresses it has, so each
+        // address's name before (Beam's own, or the one given to an address added by hand) is put back after
+        const run = async (e) => {
+          if (json == null) return e.rpc('exportData', [], 120000);
+          const call = (m, p) => e.rpc('call', [m, p], 60000);
+          const before = new Map();
+          try { for (const a of await call('addr_list', { own: true })) if (a.comment) before.set(a.address, a.comment); } catch {}
+          for (const x of (settings.addrExt && settings.addrExt[id]) || []) if (x.name && !before.has(x.address)) before.set(x.address, x.name);
+          const ok = await e.rpc('importData', [json], 300000);
+          try { for (const a of await call('addr_list', { own: true })) { const want = before.get(a.address); if (want && want !== a.comment) await call('edit_address', { address: a.address, comment: want }); } } catch {}
+          return ok;
+        };
         if (s) return run(s.e);
         const e = await Engines.fresh(id);
         try {
