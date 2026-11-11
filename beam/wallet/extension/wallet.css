@@ -488,15 +488,19 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
 .bx-strip { position: absolute; inset: 0; padding: inherit; }
 .bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
-.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > #bxNetB { visibility: hidden; }
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net { visibility: hidden; }
 .bx-strip .bx-l1 > .caps { visibility: hidden; }
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
 .bx-net { display: inline-flex; align-items: center; margin-left: 4px; white-space: nowrap; font: 700 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 16px; }      /* a card's network as the wallet tab's card title (its dot, BEAM or ETHEREUM): Ethereum's after From / To, Beam's in its card's corner */
-#bxNetB { position: absolute; right: var(--px); top: calc(var(--net-y) + 1px); margin: 0; }      /* top right on top, bottom right below: the letters as far from either edge (+1 on top: capitals sit high in their line) */
-#bxNetB.low { top: auto; bottom: var(--net-y); }
-/* From and To in the network's own letters, grey */
-.bx-l1 > .caps { font: 700 12px var(--font-mono); letter-spacing: 0.06em; color: var(--muted); }
+/* each in its card's corner, the way first in grey: FROM ● BEAM, TO ● ETHEREUM; Beam's at the right, Ethereum's at the
+   left; top on top, bottom below, the letters as far from either edge (+1 on top: capitals sit high in their line) */
+.bx-net.nb, .bx-net.ne { position: absolute; top: calc(var(--net-y) + 1px); margin: 0; }
+.bx-net.nb { right: var(--px); }
+.bx-net.ne { left: var(--px); }
+.bx-net.low { top: auto; bottom: var(--net-y); }      /* classes, not ids: the turn's torn copies have no ids */
+.bx-net .way { color: var(--muted); margin-right: 8px; }      /* as far from the dot as the dot from the name */
+.bx-l1 > .caps { visibility: hidden; }      /* the way is said by each network's corner now (the line keeps its height) */
 .bx-net:empty { display: none; }
 .bx-net .chain { margin: 0 8px 0 0; }
 /* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */

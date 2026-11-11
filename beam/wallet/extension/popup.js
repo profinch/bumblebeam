@@ -1711,11 +1711,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // Ethereum's picker
   function bxPlace() {
     const beam = dir === 'toEth' ? $('bxSend') : $('bxRecv'), eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), bk = $('bxKey'), w = W();
-    // each card's network as the wallet tab's card titles (its dot and name): Ethereum's on the title line after
-    // From / To, Beam's in its card's corner
-    beam.appendChild($('bxNetB')); $('bxNetB').innerHTML = '<i class="chain beam"></i>Beam';      // Beam's in its card's corner
-    $('bxNetB').classList.toggle('low', beam === $('bxRecv'));
-    eth.querySelector('.bx-l1').appendChild($('bxNetE')); $('bxNetE').innerHTML = '<i class="chain eth"></i>Ethereum';
+    // each card's network in its corner, as the wallet tab's card titles with the way before it: FROM ● BEAM at the
+    // right, TO ● ETHEREUM at the left
+    const way = (card) => (card === $('bxSend') ? 'From' : 'To');
+    beam.appendChild($('bxNetB')); $('bxNetB').innerHTML = `<span class="way">${way(beam)}</span><i class="chain beam"></i>Beam`;
+    eth.appendChild($('bxNetE')); $('bxNetE').innerHTML = `<span class="way">${way(eth)}</span><i class="chain eth"></i>Ethereum`;
+    $('bxNetB').classList.toggle('low', beam === $('bxRecv')); $('bxNetE').classList.toggle('low', eth === $('bxRecv'));
     bk.hidden = dir === 'toEth';
     if (dir !== 'toEth') {
       $('bxRecv').appendChild(bk);
@@ -1727,13 +1728,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       bk.style.transform = `translateY(${(base($('bxNetB')) - base(bk)).toFixed(1)}px)`;
     }
     eth.appendChild($('bxGearBox'));
-    // on top, the picker shares its line with From and ETHEREUM: it begins 10 px after them (no wider than below)
+    // the picker shares its line with FROM / TO ● ETHEREUM (top or bottom): it begins 10 px after them, at most as
+    // wide as the wallet tab's
     const g = $('bxGearBox');
     g.style.width = '';
-    if (eth === $('bxSend')) {
-      const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
-      if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
-    }
+    const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
+    if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
     bxLay();
   }
   const amount = () => { const t = $('bxAmt').value.trim().replace(',', '.'); return /^\d*\.?\d*$/.test(t) && t && t !== '.' ? Number(t) : null; };
