@@ -141,8 +141,7 @@
   const cp = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${SVG.copy}</button>`;
   const ln = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${SVG.link}</a>`;
   const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
-  // the name, the address, its icons: each on a line of its own
-  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}<span class="ics">${a.startsWith('0x') ? ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan') : ''}${cp(a, 'the address')}</span>`;
+  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}${a.startsWith('0x') ? ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan') : ''}${cp(a, 'the address')}`;
   function more(r) {
     const rows = [];
     if (r.group) {

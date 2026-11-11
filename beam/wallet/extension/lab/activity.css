@@ -86,5 +86,3 @@
 .ar-more .kv dd .st { color: var(--color-yellow); }
 
 .ar-more .kv + .kv { margin-top: 6px; }      /* its groups a row's gap apart, as a confirmation's */
-.ar-more .ics { display: flex; gap: 8px; margin-top: 4px; }      /* an address's icons on a line under it */
-.ar-more .ics .cp { margin-left: 0; }
