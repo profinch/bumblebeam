@@ -56,6 +56,7 @@
       <button class="btn solid wide" data-go="create">Create a new wallet</button>
       <button class="btn wide" data-go="restore">Restore from a seed phrase</button>
       <button class="btn wide" data-go="ethkey">Import an Ethereum private key</button>
+      <button class="btn wide" data-go="bkimport">Import a BumbleBeam backup</button>
     </div>
   </section>
 
@@ -86,6 +87,17 @@
     <p class="note bad" hidden></p>
   </section>
 
+
+  <section id="s-bkimport" class="screen" hidden>
+    <h2 class="screen-title">Import a BumbleBeam backup</h2>
+    <p class="hint" id="bmHint"></p>
+    <div class="field"><span>Backup file (.bbk)</span><div class="file-pick"><button type="button" class="sbtn" id="bmFileBtn">Choose a file</button><span class="fname" id="bmFileName">none chosen</span><input type="file" id="bmFile" accept=".bbk,application/json" hidden></div></div>
+    <label class="field">The password it was made with<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="bmPass"></label>
+    <label class="field" id="bmCurBox">Your wallet password<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="bmCur"></label>
+    <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doBmImport">Import</button></div>
+    <div class="progress" hidden><div class="bar accent"><i></i></div><span></span></div>
+    <p class="note bad" hidden></p>
+  </section>
 
   <section id="s-ethkey" class="screen" hidden>
     <h2 class="screen-title">Import an Ethereum private key</h2>

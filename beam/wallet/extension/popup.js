@@ -515,10 +515,35 @@
   qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
   async function go(what) {
     pwFields();
+    if (what === 'bkimport') bmScreen();
     if (what === 'create') return showPhrase(await host('newPhrase'));
     clearNotes(`s-${what}`);
     show(`s-${what}`);
   }
+  // a BumbleBeam backup on the start screen: with no wallet yet it becomes the wallets (its password the wallet
+  // password); from an open wallet, what it has and this one does not is added (both passwords)
+  $('bmFileBtn').onclick = () => $('bmFile').click();
+  $('bmFile').addEventListener('change', () => { const f = $('bmFile').files && $('bmFile').files[0]; $('bmFileName').textContent = f ? f.name : 'none chosen'; $('bmFileName').classList.toggle('on', !!f); });
+  function bmScreen() {
+    const open = !!(st && st.phase === 'unlocked');
+    $('bmCurBox').hidden = !open;
+    $('bmHint').textContent = open
+      ? 'The wallets the file has and this extension does not are added. Nothing here is changed.'
+      : 'Every wallet in the file comes back: phrases and keys, names, accounts, and Beam history if it was saved with it. The wallet password is then the one the backup was made with.';
+  }
+  $('doBmImport').onclick = () => longOp('s-bkimport', 'doBmImport', async () => {
+    const f = $('bmFile').files && $('bmFile').files[0];
+    if (!f) throw new Error('choose the backup file');
+    const text = await f.text(), fp = $('bmPass').value;
+    if (!fp) throw new Error('the password it was made with');
+    if (st && st.phase === 'unlocked') {
+      const res = await host('backupImport', text, fp, $('bmCur').value);
+      if (!res.added.length) throw new Error(`nothing new in it${res.skipped.length ? `: ${res.skipped.join(', ')} already here` : ''}`);
+    } else await host('backupRestore', text, fp);
+    $('bmPass').value = ''; $('bmCur').value = ''; $('bmFile').value = ''; $('bmFileName').textContent = 'none chosen';
+    curTab = 'home'; await enter();
+  });
+
   // Back from a way of adding a wallet: to the choice of ways (the header's arrow there goes back to the wallet)
   qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); welcome(); }; });
 

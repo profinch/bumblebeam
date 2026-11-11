@@ -3,6 +3,9 @@
 ## 0.4.0 (2026-11-10, not yet published)
 
 ### Safety
+- The start screen imports a BumbleBeam backup: with no wallet yet, every wallet in it comes back (the wallet
+  password is the one it was made with, Beam from its database or its phrase); from an open wallet, what it has and
+  this one does not is added.
 - Forgot the password? on the lock screen: it cannot be recovered (the vault is sealed with it alone), said plainly;
   typing RESET deletes every wallet from this browser (the vault, Beam's databases and their copies, the backup kept
   here, the old shared folder) and keeps the network settings, to restore the wallets from their seed phrases.

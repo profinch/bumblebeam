@@ -1345,6 +1345,40 @@
     },
     // the backup's file is on disk (the popup heard it from the download): its download kept, to show it in its folder
     async backupSaved(id) { need(); settings.lastBackupId = id == null ? null : Number(id); settings.lastDownload = Date.now(); await saveSettings(); },
+    // The start screen's way: a backup into an extension with no wallet yet. Its vault becomes this one, as it was
+    // (the wallet password is then the one the backup was made with); each Beam part from the file's database,
+    // else from its phrase through the snapshot. The settings in it come with it
+    backupRestore: (text, filePass) => serial(async () => {
+      if (data || vaultRec) throw new Error('there are wallets here already: import it from Settings');
+      let f = null;
+      try { f = JSON.parse(text); } catch {}
+      if (!f || f.kind !== 'bumblebeam-backup' || !f.vault) throw new Error('not a BumbleBeam backup file');
+      let o;
+      try { o = await Vault.open(f.vault, filePass); } catch { throw new Error('the file\'s password does not open it'); }
+      const d = o.data;
+      for (const w of d.wallets || []) {
+        if (!w.beam) continue;
+        const db = Engines.dbOf(w.id), made = await Engines.fresh(w.id);
+        try {
+          if (f.beam && f.beam[w.id]) { await made.rpc('importDb', [db, fromB64(f.beam[w.id]), w.beam.pass]); w.beam = { db, pass: w.beam.pass }; }
+          else if (w.phrase) {
+            progress = { wallet: w.id, step: 'download', done: 0, total: 0 };
+            try { await made.rpc('create', [db, w.phrase, w.beam.pass, node, RECOVERY_URL], 40 * 60 * 1000); } finally { progress = null; }
+            w.beam = { db, pass: w.beam.pass };
+          } else w.beam = null;
+        } finally { await made.close().catch(() => {}); }
+      }
+      const fs = f.settings || {};
+      if (fs.backupNodes) settings.backupNodes = fs.backupNodes;
+      if (fs.ethRpc) { settings.ethRpc = fs.ethRpc; Eth.setRpc(fs.ethRpc); }
+      if (Array.isArray(fs.tokens)) settings.tokens = fs.tokens;
+      settings.active = (d.wallets[0] && d.wallets[0].id) || null;
+      await saveSettings();
+      await createVault(o.k, d);
+      startOpen();
+      broadcast({ type: 'event', method: 'bb_changed' });
+      return d.wallets.map((w) => w.name);
+    }),
     // An import adds the wallets the file has and this extension does not (the same phrase, or the same first
     // Ethereum account, is the same wallet); nothing here is changed. A Beam part comes from the file's database,
     // else from its phrase through the recovery snapshot (minutes). Opened with the file's password, kept with this one's.
