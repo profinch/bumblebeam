@@ -2729,7 +2729,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const XI2 = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
   const BEHIND = {
     'wss.bumblebeam.org:443': [['What', 'our own Beam node'], ['Through', 'our WebSocket door (nginx)'], ['Also', 'the BumbleBeam pool\'s node']],
-    'wsb.bumblebeam.org:443': [['What', 'the backup door, a Cloudflare Worker\nto BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
+    'wsb.bumblebeam.org:443': [['What', 'the backup door - a Cloudflare Worker to BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
   };
   const OURS = ['wss.bumblebeam.org:443', 'wsb.bumblebeam.org:443'];      // our two nodes: moved, never removed
   const PUBLIC_RPCS = ['ethereum-rpc.publicnode.com', 'eth.llamarpc.com', 'eth.drpc.org', '1rpc.io/eth'];
