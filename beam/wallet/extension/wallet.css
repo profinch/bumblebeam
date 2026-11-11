@@ -715,7 +715,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .wcard2 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .wcard2 .acct-row { margin-top: 8px; display: flex; }
 .wcard2 .acct-row .dd { flex: 1 1 auto; min-width: 0; margin-left: 0; }
-#wList .li.wr:has(+ .wcard2), #wList > :last-child { border-bottom: 0; }
+#wList .li.wr:has(+ .wcard2) { border-bottom: 0; }      /* the last wallet keeps its line, as the others; an open row's line is its card's */
 /* General: the two display choices side by side, how each shows under it */
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .two .field { min-width: 0; }
@@ -775,3 +775,4 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .wcard2 .cols .acts { flex-wrap: wrap; row-gap: 6px; }      /* a third button goes under, in its column */
 .wr .w-ren { margin-left: 6px; vertical-align: -1px; }
 .wr .w-ren svg { width: 13px; height: 13px; }
+#wList .li.wr:last-child { border-bottom: 1px solid var(--border-dim); }      /* (.li:last-child takes it off elsewhere) */
