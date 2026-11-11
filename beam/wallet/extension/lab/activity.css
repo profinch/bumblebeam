@@ -24,16 +24,16 @@
 .af-x:hover { color: var(--text); }
 
 /* a day's heading: Today, Yesterday, 9 Nov; In progress over them all */
-.ad-day { display: flex; justify-content: space-between; margin: 14px 0 0; padding-bottom: 5px; border-bottom: 1px solid var(--border-dim);
+.ad-day { display: flex; justify-content: space-between; margin: 14px 0 0; padding: 0 8px 5px; border-bottom: 1px solid var(--border-dim);
   font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .ad-day .sum { font-weight: 400; letter-spacing: 0; text-transform: none; }
 .ad-day .sum b { color: var(--text); font-weight: 400; }      /* a day's net white (+ or −), its unit grey as the heading */
 .ad-day.now { color: var(--color-yellow); }
 
 /* a row: its icon, who and what, the amount right with its dollars under it */
-#actList .li.ar { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 10px; padding: 9px 4px; cursor: pointer; border-radius: 6px; }
+#actList .li.ar { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 10px; padding: 9px 8px; cursor: pointer; }      /* 8 px from the list's edges, square under the pointer: as the tokens' and the addresses' rows */
 #actList .li.ar:hover, #actList .li.ar.open { background: rgba(255, 255, 255, 0.03); }
-.ar .what { font-size: var(--fs-base); }
+.ar .what { font-size: var(--fs-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }      /* who and what on one line, cut with … when long */
 .ar .what .who { color: var(--muted); font-weight: 400; }
 .ar .what .who b { color: var(--text-dim); font-weight: 400; }
 .ar .sub { font: 11px var(--font-mono); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -47,7 +47,7 @@
 .ar-r .amt u { text-decoration: none; font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }
 .ar-r .usd { display: block; font: 11px var(--font-mono); color: var(--muted); margin-top: 3px; }
 .ar.dim .what, .ar.dim .ar-r .amt { opacity: 0.5; }      /* cancelled: there, but nothing moved */
-#actList .li.ar.bad { border-radius: 0; box-shadow: none; background: rgba(var(--red-rgb), 0.14); }
+#actList .li.ar.bad { box-shadow: none; background: rgba(var(--red-rgb), 0.14); }
 #actList .li.ar.bad:hover, #actList .li.ar.bad.open { background: rgba(var(--red-rgb), 0.2); }      /* failed: the wallet's red fill only (ui .li.bad), square, no bar at its left, the amount as it is */
 
 /* the icons: in / out as the wallet's, the bridge's two arrows, a dApp's cube, an approval's tick, a pool's stack */
@@ -60,7 +60,7 @@
 @keyframes ar-spin { to { transform: rotate(360deg); } }
 
 /* a row opened: its details under it, aligned as a confirmation's, then what can be done */
-.ar-more { margin: 0 4px 6px 12px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-dim); }
+.ar-more { margin: 0 8px 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-dim); }
 .ar-more .kv { gap: 6px 12px; }
 .ar-more .kv dd { white-space: pre-line; overflow-wrap: anywhere; font-size: 11px; }
 .ar-more .kv dd a { color: var(--accent); }
