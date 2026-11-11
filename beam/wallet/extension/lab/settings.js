@@ -161,7 +161,7 @@
 
   // ---------- About ----------
   const PIPE = 'e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835', ETHP = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
-  $('aboutKv').innerHTML = `<dt>Version</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md" target="_blank" rel="noopener">0.4.0</a></dd>
+  $('aboutKv').innerHTML = `<dt>Version</dt><dd>0.4.0<i class="sp"></i><a class="text-link white" href="https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md" target="_blank" rel="noopener">changelog</a></dd>
     <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548\nafter HF6</dd>
     <dt>Bridge</dt><dd>${esc(sh(PIPE))}${ics(cp(PIPE, 'the bridge\'s contract id'), ln(`https://explorer.bumblebeam.org/contract/${PIPE}`, 'Open the contract in the explorer'))} on Beam\n${esc(sh(ETHP))}${ics(cp(ETHP, 'the bridge\'s contract address'), ln(`https://etherscan.io/address/${ETHP}`, 'Open the contract on Etherscan'))} on Ethereum</dd>
     <dt>Source</dt><dd><a class="text-link" href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a></dd>
