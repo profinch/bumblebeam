@@ -1709,6 +1709,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
 
   // each side in its card: its network on the title line (Beam's key at the bottom left when it receives),
   // Ethereum's picker
+  const capMeter = document.createElement('canvas').getContext('2d');
   function bxPlace() {
     const beam = dir === 'toEth' ? $('bxSend') : $('bxRecv'), eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), bk = $('bxKey'), w = W();
     // each card's network in its left corner, as the wallet tab's card titles with the way before it: FROM ● BEAM,
@@ -1734,6 +1735,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     g.style.width = '';
     const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
     if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
+    // its middle on the middle of ETHEREUM's capitals (their baseline less half a capital's height, read from the font)
+    g.style.top = g.style.bottom = '';
+    const nm = $('bxNetE').querySelector('.nm');
+    if (nm && n.width) {
+      nm.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>');
+      const baseY = nm.lastElementChild.getBoundingClientRect().top; nm.lastElementChild.remove();
+      capMeter.font = getComputedStyle(nm).font;
+      const capH = capMeter.measureText('E').actualBoundingBoxAscent;
+      const mid = baseY - capH / 2 - c.top - eth.clientTop;      // from the padding edge, as top is (the card's border off)
+      const b = g.querySelector('.dd-btn'), bMid = b ? b.getBoundingClientRect().top - g.getBoundingClientRect().top + b.offsetHeight / 2 : g.offsetHeight / 2;
+      g.style.top = `${(mid - bMid).toFixed(1)}px`; g.style.bottom = 'auto';      // the button's middle, not its box's
+    }
     bxLay();
   }
   const amount = () => { const t = $('bxAmt').value.trim().replace(',', '.'); return /^\d*\.?\d*$/.test(t) && t && t !== '.' ? Number(t) : null; };
