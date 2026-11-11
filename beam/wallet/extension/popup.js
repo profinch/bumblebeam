@@ -2236,8 +2236,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
 
   // Beam: the wallet's transactions and the coins no transaction of its made, as rows
   async function beamActRows(wid) {
-    const [txs, coins] = await Promise.all([host('beam', wid, 'tx_list', { count: 1000 }),
-      host('beam', wid, 'get_utxo', { count: 500, sort: { field: 'maturity', direction: 'desc' } }).catch(() => [])]);
+    const [txs, coins, pool] = await Promise.all([host('beam', wid, 'tx_list', { count: 1000 }),
+      host('beam', wid, 'get_utxo', { count: 500, sort: { field: 'maturity', direction: 'desc' } }).catch(() => []),
+      host('poolPayments').catch(() => [])]);
+    // our pool's payouts: a transaction by its kernel; a coin with no record by its amount, near the run's time.
+    // The pool pays from a fresh address each day and its note does not reach the receiver, so neither tells
+    const poolK = new Set(pool.map((p) => p.kernel).filter(Boolean));
+    const poolAmt = (g, t) => pool.some((p) => p.amount === g && Math.abs(p.ts - t) < 2 * 86400);
     const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
     // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the wallet CLI)
     const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
@@ -2262,21 +2267,22 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
           : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
         why: s === 'failed' ? (t.failure_reason || ss || 'failed') : s === 'cancelled' ? (t.income ? 'by the sender' : 'by you before the receiver signed') : '',
         cancel: !t.income && !contract && (t.status === 0 || t.status === 1),
-        ours: !!t.income && String(t.comment || '').trim() === POOL_NOTE,
+        ours: !!t.income && !contract && (String(t.comment || '').trim() === POOL_NOTE || poolK.has(t.kernel) || poolAmt(Number(t.value), t.create_time || 0)),
       };
     });
     for (const c of found) {
       const own = ownSent.has(c.createTxId);
-      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, kind: 'in', t: (blockTime.get(c.maturity) || 0) * 1000, g: c.amount, v: c.amount / GROTH,
+      const tm = blockTime.get(c.maturity) || 0;
+      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && poolAmt(Number(c.amount), tm),
         sym: c.asset_id ? syms.get(Number(c.asset_id)) : 'BEAM', asset: Number(c.asset_id) || null, peer: null, st: '', block: c.maturity,
         found: own ? 'from a wallet of this seed' : 'found on the chain',
         foundTip: own ? 'Sent by a wallet of this seed phrase (a pool\'s payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took: this wallet has the coins but no record of the transfer'
           : 'Another wallet of this seed phrase (the mobile or desktop one) took this transfer: this wallet has the coins but no record of it' });
     }
-    // payouts from one place in a day as one row: our pool's by its note; another's when it pays three times or more
+    // payouts in a day as one row: our pool's (known above); another's when one address pays three times or more
     const key = (r) => `${r.peer}|${day0(r.t)}|${r.comment}`, n = new Map();
     for (const r of rows) if (r.kind === 'in' && !r.st && r.peer) n.set(key(r), (n.get(key(r)) || 0) + 1);
-    for (const r of rows) if (r.kind === 'in' && !r.st && r.peer && (r.ours || n.get(key(r)) >= 3)) r.pool = true;
+    for (const r of rows) if (r.kind === 'in' && !r.st && (r.ours || (r.peer && n.get(key(r)) >= 3))) r.pool = true;
     return rows.sort((a, b) => b.t - a.t);
   }
 
@@ -2306,14 +2312,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const out = [], at = new Map();
     for (const r of list) {
       if (!r.pool) { out.push(r); continue; }
-      const k = `${r.peer}|${day0(r.t)}`, g = at.get(k);
+      const k = `${r.ours ? 'ours' : r.peer}|${day0(r.t)}`, g = at.get(k);
       if (g) { g.items.push(r); g.g += r.g; g.v += r.v; continue; }
       const ng = { ...r, id: `pool-${r.id}`, items: [r], group: true };
       at.set(k, ng); out.push(ng);
     }
     return out.map((r) => (r.group && r.items.length < 2 ? r.items[0] : r));
   }
-  const actTitle = (r) => ({ in: r.group || r.pool ? 'Pool payouts' : 'Received', out: 'Sent', 'br-out': actNet === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': 'Bridge ← Ethereum', dapp: r.what || 'Contract call', approve: r.what })[r.kind];
+  const actTitle = (r) => ({ in: r.group ? 'Pool payouts' : r.pool ? 'Pool payout' : 'Received', out: 'Sent', 'br-out': actNet === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': 'Bridge ← Ethereum', dapp: r.what || 'Contract call', approve: r.what })[r.kind];
   const actWho = (r) => {
     if (r.kind === 'br-out' || r.kind === 'br-in' || r.kind === 'approve') return '';
     if (r.kind === 'dapp') return r.app ? `in <b>${esc(r.app)}</b>` : '';
@@ -2342,6 +2348,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const cpI = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${CPI}</button>`;
   const lnI = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${LINK}</a>`;
   const ics = (...xs) => `<span class="ics">${xs.filter(Boolean).join('')}</span>`;
+  const OUR_POOL = `BumbleBeam pool${ics(lnI('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool'))}`;
   const addrDd = (a) => `${nameOf(a) ? `${esc(nameOf(a))}\n` : ''}${esc(a)}${ics(cpI(a, 'the address'), /^0x/i.test(a) && lnI(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
 
   function actRow(r) {
@@ -2363,14 +2370,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function actCard(r) {
     if (r.group) {
       return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}${x.block ? `<i class="sp"></i>block ${x.block}` : ''}</span><b>+${vShown(x)} <u>${esc(x.sym)}</u></b></div>`).join('')}
-        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? `BumbleBeam pool${ics(lnI('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool'))}\n` : ''}${addrDd(r.peer)}</dd></dl></div>`;
+        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? OUR_POOL : r.peer ? addrDd(r.peer) : ''}</dd></dl></div>`;      // our pool pays from a fresh address each day: by its name
     }
     const rows = [], coin = actNet === 'beam' ? 'BEAM' : 'ETH';
     if (r.t) rows.push(['When', fdt(r.t)]);
     if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
     if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);
-    if (r.peer) rows.push([came(r) ? 'From' : 'To', `${r.ours ? `BumbleBeam pool${ics(lnI('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool'))}\n` : ''}${addrDd(r.peer)}`], null);
-    if (r.found) rows.push(['From', `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`]);
+    if (r.ours) rows.push(['From', `${OUR_POOL}${r.peer ? `\n${addrDd(r.peer)}` : ''}`], null);
+    else if (r.peer) rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)], null);
+    else if (r.found) rows.push(['From', `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`]);
     if (r.kind === 'dapp' && r.contract) rows.push(['Contract', `${esc(r.contract)}${ics(cpI(r.contract, 'the contract address'), lnI(`${SCAN}/address/${r.contract}`, 'Open the contract on Etherscan'))}`]);
     if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cpI(String(r.asset), 'the asset id'), lnI(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
     if (r.tokAddr && r.sym !== 'ETH') rows.push(['Token', `${esc(r.sym)}${ics(cpI(r.tokAddr, 'the token\'s contract address'), lnI(`${SCAN}/token/${r.tokAddr}`, 'Open the token on Etherscan'))}`]);

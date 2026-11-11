@@ -606,6 +606,7 @@
   const BEAM_SITE = new Set(['wallet_status', 'assets_list', 'get_asset_info', 'tx_list', 'tx_status', 'addr_list', 'get_utxo',
     'ev_subunsub', 'invoke_contract', 'process_invoke_data', 'block_details', 'get_version', 'create_address', 'validate_address', 'calc_change']);
   const BEAM_TX = new Set(['invoke_contract', 'process_invoke_data', 'tx_send']);
+  let poolPay = null;                             // our pool's payouts, as last read (ops.poolPayments)
   const beamCtx = new Map();                      // wallet id -> { origin, appname }: the site whose contract call runs now
   // A wallet's contract calls (a site's, the wallet's own bridge send and claim) one at a time: Beam's consent does
   // not say which call it is for, so the one running is the one asking. Two at once named one site for another's
@@ -1331,6 +1332,15 @@
       return r;
     },
     ethHistory: (address) => Eth.history(address),
+    // our pool's payouts (the public list, no address sent): Activity knows them by kernel, or by amount for a coin
+    // with no record; kept 10 minutes
+    poolPayments: async () => {
+      if (poolPay && Date.now() - poolPay.at < 10 * 60 * 1000) return poolPay.list;
+      const j = await Eth.getJSON('https://pool.bumblebeam.org/api/payments?limit=500');
+      const list = (j.payments || []).flatMap((p) => (p.txs || []).map((t) => ({ kernel: t.kernel || null, amount: Number(t.amount) || 0, ts: Number(p.ts) || 0 })));
+      poolPay = { at: Date.now(), list };
+      return list;
+    },
     // { from, to, amount (decimal string), token: null | { address, decimals, symbol } } -> priced, kept for ethSend
     // A token's decimals are read from its contract here, never taken from the popup or Blockscout; the
     // confirmation shows the exact amount that will be signed, as the host computed it.

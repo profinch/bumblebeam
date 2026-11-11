@@ -95,8 +95,10 @@
   came or went.
 - A failed transfer in the wallet's red with why on its line; a cancelled one faded. No status badge on what is
   done.
-- Our pool's payouts in a day as one row, Pool payouts ×N from BumbleBeam (in the pool's colour); another
-  pool's (three or more in a day from one address) by their count alone.
+- Our pool's payouts in a day as one row, Pool payouts ×N from BumbleBeam (in the pool's colour). They are known
+  from the pool's public list of payments (no address is sent): a transfer by its kernel, a coin with no record of
+  its own by its amount near the run's time; the pool pays from a fresh address each day and its note does not
+  reach the receiver. Another pool's (three or more in a day from one address) by their count alone.
 - A click opens the row's card: When, Now (where it is, while under way) or Why, the address with its copy and
   Etherscan icons, then the asset or token, the fee, the comment, the transaction (a link to our explorer or
   Etherscan) and the block. Cancel there while it can be.
