@@ -74,3 +74,6 @@
 
 .af-more { display: block; margin: 14px auto 0; }
 #actList .empty { padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
+
+/* a section's last row (or its opened details) without its line: the next day's heading draws one */
+#actList .li.ar:has(+ .ad-day), #actList .ar-more:has(+ .ad-day), #actList .ar-more:last-child { border-bottom: 0; }
