@@ -395,7 +395,9 @@
       rows.push([`Wallet ${a.spend ? 'spends' : 'receives'}`, `${coins(a.amount)} ${n || `asset ${aid}`}`]);
       if (aid && n && !ids.some((x) => x[0] === aid)) ids.push([aid, n]);
     }
-    for (const [aid, n] of ids) rows.push(['Asset ID', `${aid} (${n})`]);
+    // an asset other than BEAM named as a well-known coin (anyone can make one called BEAM): said so
+    const FAMOUS = /^(BEAM|W?BTC|W?ETH|USDT|USDC|DAI|BNB)$/i;
+    for (const [aid, n] of ids) rows.push(['Asset ID', `${aid} (${n})${FAMOUS.test(String(n).trim()) ? ` ⚠️ not ${String(n).trim().toUpperCase() === 'BEAM' ? 'BEAM itself' : `the real ${String(n).trim()}`}: a Beam asset of that name` : ''}`]);
     if (info && info.fee != null) rows.push(['Beam network fee', `${coins(info.fee)} BEAM`]);
     if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
     return rows;
@@ -2143,7 +2145,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const wRow = r.wallet ? [['Account', `${r.wallet.name}${r.wallet.beam ? '' : ' (no Beam part)'}`]] : [];
     if (r.kind === 'beamConnect') {
       $('dpTitle').textContent = 'Connect to Beam';
-      $('dpBody').innerHTML = kv([['App', r.appname || ''], ...wRow]);
+      $('dpBody').innerHTML = kv([['Calls itself', r.appname || ''], ...wRow]);      // the site's own word for its name (the site above it is Chrome's)
       $('dpNote').textContent = r.wallet && !r.wallet.beam ? 'The open wallet has no Beam part: open a wallet with one first.'
         : 'The site sees this account\'s Beam balance, assets and its own transactions, and can ask for contract transactions. Each one is asked here first. For another account, open it in the wallet first.';
       $('dpYes').textContent = 'Connect';
@@ -2153,7 +2155,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     if (r.kind === 'beamtx') {
       $('dpTitle').textContent = 'Beam contract transaction';
-      const rows = [['App', r.appname || ''], ...wRow, ...await consentRows(r.info, r.amounts)];
+      const rows = [['Calls itself', r.appname || ''], ...wRow, ...await consentRows(r.info, r.amounts)];
       $('dpBody').innerHTML = kv(rows);
       $('dpNote').textContent = 'What it spends and receives is the wallet\'s own reading of the transaction, not the site\'s.';
       $('dpYes').textContent = 'Approve';
