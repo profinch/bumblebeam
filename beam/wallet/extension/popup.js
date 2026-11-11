@@ -1261,7 +1261,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!isOpen(wid)) return false;
     const added = ext.filter((e) => !own.has(e.address)).map((e) => {
       if (e.verified) return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: true, key: e.verified === 'key', n: 0 };
-      const n = txs.filter((j) => j.includes(e.address)).length;
+      const n = txs.filter((j) => j.includes(e.address) || tokenHas(e.address, JSON.parse(j).receiver)).length;      // a payment names the address by its token, or by its SBBS id inside it
       const key = e.type === 'public_offline' && mine.some((m) => sameRun(m, b58(e.address)) >= 64);
       // verified now: kept, never checked again
       if (key || n > 0) host('setAddrExt', wid, { ...e, verified: key ? 'key' : 'payment' }).catch(() => {});
@@ -1290,6 +1290,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     let v = 0n; for (const ch of str) { const i = B58.indexOf(ch); if (i < 0) return new Uint8Array(0); v = v * 58n + BigInt(i); }
     const out = []; while (v > 0n) { out.unshift(Number(v & 255n)); v >>= 8n; }
     return Uint8Array.from(out);
+  };
+  // An address has two forms: its token (what is handed out: the long base58 string) and its SBBS id (hex, what a
+  // transaction names as sender or receiver). The token carries the SBBS id inside it
+  const tokHex = new Map();
+  const tokenHas = (token, sbbs) => {
+    if (!token || !sbbs || !/^[0-9a-f]{40,}$/i.test(String(sbbs))) return false;
+    if (!tokHex.has(token)) tokHex.set(token, [...b58(token)].map((x) => x.toString(16).padStart(2, '0')).join(''));
+    return tokHex.get(token).includes(String(sbbs).toLowerCase().replace(/^0+/, ''));
   };
   const sameRun = (a, b) => {
     let best = 0;
@@ -2429,6 +2437,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       host('beam', wid, 'block_details', { height: h }).then((b) => { blockTime.set(h, Number(b.timestamp) || 0); if (b.timestamp) kp.bt[h] = Number(b.timestamp); }, () => {})));
     const syms = new Map();
     for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
+    // which of this wallet's addresses a payment came to: Beam's own by their SBBS id, one added by hand by the id inside its token
+    const ownL = await host('beam', wid, 'addr_list', { own: true }).catch(() => []), extL = await host('addrExt', wid).catch(() => []);
+    const receivedAt = (sbbs) => {
+      if (!sbbs) return null;
+      const id = String(sbbs).toLowerCase().replace(/^0+/, '');
+      const o = ownL.find((a) => String(a.wallet_id || '').toLowerCase().replace(/^0+/, '') === id);
+      if (o) return { name: o.comment || '', address: o.address, type: o.type };
+      const e = extL.find((x) => tokenHas(x.address, sbbs));
+      return e ? { name: e.name || '', address: e.address, type: e.type } : { name: '', address: sbbs, type: '' };
+    };
     const cid = st.bridgeCid;
     const rows = txs.map((t) => {
       const aid = Number(t.asset_id || 0), contract = t.tx_type_string === 'contract', s = BEAM_STATUS[t.status] || '';
@@ -2438,7 +2456,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ss = String(t.status_string || '');
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
@@ -2586,7 +2604,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
     if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);
     if (r.ours) rows.push(['From', `${OUR_POOL}${r.peer ? `\n${addrDd(r.peer)}` : ''}`], null);
-    else if (r.peer) rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)], null);
+    else if (r.peer) {
+      // a receipt: From is the sender's SBBS id (Beam names the sending side so), To the address of this wallet it came to
+      rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)]);
+      if (came(r) && r.at) rows.push(['To', `${r.at.name ? `${esc(r.at.name)}\n` : ''}${esc(short(r.at.address))}${r.at.type ? ` (${esc(TYPE_NAME[r.at.type] || r.at.type)})` : ''}`]);
+      rows.push(null);
+    }
     else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);
     if (r.kind === 'dapp' && r.contract) rows.push(['Contract', `${esc(r.contract)}${ics(cpI(r.contract, 'the contract address'), lnI(`${SCAN}/address/${r.contract}`, 'Open the contract on Etherscan'))}`]);
     if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cpI(String(r.asset), 'the asset id'), lnI(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
