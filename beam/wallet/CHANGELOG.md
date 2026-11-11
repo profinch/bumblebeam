@@ -133,10 +133,13 @@
   "available" over the balance at the right. The balance is the All button: under the pointer it lights and its
   word reads "send all"; a click puts in the most that can go to the last decimal, the fee left for (no dust). A
   problem with the amount ("over balance + fee") shows in yellow under it, on the balance's line.
-- To: what the receiving side holds now ("there now"), and how long it takes: "usually about an hour", or "about
-  an hour, then claim" towards Beam.
-- Beam's side shows the wallet's name and its green dot in its card's corner (top right on top, bottom right
-  below) and, when it receives, its bridge key at the bottom left (the tip on the word "key").
+- To: what the receiving side holds now ("there now", 4 decimals as "available"), when it arrives by the clock
+  ("arrives ≈ 10:38", an hour from now) and how long it takes: "usually about an hour", or "about an hour, then
+  claim" towards Beam.
+- Each card says its way and network in its left corner, in the wallet tab's card-title letters, the way grey:
+  FROM ● BEAM, TO ● ETHEREUM; on top 16 px from the top, below 16 px from the bottom. Beam receiving: its bridge key
+  at the right of that line, a copy icon before it holding the whole key in its tip (the tip on "key" says what it
+  is).
 - Ethereum's side is the wallet tab's account picker: this wallet's accounts, then the other wallets' under their
   names, scrolling past 4; the mouse wheel over it steps through them. Towards Ethereum, "Enter an address" takes
   any address. Another account picked, its address runs as random hex and settles on the new one.
