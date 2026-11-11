@@ -1711,8 +1711,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // Ethereum's picker
   function bxPlace() {
     const beam = dir === 'toEth' ? $('bxSend') : $('bxRecv'), eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), bk = $('bxKey'), w = W();
-    // each card's network in its corner, as the wallet tab's card titles with the way before it: FROM ● BEAM at the
-    // right, TO ● ETHEREUM at the left
+    // each card's network in its left corner, as the wallet tab's card titles with the way before it: FROM ● BEAM,
+    // TO ● ETHEREUM (Beam's key at the right of its line when it receives)
     const way = (card) => (card === $('bxSend') ? 'From' : 'To');
     beam.appendChild($('bxNetB')); $('bxNetB').innerHTML = `<span class="way">${way(beam)}</span><i class="chain beam"></i>Beam`;
     eth.appendChild($('bxNetE')); $('bxNetE').innerHTML = `<span class="way">${way(eth)}</span><i class="chain eth"></i>Ethereum`;
@@ -1722,7 +1722,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('bxRecv').appendChild(bk);
       const k = w && keyOf[w.id];
       bk.innerHTML = `<span class="tipped" title="The bridge key of this wallet's Beam part: the Ethereum side sends to it${k ? `: ${esc(k)}` : ''}">key</span> ${k ? esc(short(k)) : beamHere() ? '…' : 'no running Beam part'}`;
-      // on BEAM's line at the right, measured (their sizes differ, and so do fonts)
+      // on TO ● BEAM's line, measured (their sizes differ, and so do fonts)
       const base = (el) => { el.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>'); const y = el.lastElementChild.getBoundingClientRect().top; el.lastElementChild.remove(); return y; };
       bk.style.transform = '';
       bk.style.transform = `translateY(${(base($('bxNetB')) - base(bk)).toFixed(1)}px)`;

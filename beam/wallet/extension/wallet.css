@@ -493,18 +493,16 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
 .bx-net { display: inline-flex; align-items: center; margin-left: 4px; white-space: nowrap; font: 700 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 16px; }      /* a card's network as the wallet tab's card title (its dot, BEAM or ETHEREUM): Ethereum's after From / To, Beam's in its card's corner */
-/* each in its card's corner, the way first in grey: FROM ● BEAM, TO ● ETHEREUM; Beam's at the right, Ethereum's at the
-   left; top on top, bottom below, the letters as far from either edge (+1 on top: capitals sit high in their line) */
+/* each in its card's left corner, the way first in grey: FROM ● BEAM, TO ● ETHEREUM; top on top, bottom below, the letters as far from either edge (+1 on top: capitals sit high in their line) */
 .bx-net.nb, .bx-net.ne { position: absolute; top: calc(var(--net-y) + 1px); margin: 0; }
-.bx-net.nb { right: var(--px); }
-.bx-net.ne { left: var(--px); }
+.bx-net.nb, .bx-net.ne { left: var(--px); }      /* both networks at the left */
 .bx-net.low { top: auto; bottom: var(--net-y); }      /* classes, not ids: the turn's torn copies have no ids */
 .bx-net .way { color: var(--muted); margin-right: 8px; }      /* as far from the dot as the dot from the name */
 .bx-l1 > .caps { visibility: hidden; }      /* the way is said by each network's corner now (the line keeps its height) */
 .bx-net:empty { display: none; }
 .bx-net .chain { margin: 0 8px 0 0; }
-/* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */
-.bx-key { position: absolute; left: var(--px); bottom: var(--net-y); line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+/* Beam below: its bridge key at the bottom right, on TO ● BEAM's line (the tip on the word "key" alone) */
+.bx-key { position: absolute; right: var(--px); bottom: var(--net-y); line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .bx-key .tipped { color: var(--text-dim); cursor: help; }
 /* the upper card: "available" over the balance at its bottom right; the balance is the "all" button */
 .bx-l3 { margin-left: auto; text-align: right; font: 11px var(--font-mono); color: var(--muted); }
