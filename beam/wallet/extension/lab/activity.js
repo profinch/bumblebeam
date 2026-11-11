@@ -164,9 +164,9 @@
     if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);      // the row says it short; why, in full here
     // When, Now / Why and the address in one group, lined up on their short labels (a whole address fits on a line);
     // the rest in a group of its own under them
-    if (r.peer && r.peer !== 'beam' && !r.from) rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', addrDd(r.peer)]);
-    if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12']);
-    rows.push(null);
+    // (no address: one group, all on one column)
+    if (r.peer && r.peer !== 'beam' && !r.from) rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', addrDd(r.peer)], null);
+    if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12'], null);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
     if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cp(String(r.asset), 'the asset id'), ln(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
     if (r.relayer) rows.push(['Relayer fee', `${num(r.relayer)} BEAM`]);
