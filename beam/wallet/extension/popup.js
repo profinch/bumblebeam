@@ -2677,8 +2677,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (a) { const w = st.wallets.find((x) => x.id === a.closest('.wcard2').previousElementSibling.dataset.w); return walletAct(w, a.dataset.a); }
     if (e.target.closest('.wcard2')) return;
     const li = e.target.closest('.li.wr'); if (!li) return;
-    if (wOpen.has(li.dataset.w)) wOpen.delete(li.dataset.w); else wOpen.add(li.dataset.w);
-    drawWallets();
+    // only this wallet's card opens or closes: the others (their pickers) stay as they are, nothing blinks
+    const id = li.dataset.w, w = st.wallets.find((x) => x.id === id), was = li.nextElementSibling && li.nextElementSibling.classList.contains('wcard2') ? li.nextElementSibling : null;
+    if (wOpen.has(id)) { wOpen.delete(id); if (was) was.remove(); }
+    else if (w) {
+      wOpen.add(id); li.insertAdjacentHTML('afterend', wCard(w));
+      const d = li.nextElementSibling.querySelector('[data-acct]'); if (d) { wAcctDd(d, w); ethPhraseBtn(w); }
+    }
+    li.classList.toggle('open', wOpen.has(id)); li.setAttribute('aria-expanded', String(wOpen.has(id)));
   };
   $('wList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.wr')) { e.preventDefault(); e.target.click(); } };
 
