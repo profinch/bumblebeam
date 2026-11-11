@@ -1165,6 +1165,13 @@
       need();
       url = String(url || '').trim();
       if (url && !/^https:\/\/[^\s]+$/.test(url)) throw new Error('an https:// URL');
+      // only Ethereum itself: another chain's node would show its balances (zero WBEAM, no history) as this one's
+      if (url) {
+        let id;
+        try { id = (await Eth.getJSON(url, { jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] })).result; }
+        catch (e) { throw new Error(`the node did not answer: ${e.message}`); }
+        if (id !== '0x1') throw new Error(`not Ethereum mainnet (chain id ${id == null ? 'none' : parseInt(id, 16)})`);
+      }
       settings.ethRpc = url; Eth.setRpc(url); await saveSettings();
     },
     async setAutoLock(min) { need(); settings.autoLock = Math.max(0, Math.min(1440, Number(min) || 0)); await saveSettings(); },
@@ -1277,6 +1284,13 @@
       const sym = token ? token.symbol : 'ETH';
       if (have < want) throw new Error(`not enough ${sym}: ${Eth.fromUnits(want, dec)} to send, ${Eth.fromUnits(have, dec)} there`);
       const p = await Eth.price(tx);
+      // the gas at this moment's price (it may have risen since the Send screen kept its room for All): the node
+      // refuses value + gas over the balance only after the user confirmed, so say it here, with what can go
+      const eth = token ? BigInt(await Eth.rpc('eth_getBalance', [a.address, 'latest'])) : have, gasMax = BigInt(p.feeMax);
+      if (eth < (token ? 0n : want) + gasMax) {
+        throw new Error(token ? `not enough ETH for the gas: up to ${Eth.fromUnits(gasMax, 18)} ETH, ${Eth.fromUnits(eth, 18)} there`
+          : `not enough ETH with the gas: send at most ${Eth.fromUnits(eth > gasMax ? eth - gasMax : 0n, 18)} ETH (gas up to ${Eth.fromUnits(gasMax, 18)})`);
+      }
       return { id: keep({ kind: 'send', wallet: w.id, p }), ...p, to, symbol: sym, amountExact: Eth.fromUnits(want, dec) };
     },
     // the Send screen's fee line, before anything is signed: what the transfer costs now (its gas x (base fee +
@@ -1378,7 +1392,13 @@
           await Eth.receipt(rec.approve);
         }
         rec.state = 'sending'; await tell();
-        const p = await Eth.price(x.send);
+        // priced right after the approval mined: an RPC behind that block still sees no allowance and the estimate
+        // reverts, so a revert is tried again (4 times, 3 s apart) before it counts
+        let p;
+        for (let k = 0; ; k++) {
+          try { p = await Eth.price(x.send); break; }
+          catch (e) { if (k >= 3 || !/revert/i.test(String(e && e.message))) throw e; await new Promise((r) => setTimeout(r, 3000)); }
+        }
         // signed without asking again only within what was confirmed (+50 % for the estimate's room)
         if (BigInt(p.feeMax) > (BigInt(x.sendFeeMax) * 3n) / 2n) {
           throw new Error(`gas rose while the approval mined: sendFunds would cost up to ${Number(BigInt(p.feeMax)) / 1e18} ETH, more than confirmed. The approval is in place: send again`);

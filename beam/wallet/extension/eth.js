@@ -27,7 +27,7 @@ const Eth = (() => {
       let d;
       try { d = await getJSON(url, { jsonrpc: '2.0', id: 1, method, params }); }
       catch (e) { last = e.message; continue; }
-      if (d.result !== undefined) return d.result;
+      if (d && d.result !== undefined) return d.result;      // a server that answered null: the next RPC
       const m = (d.error && d.error.message) || 'no result';
       // a transaction's own verdict is final; a provider's limit (range, credits, rate) is not: the next RPC tries
       if (/revert|nonce too low|nonce too high|insufficient funds|outoffunds|underpriced|already known|known transaction|exceeds block gas limit|intrinsic gas/i.test(m)) throw new Error(m);
@@ -114,7 +114,9 @@ const Eth = (() => {
     } catch {}
     const rest = known.filter((t) => t && t.address && !seen.has(t.address.toLowerCase()) && seen.add(t.address.toLowerCase()));
     const kb = await Promise.all(rest.map((t) => callBig(t.address, ERC20.balanceOf(address)).catch(() => null)));
-    rest.forEach((t, k) => { if (kb[k] != null) tokens.push({ address: t.address, symbol: t.symbol, decimals: t.decimals, balance: kb[k].toString(), usd: t.usd || null, cached: true }); });
+    // one that could not be read stays (its balance unknown, as a custom token's): one RPC hiccup while Blockscout is
+    // down no longer drops it from the kept list for good
+    rest.forEach((t, k) => tokens.push({ address: t.address, symbol: t.symbol, decimals: t.decimals, balance: kb[k] == null ? null : kb[k].toString(), usd: t.usd || null, cached: true }));
     return { eth: BigInt(eth).toString(), tokens, listed };
   }
 

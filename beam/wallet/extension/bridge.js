@@ -58,30 +58,44 @@ const Bridge = (() => {
     eth: [
       // Chainlink's ETH/USD feed on Ethereum itself (latestRoundData: answer, 8 decimals), read through our own RPCs:
       // no rate limit as the free price APIs have (CoinGecko 429, Coinpaprika 402 at 60 an hour, 2026-11-10); taken
-      // only while fresh (the feed's heartbeat is 1 h)
+      // only while fresh (the feed's heartbeat is 1 h; two missed: stale)
       ['Chainlink', async () => {
         const w = (await Eth.rpc('eth_call', [{ to: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419', data: '0xfeaf968c' }, 'latest'])).slice(2).match(/.{64}/g);
         const updated = parseInt(w[3], 16);
-        if (Date.now() / 1000 - updated > 3 * 3600) throw new Error('stale');
+        if (Date.now() / 1000 - updated > 2 * 3600) throw new Error('stale');      // two heartbeats missed
         return parseInt(w[1], 16) / 1e8;
       }],
       ['CoinGecko', async () => (await Eth.getJSON('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd')).ethereum.usd],
       ['Coinpaprika', async () => (await Eth.getJSON('https://api.coinpaprika.com/v1/tickers/eth-ethereum')).quotes.USD.price],
     ],
   };
+  // A price service that refused for asking too often (HTTP 429, 402) is left alone for 10 minutes.
+  const rest = new Map();                            // source name -> when it may be asked again
+  async function ask([name, fn]) {
+    if ((rest.get(name) || 0) > Date.now()) return null;
+    try { const v = Number(await fn()); return v > 0 && isFinite(v) ? { name, v } : null; }
+    catch (e) { if (/HTTP (429|402)\b/.test(String(e && e.message))) rest.set(name, Date.now() + 600000); return null; }
+  }
+  // ETH: Chainlink's feed alone when it answers (on chain, no rate limit); the markets only without it.
+  // BEAM: the oracle checked against one market (the first that answers), within 3x; the oracle alone when no
+  // market answers; the markets' median without the oracle.
   async function priceOf(list) {
-    const got = (await Promise.all(list.map(async ([name, fn]) => {
-      try { const v = Number(await fn()); return v > 0 && isFinite(v) ? { name, v } : null; } catch { return null; }
-    }))).filter(Boolean);
-    if (!got.length) return null;
-    if (got.length === 1) return got[0];
-    // the sources that agree with at least one other (within 3x); of those, the median, named by its source
+    const [first, ...markets] = list;
+    if (first[0] === 'Chainlink') {
+      const c = await ask(first);
+      if (c) return c;
+    }
     const near = (a, b) => a.v / b.v < 3 && b.v / a.v < 3;
+    if (first[0] === 'Beam oracle') {
+      const [o, m] = await Promise.all([ask(first), (async () => { for (const s of markets) { const r = await ask(s); if (r) return r; } return null; })()]);
+      if (o && (!m || near(o, m))) return o;
+      if (o && m) return null;                       // they disagree: the last good price, or none
+      return m;
+    }
+    const got = (await Promise.all(markets.map(ask))).filter(Boolean);
+    if (got.length < 2) return got[0] || null;
     const ok = got.filter((a) => got.some((b) => b !== a && near(a, b))).sort((a, b) => a.v - b.v);
-    if (!ok.length) return null;                     // all disagree: the last good price, or none
-    // BEAM: our oracle's own price when it is among those that agree, as the pool shows it; markets only without it
-    const oracle = ok.find((x) => x.name === 'Beam oracle');
-    return oracle || ok[(ok.length - 1) >> 1];
+    return ok.length ? ok[(ok.length - 1) >> 1] : null;
   }
   // BEAM's change over 24 h by Beam's own oracle, as its price: the oracle's median now (the pool's priceUsd)
   // against its median 1440 blocks ago, rebuilt from the oracle contract's FeedData calls (each provider's
@@ -151,10 +165,24 @@ const Bridge = (() => {
     } catch {}
     return null;
   }
-  let rateCache = null, lastGood = null;
-  async function rates() {
-    if (rateCache && Date.now() - rateCache.at < 60000) return rateCache.r;
-    const [b, e, ch, wb] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth), change24h(), wbeamMarket()]);
+  let rateCache = null, lastGood = null, rateRun = null;
+  // what only colours the prices (the 24 h change, WBEAM's own market): asked every 15 min, never waited on more
+  // than 3 s (the 24 h change alone could take 45 s through the explorers)
+  const slow = { at: 0, run: null, v: [null, null] };
+  function extras() {
+    if (Date.now() - slow.at > 900000 && !slow.run) {
+      slow.run = Promise.all([change24h().catch(() => null), wbeamMarket().catch(() => null)])
+        .then((v) => { slow.v = v; slow.at = Date.now(); }).finally(() => { slow.run = null; });
+    }
+    return Promise.race([slow.run || Promise.resolve(), new Promise((r) => setTimeout(r, 3000))]).then(() => slow.v);
+  }
+  // one asking at a time: callers at once (the popup's minute tick and the bridge's fee) share it
+  function rates() {
+    if (rateCache && Date.now() - rateCache.at < 60000) return Promise.resolve(rateCache.r);
+    return (rateRun ??= ratesNow().finally(() => { rateRun = null; }));
+  }
+  async function ratesNow() {
+    const [b, e, [ch, wb]] = await Promise.all([priceOf(SOURCES.beam), priceOf(SOURCES.eth), extras()]);
     if (!b || !e) {
       if (lastGood && Date.now() - lastGood.at < 600000) return lastGood.r;
       throw new Error(`no ${!b ? 'BEAM' : 'ETH'} price to trust: the sources failed or disagree (more than 3x)`);
@@ -176,6 +204,11 @@ const Bridge = (() => {
   let hist = null;
   async function baseFees24h() {
     if (hist && Date.now() - hist.at < 600000) return hist.fees;
+    if (histFail > Date.now()) throw new Error('24 h base fees: failed a moment ago');      // not 7 calls again each refresh
+    try { return await baseFees24hNow(); } catch (e) { histFail = Date.now() + 300000; throw e; }
+  }
+  let histFail = 0;
+  async function baseFees24hNow() {
     const fees = [];
     let newest = 'latest';
     for (let i = 0; i < 7; i++) {
@@ -229,9 +262,11 @@ const Bridge = (() => {
         const raw = t.raw_input || '';
         if (!raw.startsWith(PROCESS_REMOTE) || raw.length < 10 + 64 * 4) continue;
         const w = (k) => raw.slice(10 + 64 * k, 10 + 64 * (k + 1));
-        out.set(parseInt(w(0), 16), {
+        const id = parseInt(w(0), 16), ok = t.status === 'ok';
+        if (out.has(id) && out.get(id).ok && !ok) continue;      // a reverted retry never hides the release that went through
+        out.set(id, {
           amount: parseInt(w(2), 16), fee: parseInt(w(1), 16), receiver: '0x' + w(3).slice(24),
-          hash: t.hash, time: t.timestamp, ok: t.status === 'ok',
+          hash: t.hash, time: t.timestamp, ok,
         });
       }
       if (!d.next_page_params) break;
@@ -260,9 +295,9 @@ const Bridge = (() => {
     }
     scannedTo = Math.max(scannedTo, count);
     const mine = [...msgCache.values()].filter((m) => want.has(m.receiver)).sort((a, b) => b.id - a.id);
-    if (mine.some((m) => !relCache.has(m.id)) && Date.now() - relAt > 60000) {
+    if (mine.some((m) => !(relCache.get(m.id) || {}).ok) && Date.now() - relAt > 60000) {      // a failed one looked at again: a retry may have gone through
       relAt = Date.now();
-      try { for (const [id, r] of await ethReleases()) relCache.set(id, r); relOk = true; } catch { relOk = false; }
+      try { for (const [id, r] of await ethReleases()) if (!(relCache.get(id) || {}).ok || r.ok) relCache.set(id, r); relOk = true; } catch { relOk = false; }
     }
     // a message older than the releases read is not "waiting": its release is just out of sight
     const oldest = relCache.size ? Math.min(...relCache.keys()) : Infinity;
