@@ -66,6 +66,8 @@
     { kind: 'in', t: now - 50 * H, v: 12, sym: 'NPH', peer: BADDR.alice, asset: 47 },
     { kind: 'in', t: now - 51 * H, v: 1.4, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 52 * H, v: 1.36, sym: 'BEAM', peer: BADDR.pool, pool: true },
+    { kind: 'in', t: now - 53 * H, v: 0.82, sym: 'BEAM', peer: BADDR.exch.replace('c9', '5a'), pool: true },
+    { kind: 'in', t: now - 54 * H, v: 0.79, sym: 'BEAM', peer: BADDR.exch.replace('c9', '5a'), pool: true },
     { kind: 'in', t: now - 55 * H, v: 1.29, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'out', t: now - 74 * H, v: 40, sym: 'BEAM', peer: BADDR.bob, st: 'failed', why: 'the receiver did not answer in 12 h', fee: 0 },
     { kind: 'in', t: now - 76 * H, v: 310, sym: 'BEAM', peer: null, found: true },
@@ -110,7 +112,7 @@
     if (r.kind === 'approve') return '';
     if (r.found) return 'found on the chain';
     if (r.from) return `from <b>${esc(r.from)}</b>`;
-    if (r.peer === BADDR.pool) return 'from <span class="ours">BumbleBeam</span>';      // our pool, by its name in its colour (as the explorer's)
+    if (r.pool) return r.peer === BADDR.pool ? 'from <span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour (as the explorer's); another pool: its count alone
     const nm = name(r.peer);
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nm || sh(r.peer))}</b>`;
   };
@@ -145,8 +147,9 @@
   // copy, as the wallet's: its tip says what with the whole of it, a tick for 2 s once copied; a link to the explorer
   const cp = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${SVG.copy}</button>`;
   const ln = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${SVG.link}</a>`;
-  // the icons after what they are for: copy first, then the explorer, one space apart (and one from the text, kept on its line)
-  const ics = (...xs) => `&nbsp;<span class="ics">${xs.filter(Boolean).join('&nbsp;')}</span>`;
+  // the icons after what they are for: copy first, then the explorer, 6 px apart and 6 px from the text (as the wallet
+  // tab's tokens'), kept together
+  const ics = (...xs) => `<span class="ics">${xs.filter(Boolean).join('')}</span>`;
   const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
   const addrDd = (a) => `${name(a) ? `${esc(name(a))}${a === BADDR.pool ? ics(ln('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool')) : ''}\n` : ''}${esc(a)}${ics(cp(a, 'the address'), a.startsWith('0x') && ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
   function more(r) {

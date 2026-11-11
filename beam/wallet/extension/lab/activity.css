@@ -64,7 +64,7 @@
 .ar-more .kv { gap: 6px 12px; }
 .ar-more .kv dd { white-space: pre-line; overflow-wrap: anywhere; font-size: 11px; }
 .ar-more .kv dd a { color: var(--accent); }
-.ar-more .cp { vertical-align: -1px; }      /* the wallet's copy and explorer icons (ui .cp), after what they are for */
+.ar-more .cp { vertical-align: -1px; }      /* (inside .ics they sit on its line) */      /* the wallet's copy and explorer icons (ui .cp), after what they are for */
 .ar-acts { display: flex; gap: 8px; margin-top: 10px; }
 .ar-acts .btn { padding: 5px 12px; font-size: 11px; }
 .ar-acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
@@ -89,7 +89,7 @@
 
 .ar-more .kv + .kv { margin-top: 6px; }      /* its groups a row's gap apart, as a confirmation's */
 .ar-more .kv dd .st.bad { color: var(--color-red); }
-.ar-more .ics { white-space: nowrap; }      /* the icons together, never one on the next line */
+.ar-more .ics { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: -1px; white-space: nowrap; }      /* the icons together, never one on the next line */
 
 /* the scroll bar's room kept before it comes (a short list, a search): nothing moves sideways when it does */
 html.popup main { scrollbar-gutter: stable; }
