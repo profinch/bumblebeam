@@ -487,6 +487,8 @@
   // an account of wallet w (but index except) with that name, the case aside; a name none has, from base
   const nameUsed = (w, name, except) => (w.eth ? w.eth.accounts : []).find((a) => a.i !== except && String(a.name).trim().toLowerCase() === String(name).trim().toLowerCase());
   const freeName = (w, base) => { let nm = base; for (let k = 2; nameUsed(w, nm); k++) nm = `${base} (${k})`; return nm; };
+  // the lowest "Imported N" no account of the wallet is named (a renamed one frees its number)
+  const lowestName = (w, prefix) => { let k = 1; while (nameUsed(w, `${prefix} ${k}`)) k++; return `${prefix} ${k}`; };
   const ethSecret = (w, i) => {
     if (!w.eth) throw new Error('this wallet has no Ethereum part');
     const a = w.eth.accounts.find((x) => x.i === i);
@@ -1110,7 +1112,7 @@
         let n = IMPORTED;
         while (w.eth.accounts.some((a) => a.i === n)) n++;
         if (acc.name && nameUsed(w, acc.name)) throw new Error(`another account of this wallet is named "${acc.name}" already`);
-        w.eth.accounts.push({ ...acc, i: n, name: acc.name || freeName(w, `Imported ${n - IMPORTED + 1}`) });
+        w.eth.accounts.push({ ...acc, i: n, name: acc.name || lowestName(w, 'Imported') });
         return n;
       });
       settings.activeEth[id] = i; await saveSettings();
