@@ -140,7 +140,8 @@ const Eth = (() => {
       const h = t.transaction_hash || t.tx_hash;
       const tok = t.token || {};
       const prev = out.get(h) || { hash: h, time: t.timestamp, ok: true, fee: '0', method: t.method || null, block: t.block_number || null };
-      out.set(h, { ...prev, from: t.from && t.from.hash, to: t.to && t.to.hash, out: (t.from && t.from.hash || '').toLowerCase() === a,
+      // the token's own from and to (a burn goes to 0x0); the contract the transaction called stays as called
+      out.set(h, { ...prev, called: prev.called || prev.to || null, from: t.from && t.from.hash, to: t.to && t.to.hash, out: (t.from && t.from.hash || '').toLowerCase() === a,
         token: { symbol: tok.symbol || '?', decimals: Number(tok.decimals || (t.total && t.total.decimals) || 18), value: (t.total && t.total.value) || '0', address: tok.address_hash || tok.address } });
     }
     return [...out.values()].sort((x, y) => String(y.time).localeCompare(String(x.time))).slice(0, 50);

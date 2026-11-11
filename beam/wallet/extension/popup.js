@@ -2290,13 +2290,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function ethActRows(list) {
     const wb = st.contracts.wbeam, pipe = st.contracts.ethPipe, zero = '0x0000000000000000000000000000000000000000';
     return list.map((t) => {
-      const to = String(t.to || '').toLowerCase(), from = String(t.from || '').toLowerCase(), tok = t.token;
-      const v = tok ? units(tok.value, tok.decimals) : units(t.value, 18), sym = tok ? tok.symbol : 'ETH';
+      const to = String(t.to || '').toLowerCase(), from = String(t.from || '').toLowerCase(), called = String(t.called || '').toLowerCase(), tok = t.token;
+      const isWb = !!(tok && tok.address && tok.address.toLowerCase() === wb);
+      const v = tok ? units(tok.value, tok.decimals) : units(t.value, 18), sym = isWb ? 'WBEAM' : tok ? tok.symbol : 'ETH';      // the bridge's token is called BEAM on its contract: WBEAM here, as on the wallet tab
       const r = { id: t.hash, hash: t.hash, t: t.time ? Date.parse(t.time) : Date.now(), v, sym, tokAddr: tok && tok.address, peer: t.out ? t.to : t.from,
         st: t.pending ? 'pending' : !t.ok ? 'failed' : '', stage: 'waiting for a block', why: 'the transaction reverted: its gas is spent, nothing else moved',
         fee: units(t.fee, 18), block: t.block || null };
-      if (t.out && to === pipe) Object.assign(r, { kind: 'br-out', peer: null });
-      else if (!t.out && tok && tok.address && tok.address.toLowerCase() === wb && (from === pipe || from === zero)) Object.assign(r, { kind: 'in', peer: null, from: 'the bridge' });
+      // to Beam: the bridge called, its WBEAM burnt (sent to 0x0) on the way
+      if (t.out && (to === pipe || called === pipe || (isWb && to === zero))) Object.assign(r, { kind: 'br-out', peer: null });
+      else if (!t.out && isWb && (from === pipe || from === zero)) Object.assign(r, { kind: 'br-in', peer: null });
       else if (t.out && !tok && /^approve/i.test(t.method || '')) Object.assign(r, { kind: 'approve', what: to === wb ? 'Approve WBEAM for the bridge' : `Approve ${short(t.to)}`, v: null, sym: '', peer: null });
       else if (t.out && !tok && t.method && !/^transfer/i.test(t.method)) Object.assign(r, { kind: 'dapp', what: t.method, app: short(t.to), contract: t.to });
       else r.kind = t.out ? 'out' : 'in';
@@ -2319,7 +2321,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     return out.map((r) => (r.group && r.items.length < 2 ? r.items[0] : r));
   }
-  const actTitle = (r) => ({ in: r.group ? 'Pool payouts' : r.pool ? 'Pool payout' : 'Received', out: 'Sent', 'br-out': actNet === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': 'Bridge ← Ethereum', dapp: r.what || 'Contract call', approve: r.what })[r.kind];
+  const actTitle = (r) => ({ in: r.group ? 'Pool payouts' : r.pool ? 'Pool payout' : 'Received', out: 'Sent', 'br-out': actNet === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': actNet === 'beam' ? 'Bridge ← Ethereum' : 'Bridge ← Beam', dapp: r.what || 'Contract call', approve: r.what })[r.kind];
   const actWho = (r) => {
     if (r.kind === 'br-out' || r.kind === 'br-in' || r.kind === 'approve') return '';
     if (r.kind === 'dapp') return r.app ? `in <b>${esc(r.app)}</b>` : '';
@@ -2329,8 +2331,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!r.peer) return '';
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nameOf(r.peer) || short(r.peer))}</b>`;
   };
+  // Beam → Ethereum in the accent on either side, Ethereum → Beam purple (as in the lab)
   const actIc = (r) => (r.kind === 'in' ? ['in', r.group || r.pool ? SVG_POOL : SVG_IN] : r.kind === 'out' ? ['out', SVG_OUT]
-    : r.kind === 'br-out' || r.kind === 'br-in' ? [r.kind === 'br-out' && actNet === 'beam' ? 'br to-eth' : 'br', SVG_BRIDGE] : r.kind === 'dapp' ? ['dapp', SVG_DAPP] : ['ok2', SVG_SHIELD]);
+    : r.kind === 'br-out' || r.kind === 'br-in' ? [(r.kind === 'br-out') === (actNet === 'beam') ? 'br to-eth' : 'br', SVG_BRIDGE] : r.kind === 'dapp' ? ['dapp', SVG_DAPP] : ['ok2', SVG_SHIELD]);
   const came = (r) => r.kind === 'in' || r.kind === 'br-in';
   const vShown = (r, d) => (actNet === 'beam' ? amt(r.g, d) : num(r.v, d));
   const rateOf = (sym) => (!rates ? null : sym === 'BEAM' ? rates.beam : sym === 'WBEAM' ? rates.wbeam || rates.beam : sym === 'ETH' ? rates.eth : /^(USDT|USDC|DAI)$/.test(sym) ? 1 : null);
