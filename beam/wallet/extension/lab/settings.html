@@ -58,7 +58,7 @@
             <ul class="dd-list" role="listbox" tabindex="-1" hidden>
               <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
               <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">never (until the browser closes)</li></ul></div></div>
-        <p class="hint">Locking takes Beam offline (a transfer being made finishes first); closing the browser locks it. Only the open wallet's regular addresses are online.</p>
+        <p class="hint">Locking takes Beam offline, a transfer being made finishes first. Closing the browser locks it too. Only the open wallet's regular addresses are online.</p>
         <div class="row"><button type="button" class="sbtn" id="chPass">Change the password</button></div>
       </div>
       <div class="panel">
@@ -80,14 +80,25 @@
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title"><i class="chain beam"></i>Beam</h3><span class="panel-meta" id="beamNet"></span></div>
         <div class="nodes" id="nodes"></div>
-        <label class="field">Add a node<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button type="button" class="sbtn" id="nodeAdd">Add</button></span></label>
-        <p class="hint">The one in use is lit; the others are tried in turn, from the top, when it stops answering for a minute. Drag to order.</p>
+        <label class="field">Add a node (WebSocket only, wss)<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button type="button" class="sbtn" id="nodeAdd">Add</button></span></label>
+        <p class="hint">The first in the list is used. When it stops answering for a minute, the next ones are tried from the top down. Drag to change the order.</p>
+        <div class="fold" id="beamWhat"><button type="button" class="fold-h">What our two nodes are</button>
+          <div class="fold-b">
+            <p><b>wss.bumblebeam.org</b> is our own Beam node, on our server, reached through our WebSocket door. It is the fastest, and it sees our pool's blocks first.</p>
+            <p><b>wsb.bumblebeam.org</b> is the backup door, run by Cloudflare, not by our server. It passes the wallet through to BeamMW's public nodes (188.245.67.32 to .35, 5.161.152.212) and sunpool's, in a random order, with our node last. It keeps the wallet working when our server is down.</p>
+            <p>A browser can only open WebSockets, so a node works here only with a WebSocket door (wss). Beam's plain node ports (8100, 10000) do not.</p>
+          </div></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title"><i class="chain eth"></i>Ethereum</h3><span class="panel-meta" id="ethNet"></span></div>
         <div class="nodes" id="rpcs"></div>
         <label class="field">Your own RPC<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button type="button" class="sbtn" id="rpcAdd">Add</button></span></label>
-        <p class="hint">Without one of your own, the public RPCs are used, each in turn when one does not answer.</p>
+        <p class="hint">With an RPC of your own, it is used first, then the public ones.</p>
+        <div class="fold" id="ethWhat"><button type="button" class="fold-h">Which public RPCs</button>
+          <div class="fold-b">
+            <p><b>ethereum-rpc.publicnode.com</b>, <b>eth.llamarpc.com</b>, <b>eth.drpc.org</b> and <b>1rpc.io/eth</b>, asked in this order. When one does not answer, the next one is.</p>
+            <p>The history in Activity comes from <b>eth.blockscout.com</b>, not from an RPC.</p>
+          </div></div>
       </div>
     </div>
 
@@ -95,18 +106,18 @@
     <div class="sp-sec" data-s="storage" hidden>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Recovery snapshot</h3><span class="panel-meta">308 MB</span></div>
-        <p class="hint">Beam's snapshot kept from the last restore (<b>05.11.2026</b>): a restore from a seed phrase starts from it instead of downloading it again (<b>~320 MB</b>, a few minutes).</p>
+        <p class="hint">Beam's snapshot kept from the last restore (<b>05.11.2026</b>).<br>A restore from a seed phrase starts from it instead of downloading it again (<b>~320 MB</b>, a few minutes).</p>
         <div class="row"><button type="button" class="sbtn" id="snapDrop">Remove it</button><span class="act-msg" id="snapMsg"></span></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Activity's memory</h3><span class="panel-meta" id="keepSize"></span></div>
-        <div class="kv keep" id="keepKv"></div>
         <div class="field"><span>Clear</span>
-          <div class="inline">
-            <div class="dd compact" id="keepAge" data-value="90"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="inline wide">
+            <div class="dd" id="keepAge" data-value="90"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
               <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">everything</li></ul></div>
             <button type="button" class="sbtn" id="keepClear">Clear</button></div></div>
-        <p class="hint">What Activity worked out once (kernels and blocks Beam did not give, our pool's payouts, blocks' times, spent coins with no record) and each list as last shown. A removed wallet's goes by itself.</p>
+        <div class="kv keep" id="keepKv"></div>
+        <p class="hint">What Activity worked out once, and each list as last shown: kernels and blocks Beam did not give, our pool's payouts, blocks' times, spent coins with no record of their own. A removed wallet's goes by itself.</p>
       </div>
     </div>
 

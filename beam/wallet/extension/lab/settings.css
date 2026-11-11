@@ -80,3 +80,21 @@ html.popup main { scrollbar-gutter: stable; }
 .sp-sec .inline .dd.compact { flex: none; width: auto; }
 .sp-sec .two + .hint { margin-top: 8px; }
 .wcard2 .acct .dd { flex: none; width: auto; min-width: 140px; }      /* the account picker its own width, not the card's */
+
+/* Storage's picker the card's width, its button after it */
+.sp-sec .inline.wide { display: flex; gap: 8px; }
+.sp-sec .inline.wide .dd { flex: 1 1 auto; min-width: 0; }
+.sp-sec .field + .kv.keep { margin-top: 10px; }
+/* an explanation that folds open under a quiet head with its arrow */
+.fold { margin-top: 8px; }
+.fold-h { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; font: 11px var(--font-mono); color: var(--muted); text-decoration: underline dotted rgba(255, 255, 255, 0.35); text-underline-offset: 3px; }
+.fold-h:hover { color: var(--text); }
+.fold-h::after { content: '▾'; text-decoration: none; display: inline-block; transition: transform 0.2s; }
+.fold.open .fold-h::after { transform: rotate(180deg); }
+.fold-b { display: none; margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.fold.open .fold-b { display: block; }
+.fold-b p { margin: 0 0 6px; }
+.fold-b b { color: var(--text-dim); font-weight: 400; font-family: var(--font-mono); font-size: 11px; }
+/* the sections end where the wallet tab's Ethereum card does (the last card's margin off) */
+.sp-sec > :last-child { margin-bottom: 0; }
+html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last card 3 px above the footer as the wallet tab's Ethereum card */
