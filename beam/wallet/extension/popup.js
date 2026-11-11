@@ -2613,6 +2613,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function setSecOpen() {
     if (setSec === 'general') bkInfo();
     if (setSec === 'networks') { drawNodes(); drawRpcs(); drawToks(); probeAll(); }
+    probeLoop();
     if (setSec === 'storage') { snapInfo(); keepTidy().then(keepInfo); }
     if (setSec === 'about') drawAbout();
   }
@@ -2769,6 +2770,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       return { ms: Math.round(performance.now() - t0), block: parseInt(j.result, 16) };
     } catch { return { bad: true }; }
   };
+  // while Networks is on screen, the probes again every 30 s (the figures change in place)
+  let probeT = 0;
+  function probeLoop() {
+    clearInterval(probeT);
+    if (setSec !== 'networks') return;
+    probeT = setInterval(() => { if ($('t-settings').hidden || setSec !== 'networks') return clearInterval(probeT); probeAll(); }, 30000);
+  }
   async function probeAll() {
     for (const h of st.nodes || []) probeWs(h).then((p) => { probe[h] = p; if (setSec === 'networks') drawNodes(); });
     const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...PUBLIC_RPCS.map((x) => `https://${x}`)];
