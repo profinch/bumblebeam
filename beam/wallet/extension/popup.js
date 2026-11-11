@@ -2653,7 +2653,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // what a section reads when it is shown
   function setSecOpen() {
     if (setSec === 'general') bkInfo();
-    if (setSec === 'networks') { drawNodes(); drawRpcs(); setTimeout(probeAll, 300); }      // after the screen is drawn
+    if (setSec === 'networks') { drawNodes(); drawRpcs(); (window.requestIdleCallback || setTimeout)(() => probeAll(), { timeout: 1000 }); }      // once the popup is idle after drawing
     probeLoop();
     if (setSec === 'storage') { snapInfo(); keepTidy().then(keepInfo); }
     if (setSec === 'about') drawAbout();
@@ -2884,19 +2884,25 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (setSec !== 'networks') return;
     probeT = setInterval(() => { if ($('t-settings').hidden || setSec !== 'networks') return clearInterval(probeT); probeAll(); }, 30000);
   }
+  // A node's time: a first connection only warms the way up (the name lookup, the TLS handshake, and on opening a
+  // popup still busy with its start: seconds that say nothing of the node), then two measured, the faster shown
+  async function nodeTime(h) {
+    await probeWs(h);
+    const a = await probeWs(h), b = await probeWs(h);
+    return a.bad && b.bad ? a : { ms: Math.min(a.bad ? Infinity : a.ms, b.bad ? Infinity : b.ms) };
+  }
   async function recheck(k) {
     probeLoop();      // the 30 s start again from now
     const spin = qa(`[data-re="${CSS.escape(k)}"]`); spin.forEach((b) => b.classList.add('turning'));
     if (k === 'public') { for (const u of PUBLIC_RPCS) { const p = await probeRpc(`https://${u}`); if (!p.bad) { probe.public = p; if (p.block) probe.ethBlock = Math.max(probe.ethBlock || 0, p.block); break; } } drawRpcs(); return; }
     if (/^https:/.test(k)) { probe[k] = await probeRpc(k); drawRpcs(); return; }
-    const a = await probeWs(k), b = await probeWs(k);
-    probe[k] = a.bad && b.bad ? a : { ms: Math.min(a.bad ? Infinity : a.ms, b.bad ? Infinity : b.ms) };
+    probe[k] = await nodeTime(k);
     drawNodes();
   }
   async function probeAll() {
     // a node: asked twice in a row, the faster answer shown (the first pays for the name lookup and the TLS
     // handshake, and on opening it waits behind the popup's own start)
-    const twice = async (h) => { const a = await probeWs(h); const b = await probeWs(h); return a.bad && b.bad ? a : { ms: Math.min(a.bad ? Infinity : a.ms, b.bad ? Infinity : b.ms) }; };
+    const twice = (h) => nodeTime(h);
     for (const h of st.nodes || []) twice(h).then((p) => { probe[h] = p; if (setSec === 'networks') drawNodes(); });
     const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...PUBLIC_RPCS.map((x) => `https://${x}`)];
     let pubDone = false;
