@@ -2731,6 +2731,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     'wss.bumblebeam.org:443': [['What', 'our own Beam node, on our server'], ['Through', 'our WebSocket door (nginx)'], ['Also', 'the BumbleBeam pool\'s node']],
     'wsb.bumblebeam.org:443': [['What', 'the backup door, a Cloudflare Worker\nto BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
   };
+  const OURS = ['wss.bumblebeam.org:443', 'wsb.bumblebeam.org:443'];      // our two nodes: moved, never removed
   const PUBLIC_RPCS = ['ethereum-rpc.publicnode.com', 'eth.llamarpc.com', 'eth.drpc.org', '1rpc.io/eth'];
   const probe = {}, nOpen = new Set();
   const behind = (key, rows) => (nOpen.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
@@ -2738,7 +2739,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const msOf = (p) => (!p ? '…' : p.bad ? 'no answer' : `${p.ms} ms`);
   function drawNodes() {
     const list = st.nodes || [st.node];
-    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${msOf(probe[h])}</span><button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button></div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
+    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${msOf(probe[h])}</span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
     const h = beamStatus && beamStatus.current_height;
     $('beamNet').innerHTML = h ? `<span>block: <b>${esc(h.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
   }

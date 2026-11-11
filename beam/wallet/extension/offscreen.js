@@ -105,7 +105,8 @@
     s.status = status; s.reason = reason; s.since = Date.now();
     broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status, reason } });
   }
-  const nodeList = () => [...new Set([node, ...(settings.backupNodes || DEFAULT_BACKUPS)].filter(Boolean))];
+  // our two nodes are always in the list (they cannot be removed in Settings; one removed before comes back at the end)
+  const nodeList = () => [...new Set([node, ...(settings.backupNodes || DEFAULT_BACKUPS), DEFAULT_NODE, ...DEFAULT_BACKUPS].filter(Boolean))];
   const PENDING = new Set([0, 1, 5]);                  // tx statuses: pending, in progress, registering
   const busyTx = async (e) => { try { return (await e.call('tx_list', { count: 100 }, 20000)).some((t) => PENDING.has(t.status)); } catch { return true; } };
   const beamCfg = (id) => { const w = data && data.wallets.find((x) => x.id === id); return w && w.beam ? { db: w.beam.db, pass: w.beam.pass } : null; };
@@ -1260,6 +1261,7 @@
       need();
       const clean = [...new Set((Array.isArray(list) ? list : []).map((x) => String(x).trim()).filter((x) => /^[\w.-]+:\d{1,5}$/.test(x)))].slice(0, 6);
       if (!clean.length) throw new Error('keep at least one node');
+      for (const o of [DEFAULT_NODE, ...DEFAULT_BACKUPS]) if (!clean.includes(o)) clean.push(o);      // ours stay
       settings.backupNodes = clean.slice(1); await saveSettings();
       if (clean[0] !== node) await api.setNode(clean[0]);
       return nodeList();
