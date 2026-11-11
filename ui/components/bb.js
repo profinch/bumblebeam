@@ -7,7 +7,19 @@
    <bb-eco here="pool"></bb-eco>
      The ecosystem bar: one line above the header linking every BumbleBeam site, the current one
      underlined. A site not in the list (or here="") underlines nothing. The list is SITES below:
-     add a site there once and every page gets it on its next build. */
+     add a site there once and every page gets it on its next build.
+
+   BB.decode(el, text, ms)
+     Opt-in: el's text runs as random hex and settles, left to right, on text (an address changing to another);
+     "0x" and "…" stay put. A new call on the same element takes over from the one running. el may be a function
+     giving the element, looked up each frame (for one drawn again meanwhile, as a dropdown's button is).
+
+   BB.amountField(input, decimals, whole)
+     Opt-in: an amount field takes only digits and one decimal point (a point or a comma, as typed); anything else
+     typed or pasted is dropped where it lands, so the field never holds a wrong amount to complain about (with
+     both a point and a comma, as in a pasted "1,234.5", the last one is the decimal point). With
+     decimals, at most that many digits after the point; with whole, at most that many before it (8: up to
+     99 999 999). The caret stays where it was. */
 (function () {
   'use strict';
 
@@ -70,7 +82,43 @@
     el.style.display = 'block';
   });
 
+  var HEX = '0123456789abcdef';
+  function decode(el, text, ms) {
+    var T = ms || 520, t0 = performance.now(), run = (el._bbDecode = (el._bbDecode || 0) + 1), key = el;
+    var get = typeof el === 'function' ? el : function () { return key; };
+    var keep = /^0x/i.test(text) ? 2 : 0;
+    function frame(now) {
+      if (key._bbDecode !== run) return;
+      var to = get();
+      if (!to) return;
+      var p = Math.min(1, (now - t0) / T), fixed = keep + Math.floor(p * (text.length - keep));
+      to.textContent = text.split('').map(function (c, k) { return k < fixed || c === '…' || c === '.' ? c : HEX[Math.floor(Math.random() * 16)]; }).join('');
+      if (p < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function amountField(input, decimals, whole) {
+    function clean() {
+      var v = input.value, at = input.selectionStart == null ? v.length : input.selectionStart;
+      var out = '', caret = 0, point = -1;
+      // both a point and a comma (pasted "1,234.5"): the last of them is the decimal point, the others group thousands
+      var dec = v.indexOf('.') >= 0 && v.indexOf(',') >= 0 ? Math.max(v.lastIndexOf('.'), v.lastIndexOf(',')) : -1;
+      for (var k = 0; k < v.length; k++) {
+        var c = v[k], keep = false;
+        if (c >= '0' && c <= '9') keep = point < 0 ? whole == null || out.length < whole : decimals == null || out.length - point - 1 < decimals;
+        else if ((c === '.' || c === ',') && point < 0 && (dec < 0 || k === dec)) { keep = true; point = out.length; }
+        if (keep) { out += c; if (k < at) caret++; }
+      }
+      if (out !== v) { input.value = out; try { input.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } }
+    }
+    input.addEventListener('input', clean, true);
+    clean();
+  }
+
   window.BB = window.BB || {};
+  window.BB.decode = decode;
+  window.BB.amountField = amountField;
   window.BB.sites = SITES;
   window.BB.logoSvg = logoSvg;
 })();

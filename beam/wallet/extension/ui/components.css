@@ -288,7 +288,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
   /* the shadow only below and beside: above, it fell on the button and drew a seam */
   clip-path: inset(0 -40px -40px -40px);
 }
-.dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }      /* a name longer than the list: cut with …, not mid-letter */
 
 /* a compact list for table filters in a panel head */
 .dd-list [role="option"][aria-disabled="true"] { color: var(--muted); opacity: 0.6; cursor: default; }
