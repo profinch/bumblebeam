@@ -51,6 +51,7 @@
 
 /* the icons: in / out as the wallet's, the bridge's two arrows, a dApp's cube, an approval's tick, a pool's stack */
 .ic.br { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.1); }
+.ic.br.to-eth { color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }      /* Beam → Ethereum in the accent; Ethereum → Beam stays purple */
 .ic.dapp { color: var(--text-dim); }
 .ic.ok2 { color: var(--text-dim); }
 .ic.spin { position: relative; }

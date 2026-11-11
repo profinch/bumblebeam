@@ -107,7 +107,7 @@
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nm || sh(r.peer))}</b>`;
   };
   const title = (r) => ({ in: r.group ? 'Pool payouts' : 'Received', out: 'Sent', 'br-out': net === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': 'Bridge ← Ethereum', dapp: r.what, approve: r.what })[r.kind];
-  const ic = (r) => (r.kind === 'in' ? (r.group ? ['in', SVG.pool] : ['in', SVG.in]) : r.kind === 'out' ? ['out', SVG.out] : r.kind.startsWith('br') ? ['br', SVG.br] : r.kind === 'dapp' ? ['dapp', SVG.dapp] : ['ok2', SVG.ok2]);
+  const ic = (r) => (r.kind === 'in' ? (r.group ? ['in', SVG.pool] : ['in', SVG.in]) : r.kind === 'out' ? ['out', SVG.out] : r.kind.startsWith('br') ? [r.kind === 'br-out' && net === 'beam' ? 'br to-eth' : 'br', SVG.br] : r.kind === 'dapp' ? ['dapp', SVG.dapp] : ['ok2', SVG.ok2]);
   const sign = (r) => (r.kind === 'in' || r.kind === 'br-in' ? '+' : r.kind === 'approve' ? '' : '−');
   const fits = (r) => {
     if (kind === 'in' && !(r.kind === 'in' || r.kind === 'br-in')) return false;
