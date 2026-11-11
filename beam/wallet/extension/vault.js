@@ -32,6 +32,8 @@ const Vault = (() => {
   // -> { data, k } or throws 'wrong password' (AES-GCM fails to authenticate)
   async function open(record, password) {
     if (!record || record.v !== 1) throw new Error('no vault');
+    // a record from a file: its rounds within reason (a huge number would hang here)
+    if (!Number.isInteger(record.iter) || record.iter < 100000 || record.iter > 2000000) throw new Error('no vault');
     const k = { key: await derive(password, unb64(record.salt), record.iter), salt: record.salt, iter: record.iter };
     let pt;
     try { pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(record.iv) }, k.key, unb64(record.ct)); }

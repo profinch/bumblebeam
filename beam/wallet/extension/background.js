@@ -38,7 +38,7 @@ const OPS = {
       };
       chrome.downloads.onChanged.addListener(done);
       chrome.downloads.download({ url: `data:application/octet-stream;base64,${m.b64}`, filename: `BumbleBeam/${m.name}`, saveAs: false, conflictAction: 'uniquify' })
-        .then((d) => { id = d; chrome.downloads.search({ id: d }).then(([x]) => { if (x && x.state === 'complete') { chrome.downloads.onChanged.removeListener(done); res({ id: d }); } }); }, (e) => { chrome.downloads.onChanged.removeListener(done); rej(e); });
+        .then((d) => { id = d; chrome.downloads.search({ id: d }).then(([x]) => { if (x && x.state === 'complete') { chrome.downloads.onChanged.removeListener(done); res({ id: d }); } else if (x && x.state === 'interrupted') { chrome.downloads.onChanged.removeListener(done); rej(new Error(`not saved: ${x.error || 'interrupted'}`)); } }); }, (e) => { chrome.downloads.onChanged.removeListener(done); rej(e); });
     });
   },
   // the window where a site's request is answered (one; a second request shows in it too)

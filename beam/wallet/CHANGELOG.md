@@ -3,8 +3,40 @@
 ## 0.4.0 (2026-11-10, not yet published)
 
 ### Safety
-- A backup carries each wallet's addresses added by hand (verified or not), its favourites and its offline
-  reference; an import adds the ones a wallet lacks.
+- A backup carries each wallet's addresses added by hand (verified or not) and its favourites; an import adds the
+  ones a wallet lacks. Those lists sit outside the backup's sealed part, so they come in as not verified (the wallet
+  checks them again: its key, a payment to it, Beam's own list) and the offline reference is made again here, never
+  taken from a file. A backup's network settings are checked as Settings checks them (https, Ethereum mainnet, the
+  node format), its wallet ids must be the wallet's own kind, and a vault record asks for 100k to 2M rounds only.
+- Code audit (2026-11-11):
+  - A crashed Beam engine is started again (it stayed "running" dead, every Beam call failing).
+  - A restore from a backup that fails partway can be tried again (its half-made databases are dropped); a wallet
+    with no database and no phrase in the file keeps its Beam part and its database password (shown missing).
+  - The import of a backup runs in the host's queue (a double click adds nothing twice), shows its progress, does not
+    lock itself idle mid-snapshot, drops a half-made database when it fails, and knows a wallet by its id too.
+  - Reset now deletes the old shared folder as well (the helper engine kept it open, so the delete was blocked and
+    0.1's wallet came back); the wallets are stopped in their own queues first.
+  - Restore Beam is back on a wallet's card in Settings when its database is missing or will not start, and the
+    "restore" link on the wallet tab opens it at once (the Settings port had left it out).
+  - A site's malformed transaction (a value that is no number, a bad address or data) is refused at once: it kept
+    every other site's request from showing.
+  - The helper engine is made once when asked for at once (each word of a phrase checked): each call made its own.
+  - Removing an Ethereum account goes only through its password (a second, unchecked way is gone); a new account goes
+    to the end of the list (the order dragged kept).
+  - A new wallet's engine is taken into its slot before the settings are saved (a failed save left it running
+    outside, and a second engine could open the same store).
+  - Wallets without a public offline address are no longer started and stopped at every unlock to read theirs.
+  - The badge counts once after a burst of changes; the Storage figure reads the files' sizes, not the files.
+  - A dialog's Cancel and Esc wait while its check runs, and a check's late answer is never put into the next
+    dialog; Beam Send and the bridge send nothing if another wallet was opened meanwhile.
+  - An address added by hand verifies only by a payment TO it (a payment from it counted too); one Beam took as its
+    own from imported data is renamed and removed in Beam.
+  - Back on the start screens and the lock clear a typed phrase, key and passwords; node probes of an older round
+    are not drawn over newer ones, and the public RPCs show red when none answers; a card's picked account checked.
+- Receive: an offline or max privacy address shows its payments left (Payments: 3 of 5 left). Each carries one-time
+  keys (Beam's vouchers), one taken per payment; when a sender has none left, its wallet asks this one for new keys,
+  which come while this wallet is open and online. Max privacy carries one. New offline addresses carry 5 (the API
+  alone gave 1; Beam's desktop 10 make ~3,200 symbols, too long for a QR code); one too long shows its words only.
 - Add an address takes any kind: a public offline one is checked against the seed as before, another kind is
   added not verified (in yellow) until a payment to it or an imported wallet data file verifies it.
 - The start screen imports a BumbleBeam backup: with no wallet yet, every wallet in it comes back (the wallet

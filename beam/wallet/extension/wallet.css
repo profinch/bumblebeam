@@ -183,9 +183,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .seg.mini button { padding: 4px 8px; font-size: 10px; }
 
 /* ---- settings ---- */
-.text-link.danger { color: var(--color-red); }
-.badge.net-beam { color: var(--color-green); background: rgba(0, 246, 210, 0.08); }
-.badge.net-eth { color: #8c9eff; background: rgba(140, 158, 255, 0.1); }
 
 /* ---- the dialog ---- */
 dialog {
@@ -408,7 +405,6 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* an action that went: right of its button as its errors, in the accent */
 .act-msg.ok { color: var(--accent); word-break: break-all; }
 /* a transfer's comment in Activity: grey after Sent / Received, cut with … */
-.li .what .cmt { display: inline-block; max-width: 70%; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; font-weight: 400; color: var(--muted); }
 /* Ethereum Send's My accounts: rows and button as the wallet tab's account picker (name left, 0x+6…6 right; on
    the button name | address, the address dropped when the name fills it) */
 #esOwn .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; }
@@ -800,3 +796,5 @@ dialog .btn:focus-visible { outline: none; }
 #bsOwn .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #bsOwn .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
 #bsOwn .dd-list .nm.unver { color: var(--color-yellow); }
+.recv-v .tipped.warn { color: var(--color-yellow); }      /* an address with no payments left */
+.recv .qr.too-long { width: 180px; height: 180px; display: grid; place-items: center; text-align: center; padding: 12px; box-sizing: border-box; border: 1px dashed var(--border-dim); border-radius: 8px; font: 11px/1.4 var(--font-mono); color: var(--muted); }      /* an address no QR code holds (an offline one of 10 keys) */

@@ -97,15 +97,20 @@ const Engines = (() => {
   }
 
   // one engine without a wallet, made when first needed. withShared: the old shared folder mounted (read)
-  let util = null;
-  async function utilEngine() {
-    if (util && !util.dead) return util;
-    const e = new Engine('util');
-    await e.boot();
-    await e.rpc('load', [null, true]);
-    util = e;
-    return e;
+  // asked for at once (each word of a phrase checked), they all wait for the one being made; a failed one is dropped
+  let util = null, utilP = null;
+  function utilEngine() {
+    if (util && !util.dead) return Promise.resolve(util);
+    return utilP ||= (async () => {
+      const e = new Engine('util');
+      try { await e.boot(); await e.rpc('load', [null, true]); }
+      catch (er) { try { e.drop(); } catch {} throw er; }
+      util = e;
+      return e;
+    })().finally(() => { utilP = null; });
   }
+  // gone (a reset: it holds the old shared folder open), made again when next needed
+  function dropUtil() { const e = util; util = null; if (e && !e.dead) { try { e.drop(); } catch {} } }
 
   // a fresh engine for a wallet: its own store loaded (the old shared folder too only for a migration)
   async function fresh(walletId, keepShared = false) {
@@ -124,5 +129,5 @@ const Engines = (() => {
     });
   }
 
-  return { Engine, store, dbOf, util: utilEngine, fresh, dropStore };
+  return { Engine, store, dbOf, util: utilEngine, dropUtil, fresh, dropStore };
 })();
