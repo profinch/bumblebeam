@@ -2427,6 +2427,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const say = (t) => { actRows = []; box.innerHTML = `<div class="empty">${esc(t)}</div>`; $('afMore').hidden = true; };
     // the list stays while it refreshes; another wallet, network or account starts from loading…
     const a = acct(), forNow = `${wid}|${actNet}|${actNet === 'eth' && a ? a.address : ''}`;
+    // whose list it is on Ethereum: the wallet tab's account, by name and short address at the bar's right end
+    $('actAcct').hidden = actNet !== 'eth' || !a;
+    if (actNet === 'eth' && a) { $('actAcct').innerHTML = `<b>${esc(a.name)}</b> | ${esc(short(a.address))}`; $('actAcct').title = `${a.name}\n${a.address}`; }
     if (forNow !== actFor) { actFor = forNow; actRows = []; actOpen.clear(); box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true; }      // the button only under a list that is there
     try {
       if (actNet === 'beam') {
