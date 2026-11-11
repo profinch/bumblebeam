@@ -2193,7 +2193,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('bList').style.setProperty('--amtw', `${Math.ceil(w)}px`);
     const left = bxRows.length - bxShown;
     $('bMore').hidden = left <= 0;
-    $('bMore').innerHTML = left > 0 ? `<button type="button" class="btn ghost small">${Math.min(10, left)} more</button><span>${bxShown} of ${bxRows.length}</span>` : '';
+    $('bMore').innerHTML = left > 0 ? `<button type="button" class="btn ghost small">load older transfers (${left})</button>` : '';      // as the low-value tokens'
   }
   $('bMore').onclick = (e) => { if (!e.target.closest('button')) return; bxShown += 10; transfers(); };
   $('bxKey').onclick = (e) => { const c = e.target.closest('[data-cp]'); if (c) copyFlash(c, c.dataset.cp); };
@@ -2407,7 +2407,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       html += `<div class="ad-day"><span>${dayName(k)}</span><span class="sum">${Math.abs(sum) >= 1e-9 ? `<b>${sum > 0 ? '+' : '−'}${num(Math.abs(sum), 4)}</b> ${main}` : ''}</span></div>${rs.map(actRow).join('')}`;
     }
     $('actList').innerHTML = html || `<div class="empty">${actQ || actKind !== 'all' ? 'nothing like that here' : 'no transactions yet'}</div>`;
-    $('afMore').hidden = rest.length <= actShown;
+    // more as the low-value tokens: a quiet button with how many are left
+    const left = rest.length - actShown;
+    $('afMore').hidden = left <= 0;
+    $('afMore').innerHTML = left > 0 ? `<button type="button" class="btn ghost small">load older transactions (${left})</button>` : '';
     // the filters' counts, for what is in the list now
     for (const b of qa('#afKind button')) {
       const k = b.dataset.k, c = base.filter((r) => actFits(r, k)).length;
@@ -2449,7 +2452,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('afQ').onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); $('afFind').click(); } };
   $('afQ').oninput = () => { actQ = $('afQ').value.trim(); actDraw(); };
   $('afX').onclick = () => { $('afQ').value = ''; actQ = ''; actDraw(); $('afQ').focus(); };
-  $('afMore').onclick = () => { actShown += 30; actDraw(); };
+  $('afMore').onclick = (e) => { if (!e.target.closest('button')) return; actShown += 30; actDraw(); };
   $('actList').onclick = async (e) => {
     const c = e.target.closest('[data-cp]');
     if (c) return copyFlash(c, c.dataset.cp);
