@@ -83,3 +83,6 @@
 
 /* the parts of a row's line apart by a gap, not a dot */
 .sp { display: inline-block; width: 12px; }
+
+/* a row's state under way, in its opened card (yellow as it was on the row) */
+.ar-more .kv dd .st { color: var(--color-yellow); }

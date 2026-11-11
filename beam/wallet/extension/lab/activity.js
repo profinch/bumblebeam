@@ -121,7 +121,7 @@
 
   function row(r) {
     const [c, svg] = ic(r), live = r.st === 'pending';
-    const state = r.st === 'pending' ? `<span class="st">${esc(r.eta ? `arrives ≈ ${hm(r.eta)}` : r.stage)}</span>` : r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
+    const state = r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
     const sub = [r.group ? '' : fdt(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${fdate(r.t)} ${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
     const shownV = r.kind === 'dapp' && r.got ? r.got : [r.v, r.sym];
     const amt = r.kind === 'approve' ? `<span class="amt zero">${num(r.v)}<u>${esc(r.sym)}</u></span>`
@@ -142,6 +142,8 @@
         <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${esc(name(r.peer) || '')}\n${esc(r.peer)}${cp(r.peer)}</dd></dl></div>`;
     }
     rows.push(['When', fdt(r.t)]);
+    // where it is, while it is under way: in the opened card, not on the row
+    if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.eta ? `arrives ≈ ${hm(r.eta)}` : r.stage)}</span>`]);
     if (r.peer && r.peer !== 'beam') rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', `${esc(name(r.peer) ? `${name(r.peer)}\n` : '')}${esc(r.peer)}${cp(r.peer)}`]);
     if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12']);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
