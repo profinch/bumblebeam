@@ -2430,15 +2430,23 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     for (const c of found) {
       const own = ownSent.has(c.createTxId);
       const tm = blockTime.get(c.maturity) || 0;
-      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && poolAmt(Number(c.amount), tm),
+      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, x: c.createTxId || null, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && poolAmt(Number(c.amount), tm),
         sym: c.asset_id ? syms.get(Number(c.asset_id)) : 'BEAM', asset: Number(c.asset_id) || null, peer: null, st: '', block: c.maturity,
         found: own ? 'from a wallet of this seed' : 'found on the chain' });
     }
     // a coin with no record, once spent, is no longer among the coins: the one kept stays in the list
-    const now = new Set(rows.map((r) => r.id));
-    for (const [id, c] of Object.entries(kp.coins || {})) if (!now.has(id)) rows.push({ id, kind: 'in', t: c.t, g: c.g, v: c.g / GROTH, ours: !!c.o, sym: c.a ? syms.get(c.a) || `asset ${c.a}` : 'BEAM', asset: c.a || null, peer: null, st: '', block: c.b, found: c.f });
+    // A transaction that came in since (an import of wallet data) is that coin's record: the coin's row goes, kept
+    // or not (by its transaction id, or for one kept before, the same amount in the same block), never twice
+    const txRows = rows.filter((r) => !r.found);
+    const recorded = (c) => (c.x && ids.has(c.x)) || txRows.some((r) => r.g === c.g && r.block && r.block === c.b && came(r));
     kp.coins ||= {};
-    for (const r of rows) if (r.found && r.t) kp.coins[r.id] = { t: r.t, g: r.g, a: r.asset || 0, b: r.block, f: r.found, o: r.ours ? 1 : 0 };
+    for (let k = rows.length - 1; k >= 0; k--) { const r = rows[k]; if (r.found && recorded({ x: r.x, g: r.g, b: r.block })) { rows.splice(k, 1); delete kp.coins[r.id]; } }
+    const now = new Set(rows.map((r) => r.id));
+    for (const [id, c] of Object.entries(kp.coins)) {
+      if (recorded(c)) { delete kp.coins[id]; continue; }
+      if (!now.has(id)) rows.push({ id, kind: 'in', t: c.t, g: c.g, v: c.g / GROTH, ours: !!c.o, sym: c.a ? syms.get(c.a) || `asset ${c.a}` : 'BEAM', asset: c.a || null, peer: null, st: '', block: c.b, found: c.f, x: c.x });
+    }
+    for (const r of rows) if (r.found && r.t) kp.coins[r.id] = { t: r.t, g: r.g, a: r.asset || 0, b: r.block, f: r.found, o: r.ours ? 1 : 0, x: r.x || null };
     // our pool's payout with no kernel from Beam (a receipt often has none): the pool's list has it
     for (const r of rows) if (r.ours && !r.kern) { const p = poolPay(r.g, r.t / 1000); if (p && p.kernel) r.kern = p.kernel; }
     // what was worked out before fills what is missing now (the coin since spent, the payout gone from the pool's
