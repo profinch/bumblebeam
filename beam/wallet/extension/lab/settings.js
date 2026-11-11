@@ -66,6 +66,7 @@
     // Ethereum, when it has accounts: its own phrase (one added by a phrase, not by a key) and an account's key
     // the account, as the wallet tab's picker (name | address), at first the one the wallet tab shows; picked here,
     // it is only for this card (the wallet tab keeps its own)
+    // In the wallet: its address runs as random hex and settles on a pick (BB.decode), as the wallet tab's and the bridge's
     const acct = w.accounts.length > 1 ? `<div class="acct"><div class="dd compact acct key-acct" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
     // This wallet and Ethereum side by side; Ethereum's account picker under both, the card's width (its name and
