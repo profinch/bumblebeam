@@ -61,7 +61,7 @@
     { kind: 'in', t: now - 4 * H - 10 * M, v: 120, sym: 'BEAM', peer: BADDR.bob, comment: 'thanks!' },
     { kind: 'dapp', t: now - 26 * H, v: 0.05, sym: 'bETH', app: 'DEX', what: 'Swap', got: [880.5, 'BEAM'], fee: 0.014 },
     { kind: 'out', t: now - 27 * H, v: 1000, sym: 'BEAM', peer: BADDR.exch, fee: 0.011 },
-    { kind: 'out', t: now - 28 * H, v: 75, sym: 'BEAM', peer: BADDR.bob, st: 'cancelled', fee: 0 },
+    { kind: 'out', t: now - 28 * H, v: 75, sym: 'BEAM', peer: BADDR.bob, st: 'cancelled', why: 'by you before the receiver signed', fee: 0 },
     { kind: 'br-in', t: now - 30 * H, v: 2500, sym: 'BEAM', peer: '0x90F79bf6EB2c4f870365E785982E1f101E93b906', fee: 0.011, claimed: true },
     { kind: 'in', t: now - 50 * H, v: 12, sym: 'NPH', peer: BADDR.alice, asset: 47 },
     { kind: 'in', t: now - 51 * H, v: 1.4, sym: 'BEAM', peer: BADDR.pool, pool: true },
@@ -124,7 +124,7 @@
 
   function row(r) {
     const [c, svg] = ic(r), live = r.st === 'pending';
-    const state = r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
+    const state = r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
     const sub = [r.group ? '' : fdt(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${fdate(r.t)} ${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
     const shownV = r.kind === 'dapp' && r.got ? r.got : [r.v, r.sym];
     const amt = r.kind === 'approve' ? `<span class="amt zero">${num(r.v)}<u>${esc(r.sym)}</u></span>`
@@ -140,8 +140,10 @@
   // copy, as the wallet's: its tip says what with the whole of it, a tick for 2 s once copied; a link to the explorer
   const cp = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${SVG.copy}</button>`;
   const ln = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${SVG.link}</a>`;
+  // the icons after what they are for: copy first, then the explorer, one space apart (and one from the text, kept on its line)
+  const ics = (...xs) => `&nbsp;<span class="ics">${xs.filter(Boolean).join('&nbsp;')}</span>`;
   const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
-  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}${a.startsWith('0x') ? ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan') : ''}${cp(a, 'the address')}`;
+  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}${ics(cp(a, 'the address'), a.startsWith('0x') && ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
   function more(r) {
     const rows = [];
     if (r.group) {
@@ -151,20 +153,20 @@
     rows.push(['When', fdt(r.t)]);
     // where it is, while it is under way: in the opened card, not on the row
     if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
-    if (r.st === 'failed') rows.push(['Why', `<span class="st bad">failed: ${esc(r.why)}</span>`]);      // the row is red; why, here only
+    if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);      // the row says it short; why, in full here      // the row is red; why, here only
     // the address in a group of its own: its column as wide as its short label lets it, a whole address on one line
     if (r.peer && r.peer !== 'beam' && !r.from) rows.push(null, [r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', addrDd(r.peer)], null);
     if (r.kind === 'br-out' && net === 'eth') rows.push(null, ['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12'], null);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
-    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ln(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer')}${cp(String(r.asset), 'the asset id')}`]);
+    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cp(String(r.asset), 'the asset id'), ln(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
     if (r.relayer) rows.push(['Relayer fee', `${num(r.relayer)} BEAM`]);
     if (r.fee) rows.push([net === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${net === 'beam' ? 'BEAM' : 'ETH'}${RATE[net === 'beam' ? 'BEAM' : 'ETH'] ? ` | ${usd(r.fee * RATE[net === 'beam' ? 'BEAM' : 'ETH'])}` : ''}`]);
     if (r.comment) rows.push(['Comment', esc(r.comment)]);
     if (net === 'beam') {
       // on the chain only once it is in a block: then its kernel, in our explorer
-      if (r.st !== 'pending' && r.st !== 'cancelled' && r.st !== 'failed') rows.push(['Transaction', `${esc(sh(r.kern))}${ln(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer')}`], ['Block', String(r.block)]);
+      if (r.st !== 'pending' && r.st !== 'cancelled' && r.st !== 'failed') rows.push(['Transaction', `${esc(sh(r.kern))}${ics(ln(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer'))}`], ['Block', String(r.block)]);
     } else {
-      rows.push(['Transaction', `${esc(sh('0x' + r.kern))}${ln(`${SCAN}/tx/0x${r.kern}`, 'Open the transaction on Etherscan')}`]);
+      rows.push(['Transaction', `${esc(sh('0x' + r.kern))}${ics(ln(`${SCAN}/tx/0x${r.kern}`, 'Open the transaction on Etherscan'))}`]);
       if (r.st !== 'pending') rows.push(['Block', String(23781200 - Math.round((now - r.t) / 12e3))]);
     }
     const acts = [];
