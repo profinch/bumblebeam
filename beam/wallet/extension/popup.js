@@ -2761,18 +2761,21 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const PUBLIC_RPCS = ['ethereum-rpc.publicnode.com', 'eth.llamarpc.com', 'eth.drpc.org', '1rpc.io/eth'];
   const probe = {}, nOpen = new Set();
   const behind = (key, rows) => (nOpen.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
+  // a check by hand, left of the time: that row asked again now, the 30 s counted from here
+  const RE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const reI = (k) => `<button type="button" class="cp re" data-re="${esc(k)}" title="Check it now">${RE}</button>`;
   const stOf = (p) => (!p ? '' : p.bad ? 'bad' : p.ms > 500 ? 'slow' : 'ok');
   const msOf = (p) => (!p ? '' : p.bad ? 'no answer' : `${p.ms} ms`);      // nothing until it is measured
   function drawNodes() {
     const list = st.nodes || [st.node];
-    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${msOf(probe[h])}</span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
+    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${reI(h)}${msOf(probe[h])}</span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
     const h = beamStatus && beamStatus.current_height;
     $('beamNet').innerHTML = h ? `<span>block: <b>${esc(h.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
   }
   function drawRpcs() {
     const own = st.ethRpc || '';
-    $('rpcs').innerHTML = (own ? `<div class="node use${nOpen.has(own) ? ' open' : ''}" data-k="${esc(own)}"><i class="st ${stOf(probe[own])}"></i><span class="h">${esc(own.replace(/^https:\/\//, ''))}</span><span class="meta">${msOf(probe[own])}</span><button type="button" class="cp a-x" data-rx="1" title="Remove this RPC">${XI2}</button></div>${behind(own, [['What', 'an RPC added by you, asked first']])}` : '')
-      + `<div class="node${own ? '' : ' use'}${nOpen.has('public') ? ' open' : ''}" data-k="public"><i class="st ${stOf(probe.public)}"></i><span class="h">public RPCs</span><span class="meta end"><span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">${PUBLIC_RPCS.length}</span></span></div>${behind('public', [['Asked in turn', PUBLIC_RPCS.join('\n')], ['Activity from', 'eth.blockscout.com']])}`;
+    $('rpcs').innerHTML = (own ? `<div class="node use${nOpen.has(own) ? ' open' : ''}" data-k="${esc(own)}"><i class="st ${stOf(probe[own])}"></i><span class="h">${esc(own.replace(/^https:\/\//, ''))}</span><span class="meta">${reI(own)}${msOf(probe[own])}</span><button type="button" class="cp a-x" data-rx="1" title="Remove this RPC">${XI2}</button></div>${behind(own, [['What', 'an RPC added by you, asked first']])}` : '')
+      + `<div class="node${own ? '' : ' use'}${nOpen.has('public') ? ' open' : ''}" data-k="public"><i class="st ${stOf(probe.public)}"></i><span class="h">public RPCs</span><span class="meta end">${reI('public')}<span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">${PUBLIC_RPCS.length}</span></span></div>${behind('public', [['Asked in turn', PUBLIC_RPCS.join('\n')], ['Activity from', 'eth.blockscout.com']])}`;
     const b = probe.ethBlock;
     $('ethNet').innerHTML = b ? `<span>block: <b>${esc(b.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
   }
@@ -2801,6 +2804,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     clearInterval(probeT);
     if (setSec !== 'networks') return;
     probeT = setInterval(() => { if ($('t-settings').hidden || setSec !== 'networks') return clearInterval(probeT); probeAll(); }, 30000);
+  }
+  async function recheck(k) {
+    probeLoop();      // the 30 s start again from now
+    const spin = qa(`[data-re="${CSS.escape(k)}"]`); spin.forEach((b) => b.classList.add('turning'));
+    if (k === 'public') { for (const u of PUBLIC_RPCS) { const p = await probeRpc(`https://${u}`); if (!p.bad) { probe.public = p; if (p.block) probe.ethBlock = Math.max(probe.ethBlock || 0, p.block); break; } } drawRpcs(); return; }
+    if (/^https:/.test(k)) { probe[k] = await probeRpc(k); drawRpcs(); return; }
+    const a = await probeWs(k), b = await probeWs(k);
+    probe[k] = a.bad && b.bad ? a : { ms: Math.min(a.bad ? Infinity : a.ms, b.bad ? Infinity : b.ms) };
+    drawNodes();
   }
   async function probeAll() {
     // a node: asked twice in a row, the faster answer shown (the first pays for the name lookup and the TLS
@@ -2833,6 +2845,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     setNodes(list);
   });
   $('nodes').onclick = (e) => {
+    const re = e.target.closest('[data-re]'); if (re) return recheck(re.dataset.re);
     const x = e.target.closest('[data-x]');
     if (x) { const list = (st.nodes || []).slice(); list.splice(Number(x.dataset.x), 1); return setNodes(list); }
     const r = e.target.closest('.node'); if (!r) return; const k = r.dataset.k; if (nOpen.has(k)) nOpen.delete(k); else nOpen.add(k); drawNodes();
@@ -2844,6 +2857,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('nodeIn').value = ''; await setNodes([...(st.nodes || []), v]);
   };
   $('rpcs').onclick = async (e) => {
+    const re = e.target.closest('[data-re]'); if (re) return recheck(re.dataset.re);
     if (e.target.closest('[data-rx]')) { try { await host('setEthRpc', ''); st.ethRpc = ''; } catch (err) { actErr($('rpcAdd'), err); } drawRpcs(); return; }
     const r = e.target.closest('.node[data-k]'); if (!r) return; const k = r.dataset.k; if (nOpen.has(k)) nOpen.delete(k); else nOpen.add(k); drawRpcs();
   };
