@@ -77,3 +77,6 @@
 
 /* a section's last row (or its opened details) without its line: the next day's heading draws one */
 #actList .li.ar:has(+ .ad-day), #actList .ar-more:has(+ .ad-day), #actList .ar-more:last-child { border-bottom: 0; }
+
+/* the parts of a row's line apart by a gap, not a dot */
+.sp { display: inline-block; width: 12px; }

@@ -46,7 +46,7 @@
   const kern = () => Array.from({ length: 64 }, (_, i) => '0123456789abcdef'[(i * 7 + n * 13) % 16]).join('');
   const BEAMH = [
     { kind: 'out', t: now - 3 * M, v: 250, sym: 'BEAM', peer: BADDR.alice, st: 'pending', stage: 'waiting for Alice', comment: 'for the bikes', fee: 0.011, cancel: true },
-    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', stage: 'relayer · arrives ≈ ' + hm(now + 38 * M), fee: 0.011, relayer: 22.82 },
+    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', stage: 'arrives ≈ ' + hm(now + 38 * M), fee: 0.011, relayer: 22.82 },
     { kind: 'in', t: now - 2 * H, v: 1.25, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 3 * H, v: 1.31, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 5 * H, v: 1.18, sym: 'BEAM', peer: BADDR.pool, pool: true },
@@ -118,7 +118,7 @@
   function row(r) {
     const [c, svg] = ic(r), live = r.st === 'pending';
     const state = r.st === 'pending' ? `<span class="st">${esc(r.stage)}</span>` : r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
-    const sub = [live || r.group ? '' : hm(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join(' · ');
+    const sub = [live || r.group ? '' : hm(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
     const shownV = r.kind === 'dapp' && r.got ? r.got : [r.v, r.sym];
     const amt = r.kind === 'approve' ? `<span class="amt zero">${num(r.v)}<u>${esc(r.sym)}</u></span>`
       : `<span class="amt ${r.kind === 'in' || r.kind === 'br-in' || (r.kind === 'dapp' && r.got) ? 'pos' : ''}">${r.kind === 'dapp' ? '+' : sign(r)}${num(shownV[0])}<u>${esc(shownV[1])}</u></span>`;
@@ -134,7 +134,7 @@
   function more(r) {
     const rows = [];
     if (r.group) {
-      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${hm(x.t)} · block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
+      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${hm(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
         <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${esc(name(r.peer) || '')}\n${esc(r.peer)}${cp(r.peer)}</dd></dl></div>`;
     }
     const full = new Date(r.t);
@@ -142,9 +142,9 @@
     if (r.peer && r.peer !== 'beam') rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', `${esc(name(r.peer) ? `${name(r.peer)}\n` : '')}${esc(r.peer)}${cp(r.peer)}`]);
     if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12']);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
-    if (r.asset) rows.push(['Asset', `${esc(r.sym)} · id ${r.asset}`]);
+    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})`]);
     if (r.relayer) rows.push(['Relayer fee', `${num(r.relayer)} BEAM`]);
-    if (r.fee) rows.push([net === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${net === 'beam' ? 'BEAM' : 'ETH'}${RATE[net === 'beam' ? 'BEAM' : 'ETH'] ? ` · ${usd(r.fee * RATE[net === 'beam' ? 'BEAM' : 'ETH'])}` : ''}`]);
+    if (r.fee) rows.push([net === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${net === 'beam' ? 'BEAM' : 'ETH'}${RATE[net === 'beam' ? 'BEAM' : 'ETH'] ? ` | ${usd(r.fee * RATE[net === 'beam' ? 'BEAM' : 'ETH'])}` : ''}`]);
     if (r.comment) rows.push(['Comment', esc(r.comment)]);
     if (r.st === 'failed') rows.push(['Why', esc(r.why)]);
     if (net === 'beam') {

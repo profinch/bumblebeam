@@ -594,3 +594,5 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 .bx-tr .end .btn { padding: 4px 0; font-size: 11px; }
 .bx-more { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 0 2px; border-top: 1px solid var(--border-dim); }
 .bx-more span { font: 11px var(--font-mono); color: var(--muted); }
+/* the parts of an Activity row's line apart by a gap, not a dot */
+.sub .sp { display: inline-block; width: 12px; }
