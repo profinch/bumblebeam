@@ -62,6 +62,18 @@
         <div class="row"><button type="button" class="sbtn" id="chPass">Change the password</button></div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Display</h3></div>
+        <div class="two">
+          <div class="field"><span>Time</span>
+            <div class="dd compact" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div><span class="ex" id="timeEx"></span></div>
+          <div class="field"><span>Decimals</span>
+            <div class="dd compact" id="decFmt" data-value="6"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="2">2 (0.12)</li><li role="option" data-v="4">4 (0.1234)</li><li role="option" data-v="6">6 (0.123456)</li><li role="option" data-v="8">8 (all)</li></ul></div><span class="ex" id="decEx"></span></div>
+        </div>
+        <p class="hint">Used on the wallet tab, the bridge, Send and Activity. Confirmations always show every decimal.</p>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Backup</h3><span class="panel-meta" id="bkLast"></span></div>
         <p class="hint">One file with every wallet of this extension: phrases and keys, names, accounts and settings, encrypted with the wallet password.</p>
         <label class="check"><input type="checkbox" id="bkDb"><span>With Beam's databases (history and address names, <b>~12 MB</b> now)</span></label>
@@ -73,17 +85,6 @@
         <p class="hint" id="bkWhere"></p>
         <div class="row"><button type="button" class="sbtn" id="bkSave">Save a backup now</button><button type="button" class="sbtn" id="bkImport">Import a backup</button><span class="act-msg" id="bkMsg"></span></div>
         <p class="hint">An import adds the wallets the file has and this extension does not. It asks for the password the file was saved with. Nothing here is changed or removed.</p>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><h3 class="panel-title">Display</h3></div>
-        <div class="two">
-          <div class="field"><span>Time</span>
-            <div class="dd compact" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
-              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div><span class="ex" id="timeEx"></span></div>
-          <div class="field"><span>Decimals</span>
-            <div class="dd compact" id="decFmt" data-value="6"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
-              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="2">2 (0.12)</li><li role="option" data-v="4">4 (0.1234)</li><li role="option" data-v="6">6 (0.123456)</li><li role="option" data-v="8">8 (all)</li></ul></div><span class="ex" id="decEx"></span></div>
-        </div>
       </div>
     </div>
 
