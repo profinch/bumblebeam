@@ -47,12 +47,15 @@
   const $ = (id) => document.getElementById(id);
   const qa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const amt = (groth, d = 4) => (groth == null || !isFinite(groth) ? ''
+  // the decimals amounts show (Settings, Display: 2, 4, 6 or 8; kept in this browser). Confirmations pass 8: what is
+  // signed is shown whole
+  let decShown = 6;
+  const amt = (groth, d = decShown) => (groth == null || !isFinite(groth) ? ''
     : (groth / GROTH).toLocaleString('en-US', { minimumFractionDigits: Math.min(2, d), maximumFractionDigits: d }).replace(/,/g, '\u2060\u2009\u2060'));
   // a decimal string of smallest units, as a number for display (exact enough for display), and exactly
   const units = (s, dec) => { try { const v = BigInt(s || 0); const p = 10n ** BigInt(dec); return Number(v / p) + Number(v % p) / Number(p); } catch { return NaN; } };
   const exact = (s, dec) => { const v = BigInt(s || 0), p = 10n ** BigInt(dec); const f = (v % p).toString().padStart(dec, '0').replace(/0+$/, ''); return `${v / p}${f ? '.' + f : ''}`; };
-  const num = (x, max = 4) => (x == null || !isFinite(x) ? '' : x.toLocaleString('en-US', { maximumFractionDigits: x !== 0 && Math.abs(x) < 1 ? Math.max(max, 6) : max }).replace(/,/g, '\u2060\u2009\u2060'));
+  const num = (x, max = decShown) => (x == null || !isFinite(x) ? '' : x.toLocaleString('en-US', { maximumFractionDigits: x !== 0 && Math.abs(x) < 1 ? Math.max(max, 6) : max }).replace(/,/g, '\u2060\u2009\u2060'));
   // thousands are set apart by a thin space, not a comma (no mix-up with the decimal point): 132 796.34; word
   // joiners round it keep a number on one line
   const usd = (x) => (x == null || !isFinite(x) ? '' : `$${x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, '\u2060\u2009\u2060')}`);
@@ -786,6 +789,7 @@
     $('beamCard').classList.toggle('nodata', !s);
     $('beamAvail').textContent = s ? amt(s.available || 0) : '';
     $('beamUsd').textContent = s && rates ? usd((s.available || 0) / GROTH * rates.beam) : '';
+    fitBig($('beamAvail'));
     beamPriceChip();
     $('beamMinor').innerHTML = s ? chips(s) : '';
     // another wallet open: its card starts with the tokens folded
@@ -823,6 +827,14 @@
   }
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
 
+  // a big amount (24 px) that does not fit its line with its unit and dollars gets smaller, down to 12 px: up to
+  // 99 999 999.99999999 BEAM fits the popup
+  function fitBig(el) {
+    const line = el.parentElement;
+    let px = 24;
+    el.style.fontSize = '';
+    while (px > 12 && line.scrollWidth > line.clientWidth) el.style.fontSize = `${--px}px`;
+  }
   // what is not spendable yet, as chips in the explorer's way: one colour per state, "name: amount" (to the
   // hundredth), what each is in its tip; the line scrolls when they do not fit
   function chips(s) {
@@ -1377,7 +1389,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function bsAvail() {
     const have = bsHave(), max = beamStatus ? Math.max(0, have - (bsAid() ? 0 : beamFee())) / GROTH : null;
     // the amount white, its unit grey after it (as on the fee)
-    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `Available: <b>${esc(amt(have, 8))}</b> <span class="unit">${esc(bsSym())}</span>` : ''), amtIssue($('bsAmt').value, 8, max));
+    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `Available: <b>${esc(amt(have))}</b> <span class="unit">${esc(bsSym())}</span>` : ''), amtIssue($('bsAmt').value, 8, max));
     $('bsFee').innerHTML = `${esc(amt(beamFee(), 8))} <span class="unit">BEAM</span>`;
   }
   // every amount field takes only digits and one point (or comma), BB.amountField: nothing else gets in to be
@@ -1763,10 +1775,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('bxAmt').classList.toggle('bad', !!issue);
     $('bxIssue').textContent = issue;
     const unitHave = toEth ? 'BEAM' : 'WBEAM';
-    $('bxHave').innerHTML = have != null ? `${num(have, 4)} <span class="u">${unitHave}</span>` : `<span class="u">${toEth ? (W() && W().beam ? '…' : 'no Beam part') : from && from.err ? 'unread' : '…'}</span>`;
+    $('bxHave').innerHTML = have != null ? `${num(have)} <span class="u">${unitHave}</span>` : `<span class="u">${toEth ? (W() && W().beam ? '…' : 'no Beam part') : from && from.err ? 'unread' : '…'}</span>`;
     // the lower card: what the receiving side holds now; under To, how long it takes
     const there = toEth ? (to && !to.err ? to.wbeam : null) : beamHave();
-    $('bxThereHave').innerHTML = there != null ? `${num(there, 4)} <span class="u">${toEth ? 'WBEAM' : 'BEAM'}</span>` : '<span class="u">…</span>';
+    $('bxThereHave').innerHTML = there != null ? `${num(there)} <span class="u">${toEth ? 'WBEAM' : 'BEAM'}</span>` : '<span class="u">…</span>';
     $('bxWhen').textContent = toEth ? 'usually about an hour' : 'about an hour, then claim';
     // when, by the clock: now and an hour (as the line under it says), on the line of the balance's figures
     $('bxEta').innerHTML = `arrives ≈ <b>${esc(ftime(Date.now() + 3600e3))}</b>`;
@@ -2053,7 +2065,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const end = r.claim ? `<button type="button" class="btn solid small" data-msg="${esc(r.msg)}" data-amount="${esc(r.raw)}">Claim</button>`
         : `<span class="badge ${r.badge[0]}"${r.err || r.badge[2] ? ` title="${esc(r.err || r.badge[2])}"` : ''}>${r.badge[1]}</span>`;
       return `<div class="li bx-tr"><span class="what">${way}${r.no != null ? ` <span class="no">#${esc(r.no)}</span>` : ''}<span class="sub">${esc(r.who)}</span><span class="sub">${esc(r.when) || '&nbsp;'}${r.hash ? `<a class="cp tx" href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener" title="Open the transaction on Etherscan">${LINK}</a>` : ''}</span></span>`
-        + `<span class="money"><span class="amt">${num(r.amount, 4)}</span><span class="fee">${r.fee != null ? `fee ${num(r.fee, 2)}` : '&nbsp;'}</span></span><span class="end">${end}</span></div>`;
+        + `<span class="money"><span class="amt">${num(r.amount)}</span><span class="fee">${r.fee != null ? `fee ${num(r.fee, 2)}` : '&nbsp;'}</span></span><span class="end">${end}</span></div>`;
     }).join('') || '<div class="empty">none yet</div>';
     const w = Math.max(0, ...qa('#bList .money').map((m) => m.scrollWidth));
     $('bList').style.setProperty('--amtw', `${Math.ceil(w)}px`);
@@ -2152,12 +2164,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const autoLockDd = BB.dropdown($('autoLock'), (v) => host('setAutoLock', Number(v)));
   const timeDd = BB.dropdown($('timeFmt'), (v) => { time12 = v === '12'; chrome.storage.local.set({ time12 }).catch(() => {}); });
   chrome.storage.local.get('time12').then((v) => { time12 = !!v.time12; }).catch(() => {});
+  // how many decimals amounts show: drawn again at once where they are (the wallet tab, the bridge)
+  const decDd = BB.dropdown($('decFmt'), (v) => {
+    decShown = Number(v) || 6; chrome.storage.local.set({ decShown }).catch(() => {});
+    try { renderBeam(); ethRows(); bxCalc(); transfers(); } catch {}
+  });
+  chrome.storage.local.get('decShown').then((v) => { if ([2, 4, 6, 8].includes(v.decShown)) decShown = v.decShown; decDd.set(String(decShown)); }).catch(() => {});
   async function settingsOpen() {
     $('ver').textContent = chrome.runtime.getManifest().version;
     $('node').value = st.node; $('ethRpc').value = st.ethRpc || '';
     $('backupNodes').value = (st.nodes || []).filter((n) => n !== st.node).join(', ');
     autoLockDd.set(String(st.autoLock));
-    timeDd.set(time12 ? '12' : '24');
+    timeDd.set(time12 ? '12' : '24'); decDd.set(String(decShown));
     $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
       <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
         ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>

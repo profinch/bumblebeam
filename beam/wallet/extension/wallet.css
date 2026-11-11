@@ -84,9 +84,9 @@ html.popup .seed { columns: 2; }
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
 .panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
 /* Beam's balance: one big line, the amount, the unit, its dollars */
-.bigamt .amt { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bigamt .amt { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }      /* one line: too long, popup.js fitBig makes it smaller */
 .bigamt .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
-.bigamt .usd { margin-left: auto; font-size: var(--fs-s); color: var(--muted); }
+.bigamt .usd { margin-left: auto; font-size: var(--fs-s); color: var(--muted); white-space: nowrap; }
 .panel-head .panel-meta { margin-left: auto; }
 .panel-title .chain { margin-right: 8px; }
 .chain { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; }
@@ -541,6 +541,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-fee3 { display: inline-flex; align-items: center; gap: 8px; font: 11px var(--font-mono); color: var(--muted); }
 .bx-fee3 .lv .w { display: inline-block; width: 6ch; }      /* cheap, normal, safe in one width: the figure stays put */
 .bx-gauge { width: 46px; height: 26px; flex: none; cursor: pointer; touch-action: none; overflow: visible; }
+.bx-gauge:focus, .bx-gauge:focus-visible { outline: none; }      /* no ring on it, clicked or reached by Tab (its lit arcs say where it is) */
 .bx-gauge .arc { fill: none; stroke: var(--border); stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.25s; }
 .bx-gauge .arc.on { stroke: var(--accent); filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.6)); }
 .bx-gauge .arc:hover:not(.on) { stroke: rgba(var(--accent-rgb), 0.5); }

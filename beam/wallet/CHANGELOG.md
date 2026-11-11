@@ -221,6 +221,9 @@
 - Thousands are set apart by a thin space (kept on one line), not a comma, so they are not mixed up with the
   decimal point:
   132 796.34 BEAM.
+- Settings, Display: Decimals shown (2, 4, 6 or 8; 6 at first) for the amounts on the wallet tab, the bridge, Send
+  and Activity; confirmations always show every decimal. The wallet tab's Beam balance gets smaller when it does not
+  fit its line (up to 99 999 999.99999999 BEAM with its dollars).
 - An amount field takes only digits and one decimal point (a point or a comma): anything else typed or pasted
   does not get in, so there is nothing to complain about; at most 8 digits before the point. A pasted
   "1,234.5" reads 1234.5 (with both, the last one is the decimal point).
