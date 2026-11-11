@@ -2125,7 +2125,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const ok = await confirmBox('Bridge WBEAM → BEAM', [
       ['Receive', `${exact(p.value, 8)} BEAM`], ['Relayer fee', `${exact(p.fee, 8)} WBEAM`],
       ['From', `${acc ? `${acc.wallet.name} | ${acc.name}\n` : ''}${p.from}`], ['To', `${p.beamWallet}\nBeam bridge key: ${short(p.key)}`],
-      ['Transactions - Ethereum', p.approve ? '2\napprove WBEAM to the bridge, then send' : '1\nsend'],
+      ['Transactions', p.approve ? 'Ethereum: 2\napprove WBEAM to the bridge, then send' : 'Ethereum: 1\nsend'],
       // the gas as Ethereum Send says it: what it should cost, and the most it can
       ['Net fee', `≈ ${num(fn, 6)} ETH${rates ? ` | ${usd(fn * rates.eth)}` : ''}`],
       ['Max fee', `${num(fm, 6)} ETH${rates ? ` | ${usd(fm * rates.eth)}` : ''}`]],
