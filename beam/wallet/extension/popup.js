@@ -1707,24 +1707,27 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     pick(l[(k + (e.deltaY > 0 ? 1 : -1) + l.length) % l.length].address);
   }, { passive: false });
 
-  // each side in its card: Beam's dot and name in its corner, as the wallet tab's card title (and its key when it
-  // receives), Ethereum's picker
+  // each side in its card: its network on the title line (Beam's key at the bottom left when it receives),
+  // Ethereum's picker
   function bxPlace() {
-    const eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), nb = $('bxNetB'), bk = $('bxKey'), w = W();
-    (dir === 'toEth' ? $('bxSend') : $('bxRecv')).appendChild(nb);
-    nb.classList.toggle('low', dir !== 'toEth');
-    nb.innerHTML = '<i class="chain beam"></i>Beam';      // as the wallet tab's Beam card names itself
+    const beam = dir === 'toEth' ? $('bxSend') : $('bxRecv'), eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), bk = $('bxKey'), w = W();
+    // each card's network on its title line, after From / To: its dot and name, as the wallet tab's cards
+    beam.querySelector('.bx-l1').appendChild($('bxNetB')); $('bxNetB').innerHTML = '<i class="chain beam"></i>Beam';
+    eth.querySelector('.bx-l1').appendChild($('bxNetE')); $('bxNetE').innerHTML = '<i class="chain eth"></i>Ethereum';
     bk.hidden = dir === 'toEth';
     if (dir !== 'toEth') {
       $('bxRecv').appendChild(bk);
       const k = w && keyOf[w.id];
       bk.innerHTML = `<span class="tipped" title="The bridge key of this wallet's Beam part: the Ethereum side sends to it${k ? `: ${esc(k)}` : ''}">key</span> ${k ? esc(short(k)) : beamHere() ? '…' : 'no running Beam part'}`;
-      // on the name's line, measured (their sizes differ, and so do fonts)
-      const base = (el) => { el.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>'); const y = el.lastElementChild.getBoundingClientRect().top; el.lastElementChild.remove(); return y; };
-      bk.style.transform = '';
-      bk.style.transform = `translateY(${(base(nb) - base(bk)).toFixed(1)}px)`;
     }
     eth.appendChild($('bxGearBox'));
+    // on top, the picker shares its line with From and ETHEREUM: it begins 10 px after them (no wider than below)
+    const g = $('bxGearBox');
+    g.style.width = '';
+    if (eth === $('bxSend')) {
+      const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
+      if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
+    }
     bxLay();
   }
   const amount = () => { const t = $('bxAmt').value.trim().replace(',', '.'); return /^\d*\.?\d*$/.test(t) && t && t !== '.' ? Number(t) : null; };

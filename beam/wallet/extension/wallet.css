@@ -447,7 +447,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
   position: relative; display: grid; grid-auto-rows: 1fr; gap: var(--seam); margin-top: 2px;      /* the two cards one height: the seam (and the switch on it) in the middle */
 }
 .bx-side { position: relative; overflow: clip; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); padding: 10px var(--px) 12px; }      /* clip: a torn strip jerked past the edge is cut there */
-.bx-l1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 16px; }
+.bx-l1 { display: flex; align-items: center; gap: 8px; height: 16px; }
 .bx-side .bx-l1 { position: relative; top: -5px; }      /* From and To 10 px from the card's top, as the lower card's balance; moved, not reflowed (their torn copies too) */
 .bx-l2 { display: flex; align-items: center; gap: 8px; margin-top: 6px; min-height: 34px; }
 .bx-l2 input { flex: 1 1 auto; min-width: 0; width: 0; height: 34px; line-height: 34px; padding: 0; background: none; border: 0; outline: none; color: var(--text); font: 700 24px var(--font-mono); }      /* the line's whole height: a field of the font's own cut the figures' feet in some fonts (Consolas) */
@@ -488,16 +488,15 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
 .bx-strip { position: absolute; inset: 0; padding: inherit; }
 .bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
-.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net { visibility: hidden; }
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue { visibility: hidden; }
 .bx-strip .bx-l1 > .caps { visibility: hidden; }
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
-.bx-net { position: absolute; right: var(--px); top: calc(var(--net-y) + 1px); display: inline-flex; align-items: center; white-space: nowrap; font: 700 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 16px; }      /* as the wallet tab's card title: its dot, BEAM; in its card's corner, mirrored top and bottom (+1 on top: capitals sit high in their line, so the letters are as far from either edge) */
+.bx-net { display: inline-flex; align-items: center; margin-left: 4px; white-space: nowrap; font: 700 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 16px; }      /* the card's network on its title line, after From / To, as the wallet tab's card title: its dot, BEAM or ETHEREUM */
 .bx-net:empty { display: none; }
 .bx-net .chain { margin: 0 8px 0 0; }
-.bx-net.low { top: auto; bottom: var(--net-y); }
 /* Beam below: its bridge key at the bottom left, on the account's line (the tip on the word "key" alone) */
-.bx-key { position: absolute; left: var(--px); bottom: 15px; line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.bx-key { position: absolute; left: var(--px); bottom: var(--net-y); line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .bx-key .tipped { color: var(--text-dim); cursor: help; }
 /* the upper card: "available" over the balance at its bottom right; the balance is the "all" button */
 .bx-l3 { margin-left: auto; text-align: right; font: 11px var(--font-mono); color: var(--muted); }
