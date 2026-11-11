@@ -68,9 +68,11 @@
     // it is only for this card (the wallet tab keeps its own)
     const acct = w.accounts.length > 1 ? `<div class="acct"><div class="dd compact acct key-acct" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
+    // This wallet and Ethereum side by side; Ethereum's account picker under both, the card's width (its name and
+    // address need it)
     return `<div class="wcard2">
-      ${g('This wallet', mine)}
-      ${eth.length ? g('Ethereum', eth, acct) : ''}
+      <div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>
+      ${eth.length && acct ? `<div class="acct-row">${acct}</div>` : ''}
       ${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}
     </div>`;
   }

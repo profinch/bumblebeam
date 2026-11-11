@@ -131,3 +131,7 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .key-acct .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .key-acct .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
 .key-acct .dd-list [aria-selected="true"] .ad { color: inherit; }
+.wcard2 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.wcard2 .cols .acts { flex-wrap: nowrap; }
+.wcard2 .acct-row { margin-top: 8px; }
+.wcard2 .acct-row .acct { margin: 0; }
