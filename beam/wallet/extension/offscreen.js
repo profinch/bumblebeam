@@ -308,9 +308,9 @@
     const have = settings.beamAddr[id];
     const list = await s.e.call('addr_list', { own: true }).catch(() => null);
     if (!Array.isArray(list)) return;
-    // every offline and public offline address of it, by name, for Send's My wallets (both take a payment while
-    // this wallet does not run)
-    const offl = list.filter((a) => (a.type === 'public_offline' || a.type === 'offline') && !a.expired).map((a) => ({ address: a.address, type: a.type, name: a.comment || '' }));
+    // every address of it of a kind Send can pay, by name, for Send's My wallets (the offline kinds take a payment
+    // while this wallet does not run; a regular one, once it is opened while the sender still runs)
+    const offl = list.filter((a) => ['public_offline', 'offline', 'max_privacy', 'regular'].includes(a.type) && !a.expired).map((a) => ({ address: a.address, type: a.type, name: a.comment || '' }));
     const was = JSON.stringify((settings.beamAddrs || {})[id] || null);
     if (JSON.stringify(offl) !== was) { (settings.beamAddrs ||= {})[id] = offl; await saveSettings(); broadcast({ type: 'event', method: 'bb_wallet', wallet: id, result: { status: slot(id).status } }); }
     const pub = list.filter((a) => a.type === 'public_offline' && !a.expired);
@@ -899,7 +899,7 @@
           // its public offline address as last read while it ran; else one added by hand and verified by its offline key
           // its offline and public offline addresses (read while it ran), and the ones of those kinds added by hand (a
           // payment to an unverified one, if it arrives, verifies it)
-          beamAddresses: [...((settings.beamAddrs || {})[w.id] || []), ...((settings.addrExt || {})[w.id] || []).filter((e) => e.type === 'public_offline' || e.type === 'offline').map((e) => ({ address: e.address, type: e.type, name: e.name || '', unverified: !e.verified }))].filter((a, k, l) => l.findIndex((b) => b.address === a.address) === k),
+          beamAddresses: [...((settings.beamAddrs || {})[w.id] || []), ...((settings.addrExt || {})[w.id] || []).filter((e) => ['public_offline', 'offline', 'max_privacy', 'regular'].includes(e.type)).map((e) => ({ address: e.address, type: e.type, name: e.name || '', unverified: !e.verified }))].filter((a, k, l) => l.findIndex((b) => b.address === a.address) === k),
           beamAddress: (settings.beamAddr[w.id] || {}).address || (((settings.addrExt || {})[w.id] || []).find((e) => e.type === 'public_offline' && e.verified === 'key') || {}).address || null,
           accounts: ethAccounts(w),
         })),

@@ -1594,6 +1594,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
           : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If it is that wallet's, the payment verifies it; if not, the coins go to whoever it belongs to` : ''))) return;
       const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
       actOk($('doBeamSend'), `transaction ${esc(r.txId)} sent`);
+      // to a regular address of another of one's wallets: it completes once that wallet is opened (this one keeps
+      // running meanwhile, its transfer under way)
+      if (bsType === 'regular' && st.wallets.some((w) => w.id !== st.active && (w.beamAddresses || []).some((x) => x.address === address))) ask({ title: 'Now open the other wallet', note: 'A regular transfer completes when both wallets are online. Switch to the receiving wallet (the picker at the top): this one keeps running until its transfer is done.', yes: 'OK', no: null });
       $('bsAmt').value = ''; delete $('bsAmt').dataset.need; $('bsNote').value = ''; bsAvail();
       beamRefresh();
     } catch (e) { actErr($('doBeamSend'), e, { bsAmt: /amount|enough|decimal|available|zero|fee/i, bsAddr: /address|token/i }); }
