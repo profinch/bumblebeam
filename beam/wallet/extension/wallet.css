@@ -676,5 +676,6 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .hint .all { cursor: pointer; }
 .hint .all b { transition: color 0.2s; }
 .hint .all:hover b { color: var(--accent); }
-.hint .all:hover .lb { font-size: 0; }
-.hint .all:hover .lb::after { content: "send all"; font-size: 12px; }      /* as the bridge's: available reads send all under the pointer */
+.hint .all .lb { position: relative; }
+.hint .all:hover .lb { color: transparent; }
+.hint .all:hover .lb::after { content: "send all"; position: absolute; left: 0; color: var(--muted); }      /* as the bridge's: available reads send all under the pointer, in available's room (the figures stay put) */
