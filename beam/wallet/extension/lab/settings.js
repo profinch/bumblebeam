@@ -5,8 +5,10 @@
 //     a click opens its card: Use / Rename; Keys and backups (seed phrase, Ethereum phrase, an account's private key
 //     with the account picked, the Beam file); Restore Beam when it is gone; Remove apart, last
 //   - General: security (short) and display side by side, with an example of both
-//   - Networks: Beam's nodes as one list (the one in use first, whether each answers and how fast, drag to order,
-//     remove, add); Ethereum's RPC and its added tokens together
+//   - Networks: Beam's nodes as one list as Beam's addresses (the one in use lit, whether each answers and how fast,
+//     drag to order with a line where it goes, the list's cross, add); Ethereum's RPCs the same way (public ones
+//     lit while none of one's own)
+//   Planned, not here: adding a token moves to the wallet tab, by its token list; Arbitrum later, as a network of its own here
 //   - Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing
 //   - About: the version, the engine, the bridge's contracts with copy and explorer icons, the source, the changelog
 (() => {
@@ -19,6 +21,7 @@
   const LN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const cp = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${CP}</button>`;
   const ln = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${LN}</a>`;
+  const XI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';      // the list's cross, as Beam's addresses'
   const ics = (...xs) => `<span class="ics">${xs.filter(Boolean).join('')}</span>`;
 
   // made up: three wallets, one open
@@ -55,7 +58,7 @@
   }
   function card(w) {
     const g = (cap, acts, extra = '') => `<div class="grp"><div class="cap">${cap}</div>${extra}<div class="acts">${acts.join('')}</div></div>`;
-    const b = (a, t, cls = '') => `<button type="button" class="btn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
+    const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
     const keys = [];
     if (w.phrase) keys.push(b('phrase', 'Seed phrase'));
     if (w.ethKind === 'phrase') keys.push(b('ethPhrase', 'Ethereum phrase'));
@@ -80,7 +83,7 @@
     for (const d of qa('[data-acct]')) { const w = W.find((x) => x.id === d.dataset.acct); BB.dropdown(d, () => {}).options(w.accounts.map((n, i) => ({ v: String(i), label: n })), '0'); }
   };
   $('wList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.wr')) { e.preventDefault(); e.target.click(); } };
-  $('addWallet').onclick = () => { $('addWallet').textContent = '+ add a wallet: the start screen (lab)'; };
+  $('addWallet').onclick = () => { $('addWallet').textContent = '+ Add a wallet: the start screen (lab)'; };
   drawWallets();
 
   // ---------- General ----------
@@ -99,21 +102,36 @@
     { h: 'old.example.org:8100', st: 'bad' },
   ];
   function drawNodes() {
-    $('nodes').innerHTML = nodes.map((n, i) => `<div class="node${n.use ? ' use' : ''}" draggable="true" data-i="${i}"><i class="st ${n.st}"></i><span class="h" title="${esc(n.h)}">${esc(n.h)}</span><span class="meta">${n.use ? 'in use, ' : ''}${n.st === 'bad' ? 'no answer' : `${n.ms} ms`}</span><button type="button" class="x" data-x="${i}" aria-label="Remove">×</button></div>`).join('');
-    $('beamNet').textContent = 'block 4 119 939';
+    $('nodes').innerHTML = nodes.map((n, i) => `<div class="node${n.use ? ' use' : ''}" draggable="true" data-i="${i}"><i class="st ${n.st}"></i><span class="h" title="${esc(n.h)}">${esc(n.h)}</span><span class="meta">${n.st === 'bad' ? 'no answer' : `${n.ms} ms`}</span><button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI}</button></div>`).join('');
+    $('beamNet').innerHTML = `block: <b>${(4119939).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')}</b>`;
   }
+  // dragged as Beam's addresses: a line above or below the row it would go to
   let drag = null;
-  $('nodes').addEventListener('dragstart', (e) => { drag = Number(e.target.closest('.node').dataset.i); e.target.classList.add('dragging'); });
-  $('nodes').addEventListener('dragover', (e) => e.preventDefault());
-  $('nodes').addEventListener('drop', (e) => { e.preventDefault(); const t = e.target.closest('.node'); if (!t || drag == null) return; const [n] = nodes.splice(drag, 1); nodes.splice(Number(t.dataset.i), 0, n); drag = null; drawNodes(); });
+  const clearMarks = () => qa('#nodes .drop-above, #nodes .drop-below').forEach((r) => r.classList.remove('drop-above', 'drop-below'));
+  $('nodes').addEventListener('dragstart', (e) => { const r = e.target.closest('.node'); drag = Number(r.dataset.i); r.classList.add('dragging'); });
+  $('nodes').addEventListener('dragend', () => { clearMarks(); qa('#nodes .dragging').forEach((r) => r.classList.remove('dragging')); });
+  $('nodes').addEventListener('dragover', (e) => {
+    e.preventDefault(); const r = e.target.closest('.node'); clearMarks(); if (!r || Number(r.dataset.i) === drag) return;
+    const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
+  });
+  $('nodes').addEventListener('drop', (e) => {
+    e.preventDefault(); const r = e.target.closest('.node'); if (!r || drag == null) return clearMarks();
+    const above = r.classList.contains('drop-above'); clearMarks();
+    let to = Number(r.dataset.i) + (above ? 0 : 1); const [n] = nodes.splice(drag, 1); if (drag < to) to--; nodes.splice(to, 0, n); drag = null; drawNodes();
+  });
   $('nodes').onclick = (e) => { const x = e.target.closest('[data-x]'); if (x) { nodes.splice(Number(x.dataset.x), 1); drawNodes(); } };
   $('nodeAdd').onclick = () => { const v = $('nodeIn').value.trim(); if (!/^[\w.-]+:\d{2,5}$/.test(v)) return; nodes.push({ h: v, st: 'ok', ms: 200 }); $('nodeIn').value = ''; drawNodes(); };
   drawNodes();
-  $('ethNet').textContent = 'public RPCs, block 23 781 200';
-  const toks = [{ s: 'USDT', a: '0xdAC17F958D2ee523a2206206994597C13D831ec7' }];
-  const drawToks = () => { $('tokList').innerHTML = toks.map((t, i) => `<div class="li"><span class="what">${esc(t.s)}<span class="sub hash">${esc(t.a)}</span></span><a href="#" class="text-link" data-t="${i}">remove</a></div>`).join('') || '<div class="empty">none added</div>'; };
-  $('tokList').onclick = (e) => { const t = e.target.closest('[data-t]'); if (t) { e.preventDefault(); toks.splice(Number(t.dataset.t), 1); drawToks(); } };
-  drawToks();
+  // Ethereum: the public RPCs as one row, lit while there is none of one's own; one's own above them, in use
+  const rpcs = [];
+  function drawRpcs() {
+    $('rpcs').innerHTML = [...rpcs.map((u, i) => `<div class="node${i === 0 ? ' use' : ''}" data-r="${i}"><i class="st ok"></i><span class="h" title="${esc(u)}">${esc(u.replace(/^https:\/\//, ''))}</span><span class="meta">96 ms</span><button type="button" class="cp a-x" data-rx="${i}" title="Remove this RPC">${XI}</button></div>`),
+      `<div class="node solo${rpcs.length ? '' : ' use'}"><i class="st ok"></i><span class="h">public RPCs</span><span class="meta">5, in turn</span><span></span></div>`].join('');
+    $('ethNet').innerHTML = `block: <b>${(23781200).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')}</b>`;
+  }
+  $('rpcs').onclick = (e) => { const x = e.target.closest('[data-rx]'); if (x) { rpcs.splice(Number(x.dataset.rx), 1); drawRpcs(); } };
+  $('rpcAdd').onclick = () => { const v = $('ethRpc').value.trim(); if (!/^https:\/\/\S+$/.test(v)) return; rpcs.unshift(v); $('ethRpc').value = ''; drawRpcs(); };
+  drawRpcs();
 
   // ---------- Storage ----------
   const keep = { tx: 214, coins: 38, bt: 61, ls: 3, kb: 96 };
@@ -130,7 +148,7 @@
   const PIPE = 'e63bd26ca5b226558686dd191122a8e5d6861a97597db9f40bda48aef6dbe835', ETHP = '0x6063024646E8A1561970840a4b0e0f1082f5a670';
   $('aboutKv').innerHTML = `<dt>Version</dt><dd>0.4.0${ics(ln('https://github.com/profinch/bumblebeam/blob/main/beam/wallet/CHANGELOG.md', 'What is new (the changelog)'))}</dd>
     <dt>Beam engine</dt><dd>BeamMW wasm-client 7.5.14548\nafter HF6</dd>
-    <dt>Bridge</dt><dd>on Beam ${esc(sh(PIPE))}${ics(cp(PIPE, 'the bridge\'s contract id'), ln(`https://explorer.bumblebeam.org/contract/${PIPE}`, 'Open the contract in the explorer'))}\non Ethereum ${esc(sh(ETHP))}${ics(cp(ETHP, 'the bridge\'s contract address'), ln(`https://etherscan.io/address/${ETHP}`, 'Open the contract on Etherscan'))}</dd>
+    <dt>Bridge</dt><dd>${esc(sh(PIPE))}${ics(cp(PIPE, 'the bridge\'s contract id'), ln(`https://explorer.bumblebeam.org/contract/${PIPE}`, 'Open the contract in the explorer'))} on Beam\n${esc(sh(ETHP))}${ics(cp(ETHP, 'the bridge\'s contract address'), ln(`https://etherscan.io/address/${ETHP}`, 'Open the contract on Etherscan'))} on Ethereum</dd>
     <dt>Source</dt><dd>github.com/profinch/bumblebeam${ics(ln('https://github.com/profinch/bumblebeam/tree/main/beam/wallet', 'Open the source'))}</dd>
     <dt>Licence</dt><dd>Apache-2.0</dd>`;
 

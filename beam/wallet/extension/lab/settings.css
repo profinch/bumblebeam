@@ -29,8 +29,7 @@ html.popup main { scrollbar-gutter: stable; }
 .wcard2 .grp { margin-top: 10px; }
 .wcard2 .cap { font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .wcard2 .acts { display: flex; flex-wrap: wrap; gap: 8px; }
-.wcard2 .acts .btn { flex: none; width: auto; white-space: nowrap; padding: 5px 12px; font-size: 11px; }
-.wcard2 .acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
+.wcard2 .acts .sbtn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
 .wcard2 .acct { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 11px var(--font-mono); color: var(--muted); }
 .wcard2 .acct .dd { flex: 1 1 auto; min-width: 0; }
 .wcard2 .note { font: 11px var(--font-mono); color: var(--color-yellow); margin-top: 6px; }
@@ -40,24 +39,25 @@ html.popup main { scrollbar-gutter: stable; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .two .field { min-width: 0; }
 
-/* Networks: each node a row, whether it answers before it, the one in use marked; remove at its end */
+/* Networks: each node a row as Beam's addresses (ui .li.addr): whether it answers, its host, how fast, the list's cross;
+   the one in use lit as the address shown; dragged, a line where it goes */
 .nodes { margin: 4px 0 6px; }
-.node { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 16px; align-items: center; gap: 0 10px; padding: 7px 8px; border-bottom: 1px solid var(--border-dim); font: 12px var(--font-mono); cursor: grab; }
-.node:last-child { border-bottom: 0; }
-.node:hover { background: rgba(255, 255, 255, 0.03); }
+.node { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto 16px; align-items: center; gap: 0 10px; padding: 6px 8px; font: var(--fs-s) var(--font-mono); cursor: grab; }
+.node:hover, .node.use { background: rgba(255, 255, 255, 0.03); }
+.node.use .h { color: var(--accent); }
 .node .st { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .node .st.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .node .st.slow { background: var(--color-yellow); }
 .node .st.bad { background: var(--color-red); }
 .node .h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
-.node.use .h { color: var(--text); }
 .node .meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.node .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
-.node .x:hover { color: var(--color-red); }
+.node .a-x { justify-self: end; }
+.node .a-x svg { width: 14px; height: 14px; }
+.node.solo { cursor: default; }
 .node.dragging { opacity: 0.4; }
+.node.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.node.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
 .panel-title .chain { margin-right: 8px; }
-#tokList .li { grid-template-columns: minmax(0, 1fr) auto; padding: 6px 8px; }
-#tokList .empty { padding: 6px 8px; text-align: left; color: var(--muted); font-size: 12px; }
 
 /* Storage and About: their figures as a confirmation's */
 .kv.keep { margin: 4px 0 10px; }
@@ -65,3 +65,18 @@ html.popup main { scrollbar-gutter: stable; }
 .two .dd { min-width: 0; width: 100%; }
 .two .dd .dd-btn { min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kv.about dd { white-space: pre-line; }      /* a line each: the engine and its fork, the bridge's two sides */
+
+/* the sections as the header's quiet tabs, from edge to edge */
+#setNav { justify-content: space-between; gap: 0; }
+/* the wallet's small buttons everywhere here (ui .seg.mini, as All) */
+.sbtn { font: 700 10px var(--font-mono); letter-spacing: 0.02em; padding: 4px 8px; cursor: pointer; color: var(--text-dim); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; white-space: nowrap; }
+.sbtn:hover { border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
+/* a figure in a hint white (a date, a size); a panel's meta as the wallet tab's (block: grey, the figure white) */
+.sp-sec .hint b { color: var(--text); font-weight: 400; }
+.sp-sec .panel-meta b { color: var(--text); font-weight: 700; }
+/* a hint under a field 8 px apart from it, as everywhere else */
+.sp-sec .field + .hint, .sp-sec .nodes + .hint, .sp-sec .kv + .field { margin-top: 8px; }
+.sp-sec .inline { align-items: center; }
+.sp-sec .inline .dd.compact { flex: none; width: auto; }
+.sp-sec .two + .hint { margin-top: 8px; }
+.wcard2 .acct .dd { flex: none; width: auto; min-width: 140px; }      /* the account picker its own width, not the card's */

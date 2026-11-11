@@ -1412,7 +1412,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function bsAvail() {
     const have = bsHave(), max = beamStatus ? Math.max(0, have - (bsAid() ? 0 : beamFee())) / GROTH : null;
     // the amount white, its unit grey after it (as on the fee)
-    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `Available: <b>${esc(amt(have))}</b> <span class="unit">${esc(bsSym())}</span>` : ''), amtIssue($('bsAmt').value, 8, max));
+    amtLine($('bsAmt'), $('bsLeft'), (beamStatus ? `<span class="all" title="Send all of it">Available: <b>${esc(amt(have))}</b> <span class="unit">${esc(bsSym())}</span></span>` : ''), amtIssue($('bsAmt').value, 8, max));
     $('bsFee').innerHTML = `${esc(amt(beamFee(), 8))} <span class="unit">BEAM</span>`;
   }
   // every amount field takes only digits and one point (or comma), BB.amountField: nothing else gets in to be
@@ -1461,7 +1461,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   const beamFee = () => (bsType === 'offline' || bsType === 'max_privacy' || bsType === 'public_offline' ? 1100000 : 100000);
   // All: the whole of a token (the fee is paid in BEAM), BEAM less the fee
-  $('bsMax').onclick = () => { const a = bsHave(), keep = bsAid() ? 0 : beamFee(); $('bsAmt').value = Math.max(0, (a - keep) / GROTH).toFixed(8).replace(/\.?0+$/, '') || '0'; bsAvail(); };
+  // Available is All, as the bridge's balance: a click sends all of it (but the fee)
+  $('bsLeft').onclick = (e) => {
+    if (!e.target.closest('.all')) return; const a = bsHave(), keep = bsAid() ? 0 : beamFee(); $('bsAmt').value = Math.max(0, (a - keep) / GROTH).toFixed(8).replace(/\.?0+$/, '') || '0'; bsAvail(); };
   $('doBeamSend').onclick = async () => {
     clearNotes('x-beamSend'); actErr($('doBeamSend'), null);
     if ($('doBeamSend').disabled) return;
@@ -1513,13 +1515,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // its two parts made once; then each written only when its text changes, so typing an amount does not
     // redraw the line (it blinked: the fade took each redraw for new data)
     if (!$('esLeft')) $('esAvail').innerHTML = '<span id="esLeft"></span><span id="esRight"></span>';
-    const rightHtml = `<span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Net fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} <span class="unit">ETH</span>`}</b></span>`;
+    const rightHtml = `<span><span class="tipped" title="${esc(`Gas for this transfer at today's base fee and tip${f != null && rates ? ` (${usd(f * rates.eth)})` : ''}. Paid in ETH whatever is sent.`)}">Network fee</span>: <b class="fee-v eth">${f == null ? '…' : `≈ ${esc(num(f, 6))} <span class="unit">ETH</span>`}</b></span>`;
     if ($('esRight').innerHTML !== rightHtml) $('esRight').innerHTML = rightHtml;
-    amtLine($('esAmt'), $('esLeft'), ethData ? `Available: <b>${esc(num(units(c.bal, c.dec), 8))}</b> <span class="unit">${esc(c.label)}</span>` : '', amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
+    amtLine($('esAmt'), $('esLeft'), ethData ? `<span class="all" title="Send all of it">Available: <b>${esc(num(units(c.bal, c.dec), 8))}</b> <span class="unit">${esc(c.label)}</span></span>` : '', amtIssue($('esAmt').value, c.dec, units(c.bal, c.dec)));
   }
   $('esAmt').oninput = () => { delete $('esAmt').dataset.need; esAvail(); };
   // All: the whole of a token; of ETH, all but the most the transfer may cost (its quote, else 0.002 ETH)
-  $('esMax').onclick = () => {
+  $('esAvail').onclick = (e) => {      // (its left part, Available, is made with the line)
+    if (!e.target.closest('.all')) return;
     const c = esCur();
     if (c.token) $('esAmt').value = exact(c.bal, c.dec);
     else { const keepWei = esQuote ? BigInt(esQuote.feeMax) : 2n * 10n ** 15n; const v = BigInt(c.bal) > keepWei ? BigInt(c.bal) - keepWei : 0n; $('esAmt').value = exact(v.toString(), 18); }
@@ -1580,7 +1583,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ok = await confirmBox(`Send ${p.symbol}`, [
         ['Amount', `${p.amountExact} ${p.symbol}${inUsd}`], ['From', `${a.name} ${short(a.address)}`], ['To', p.to],
         // the fee it should cost (gas estimate x today's base fee + tip), and the most it can (gas limit x max fee per gas)
-        ['Net fee', `≈ ${num(feeNow, 6)} ETH${rates ? ` | ${usd(feeNow * rates.eth)}` : ''}`],
+        ['Network fee', `≈ ${num(feeNow, 6)} ETH${rates ? ` | ${usd(feeNow * rates.eth)}` : ''}`],
         ['Max fee', `${num(feeMax, 6)} ETH${rates ? ` | ${usd(feeMax * rates.eth)}` : ''}`],
         // under them what each goes by: the gas price (the fee), the gas limit (the max fee)
         ['Gas base', `${p.baseGwei.toFixed(2)} gwei`], ['Gas limit', Number(p.gasLimit).toLocaleString('en-US').replace(/,/g, '\u2060\u2009\u2060')]],

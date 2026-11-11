@@ -102,7 +102,7 @@
 - A click opens the row's card: When, Now (where it is, while under way) or Why, the address with its copy and
   Etherscan icons, then the asset or token, the fee, the comment, the transaction (a link to our explorer or
   Etherscan) and the block. Cancel there while it can be.
-- All / In / Out / Bridge / dApps with their counts, and a search (name, address, comment, amount) in their
+- All / In / Out / Bridge / dApps (the wallet's small buttons, as All) with their counts, and a search (name, address, comment, amount) in their
   place; 30 rows, then Older. A refresh keeps the list until the new one is ready; the scroll bar's room is kept.
 - A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after its date.
 - Activity's memory: what it worked out once is kept in this browser per wallet, so it is not lost later: a
@@ -197,6 +197,8 @@
   were two button bars.
 
 ### Everywhere
+- Send on both networks: Available is All, as the bridge's balance (its figures light under the pointer, a click
+  takes all of it but the fee); the All button is gone. Ethereum Send says Network fee, as Beam's.
 - A screen opened before its balances came (Send on either network, the bridge) fills them in as they come; it
   showed "—" until it was opened again. A value not known yet is left blank, not a dash.
 - The lock clears what was typed: Send on both networks, the bridge and the token field go back to empty, their

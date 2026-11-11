@@ -600,10 +600,10 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 .af-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }      /* right under the network tabs, as close as the wallet tab's first card */
 .af { display: flex; gap: 6px; flex-wrap: nowrap; }
 .af[hidden], .af-search[hidden] { display: none; }
-.af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
-  font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
-.af button:hover { color: var(--text); }
-.af button.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.08); }
+/* the filters in the wallet's small buttons' style (ui .seg.mini, as All) */
+.af button { font: 700 10px var(--font-mono); letter-spacing: 0.02em; padding: 4px 8px; cursor: pointer; color: var(--text-dim); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; }
+.af button:hover { border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
+.af button.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.15); }
 .af button .n { margin-left: 5px; color: var(--muted); font-weight: 400; }
 .af-find { margin-left: auto; }
 .af-find.on { color: var(--accent); }
@@ -672,3 +672,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .act-acct[hidden] { display: none; }
 .act-acct .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }      /* the name gives way (cut with …) */
 .act-acct .ad { flex: none; }      /* the address always whole as 0x + 6 … 6 */
+/* Send's Available is All, as the bridge's balance: the figures light under the pointer, a click takes all of it */
+.hint .all { cursor: pointer; }
+.hint .all b { transition: color 0.2s; }
+.hint .all:hover b { color: var(--accent); }

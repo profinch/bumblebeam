@@ -217,7 +217,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <div class="field own-label" id="bsOwnL">To one of my wallets</div><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" id="bsOwnB" aria-labelledby="bsOwnL bsOwnB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
     <p class="hint after" id="bsKind"></p>
-    <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="bsMax">All</button></span></span></label>
+    <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"></span></label>
     <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">Network fee</span>: <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
     <label class="field">Comment (only in your history, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
@@ -252,7 +252,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <div class="field own-label" id="esOwnL">To one of my accounts</div><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" id="esOwnB" aria-labelledby="esOwnL esOwnB" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<input id="esTo" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x…"></label>
     <p class="hint after" id="esToHint"></p>
-    <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="esMax">All</button></span></span></label>
+    <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"></span></label>
     <p class="hint after split" id="esAvail"></p>
     <div class="row"><button class="btn solid" id="doEthSend">Review</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>

@@ -46,7 +46,7 @@
          backups, remove. Add a wallet under them -->
     <div class="sp-sec" data-s="wallets">
       <div class="list" id="wList"></div>
-      <div class="more"><button type="button" class="btn ghost small" id="addWallet">+ add a wallet</button></div>
+      <div class="more"><button type="button" class="sbtn" id="addWallet">+ Add a wallet</button></div>
     </div>
 
     <!-- General: security and display -->
@@ -59,7 +59,7 @@
               <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
               <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">never (until the browser closes)</li></ul></div></div>
         <p class="hint">Locking takes Beam offline (a transfer being made finishes first); closing the browser locks it. Only the open wallet's regular addresses are online.</p>
-        <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
+        <div class="row"><button type="button" class="sbtn" id="chPass">Change the password</button></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Display</h3></div>
@@ -80,16 +80,14 @@
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title"><i class="chain beam"></i>Beam</h3><span class="panel-meta" id="beamNet"></span></div>
         <div class="nodes" id="nodes"></div>
-        <label class="field">Add a node<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button class="btn ghost small" id="nodeAdd">Add</button></span></label>
-        <p class="hint">The first that answers is used; the others are tried in turn when it stops answering for a minute. Drag to order.</p>
+        <label class="field">Add a node<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button type="button" class="sbtn" id="nodeAdd">Add</button></span></label>
+        <p class="hint">The one in use is lit; the others are tried in turn, from the top, when it stops answering for a minute. Drag to order.</p>
       </div>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title"><i class="chain eth"></i>Ethereum</h3><span class="panel-meta" id="ethNet"></span></div>
-        <label class="field">RPC<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="public ones (empty)"><button class="btn ghost small" id="rpcSave">Save</button></span></label>
-        <div class="field"><span>Tokens added</span></div>
-        <div class="list" id="tokList"></div>
-        <label class="field">Add a token<span class="inline"><input id="tokAddr" maxlength="42" placeholder="0x… its contract" spellcheck="false"><button class="btn ghost small" id="tokAdd">Add</button></span></label>
-        <p class="hint">ETH and WBEAM always show, and tokens with a market price by themselves.</p>
+        <div class="nodes" id="rpcs"></div>
+        <label class="field">Your own RPC<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="https://…"><button type="button" class="sbtn" id="rpcAdd">Add</button></span></label>
+        <p class="hint">Without one of your own, the public RPCs are used, each in turn when one does not answer.</p>
       </div>
     </div>
 
@@ -97,17 +95,17 @@
     <div class="sp-sec" data-s="storage" hidden>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Recovery snapshot</h3><span class="panel-meta">308 MB</span></div>
-        <p class="hint">Beam's snapshot kept from the last restore (05.11.2026): a restore from a seed phrase starts from it instead of downloading it again (~320 MB, a few minutes).</p>
-        <div class="row"><button class="btn ghost small" id="snapDrop">Remove it</button><span class="act-msg" id="snapMsg"></span></div>
+        <p class="hint">Beam's snapshot kept from the last restore (<b>05.11.2026</b>): a restore from a seed phrase starts from it instead of downloading it again (<b>~320 MB</b>, a few minutes).</p>
+        <div class="row"><button type="button" class="sbtn" id="snapDrop">Remove it</button><span class="act-msg" id="snapMsg"></span></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h3 class="panel-title">Activity's memory</h3><span class="panel-meta" id="keepSize"></span></div>
         <div class="kv keep" id="keepKv"></div>
         <div class="field"><span>Clear</span>
           <div class="inline">
-            <div class="dd" id="keepAge" data-value="90"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
-              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">all of it</li></ul></div>
-            <button class="btn ghost small" id="keepClear">Clear</button></div></div>
+            <div class="dd compact" id="keepAge" data-value="90"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">everything</li></ul></div>
+            <button type="button" class="sbtn" id="keepClear">Clear</button></div></div>
         <p class="hint">What Activity worked out once (kernels and blocks Beam did not give, our pool's payouts, blocks' times, spent coins with no record) and each list as last shown. A removed wallet's goes by itself.</p>
       </div>
     </div>
