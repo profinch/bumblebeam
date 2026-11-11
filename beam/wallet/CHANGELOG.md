@@ -186,7 +186,8 @@
 - Catalog: the groups are "Beam official" (it folds, folded at first, the choice kept, sliding open and shut)
   and "BumbleBeam whitelisted".
 - Beam, Ethereum and Catalog are quiet tabs, as Activity's networks (a network's dot before its name; Catalog at
-  the right end); they were two button bars.
+  the right end, an open book before it, no taller than the letters so the bar is as high as Activity's); they
+  were two button bars.
 
 ### Everywhere
 - A screen opened before its balances came (Send on either network, the bridge) fills them in as they come; it
