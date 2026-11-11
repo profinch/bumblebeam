@@ -2381,7 +2381,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.block && !r.st) rows.push(['Block', String(r.block)]);
     const acts = [];
     if (r.cancel) acts.push(`<button type="button" class="btn warn" data-cancel="${esc(r.id)}">Cancel</button>`);
-    if (r.kind === 'out' && r.peer && r.st !== 'pending') acts.push(`<button type="button" class="btn" data-again="${esc(r.peer)}">Send again</button>`);
     const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
     return `<div class="ar-more">${groups.map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`).join('')}${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;
   }
@@ -2450,12 +2449,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (x) {
       if (!(await confirmBox('Cancel the transfer', [['Transaction', x.dataset.cancel]], 'Only a transfer the other wallet has not signed yet can be cancelled.'))) return;
       try { await host('beam', W().id, 'tx_cancel', { txId: x.dataset.cancel }); activity(); } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
-      return;
-    }
-    const ag = e.target.closest('[data-again]');
-    if (ag) {
-      if (actNet === 'beam') { sheet('beamSend'); $('bsAddr').value = ag.dataset.again; $('bsAddr').dispatchEvent(new Event('input')); }
-      else { sheet('ethSend'); $('esTo').value = ag.dataset.again; $('esTo').oninput(); }
       return;
     }
     if (e.target.closest('.ar-more') || e.target.closest('a')) return;

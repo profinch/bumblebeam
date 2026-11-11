@@ -99,7 +99,7 @@
   pool's (three or more in a day from one address) by their count alone.
 - A click opens the row's card: When, Now (where it is, while under way) or Why, the address with its copy and
   Etherscan icons, then the asset or token, the fee, the comment, the transaction (a link to our explorer or
-  Etherscan) and the block. Cancel and Send again there.
+  Etherscan) and the block. Cancel there while it can be.
 - All / In / Out / Bridge / dApps with their counts, and a search (name, address, comment, amount) in their
   place; 30 rows, then Older. A refresh keeps the list until the new one is ready; the scroll bar's room is kept.
 - A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after its date.
