@@ -488,7 +488,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
 .bx-strip { position: absolute; inset: 0; padding: inherit; }
 .bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
-.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net { visibility: hidden; }
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net, .bx.turning .bx-side > .bx-eta { visibility: hidden; }
 .bx-strip .bx-l1 > .caps { visibility: hidden; }
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
@@ -521,6 +521,8 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* the lower card: the receiving side's balance at its top right (the upper card's mirrored), how long it takes under To */
 .bx-right2 { position: absolute; top: 7px; right: var(--px); display: flex; flex-direction: column; align-items: flex-end; gap: 2px; line-height: 16px; }
 .bx-right2 .bx-have, .bx-right2 .bx-l3 { margin: 0; }
+.bx-eta { position: absolute; left: var(--px); top: 7px; font: 11px var(--font-mono); line-height: 16px; color: var(--muted); white-space: nowrap; }      /* when it arrives by the clock, over the line of how long (moved onto the balance's line: popup.js bxCalc) */
+.bx-eta b { color: var(--text); font-weight: 700; }
 .bx-when { position: absolute; left: var(--px); top: 22px; font: 11px var(--font-mono); line-height: 16px; color: var(--muted); white-space: nowrap; }
 /* Ethereum's account: the wallet tab's picker (#bxAcct) over its place in the Ethereum card; the place holds a still
    copy of it, seen only in the torn strips. As wide as the wallet tab's (256 px in the popup) */

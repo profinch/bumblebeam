@@ -1768,6 +1768,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const there = toEth ? (to && !to.err ? to.wbeam : null) : beamHave();
     $('bxThereHave').innerHTML = there != null ? `${num(there, 4)} <span class="u">${toEth ? 'WBEAM' : 'BEAM'}</span>` : '<span class="u">…</span>';
     $('bxWhen').textContent = toEth ? 'usually about an hour' : 'about an hour, then claim';
+    // when, by the clock: now and an hour (as the line under it says), on the line of the balance's figures
+    $('bxEta').innerHTML = `arrives ≈ <b>${esc(ftime(Date.now() + 3600e3))}</b>`;
+    const mark = (el) => { el.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>'); const y = el.lastElementChild.getBoundingClientRect().top; el.lastElementChild.remove(); return y; };
+    $('bxEta').style.transform = '';
+    if ($('bxEta').offsetParent) $('bxEta').style.transform = `translateY(${(mark($('bxThereHave')) - mark($('bxEta'))).toFixed(1)}px)`;
     $('bxGo').innerHTML = s > 0 && !issue ? `<span>Bridge ${num(s, 4)} ${unitHave}</span>` : 'Bridge';
     // the fee: the gauge's three levels this way, fixed the other; what it is for in two short lines
     $('bxFee').hidden = !toEth;
