@@ -2663,7 +2663,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // the Beam file: this wallet's Beam part alone as a wallet.db (what Open a Beam backup file takes)
     const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
-    const eth = w.eth && w.accounts.length ? [b('ethPhrase', 'Seed phrase'), b('ethKey', 'Private key')] : [];
+    const eth = w.eth && w.accounts.length ? [b('ethKey', 'Private key'), b('ethPhrase', 'Seed phrase')] : [];      // the key first (every account has one), its phrase after
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${mine.length ? g('This wallet', mine) : '<div></div>'}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
   }
