@@ -56,6 +56,15 @@ const Bridge = (() => {
       ['Coinpaprika', async () => (await Eth.getJSON('https://api.coinpaprika.com/v1/tickers/beam-beam')).quotes.USD.price],
     ],
     eth: [
+      // Chainlink's ETH/USD feed on Ethereum itself (latestRoundData: answer, 8 decimals), read through our own RPCs:
+      // no rate limit as the free price APIs have (CoinGecko 429, Coinpaprika 402 at 60 an hour, 2026-11-10); taken
+      // only while fresh (the feed's heartbeat is 1 h)
+      ['Chainlink', async () => {
+        const w = (await Eth.rpc('eth_call', [{ to: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419', data: '0xfeaf968c' }, 'latest'])).slice(2).match(/.{64}/g);
+        const updated = parseInt(w[3], 16);
+        if (Date.now() / 1000 - updated > 3 * 3600) throw new Error('stale');
+        return parseInt(w[1], 16) / 1e8;
+      }],
       ['CoinGecko', async () => (await Eth.getJSON('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd')).ethereum.usd],
       ['Coinpaprika', async () => (await Eth.getJSON('https://api.coinpaprika.com/v1/tickers/eth-ethereum')).quotes.USD.price],
     ],
