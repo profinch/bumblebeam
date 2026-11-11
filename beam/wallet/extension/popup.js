@@ -1266,7 +1266,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const ownMarked = list.map((x) => {
       const e = extOf.get(x.address); if (!e) return x;
       if (!e.verified) host('setAddrExt', wid, { ...e, verified: 'own' }).catch(() => {});
-      return { ...x, ext: true, verified: true, key: e.verified === 'key', own: true };
+      return { ...x, ext: true, verified: true, key: e.verified === 'key' && x.type === 'public_offline', own: true };      // the offline key only says it of a public offline one
     });
     addrs = [...ownMarked, ...added].sort(byFav);
     renderAddrs();
@@ -2834,7 +2834,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     let now = 0;
     if (open0.length && isOpen(w.id)) {
       const own = new Set((await host('beam', w.id, 'addr_list', { own: true }).catch(() => [])).map((x) => x.address));
-      for (const e of open0) if (own.has(e.address)) { await host('setAddrExt', w.id, { ...e, verified: 'key' }).catch(() => {}); now++; }
+      for (const e of open0) if (own.has(e.address)) { await host('setAddrExt', w.id, { ...e, verified: 'own' }).catch(() => {}); now++; }
       await loadAddrs().catch(() => {});
       now = open0.length - (await host('addrExt', w.id).catch(() => [])).filter((e) => !e.verified).length;
     }
