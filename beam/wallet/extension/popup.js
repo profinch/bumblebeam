@@ -2817,7 +2817,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       await loadAddrs().catch(() => {});
       now = open0.length - (await host('addrExt', w.id).catch(() => [])).filter((e) => !e.verified).length;
     }
-    ask({ title: 'Imported', note: `The addresses and the history are in this wallet now.${open0.length ? (isOpen(w.id) ? `\nAdded by hand and not verified: ${open0.length}, verified now: ${now}.` : `\nAdded by hand and not verified: ${open0.length}. They are checked again when this wallet is opened.`) : ''}`, yes: 'OK', no: null });
+    ask({ title: 'Imported', yes: 'OK', no: null, html: `<p class="imp-res">The addresses and the history are in this wallet now.${open0.length ? `<br>Manually added and not verified addresses: <b>${open0.length}</b>${isOpen(w.id) ? `<br>Verified now: <b>${now}</b>` : '<br>They are checked again when this wallet is opened'}` : ''}</p>` });
   };
 
   // ---------- Settings: Backup ----------
