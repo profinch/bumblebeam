@@ -314,7 +314,7 @@
   }
 
   // ---------- the dialog: confirm, password, one input ----------
-  let dlgBusy = Promise.resolve();
+  let dlgBusy = Promise.resolve(), lockN = 0;      // lockN: how many locks so far
   // an Ethereum address field takes no more than an address (42); a pasted one is trimmed first, so spaces round it
   // do not push its last letters out
   for (const id of ['esTo', 'bxAddrIn']) $(id).addEventListener('paste', (e) => {
@@ -327,8 +327,9 @@
   // and when the popup gets its focus back (a file chooser, the download bubble), the same for the button it lands on
   window.addEventListener('focus', () => setTimeout(() => unring(), 0));
   function ask({ title, before = null, rows = [], note: n = '', password = false, passLabel = 'Wallet password', input = null, yes = 'Confirm', no = 'Cancel', html = null, check = null }) {
+    const ln = lockN;      // asked before a lock: not shown after it
     const run = () => new Promise((resolve) => {
-      if (before && !before()) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
+      if (ln !== lockN || (before && !before())) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
       $('dTitle').textContent = title;
       $('dBody').innerHTML = html != null ? html : rows.length ? kvHtml(rows) : '';
       $('dNote').textContent = n; $('dNote').hidden = !n;
@@ -388,9 +389,10 @@
         }
         done(true);
       };
-      // Cancel and Esc wait while its check runs: the action asked for (a removal, an import) goes on in the host either way
-      $('dNo').onclick = () => { if (!checking) done(false); };
-      $('dlg').oncancel = (e) => { e.preventDefault(); if (!checking) done(false); };
+      // Cancel and Esc close it while its check runs too (a backup's import takes minutes); what the host does goes on,
+      // and the check's late answer is dropped (finished)
+      $('dNo').onclick = () => done(false);
+      $('dlg').oncancel = (e) => { e.preventDefault(); done(false); };
       // Enter presses the button and nothing else: its default action, left to Chrome, took the popup's focus on
       // Windows (traced 2026-11-06: blur 2 ms after Enter, before any answer), and a popup that loses it closes
       $('dPass').onkeydown = $('dInput').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); $('dYes').click(); } };
@@ -524,7 +526,7 @@
   async function go(what) {
     pwFields();
     if (what === 'bkimport') bmScreen();
-    if (what === 'create') return showPhrase(await host('newPhrase'));
+    if (what === 'create') { try { return showPhrase(await host('newPhrase')); } catch (e) { return note('s-welcome', 'bad', msg(e)); } }
     clearNotes(`s-${what}`);
     show(`s-${what}`);
   }
@@ -555,7 +557,7 @@
   // Back from a way of adding a wallet: to the choice of ways (the header's arrow there goes back to the wallet)
   // the start screens leave no phrase, key or password typed behind (Back, and the lock)
   function clearStart() {
-    for (const id of ['kKey', 'rSeed', 'bmPass', 'bmCur']) if ($(id)) $(id).value = '';
+    for (const id of ['kKey', 'rSeed', 'bmPass', 'bmCur', 'seedCheck']) if ($(id)) $(id).value = '';
     if ($('seedWords')) $('seedWords').innerHTML = '';
     clearPw();
   }
@@ -580,18 +582,20 @@
     if (typed.join(' ') !== checks.map((i) => w[i]).join(' ')) throw new Error('the check words do not match: look at the list again');
     const p = readPw('s-create');
     await host('addWallet', ...addArgs({ kind: 'new', name: $('cName').value }, p));
-    $('seedWords').innerHTML = ''; $('cName').value = ''; clearPw();
+    $('seedWords').innerHTML = ''; $('cName').value = ''; $('seedCheck').value = ''; clearPw();
     curTab = 'home'; await enter();
   });
 
   // restore: what kind of phrase it is, as it is typed
-  let kindTimer = 0;
+  let kindTimer = 0, kindN = 0;
   $('rSeed').oninput = () => {
     clearTimeout(kindTimer);
+    const n = ++kindN;
     kindTimer = setTimeout(async () => {
       const p = norm($('rSeed').value);
-      if (!p) { $('rKind').textContent = ''; return; }
-      const k = await host('checkPhrase', p);
+      if (!p) { $('rKind').textContent = ''; $('rBeamBox').hidden = true; return; }
+      let k; try { k = await host('checkPhrase', p); } catch { return; }
+      if (n !== kindN) return;      // typed on meanwhile: the newer answer draws
       $('rBeamBox').hidden = !k.beam;
       $('rKind').textContent = k.beam && k.eth ? 'A 12-word phrase: Beam and Ethereum.'
         : k.eth ? `An Ethereum phrase (${k.words} words): the Ethereum part only. Beam phrases are 12 words.`
@@ -720,7 +724,7 @@
       else if (v === '__rename') { await renameAccount(); }
       else if (v === '__remove') { await removeAccount(w); return load().then(() => { renderEth(); ethRefresh(); }); }
       else await host('setActiveEth', w.id, Number(v));
-    } catch (e) { await ask({ title: 'Not added', note: msg(e), yes: 'OK', no: null }); }
+    } catch (e) { await ask({ title: v === '__add' || v === '__import' ? 'Not added' : 'Not done', note: msg(e), yes: 'OK', no: null }); }
     await load(); renderEth(); ethRefresh();
   });
   // an account from another phrase or a private key, into this wallet
@@ -819,16 +823,17 @@
             else if (curTab === 'activity' && !$('t-activity').hidden) activity();
             else if (curTab === 'bridge' && !$('t-bridge').hidden) bridgeOpen();
           }
-          if (curTab === 'settings' && !$('t-settings').hidden) settingsOpen();
+          if (curTab === 'settings' && !$('t-settings').hidden) { drawWallets(); if (setSec === 'general') bkInfo(); }
           // a wallet's address for My wallets came (read in the background): the open Send lists it
           if (!$('x-beamSend').hidden) bsOwnFill();
           // Receive opened while the Beam part was starting: filled once it runs
-          if (!$('x-beamRecv').hidden && !shownAddr && beamHere()) recvOpen();
+          if (!$('x-beamRecv').hidden && !shownAddr && beamHere() && (switched || m.wallet === st.active) && !recvBusy) { recvBusy = true; Promise.resolve(recvOpen()).finally(() => { recvBusy = false; }); }
         });
         break;
       }
       case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
-      case 'bb_locked': st = null; resetForms(); route(); break;
+      // the open dialog closed (a key or phrase typed into it goes with it), the waiting ones dropped
+      case 'bb_locked': st = null; lockN++; if (dlgCancel) dlgCancel(); resetForms(); route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
       case 'bb_bridge': if (!$('t-bridge').hidden) listsSoon(); break;
       case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappListOpen(); } break;
@@ -1179,8 +1184,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const beamPricesFresh = (wid) => beamPx.wid === wid && Date.now() - beamPx.at < 60000;
   function beamPricesLoad(wid) {
     if (beamPricesFresh(wid)) return Promise.resolve();
-    if (!beamPxP) beamPxP = host('beamPrices', wid).then((p) => { beamPx = { wid, at: Date.now(), p: p || {} }; total(); }, () => {}).finally(() => { beamPxP = null; });
-    return beamPxP;
+    if (beamPxP && beamPxP.wid === wid) return beamPxP;
+    const p = host('beamPrices', wid).then((x) => { beamPx = { wid, at: Date.now(), p: x || {} }; total(); }, () => { beamPx = { wid, at: Date.now(), p: {} }; })      // a failure rests a minute too
+      .finally(() => { if (beamPxP === p) beamPxP = null; });
+    p.wid = wid; beamPxP = p;
+    return p;
   }
   const beamTokUsd = (aid, groth) => { const w = W(), px = w && beamPx.wid === w.id ? beamPx.p[aid] : undefined; return rates && px > 0 ? ((groth || 0) / GROTH) * px * rates.beam : null; };
   $('beamAssets').onclick = (e) => { const c = e.target.closest('[data-cp]'); if (c) copyFlash(c, c.dataset.cp); };
@@ -1218,14 +1226,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   }
 
   $('ethAddNew').onclick = async () => {
-    const w = W();
+    const w = W(); let made = false;
     // made in the window itself (an error shows there in yellow), which then shows the phrase
     const r = await ask({ title: 'Create Ethereum accounts', note: 'A new Ethereum seed phrase for this wallet. It is shown once now: write it down. Settings → Wallets shows it again with the password.', yes: 'Create',
       check: async () => {
         const phrase = await host('addEthPart', w.id, { kind: 'new' });
+        made = true;
         return phrase ? { title: 'Your Ethereum seed phrase', html: `<ol class="seed">${phrase.split(' ').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`, note: 'It restores this wallet\'s Ethereum accounts here, in MetaMask or Rabby. The Beam part has its own phrase (or backup file).', yes: 'Written down' } : null;
       } });
-    if (!r.ok) return;
+    if (!r.ok && !made) return;      // made, then closed with Esc: the accounts are there all the same
     await load(); ethRefresh();
   };
   $('ethAddImport').onclick = async () => {
@@ -1243,7 +1252,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // ---------- sheets ----------
   const ADDR_HINT = {
     regular: 'Give it to the sender. Online while this wallet is the open one and unlocked. The transfer completes while both wallets are online. The popup may be closed.',
-    offline: 'Takes payments while this wallet is off, up to 10 (one-time vouchers inside the address). The coins arrive shielded. For many payments use public offline.',
+    offline: 'Takes payments while this wallet is off: as many as the one-time keys inside it (5 in one made here; Payments shows how many are left), then more while it is online. The coins arrive shielded. For many payments use public offline.',
     max_privacy: 'One payment, maximum anonymity (the shielded pool). The coins mature over a while before they can be spent.',
     public_offline: 'Public offline: any number of payments, also while this wallet is off (a pool\'s payouts, an exchange, donations). The coins arrive shielded and mature for a while. Less private than the others: all payments go to one public key.',
   };
@@ -1260,6 +1269,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   async function loadAddrs() {
     const wid = W().id;
     const [list, fav, ext] = await Promise.all([host('beam', wid, 'addr_list', { own: true }), host('addrFavs', wid).catch(() => []), host('addrExt', wid).catch(() => [])]);
+    if (!isOpen(wid)) return false;      // an older answer: the favourites are another wallet's
     favs = new Set(fav); favOrder = fav.slice();
     const own = new Set(list.map((x) => x.address));
     // an address once verified stays so: only the others are checked
@@ -1383,7 +1393,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!(n > 0)) { if (shownAddr === x.address) $('beamAddrPay').textContent = 'unknown'; return; }
       vouchersIn.set(x.address, n);
       const txs = await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => []);
-      const got = txs.filter((t) => t.income && t.receiver && t.status !== 2 && t.status !== 4 && (t.receiver === x.wallet_id || t.receiver === x.address || tokenHas(x.address, String(t.receiver)))).length;
+      const nid = (v) => String(v || '').toLowerCase().replace(/^0+/, '');
+      // an offline payment (a push) to it: a regular transfer to the same SBBS id used no key of it
+      const got = txs.filter((t) => t.income && t.receiver && t.status !== 2 && t.status !== 4 && /push/i.test(t.tx_type_string || '')
+        && ((x.wallet_id && nid(t.receiver) === nid(x.wallet_id)) || t.receiver === x.address || tokenHas(x.address, String(t.receiver)))).length;
       if (shownAddr !== x.address || W().id !== wid) return;
       const left = Math.max(0, n - got);
       const tip = kind === 'max'
@@ -1401,6 +1414,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // Receive opens on (in this order) the address shown last since the unlock (the host remembers it), else the
   // first favourite, else the first in the list; never an unverified one added manually, even shown last or a
   // favourite. No address is ever made by itself: with none, New makes one.
+  let recvBusy = false;      // Receive being filled on an event: one at a time
   async function recvOpen() {
     note('x-beamRecv', 'bad', '');
     // nothing of the wallet shown before stays on screen while this one's addresses come
@@ -1442,13 +1456,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('saveBeamQr').onclick = () => { const x = addrs.find((y) => y.address === shownAddr); BB.qrSave($('beamAddr').textContent, `beam-${(x && x.type) || 'address'}-address`, 'png'); };
   $('nameBeamAddr').onclick = async (e) => {
     e.preventDefault();
-    const x = addrs.find((y) => y.address === shownAddr);
+    const x = addrs.find((y) => y.address === shownAddr), wid = W().id;
     if (!x) return;
     const r = await ask({ title: 'Name the address', input: { label: 'Name (visible only to you)', value: x.comment || '', max: NAME_MAX }, yes: 'Save', check: nameCheck(x.address) });
     if (!r.ok) return;
     try {
-      if (x.ext && !x.own) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
-      else await host('beam', W().id, 'edit_address', { address: x.address, comment: r.input });      // Beam's own (one added by hand too, once an import made it Beam's)
+      if (!isOpen(wid)) return;      // another wallet opened meanwhile: the address is not its
+      if (x.ext && !x.own) await host('setAddrExt', wid, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
+      else await host('beam', wid, 'edit_address', { address: x.address, comment: r.input });      // Beam's own (one added by hand too, once an import made it Beam's)
       if (!(await loadAddrs())) return; showAddr(addrs.find((y) => y.address === x.address) || x);
     }
     catch (e) { note('x-beamRecv', 'bad', msg(e)); }
@@ -1456,13 +1471,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // removes an address once asked (it stops taking payments): the list's trash and the card's
   async function removeAddr(x) {
     if (!x) return;
-    const lo = x.ext && !x.own;      // only the list's: Beam does not know it
+    const wid = W().id, lo = x.ext && !x.own;      // only the list's: Beam does not know it
     const r = await ask({ title: lo ? 'Remove it from the list' : 'Remove this address', rows: [['Address', short(x.address)], ['Name', x.comment || 'Unnamed'], ['Type', TYPE_NAME[x.type] || x.type]],
       note: lo ? 'Only this list forgets it: payments to it are not affected.' : 'It stops taking payments. Coins it already brought stay in the wallet.', yes: 'Remove' });
     if (!r.ok) return;
     try {
-      if (!lo) await host('beam', W().id, 'delete_address', { address: x.address });
-      if (x.ext) await host('setAddrExt', W().id, null, x.address);
+      if (!isOpen(wid)) return;      // another wallet opened meanwhile: nothing removed from it
+      if (!lo) await host('beam', wid, 'delete_address', { address: x.address });
+      if (x.ext) await host('setAddrExt', wid, null, x.address);
       const was = x.address === shownAddr;
       if (!(await loadAddrs())) return;
       if (was) openDefault(null);
@@ -1567,7 +1583,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const keep = held.some((t) => String(t.asset_id) === bsAsset.value()) ? bsAsset.value() : '0';
     bsAsset.options(opts((w && assetMetaDone.get(w.id)) || new Map()), keep);
     $('bsAsset').classList.toggle('one', !held.length);
-    if (w && ids.length) { const m = await assetMeta(w.id, ids); if (W() === w) bsAsset.options(opts(m), bsAsset.value() || keep); }
+    if (w && ids.length) { const m = await assetMeta(w.id, ids); if (W() && W().id === w.id) bsAsset.options(opts(m), bsAsset.value() || keep); }
     bsAvail();
   }
   const bsAid = () => Number(bsAsset.value() || 0);
@@ -1591,8 +1607,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('bsAddr').oninput = async () => {
     const a = $('bsAddr').value.trim();
     // My wallets follows the field: another wallet's address picks its name, anything else "My wallets…"
-    const ow = st.wallets.find((w) => w.id !== st.active && w.beamAddress && w.beamAddress === a);
-    bsOwn.set(ow ? ow.beamAddress : '');
+    const hit = !!a && st.wallets.some((w) => w.id !== st.active && (w.beamAddress === a || (w.beamAddresses || []).some((x) => x.address === a)));
+    bsOwn.set(hit ? a : '');
     bsType = null; bsMine = ''; $('bsKind').textContent = ''; bsAvail();
     if (!a || !beamHere()) return;
     // Beam's validate_address calls almost any word a valid token, so the shape is checked first: an SBBS
@@ -1649,7 +1665,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee`
           : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If the address is that wallet's, this payment verifies it. If not, the coins go to whoever it belongs to.` : ''))) return;
       if (!isOpen(wid)) throw new Error('another wallet was opened meanwhile: nothing was sent');
-      const r = await host('beam', wid, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
+      // to an offline address: an offline payment (Beam's API since 6.0 makes it a regular, online one unless asked: the receiver then has to be online)
+      const r = await host('beam', wid, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined, ...(bsType === 'offline' ? { offline: true } : {}) });
       actOk($('doBeamSend'), `transaction ${esc(r.txId)} sent`);
       // to a regular address of another of one's wallets: it completes once that wallet is opened (this one keeps
       // running meanwhile, its transfer under way)
@@ -1889,6 +1906,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const w = W(), a = w && w.accounts.find((x) => x.address === v);
     if (!a || (acct() && acct().address === v)) return;
     toMainTimer = setTimeout(async () => {
+      if (!isOpen(w.id)) return;      // another wallet opened meanwhile
       try { await host('setActiveEth', w.id, a.i); bxMain = v; await load(); renderEth(); ethRefresh(); } catch { /* the wallet tab keeps its own */ }
     }, 400);
   }
@@ -2234,6 +2252,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (w && w.id !== bxWallet) {                     // another wallet: its own account, nothing carried over
       bxWallet = w.id; mine = ''; other = ''; feeOwn = null; if (cur === 'typed') cur = '';
       $('bxAmt').value = ''; bxShown = 5; actErr($('bxGo'), null);
+      bxRows = []; bxRowsW = null; $('bList').innerHTML = '<div class="empty">loading…</div>'; $('bMore').hidden = true;
       if ($('bxAcct').classList.contains('typing')) typed(false);
     }
     // the wallet tab's account changed since the bridge last looked: the bridge takes it (one picked on the bridge
@@ -2279,8 +2298,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const rcv = addrOf(cur);
     if (!isEthAddress(rcv)) throw fieldErr('bxAcct', 'choose the Ethereum account, or enter an address');
     const own = allAccounts().find((a) => a.address.toLowerCase() === rcv.toLowerCase());
-    const fd = feeData || await host('relayerFee').catch((e) => { throw Object.assign(e instanceof Error ? e : new Error(msg(e)), { pricing: true }); });
+    const fd = feeData || (feeData = await host('relayerFee').catch((e) => { throw Object.assign(e instanceof Error ? e : new Error(msg(e)), { pricing: true }); }));
     const o = fd.options.find((x) => x.key === level) || fd.options[0];
+    if (feeOwn != null && !(feeOwn > 0)) throw fieldErr('bxFeeIn', 'a fee above zero');
     const a = toGroth($('bxAmt').value), f = toGroth(String(feeOwn != null ? feeOwn : o.fee));
     if (f < Math.round(fd.min * GROTH)) {
       const up = covers(f / GROTH);
@@ -2344,7 +2364,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // first. Each row: the way and its number (the Beam side's message), whom to or from, when (the date in full, the
   // time as Settings has it), the amount over the fee paid, the state. The amounts' and the states' columns one width
   // down the list. The last 5 shown, "10 more" adds ten at a time
-  let bxRows = [], bxShown = 5;
+  let bxRows = [], bxShown = 5, bxRowsW = null;      // the transfers drawn, and whose wallet they are
+  const bxClaimed = new Set();      // `${wallet}:${MsgId}` claimed here: not offered again while its transaction is mined
   const BADGE_OUT = { done: ['ok', 'arrived'], waiting: ['pending', 'relaying'], failed: ['bad', 'failed'], unknown: ['pending', 'unknown', 'not in the releases read: see the bridge monitor'] };
   const BADGE_IN = { approving: ['pending', 'approving'], sending: ['pending', 'sending'], sent: ['pending', 'mining'], unconfirmed: ['pending', 'unmined', 'not mined yet'], confirmed: ['ok', 'sent'], failed: ['bad', 'failed'] };
   let bxListSeq = 0;
@@ -2359,20 +2380,20 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     ]);
     if ((wid && !isOpen(wid)) || seq !== bxListSeq) return;
     const rows = [
-      ...claims.map((m) => ({ t: Infinity, claim: true, way: 'in', no: m.MsgId, who: 'from Ethereum', when: 'arrived on Beam', amount: Number(m.amount) / GROTH, fee: null, msg: m.MsgId, raw: m.amount })),
+      ...claims.map((m) => ({ t: Infinity, claim: !bxClaimed.has(`${wid}:${m.MsgId}`), badge: ['pending', 'claiming'], way: 'in', no: m.MsgId, who: 'from Ethereum', when: 'arrived on Beam', amount: Number(m.amount) / GROTH, fee: null, msg: m.MsgId, raw: m.amount })),
       ...out.msgs.map((m) => ({ t: m.eth ? Date.parse(m.eth.time) : Infinity - 1, way: 'out', no: m.id, who: `to ${short(m.receiver)}`,
         when: m.eth ? fdt(m.eth.time) : m.state === 'waiting' ? 'on Beam, not released yet' : '', hash: m.eth && m.eth.hash, amount: m.amount / GROTH, fee: m.fee / GROTH, badge: BADGE_OUT[m.state] || BADGE_OUT.unknown })),
       ...ins.map((r) => ({ t: r.time, way: 'in', no: null, who: `from ${short(r.from)}`, when: fdt(r.time), hash: r.hash, amount: units(r.value, 8), fee: r.fee != null ? units(r.fee, 8) : null,
         badge: BADGE_IN[r.state] || BADGE_IN.sent, err: r.error })),
     ].sort((a, b) => (b.claim ? 1 : 0) - (a.claim ? 1 : 0) || b.t - a.t);
-    bxRows = rows;
+    bxRows = rows; bxRowsW = wid;
     transfers();
   }
   function transfers() {
     const rows = bxRows.slice(0, bxShown);
     $('bList').innerHTML = rows.map((r) => {
       const way = r.way === 'out' ? 'BEAM → WBEAM' : 'WBEAM → BEAM';
-      const end = r.claim ? `<button type="button" class="btn solid small" data-msg="${esc(r.msg)}" data-amount="${esc(r.raw)}">Claim</button>`
+      const end = r.claim ? `<button type="button" class="btn solid small" data-msg="${esc(r.msg)}" data-amount="${esc(r.raw)}" data-w="${esc(bxRowsW || '')}">Claim</button>`
         : `<span class="badge ${r.badge[0]}"${r.err || r.badge[2] ? ` title="${esc(r.err || r.badge[2])}"` : ''}>${r.badge[1]}</span>`;
       return `<div class="li bx-tr"><span class="what">${way}${r.no != null ? ` <span class="no">#${esc(r.no)}</span>` : ''}<span class="sub">${esc(r.who)}</span><span class="sub">${esc(r.when) || '&nbsp;'}${r.hash ? `<a class="cp tx" href="https://etherscan.io/tx/${esc(r.hash)}" target="_blank" rel="noopener" title="Open the transaction on Etherscan">${LINK}</a>` : ''}</span></span>`
         + `<span class="money"><span class="amt">${num(r.amount)}</span><span class="fee">${r.fee != null ? `fee ${num(r.fee, 2)}` : '&nbsp;'}</span></span><span class="end">${end}</span></div>`;
@@ -2388,14 +2409,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('bList').onclick = async (e) => {
     const b = e.target.closest('button[data-msg]');
     if (!b) return;
+    const wid = W() && W().id;
+    if (!wid || b.dataset.w !== wid) return;      // a list of the wallet open before: its claim is not this one's
     note('bErr', 'bad', '');
     b.disabled = true;
     try {
-      const txid = await host('receive', W().id, {
+      const txid = await host('receive', wid, {
         title: 'Claim from the bridge', rows: [['Bridge message', `#${b.dataset.msg}`], ['BEAM', amt(Number(b.dataset.amount), 8)]],
         note: 'Takes the BEAM the relayer brought over for this wallet.',
       }, b.dataset.msg);
-      b.textContent = 'Claimed'; b.title = `Beam transaction ${txid}`;
+      b.textContent = 'Claimed'; b.title = `Beam transaction ${txid}`; bxClaimed.add(`${wid}:${b.dataset.msg}`);
       beamRefresh();
     } catch (err) { note('bErr', 'bad', msg(err)); b.disabled = false; }
   };
@@ -2533,7 +2556,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         cancel: !t.income && !contract && (t.status === 0 || t.status === 1),
         // our pool's: its kernel in the pool's list; with no kernel from Beam, its amount (a payout taken once); a
         // comment proves nothing (anyone can write it)
-        ours: !!t.income && !contract && (zeroK(t.kernel) ? !!(t.poolP = poolPay(Number(t.value), t.create_time || 0)) : poolK.has(t.kernel)),
+        ours: !!t.income && !contract && (zeroK(t.kernel) ? !s && !!(t.poolP = poolPay(Number(t.value), t.create_time || 0)) : poolK.has(t.kernel)),      // by amount: a completed receipt only (a failed one takes no payout)
         poolK: zeroK(t.kernel) && t.poolP ? t.poolP.kernel : null,
       };
     });
@@ -2677,20 +2700,25 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // each payout of a folded row: its transaction in the explorer by its kernel, else its block
   const payLink = (x) => (x.kern ? ics(lnI(`${EXPL}/kernel/${x.kern}`, 'Open the transaction in the explorer'))
     : x.block ? ics(lnI(`${EXPL}/block/${x.block}`, 'Open its block in the explorer (Beam gave no kernel to open the transaction by)')) : '');
+  // the addresses of this wallet a receipt came to (every address of its SBBS id, the one paid first)
+  const atHtml = (at) => at.map((x) => `${x.name ? `${esc(x.name)}\n` : ''}${esc(short(x.address))}${x.type ? ` (${esc(TYPE_NAME[x.type] || x.type)})` : ''}`).join('\n');
   function actCard(r) {
     if (r.group) {
+      // the payouts' address(es) here: each once (a pool pays one address; a coin with no record names none)
+      const seen = new Map(); for (const x of r.items) for (const a of (Array.isArray(x.at) ? x.at : [])) if (!seen.has(a.address)) seen.set(a.address, a);
       return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}${payLink(x)}${x.block ? `<span class="bk">block ${x.block}</span>` : ''}</span><b>+${vShown(x)} <u>${esc(x.sym)}</u></b></div>`).join('')}
-        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? OUR_POOL : r.peer ? addrDd(r.peer) : ''}</dd></dl></div>`;      // our pool pays from a fresh address each day: by its name
+        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? OUR_POOL : r.peer ? addrDd(r.peer) : ''}</dd>${seen.size ? `<dt>To</dt><dd>${atHtml([...seen.values()])}</dd>` : ''}</dl></div>`;      // our pool pays from a fresh address each day: by its name
     }
     const rows = [], coin = actNet === 'beam' ? 'BEAM' : 'ETH';
     if (r.t) rows.push(['When', fdt(r.t)]);
     if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
     if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);
-    if (r.ours) rows.push(['From', `${OUR_POOL}${r.peer ? `\n${addrDd(r.peer)}` : ''}`], null);
+    if (r.ours) { rows.push(['From', `${OUR_POOL}${r.peer ? `\n${addrDd(r.peer)}` : ''}`]); if (Array.isArray(r.at) && r.at.length) rows.push(['To', atHtml(r.at)]); rows.push(null); }
     else if (r.peer) {
       // a receipt: From is the sender's SBBS id (Beam names the sending side so), To the address of this wallet it came to
       rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)]);
-      if (came(r) && r.at && r.at.length) rows.push(['To', r.at.map((x) => `${x.name ? `${esc(x.name)}\n` : ''}${esc(short(x.address))}${x.type ? ` (${esc(TYPE_NAME[x.type] || x.type)})` : ''}`).join('\n')]);      // every address of that id, the one paid first
+      const at = Array.isArray(r.at) ? r.at : r.at ? [r.at] : [];      // kept by an earlier version: one object
+      if (came(r) && at.length) rows.push(['To', atHtml(at)]);      // every address of that id, the one paid first
       rows.push(null);
     }
     else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);
@@ -2749,7 +2777,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     keepTidy();
     const lsKey = `${actNet}|${actNet === 'eth' && a ? a.address.toLowerCase() : ''}`;
     if (forNow !== actFor) {
-      actFor = forNow; actRows = []; actOpen.clear();
+      actFor = forNow; actRows = []; actOpen.clear(); actShown = 30;
       box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true;      // the other list off at once
       // the list as last shown opens at once (from Activity's memory), the new one replaces it when it comes
       const kept = wid ? ((await keepOf(wid)).ls || {})[lsKey] : null;
@@ -2773,7 +2801,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       // kept as shown, for the next opening (these rows, not whatever is shown by then): the newest 300, without what
       // is only for drawing and without Cancel (a kept transfer may be done by the next opening)
       const kp = await keepOf(wid);
-      if (rows.length) kp.ls[lsKey] = rows.slice(0, 300).map(({ beamK, beamB, items, group, cancel, poolP, ...r }) => r); else delete kp.ls[lsKey];
+      if (rows.length) kp.ls[lsKey] = rows.slice(0, 300).map(({ beamK, beamB, items, group, cancel, ...r }) => r); else delete kp.ls[lsKey];
       keepSave();
     } catch (e) { if (!stale()) say(msg(e)); }
   }
@@ -2985,6 +3013,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       check: async ({ pass }) => { out = await host('backupMake', pass, $('bkDb').checked); } });
     if (!r.ok || !out) return;
     st.lastBackup = out.at; st.lastBackupId = null; bkInfo(); bkSay('made: download it to keep it');
+    if (out.left && out.left.length) ask({ title: 'Made, without some Beam databases', note: `Beam's database of ${out.left.join(', ')} could not be read (missing, or a transfer under way): those wallets are in it by their keys only. Their history comes back from the chain or an exported wallet data file.`, yes: 'OK', no: null });
   };
   $('bkDown').onclick = async () => {
     const last = await host('backupLast').catch(() => null);
@@ -3098,8 +3127,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   async function probeAll() {
     const g = ++probeGen;
     for (const h of st.nodes || []) nodeTime(h).then((p) => { if (g !== probeGen) return; probe[h] = p; if (setSec === 'networks') drawNodes(); });
-    const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...PUBLIC_RPCS.map((x) => `https://${x}`)];
-    let pubDone = false, pubLeft = PUBLIC_RPCS.length;
+    const pub = PUBLIC_RPCS.map((x) => `https://${x}`).filter((u) => u !== st.ethRpc);
+    const urls = [...(st.ethRpc ? [st.ethRpc] : []), ...pub];
+    let pubDone = false, pubLeft = pub.length;
     for (const u of urls) probeRpc(u).then((p) => {
       if (g !== probeGen) return;
       if (u === st.ethRpc) probe[u] = p;
@@ -3192,9 +3222,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     dpShown = r.id; $('dpYes').disabled = true;
     setTimeout(() => { if (dpCur && dpCur.id === r.id && !dpBusy) $('dpYes').disabled = false; }, 600);
   }
+  let dpSeq = 0;      // each drawing numbered: one that awaited is not drawn over a newer one (Approve answers what shows)
   async function dappScreen() {
+    const seq = ++dpSeq;
     let list = [];
     try { list = await host('dappPending'); } catch {}
+    if (seq !== dpSeq) return;
+    // a Beam contract transaction's reading, made before anything is drawn or taken as the current request
+    const pre = list[0] && list[0].kind === 'beamtx' ? await consentRows(list[0].info, list[0].amounts).catch(() => [['Reading', 'not available']]) : null;
+    if (seq !== dpSeq) return;
+    $('dpNote').classList.remove('warn-own');
     if (!list.length) { dpCur = null; if (inWin) { await host('dappWinDone').catch(() => {}); return window.close(); } return; }
     const same = dpCur && dpCur.id === list[0].id;
     const r = dpCur = list[0];
@@ -3219,7 +3256,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     if (r.kind === 'beamtx') {
       $('dpTitle').textContent = 'Beam contract transaction';
-      const rows = [['Calls itself', r.appname || ''], ...wRow, ...await consentRows(r.info, r.amounts)];
+      const rows = [['Calls itself', r.appname || ''], ...wRow, ...pre];
       $('dpBody').innerHTML = kv(rows);
       $('dpNote').textContent = 'What it spends and receives is the wallet\'s own reading of the transaction, not the site\'s.';
       $('dpYes').textContent = 'Approve';
@@ -3391,7 +3428,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (act === 'restoreBeam') {
         // the Beam part rebuilt from the seed phrase: the stored one, or typed for a wallet that has none
         const r = await ask({ title: `Restore Beam: ${w.name}`, password: true, yes: 'Restore',
-          input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '' },
+          input: w.phraseKnown ? null : { label: 'Seed phrase of this wallet (12 words)', value: '', secret: true },
           note: `Rebuilds this wallet's Beam part from its seed phrase${w.phraseKnown ? ' (the one kept in this wallet)' : ''} through Beam's recovery snapshot (~320 MB, a few minutes). The coins come back; the history and the address names come back only from an exported wallet data file. Only when its Beam database is gone.` });
         if (!r.ok) return;
         // it runs in the host (the popup may close); the wallet's card shows its progress

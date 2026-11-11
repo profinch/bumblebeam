@@ -33,6 +33,24 @@
     own from imported data is renamed and removed in Beam.
   - Back on the start screens and the lock clear a typed phrase, key and passwords; node probes of an older round
     are not drawn over newer ones, and the public RPCs show red when none answers; a card's picked account checked.
+- Send to an offline address makes an offline payment (Beam's API since 6.0 turns it into a regular, online one
+  unless asked: the receiving wallet then had to be open, and the address's one-time key was never used).
+- Second full audit (2026-11-12):
+  - A restart only for the engine that asked (queued ones restarted the next engine too, cycling the nodes); an
+    engine that crashed while locked is stopped, not left "running" dead; a new engine never shares a store.
+  - Restore Beam on a wallet whose database is there starts it again instead of marking it missing.
+  - A backup is made without the Beam databases that cannot be read (said so), not refused; a restore keeps a
+    wallet's database that survived here (it opens with the backup's password) instead of the file's older one;
+    imports run apart from the host's queue (a snapshot no longer holds switches and bridge consents).
+  - The lock closes an open dialog (a pasted key or phrase goes with it) and the ones waiting; the start screens'
+    check words cleared too.
+  - Rename and remove an address act on the wallet they were asked in; the dApp window answers the request it
+    shows; a bridge Claim of the wallet open before does nothing, a claimed one is not offered again.
+  - A failed receipt takes no pool payout; pool payouts' cards name the address they came to; a fee of zero said
+    on the fee's field; Activity starts at its first page for another wallet; events in Settings no longer probe
+    every node again; the request windows open one at a time.
+  - Timers no longer hold a call's phrase or database; the helper engine dropped on a crash or a reset in progress.
+  - No focus ring on the header's tabs and icon buttons, nor the bars' small tabs.
 - Receive: an offline or max privacy address shows its payments left (Payments: 3 of 5 left). Each carries one-time
   keys (Beam's vouchers), one taken per payment; when a sender has none left, its wallet asks this one for new keys,
   which come while this wallet is open and online. Max privacy carries one. New offline addresses carry 5 (the API

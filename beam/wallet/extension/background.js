@@ -17,6 +17,7 @@ async function ensureHost() {
 }
 
 // ensureHost from the popup; get/set/badge from the host, whose offscreen document has chrome.runtime only
+let dappWinP = null;      // the request window being opened
 const OPS = {
   ensureHost: () => ensureHost(),
   get: (m) => chrome.storage.local.get(m.key).then((v) => v[m.key]),
@@ -43,7 +44,9 @@ const OPS = {
   },
   // the window where a site's request is answered (one; a second request shows in it too)
   // (its id kept in session storage: this worker sleeps and forgets)
-  dappWindow: async (m) => {
+  // two asks at once (connect and sign) open one window: the second waits for the first's
+  dappWindow: (m) => (dappWinP ||= OPS.dappWindowOpen(m).finally(() => { dappWinP = null; })),
+  dappWindowOpen: async (m) => {
     const { dappWin } = await chrome.storage.session.get('dappWin');
     if (dappWin != null) { try { await chrome.windows.update(dappWin, { focused: true }); return dappWin; } catch {} }
     // at the right of the browser window the user is in, under its toolbar (where the extension's icon is)

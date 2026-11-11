@@ -798,3 +798,8 @@ dialog .btn:focus-visible { outline: none; }
 #bsOwn .dd-list .nm.unver { color: var(--color-yellow); }
 .recv-v .tipped.warn { color: var(--color-yellow); }      /* an address with no payments left */
 .recv .qr.too-long { width: 180px; height: 180px; display: grid; place-items: center; text-align: center; padding: 12px; box-sizing: border-box; border: 1px dashed var(--border-dim); border-radius: 8px; font: 11px/1.4 var(--font-mono); color: var(--muted); }      /* an address no QR code holds (an offline one of 10 keys) */
+/* the header's tabs and the bars' small tabs: no ring (Chrome lit it after a key pressed elsewhere, e.g. Enter on the
+   lock screen); reached by the keyboard, the word turns white instead */
+.wnav a:focus-visible, .subtabs button:focus-visible, .seg button:focus-visible { outline: none; color: var(--text); }
+/* the header's icon buttons (back, lock, dApps, Settings): no ring either; reached by the keyboard, their frame lit */
+.ibtn:focus-visible { outline: none; border-color: rgba(var(--accent-rgb), 0.5); color: var(--text); }

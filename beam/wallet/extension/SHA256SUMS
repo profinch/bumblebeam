@@ -3,3 +3,4 @@
 eff6668e83689221c3515bd0b29bf9db9a1c8067a73213be4abe142f396a4e0e  vendor/wasm-client.worker.js
 6310f8af645dc85e093ab975209a60ca1b71197d92841c78fdac70088341415e  shaders/pipe_app.wasm
 9a85a5aa81305f85e6546452fd2093a8a68932bed3cec4f6491e4d031a90bc95  vendor/ethers.umd.min.js
+429de523c7563fc0647e618f5a8ea567d5a16412a13ef5d6a082b4502f5a54f9  ui/vendor/qr-code-styling.js

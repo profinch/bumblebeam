@@ -188,7 +188,8 @@
     e.on.crash = (msg) => {
       if (!cur()) return;
       console.warn(`Beam engine of ${id} crashed: ${msg}`);
-      restart(id, false).catch(() => {});
+      if (!data) withWallet(id, () => stop(id)).catch(() => {});      // locked: stopped (started again at the unlock)
+      else restart(id, false).catch(() => {});
     };
   }
 
@@ -196,7 +197,8 @@
   // back from its copy, else the slot says missing; any other failure: failed, and tried again later.
   async function start(id, nodeIx = 0) {
     const cfg = beamCfg(id), s = slot(id);
-    if (!cfg || s.status === 'running') return;
+    if (!cfg || live(id)) return;
+    if (s.e) await stop(id);      // one left dead (a crash while locked): its frame goes first
     const gen = ++s.gen;
     setStatus(id, 'starting');
     const list = nodeList(), ix = ((nodeIx % list.length) + list.length) % list.length, n = list[ix];
@@ -242,6 +244,7 @@
   // an engine made by a create or an import (already open) becomes the wallet's running one
   async function adopt(id, e, cfg, gen) {
     const s = slot(id);
+    if (s.e && s.e !== e) { const old = s.e; s.e = null; await old.close().catch(() => {}); }      // one started meanwhile: never two on a store
     Object.assign(s, { e, cfg, node, nodeIx: 0, started: Date.now(), lingering: false, mainOk: 0, sync: null, retry: 0, gen });
     await e.call('ev_subunsub', { ev_sync_progress: true, ev_system_state: true, ev_txs_changed: true, ev_utxos_changed: true, ev_connection_changed: true }).catch(() => {});
     setStatus(id, 'running');
@@ -251,9 +254,10 @@
 
   // a new engine for the same wallet (crash, lost node, a lagging node, a new node list): next = the next node
   function restart(id, next, toIx = null) {
+    const g = (slots.get(id) || {}).gen;      // the engine asking: a restart queued behind another restarts nothing new
     return withWallet(id, async () => {
       const s = slots.get(id);      // its engine dead too (a crash): that is what is restarted
-      if (!s || s.status !== 'running' || !s.e || !data) return;
+      if (!s || s.gen !== g || s.status !== 'running' || !s.e || !data) return;
       const ix = toIx != null ? toIx : s.nodeIx + (next ? 1 : 0);
       await stop(id);
       await start(id, ix);
@@ -836,6 +840,30 @@
     if (l.some((w) => !w || !/^[0-9a-f]{12}$/.test(w.id)) || new Set(l.map((w) => w.id)).size !== l.length) throw new Error('the backup\'s wallets are not in order');
     return l;
   };
+  // A wallet's Beam database as bytes (base64), read while it is stopped (its engine closed, the database written);
+  // then a new engine runs it again. Internal only (a backup): no port op hands the raw database out.
+  async function exportBeam(id) {
+    const w = wallet(id);
+    if (!w.beam) throw new Error('this wallet has no Beam part');
+    // read while the wallet is stopped (its engine closed, the database written); then a new engine runs it
+    const b64 = await withWallet(id, async () => {
+      const was = live(id), ix = was ? was.nodeIx : 0;
+      if (was && await busyTx(was.e)) throw new Error('a transfer is being made: try again once it is done');      // not stopped mid-transfer
+      await stop(id);
+      let e = null;
+      try { e = await Engines.fresh(id); return toB64(await e.rpc('readDb', [w.beam.db])); }
+      finally { if (e) e.drop(); if (was && data) await start(id, ix); }
+    });
+    return { b64 };
+  }
+  // the main node: every running engine starts again on it
+  async function setNodeTo(n) {
+    node = String(n || '').trim() || DEFAULT_NODE;
+    await kv.set('node', node);
+    await Promise.all([...slots.keys()].filter((id) => live(id)).map((id) => restart(id, false, 0).catch(() => {})));
+    return node;
+  }
+  let importQ = Promise.resolve();      // backup imports one at a time, apart from the host's queue (a snapshot takes minutes)
   const api = {
     // ---------- dApps ----------
     // the waiting requests, oldest first, as the wallet's window shows them (a transaction priced for it)
@@ -847,8 +875,8 @@
         // a malformed request (a value that is no number) answered with an error at once: it does not keep the others from showing
         if (r.kind === 'send') {
           const tx = r.params[0] || {};
-          try { if (tx.value != null) BigInt(tx.value); if (tx.to != null && !/^0x[0-9a-fA-F]{40}$/.test(tx.to)) throw 0; if ((tx.data || tx.input) != null && !/^0x([0-9a-fA-F]{2})*$/.test(tx.data || tx.input)) throw 0; }
-          catch { dappReq.delete(r.id); r.reject(err(-32602, 'invalid transaction parameters')); continue; }
+          try { if (tx.value != null) BigInt(tx.value); if (tx.to != null && tx.to !== '' && !/^0x[0-9a-fA-F]{40}$/.test(tx.to)) throw 0; if ((tx.data || tx.input) != null && !/^0x([0-9a-fA-F]{2})*$/.test(tx.data || tx.input)) throw 0; }
+          catch { dappReq.delete(r.id); r.reject(err(-32602, 'invalid transaction parameters')); dappDone(r.origin); continue; }
         }
         if (r.kind === 'sign') {
           v.text = r.method === 'personal_sign' ? (hexText(r.params[0]) ?? r.params[0]) : null;
@@ -1061,18 +1089,21 @@
       // never left without them; the phrase too, for a wallet that came without it
       await mutate((d) => { const x = wallet(id, d); x.beam = { db, pass: dbPass, ...(x.beam && x.beam.movedFrom ? { movedFrom: x.beam.movedFrom } : {}) }; if (!x.phrase) x.phrase = p; });
       return withWallet(id, async () => {
+        // a database that is here (a start that failed for another reason): nothing to restore, it is started again
+        { const chk = await Engines.fresh(id); let here = false; try { here = await chk.rpc('exists', [db]); } finally { chk.drop(); }
+          if (here) { if (!live(id)) start(id, 0).catch(() => {}); throw new Error('this wallet\'s Beam database is here: nothing to restore (started again)'); } }
         await stop(id);
         const s = slot(id), gen = ++s.gen;
         setStatus(id, 'restoring');
         // the snapshot is ~320 MB, held twice while it goes into Beam: the other wallets pause meanwhile
         // (not one with a transfer being made), so the browser's memory holds it
         const paused = [];
-        for (const o of data.wallets) {
-          const os = o.id !== id && live(o.id);
-          if (os && !(await busyTx(os.e))) { paused.push(o.id); await withWallet(o.id, async () => { await stop(o.id); setStatus(o.id, 'stopped', 'paused'); }); }
-        }
         let made = null, made2 = false;
         try {
+          for (const o of (need(), data.wallets)) {
+            const os = o.id !== id && live(o.id);
+            if (os && !(await busyTx(os.e))) { paused.push(o.id); await withWallet(o.id, async () => { await stop(o.id); setStatus(o.id, 'stopped', 'paused'); }); }
+          }
           made = await Engines.fresh(id);
           wire(made, id, gen);
           if (await made.rpc('exists', [db])) throw new Error('this wallet\'s Beam database is here: nothing to restore');
@@ -1111,6 +1142,7 @@
     // then the wallets come back from their seed phrases (or a backup with its own password)
     resetAll: (word) => serial(async () => {
       if (word !== 'RESET') throw new Error('type RESET to delete it all');
+      if (data) lock();      // its cleanup: prepared transactions, the sites told, what was read
       for (const id of [...slots.keys()]) { try { await withWallet(id, () => stop(id)); } catch {} slots.delete(id); }
       Engines.dropUtil();      // it keeps /beam_wallet open: its delete would be blocked
       // every wallet's store, and the old shared folder (0.1's wallet.db: left there, it would come back as a wallet)
@@ -1136,7 +1168,7 @@
         await dropCopies(id).catch(() => {});
       });
       slots.delete(id);
-      if (settings.active === id) settings.active = data.wallets[0] ? data.wallets[0].id : null;
+      if (settings.active === id) settings.active = data && data.wallets[0] ? data.wallets[0].id : null;      // locked meanwhile: none
       delete settings.activeEth[id]; delete settings.beamAddr[id]; if (settings.beamAddrs) delete settings.beamAddrs[id];
       for (const k of ['dappsW', 'beamSitesW', 'addrFav', 'addrExt', 'offlineRef']) if (settings[k]) delete settings[k][id];      // its sites and address lists go with it
       await saveSettings();
@@ -1284,20 +1316,6 @@
       await verify(oldPass);
       await mutate(() => {}, await Vault.keyFor(newPass));
     },
-    async exportBeam(id, pass) {
-      await verify(pass);
-      const w = wallet(id);
-      if (!w.beam) throw new Error('this wallet has no Beam part');
-      // read while the wallet is stopped (its engine closed, the database written); then a new engine runs it
-      const b64 = await withWallet(id, async () => {
-        const was = live(id), ix = was ? was.nodeIx : 0;
-        await stop(id);
-        let e = null;
-        try { e = await Engines.fresh(id); return toB64(await e.rpc('readDb', [w.beam.db])); }
-        finally { if (e) e.drop(); if (was && data) await start(id, ix); }
-      });
-      return { b64, samePassword: w.beam.pass === pass };
-    },
 
     // Beam's own exchange file of a wallet (addresses with their key numbers, contacts, transactions; no keys): out of
     // its running engine, or a short-lived one for a wallet not open now; and into it the same way
@@ -1330,14 +1348,6 @@
     },
 
     // ---------- settings ----------
-    async setNode(n) {
-      need();
-      node = String(n || '').trim() || DEFAULT_NODE;
-      await kv.set('node', node);
-      // every engine starts again on the new node
-      await Promise.all([...slots.keys()].filter((id) => live(id)).map((id) => restart(id, false, 0).catch(() => {})));
-      return node;
-    },
     async setEthRpc(url) {
       need();
       url = String(url || '').trim();
@@ -1369,7 +1379,7 @@
       if (!clean.length) throw new Error('keep at least one node');
       for (const o of [DEFAULT_NODE, ...DEFAULT_BACKUPS]) if (!clean.includes(o)) clean.push(o);      // ours stay
       settings.backupNodes = clean.slice(1); await saveSettings();
-      if (clean[0] !== node) await api.setNode(clean[0]);
+      if (clean[0] !== node) await setNodeTo(clean[0]);
       return nodeList();
     },
 
@@ -1387,14 +1397,19 @@
         settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {},
         // each wallet's own lists kept outside the vault: the addresses added by hand (verified or not), the favourites, the offline reference
         lists: Object.fromEntries(data.wallets.map((w) => [w.id, { addrExt: (settings.addrExt || {})[w.id] || [], addrFav: (settings.addrFav || {})[w.id] || [], offlineRef: (settings.offlineRef || {})[w.id] || null, beamAddr: (settings.beamAddr || {})[w.id] || null }])) };
-      if (withBeam) for (const w of data.wallets) if (w.beam) out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await api.exportBeam(w.id, pass)).b64;
+      // a wallet whose database cannot be read (missing) is left out: the others are kept all the same
+      const left = [];
+      if (withBeam) for (const w of data.wallets) if (w.beam) {
+        try { out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await exportBeam(w.id)).b64; }
+        catch { left.push(w.name); }
+      }
       // kept in this browser (backups/last.bbk) until it is downloaded: Download a backup saves it to disk
       const bytes = new TextEncoder().encode(JSON.stringify(out));
       const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('backups', { create: true });
       const wr = await (await dir.getFileHandle('last.bbk', { create: true })).createWritable();
       await wr.write(bytes); await wr.close();
       settings.lastBackup = out.at; settings.lastBackupSize = bytes.length; settings.lastBackupId = null; await saveSettings();
-      return { at: out.at, size: bytes.length };
+      return { at: out.at, size: bytes.length, left };
     },
     // the backup last made, to download
     async backupLast() {
@@ -1419,22 +1434,29 @@
       let o;
       try { o = await Vault.open(f.vault, filePass); } catch { throw new Error('the file\'s password does not open it'); }
       const d = o.data, wl = fileWallets(d);
-      // no vault here: any store of these ids is an earlier try's left over (gone, so the try can be made again)
+      // A store of these ids that opens with the backup's password is this wallet's own database that survived
+      // (the vault lost, IndexedDB not): kept, it is newer than the file's. Any other is an earlier try's left over
+      // (gone, so the try can be made again). The stores made here are dropped again if the restore fails.
       const made2 = [];
       try {
         for (const w of wl) {
           if (!w.beam) continue;
-          await Engines.dropStore(w.id).catch(() => {});
-          const db = Engines.dbOf(w.id), made = await Engines.fresh(w.id);
+          const db = Engines.dbOf(w.id);
+          let made = await Engines.fresh(w.id), kept = false;
+          try { kept = !!(await made.rpc('exists', [db])) && !!(await made.rpc('checkPassword', [db, w.beam.pass])); } catch {}
+          if (kept) { await made.close().catch(() => {}); w.beam = { db, pass: w.beam.pass }; continue; }
+          made.drop(); await Engines.dropStore(w.id).catch(() => {});
+          made = await Engines.fresh(w.id);
           made2.push(w.id);
           try {
             if (f.beam && f.beam[w.id]) { await made.rpc('importDb', [db, fromB64(f.beam[w.id]), w.beam.pass]); w.beam = { db, pass: w.beam.pass }; }
             else if (w.phrase) {
               progress = { wallet: w.id, step: 'download', done: 0, total: 0 };
+              wire(made, w.id, ++slot(w.id).gen);      // its progress to the popup
               try { await made.rpc('create', [db, w.phrase, w.beam.pass, node, RECOVERY_URL], 40 * 60 * 1000); } finally { progress = null; }
               w.beam = { db, pass: w.beam.pass };
             } else w.beam = { db, pass: w.beam.pass };      // no database, no phrase: kept (shown missing), its password with it
-          } finally { await made.close().catch(() => {}); }
+          } finally { await made.close().catch(() => {}); slots.delete(w.id); }
         }
       } catch (e) { for (const id of made2) await Engines.dropStore(id).catch(() => {}); throw e; }
       await settingsFrom(f.settings);
@@ -1449,7 +1471,7 @@
     // An import adds the wallets the file has and this extension does not (the same phrase, or the same first
     // Ethereum account, is the same wallet); nothing here is changed. A Beam part comes from the file's database,
     // else from its phrase through the recovery snapshot (minutes). Opened with the file's password, kept with this one's.
-    backupImport: (text, filePass, pass) => serial(async () => {
+    backupImport: (text, filePass, pass) => (importQ = importQ.catch(() => {}).then(async () => {
       await verify(pass);
       let f = null;
       try { f = JSON.parse(text); } catch {}
@@ -1478,7 +1500,7 @@
               wire(made, id, ++slot(id).gen);      // its progress to the popup
               try { await made.rpc('create', [db, fw.phrase, p2, node, RECOVERY_URL], 40 * 60 * 1000); } finally { progress = null; }
               w.beam = { db, pass: p2 };
-            }
+            } else w.beam = { db, pass: fw.beam.pass };      // no database, no phrase: kept (shown missing), its password with it
             await made.close().catch(() => {}); made = null;
           }
           lastActive = Date.now();          // a long snapshot import is not idle time
@@ -1496,7 +1518,7 @@
       await saveSettings();
       broadcast({ type: 'event', method: 'bb_changed' });
       return { added, skipped };
-    }),
+    })),
 
     // ---------- Beam ----------
     beam(walletId, method, params) {
@@ -1792,7 +1814,7 @@
       node = DEFAULT_NODE; await kv.set('node', node); await kv.set('settings', settings);
     }
     // the util engine reads the old shared folder: is there a 0.1 wallet.db waiting for its first unlock?
-    if (!vaultRec) legacyDb = !!(await (await util()).rpc('exists', ['/beam_wallet/wallet.db']));
+    if (!vaultRec) legacyDb = !!(await util().then((u) => u.rpc('exists', ['/beam_wallet/wallet.db'])).catch(() => false));      // a helper that fails once does not stop the wallet
     lockIcon();
   })();
   ready.catch(() => {});                       // reported to each operation instead

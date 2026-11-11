@@ -73,8 +73,9 @@ const Engines = (() => {
       if (this.dead || !this.frame) return Promise.reject(new Error('the Beam engine is not running'));
       const id = this.next++;
       return new Promise((resolve, reject) => {
-        this.wait.set(id, { resolve, reject });
-        setTimeout(() => { if (this.wait.delete(id)) reject(new Error(`the Beam engine did not answer ${fn} in ${ms / 1000} s`)); }, ms);
+        // the timer goes with the answer: it held the call's arguments (a phrase, a database) for as long as 40 min
+        const t = setTimeout(() => { if (this.wait.delete(id)) reject(new Error(`the Beam engine did not answer ${fn} in ${ms / 1000} s`)); }, ms);
+        this.wait.set(id, { resolve: (v) => { clearTimeout(t); resolve(v); }, reject: (e) => { clearTimeout(t); reject(e); } });
         this.post({ id, fn, args });
       });
     }
@@ -98,19 +99,22 @@ const Engines = (() => {
 
   // one engine without a wallet, made when first needed. withShared: the old shared folder mounted (read)
   // asked for at once (each word of a phrase checked), they all wait for the one being made; a failed one is dropped
-  let util = null, utilP = null;
+  let util = null, utilP = null, utilGen = 0;
   function utilEngine() {
     if (util && !util.dead) return Promise.resolve(util);
+    const g = utilGen;
     return utilP ||= (async () => {
       const e = new Engine('util');
+      e.on.crash = () => e.drop();      // a crashed one's frame goes (the next call makes a new one)
       try { await e.boot(); await e.rpc('load', [null, true]); }
       catch (er) { try { e.drop(); } catch {} throw er; }
+      if (g !== utilGen) { e.drop(); throw new Error('the helper engine was dropped'); }      // a reset meanwhile: it keeps nothing open
       util = e;
       return e;
     })().finally(() => { utilP = null; });
   }
-  // gone (a reset: it holds the old shared folder open), made again when next needed
-  function dropUtil() { const e = util; util = null; if (e && !e.dead) { try { e.drop(); } catch {} } }
+  // gone (a reset: it holds the old shared folder open), made again when next needed; one being made is dropped too
+  function dropUtil() { utilGen++; const e = util; util = null; if (e && !e.dead) { try { e.drop(); } catch {} } }
 
   // a fresh engine for a wallet: its own store loaded (the old shared folder too only for a migration)
   async function fresh(walletId, keepShared = false) {

@@ -187,8 +187,9 @@ const Beam = (() => {
 
   const checkPassword = (db, pass) => new Promise((resolve) => WC.CheckPassword(db, pass, (ok) => resolve(!!ok)));
   // bytes of a database: do they open with pass? (a scratch file in memory, outside every IndexedDB mount)
+  let scratchN = 0;      // each check its own file: several at once (the copies every 10 min) do not overwrite each other
   async function checkBytes(bytes, pass) {
-    const f = '/scratch-check.db';
+    const f = `/scratch-check-${++scratchN}.db`;
     try { M.FS.writeFile(f, bytes); return await checkPassword(f, pass); }
     catch { return false; }
     finally { try { M.FS.unlink(f); } catch {} }

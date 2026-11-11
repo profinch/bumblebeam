@@ -28,7 +28,7 @@ const Eth = (() => {
       try { d = await getJSON(url, { jsonrpc: '2.0', id: 1, method, params }); }
       catch (e) { last = e.message; continue; }
       if (d && d.result !== undefined) return d.result;      // a server that answered null: the next RPC
-      const m = (d.error && d.error.message) || 'no result';
+      const m = (d && d.error && d.error.message) || 'no result';
       // a transaction's own verdict is final; a provider's limit (range, credits, rate) is not: the next RPC tries
       if (/revert|nonce too low|nonce too high|insufficient funds|outoffunds|underpriced|already known|known transaction|exceeds block gas limit|intrinsic gas/i.test(m)) throw new Error(m);
       answer = answer || m;
