@@ -27,12 +27,13 @@
 
   // made up: three wallets, one open
   const W = [
-    { id: 'a', name: 'Main', beam: true, eth: true, accounts: ['Account 1', 'Account 2', 'mevin'], phrase: true, ethKind: 'phrase', beamSt: 'running' },
+    { id: 'a', name: 'Main', beam: true, eth: true, accounts: ['Account 1', 'Account 2', 'mevin very very long name for an account'], phrase: true, ethKind: 'phrase', beamSt: 'running', main: 1 },
     { id: 'b', name: 'Second', beam: true, eth: true, accounts: ['Account 1'], phrase: true, ethKind: 'phrase', beamSt: 'stopped' },
     { id: 'c', name: 'Ledger watch, imported by key', beam: false, eth: true, accounts: ['Imported 1'], phrase: false, ethKind: 'key' },
     { id: 'd', name: 'Old mining', beam: true, eth: false, accounts: [], phrase: true },
   ];
   let active = 'a';
+  const ADDR = ['0x70997970C51812dc3A010C7d01b50e0d17dc79C8', '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', '0x90F79bf6EB2c4f870365E785982E1f101E93b906'];
   const open = new Set();
   const wd = BB.dropdown($('walletDd'), (v) => { active = v; drawWallets(); });
   const wdFill = () => wd.options(W.map((w) => ({ v: w.id, label: w.name })), active);
@@ -63,7 +64,9 @@
     // General's backup
     const mine = [b('rename', 'Rename'), w.phrase ? b('phrase', 'Seed phrase') : ''].filter(Boolean);
     // Ethereum, when it has accounts: its own phrase (one added by a phrase, not by a key) and an account's key
-    const acct = w.accounts.length > 1 ? `<div class="acct">the private key of<div class="dd compact" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
+    // the account, as the wallet tab's picker (name | address), at first the one the wallet tab shows; picked here,
+    // it is only for this card (the wallet tab keeps its own)
+    const acct = w.accounts.length > 1 ? `<div class="acct"><div class="dd compact acct key-acct" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
     const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
     return `<div class="wcard2">
       ${g('This wallet', mine)}
@@ -78,7 +81,11 @@
     if (!li) return;
     if (open.has(li.dataset.w)) open.delete(li.dataset.w); else open.add(li.dataset.w);
     drawWallets();
-    for (const d of qa('[data-acct]')) { const w = W.find((x) => x.id === d.dataset.acct); BB.dropdown(d, () => {}).options(w.accounts.map((n, i) => ({ v: String(i), label: n })), '0'); }
+    for (const d of qa('[data-acct]')) {
+      const w = W.find((x) => x.id === d.dataset.acct);
+      BB.dropdown(d, (v) => { w.picked = Number(v); }).options(w.accounts.map((n, i) => ({ v: String(i), label: `${n} ${sh(ADDR[i])}`, html: `<span class="nm">${esc(n)}</span><span class="ad">${sh(ADDR[i])}</span>`,
+        btn: `<span class="acc-b"><span class="nm">${esc(n)}</span><span class="ad">${sh(ADDR[i])}</span></span>` })), String(w.picked ?? w.main ?? 0));
+    }
   };
   $('wList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.wr')) { e.preventDefault(); e.target.click(); } };
   $('addWallet').onclick = () => { $('addWallet').textContent = '+ Add a wallet: the start screen (lab)'; };

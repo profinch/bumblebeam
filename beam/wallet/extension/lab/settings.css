@@ -77,7 +77,6 @@ html.popup main { scrollbar-gutter: stable; }
 .sp-sec .inline { align-items: center; }
 .sp-sec .inline .dd.compact { flex: none; width: auto; }
 .sp-sec .two + .hint { margin-top: 8px; }
-.wcard2 .acct .dd { flex: none; width: auto; min-width: 140px; }      /* the account picker its own width, not the card's */
 
 /* Storage's picker the card's width, its button after it */
 .sp-sec .inline.wide { display: flex; gap: 8px; }
@@ -125,3 +124,10 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .sp-sec .check input:checked { background: var(--accent); border-color: var(--accent); }
 .sp-sec .check input:checked::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg, #071a26); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .sp-sec .check input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
+
+/* a card's account picker as the wallet tab's one, row for row (wallet.css :is(#acctDd, #bxAcct)) */
+.wcard2 .acct .dd.key-acct { flex: 1 1 auto; min-width: 0; margin-left: 0; }
+.key-acct .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding: 5px 8px; line-height: 16px; margin: 0 10px; border-radius: 4px; }
+.key-acct .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.key-acct .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+.key-acct .dd-list [aria-selected="true"] .ad { color: inherit; }
