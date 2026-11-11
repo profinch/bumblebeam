@@ -123,7 +123,7 @@
   ];
   // what is behind a node or the public RPCs, shown under its row on a click (as a transaction's card in Activity)
   const BEHIND = {
-    'wss.bumblebeam.org:443': [['What', 'our own Beam node'], ['Through', 'our WebSocket door (nginx)'], ['Also', 'the BumbleBeam pool\'s node']],
+    'wss.bumblebeam.org:443': [['What', 'own Beam node'], ['Through', 'WebSocket door'], ['Also', 'BumbleBeam pool\'s node']],
     'wsb.bumblebeam.org:443': [['What', 'the backup door - a Cloudflare Worker to BeamMW\'s public nodes'], ['Passes to', 'in a random order:\n188.245.67.32:8100\n188.245.67.33:8100\n188.245.67.34:8100\n188.245.67.35:8100\n5.161.152.212:8100\nsunpool, 195.201.121.246:10000\nthen our node, last']],
   };
   const openN = new Set();
