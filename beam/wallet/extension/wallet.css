@@ -468,6 +468,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* the whole cut is the switch's: it lies over the cards (their cut is a mask, which takes the pointer all the
    same) and catches the pointer out to the cut's edge, so the ring round the oval lights it too */
 .bx-swap { z-index: 2; }
+.bx-swap:focus, .bx-swap:focus-visible { outline: none; }      /* no ring after a click and a key pressed (the browser then takes it for keyboard use) */
 .bx-swap::after { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border-radius: 999px; }
 .bx-swap::before { content: ''; position: absolute; inset: calc(-1 * var(--room) - 1px); border: 1px solid transparent; border-radius: 999px; pointer-events: none;
   /* its upper half the upper card's edge, its lower half the lower card's (each takes its card's colour: red when the
