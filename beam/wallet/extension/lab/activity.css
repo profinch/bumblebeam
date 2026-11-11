@@ -1,0 +1,76 @@
+/* The Activity lab (lab/activity.html): the history read by day, each row who and what in words, the amount with
+   its unit and its dollars, a state only while it is not done; a row opens to its details. */
+
+/* the lab header as the wallet's inside (as the bridge lab): no brand, the wallet picker its usual width */
+#brand { display: none !important; }
+#walletDd { flex: 0 1 200px; margin-right: auto; }
+
+/* what to see, and the search: one line under the network's tabs */
+.af-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.af { display: flex; gap: 6px; flex-wrap: nowrap; }
+.af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
+  font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.af button:hover { color: var(--text); }
+.af button.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.08); }
+.af button .n { margin-left: 5px; color: var(--muted); font-weight: 400; }
+.af-find { margin-left: auto; }
+.af-find.on { color: var(--accent); }
+.af-search { position: relative; margin: 6px 0 2px; }
+.af-search input { width: 100%; height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-fill); color: var(--text); font: 12px var(--font-mono); outline: none; }
+.af-search input:focus { border-color: rgba(var(--accent-rgb), 0.5); }
+.af-x { position: absolute; right: 4px; top: 4px; width: 22px; height: 22px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+.af-x:hover { color: var(--text); }
+
+/* a day's heading: Today, Yesterday, 9 Nov; In progress over them all */
+.ad-day { display: flex; justify-content: space-between; margin: 14px 0 0; padding-bottom: 5px; border-bottom: 1px solid var(--border-dim);
+  font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ad-day .sum { font-weight: 400; letter-spacing: 0; text-transform: none; }
+.ad-day .sum .pos { color: var(--accent); }
+.ad-day.now { color: var(--color-yellow); }
+
+/* a row: its icon, who and what, the amount right with its dollars under it */
+#actList .li.ar { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 10px; padding: 9px 4px; cursor: pointer; border-radius: 6px; }
+#actList .li.ar:hover, #actList .li.ar.open { background: rgba(255, 255, 255, 0.03); }
+.ar .what { font-size: var(--fs-base); }
+.ar .what .who { color: var(--muted); font-weight: 400; }
+.ar .what .who b { color: var(--text-dim); font-weight: 400; }
+.ar .sub { font: 11px var(--font-mono); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ar .sub .st { color: var(--color-yellow); }
+.ar .sub .st.bad { color: var(--color-red); }
+.ar .sub .cm { color: var(--text-dim); }
+.ar-r { text-align: right; white-space: nowrap; }
+.ar-r .amt { font: 700 var(--fs-m) var(--font-mono); }
+.ar-r .amt.pos { color: var(--accent); }
+.ar-r .amt.zero { color: var(--muted); font-weight: 400; }
+.ar-r .amt u { text-decoration: none; font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }
+.ar-r .usd { display: block; font: 11px var(--font-mono); color: var(--muted); margin-top: 3px; }
+.ar.dim .what, .ar.dim .ar-r .amt { opacity: 0.5; }      /* cancelled: there, but nothing moved */
+.ar.bad .ar-r .amt { text-decoration: line-through; text-decoration-color: rgba(var(--red-rgb), 0.7); }
+
+/* the icons: in / out as the wallet's, the bridge's two arrows, a dApp's cube, an approval's tick, a pool's stack */
+.ic.br { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.1); }
+.ic.dapp { color: var(--text-dim); }
+.ic.ok2 { color: var(--text-dim); }
+.ic.spin { position: relative; }
+.ic.spin::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--color-yellow); animation: ar-spin 1.1s linear infinite; }
+@keyframes ar-spin { to { transform: rotate(360deg); } }
+
+/* a row opened: its details under it, aligned as a confirmation's, then what can be done */
+.ar-more { margin: 0 4px 6px 42px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-dim); }
+.ar-more .kv { gap: 6px 12px; }
+.ar-more .kv dd { white-space: pre-line; overflow-wrap: anywhere; font-size: 11px; }
+.ar-more .kv dd a { color: var(--accent); }
+.ar-more .cp { margin-left: 6px; cursor: pointer; color: var(--muted); vertical-align: -2px; }
+.ar-more .cp:hover { color: var(--accent); }
+.ar-more .cp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
+.ar-acts { display: flex; gap: 8px; margin-top: 10px; }
+.ar-acts .btn { padding: 5px 12px; font-size: 11px; }
+.ar-acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
+
+/* payouts from one place in a day, as one row: its count, opened to each */
+.ar .what .x { margin-left: 6px; font: 700 10px var(--font-mono); color: var(--muted); }
+.ar-more .sub-li { display: grid; grid-template-columns: minmax(0, 1fr) auto; font: 11px var(--font-mono); color: var(--muted); padding: 3px 0; }
+.ar-more .sub-li b { color: var(--accent); font-weight: 400; }
+
+.af-more { display: block; margin: 14px auto 0; }
+#actList .empty { padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
