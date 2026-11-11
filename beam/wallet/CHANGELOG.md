@@ -200,10 +200,10 @@
 - Quiet tabs in the header instead of one long page: Wallets, General, Networks, Storage, About; the wallet's
   small buttons (as All) and compact pickers throughout.
 - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current; the header's
-  picker switches). A click opens its card: This wallet (Rename, Seed phrase) and Ethereum (its own Seed phrase when
+  picker switches). A click opens its card: This wallet (Seed phrase, Beam file: its Beam part as a wallet.db) and Ethereum (its own Seed phrase when
   added by one, Private key) side by side, the account picker under them as the wallet tab's (with add, import,
-  rename, remove; it opens at the wallet tab's account and does not change it), Remove last. Use, the Beam backup
-  file and the manual Beam restore are gone from here.
+  rename, remove; it opens at the wallet tab's account and does not change it), Remove last; Rename is a pencil by the
+  name. Use and the manual Beam restore are gone from here.
 - General: Security; Display with how the time and the decimals show under their pickers; Backup: one file with
   every wallet (the vault as stored, sealed with the wallet password, the settings, and Beam's databases if asked),
   saved into Downloads; an import adds the wallets the file has and the extension does not (a Beam part from its
