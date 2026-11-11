@@ -1401,7 +1401,10 @@
     sendToEth: (walletId, c, a, rcv, f) => {
       const w = beamFor(walletId);
       const args = [uint(a, 'amount'), Eth.checkAddress(rcv), uint(f, 'relayer fee')];
-      return withCtx({ ...c, rows: [['Beam wallet', w.name], ...((c && c.rows) || [])] }, () => lane(walletId, () => { beamCtx.delete(walletId); return Bridge.sendToEth(beamFor(walletId).e, ...args); }));
+      // the wallet as From, right above the popup's To (as the way back names its account)
+      const rows = ((c && c.rows) || []).slice(), at = rows.findIndex((r) => r && r[0] === 'To');
+      rows.splice(at < 0 ? 0 : at, 0, ['From', w.name]);
+      return withCtx({ ...c, rows }, () => lane(walletId, () => { beamCtx.delete(walletId); return Bridge.sendToEth(beamFor(walletId).e, ...args); }));
     },
     receive: (walletId, c, msgId) => {
       const w = beamFor(walletId);
