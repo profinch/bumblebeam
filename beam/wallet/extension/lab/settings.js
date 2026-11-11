@@ -2,8 +2,9 @@
 // saved. It moves into the wallet once it is right.
 //   - quiet tabs in the header (Wallets, General, Networks, Storage, About) instead of one long page
 //   - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current, the others
-//     switched by the header's picker); a click opens its card: Rename; Keys and backups (seed phrase, Ethereum phrase, an account's private key
-//     with the account picked, the Beam file); Restore Beam when it is gone; Remove apart, last
+//     switched by the header's picker); a click opens its card: This wallet (Rename, Seed phrase, Beam file); Ethereum when
+//     it has accounts (its own Seed phrase when added by one, an account's Private key, the account picked); Remove
+//     apart, last
 //   - General: security (short) and display side by side, with an example of both
 //   - Networks: Beam's nodes as one list as Beam's addresses (the one in use lit, whether each answers and how fast,
 //     drag to order with a line where it goes, the list's cross, add); Ethereum's RPCs the same way (public ones
@@ -29,7 +30,7 @@
     { id: 'a', name: 'Main', beam: true, eth: true, accounts: ['Account 1', 'Account 2', 'mevin'], phrase: true, ethKind: 'phrase', beamSt: 'running' },
     { id: 'b', name: 'Second', beam: true, eth: true, accounts: ['Account 1'], phrase: true, ethKind: 'phrase', beamSt: 'stopped' },
     { id: 'c', name: 'Ledger watch, imported by key', beam: false, eth: true, accounts: ['Imported 1'], phrase: false, ethKind: 'key' },
-    { id: 'd', name: 'Old mining', beam: true, eth: false, accounts: [], phrase: true, beamSt: 'missing' },
+    { id: 'd', name: 'Old mining', beam: true, eth: false, accounts: [], phrase: true },
   ];
   let active = 'a';
   const open = new Set();
@@ -50,25 +51,22 @@
     $('wList').innerHTML = W.map((w) => {
       const on = w.id === active, isOpen = open.has(w.id);
       const holds = [w.beam ? 'Beam' : '', w.eth ? `Ethereum ×${w.accounts.length}` : ''].filter(Boolean).join('<i class="sp"></i>');
-      const warn = w.beamSt === 'missing' ? '<i class="sp"></i><span class="warn">Beam part gone: restore it</span>' : '';
       return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${w.id}" tabindex="0" role="button" aria-expanded="${isOpen}">
-        <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}${warn}</span></span>
+        <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
         ${on ? '<span class="end">current</span>' : '<span></span>'}</div>${isOpen ? card(w) : ''}`;      // the open one marked, the others switched by the header's picker
     }).join('');
   }
   function card(w) {
     const g = (cap, acts, extra = '') => `<div class="grp"><div class="cap">${cap}</div>${extra}<div class="acts">${acts.join('')}</div></div>`;
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
-    const keys = [];
-    if (w.phrase) keys.push(b('phrase', 'Seed phrase'));
-    if (w.ethKind === 'phrase') keys.push(b('ethPhrase', 'Ethereum phrase'));
-    if (w.eth) keys.push(b('ethKey', 'Private key'));
-    if (w.beam && w.beamSt !== 'missing') keys.push(b('backup', 'Beam file'));
-    const acct = w.eth && w.accounts.length > 1 ? `<div class="acct">the private key of<div class="dd compact" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
+    // this wallet: its name, its seed phrase (Beam and Ethereum from the same words), its Beam part as a file
+    const mine = [b('rename', 'Rename'), w.phrase ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : ''].filter(Boolean);
+    // Ethereum, when it has accounts: its own phrase (one added by a phrase, not by a key) and an account's key
+    const acct = w.accounts.length > 1 ? `<div class="acct">the private key of<div class="dd compact" data-acct="${w.id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
+    const eth = w.eth && w.accounts.length ? [w.ethKind === 'phrase' ? b('ethPhrase', 'Seed phrase') : '', b('ethKey', 'Private key')].filter(Boolean) : [];
     return `<div class="wcard2">
-      ${g('This wallet', [b('rename', 'Rename')])}
-      ${keys.length ? g('Keys and backups', keys, acct) : ''}
-      ${w.beamSt === 'missing' ? g('Beam', [b('restore', 'Restore Beam')], '<div class="note">its database is not in this browser: rebuilt from the seed phrase</div>') : ''}
+      ${g('This wallet', mine)}
+      ${eth.length ? g('Ethereum', eth, acct) : ''}
       ${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}
     </div>`;
   }
