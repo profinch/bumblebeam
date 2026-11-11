@@ -182,7 +182,8 @@
   card reaches down to where the wallet tab's Ethereum card ends.
 
 ### dApps
-- The Catalog lists buybeam.my (any token on any chain swapped to BEAM, no account) among the whitelisted.
+- The Catalog lists buybeam.my (any token on any chain swapped to BEAM, no account) among the whitelisted, as an
+  Ethereum dApp: it pays from this wallet's Ethereum account.
 - Each wallet keeps its own site connections, Beam and Ethereum. A site connected in one wallet saw another
   wallet's Beam balance after a switch, and kept its Ethereum account. After a switch:
   - the sites are told;

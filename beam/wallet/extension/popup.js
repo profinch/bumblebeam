@@ -2776,7 +2776,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       ['explorer.bumblebeam.org', 'Explorer', 'Blocks, kernels, assets, DEX, contracts', ''],
       ['pool.bumblebeam.org', 'Mining pool', 'Beam mining, PPLNS and solo', ''],
       ['puzzle.bumblebeam.org', 'Puzzle', 'The Bitcoin puzzle, searched together in the browser', ''],
-      ['buybeam.my', 'Buy BEAM', 'Any token on any chain swapped to BEAM, no account', ''],      // checked 2026-11-11: answers, no wallet connection (BEAM goes to the address given)
+      ['buybeam.my', 'Buy BEAM', 'Any token on any chain swapped to BEAM, no account', 'Ethereum dApp'],      // checked 2026-11-11: pays from an Ethereum wallet (window.ethereum, eth_requestAccounts); BEAM goes to the address given
     ] },
   ];
   // a group with fold folds by a click on its head (an arrow right of it): Beam's official sites start folded, the
