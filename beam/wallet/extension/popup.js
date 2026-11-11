@@ -861,6 +861,8 @@
       if (!$('x-ethSend').hidden) { esAsset.options(esTokens().map((x) => ({ v: x.v, label: x.label })), esAsset.value() || 'ETH'); esAvail(); }
       if (!$('t-bridge').hidden) teBal();
     } catch {}
+  const accAd = () => $('acctDd').querySelector('.acc-b .ad');
+  let shownEth = null;                                // the account last drawn: a change of it is animated
   }
   function renderEth() {
     const a = acct();
@@ -869,7 +871,13 @@
     const v = a ? eview(a.address) : null;
     ethData = v && v.d ? v.d : null;
     if (a) {
-      $('ethAddr').textContent = a.address;
+      // another account than the one shown: its address runs as random hex and settles (BB.decode), on the
+      // account's button and on the address line
+      if (shownEth && shownEth !== a.address) {
+        BB.decode(accAd, short(a.address));            // looked up each frame: a load() meanwhile draws the button again
+        BB.decode($('ethAddr'), a.address, 620);
+      } else $('ethAddr').textContent = a.address;
+      shownEth = a.address;
       if (ethData) ethRows();
       else $('ethAssets').innerHTML = v.err ? `<div class="empty">no Ethereum RPC answers: ${esc(v.err)}</div>` : '<div class="empty">syncing…</div>';
       netDot('ethDot', v.err ? 'down' : '', v.err ? `Ethereum: no RPC answers (${v.err})${ethData ? '; the balances shown may be old' : ''}` : '');
