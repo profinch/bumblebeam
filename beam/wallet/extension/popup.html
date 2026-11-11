@@ -201,7 +201,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
           <div class="recv-icons">
             <button type="button" class="cp" id="copyBeamAddr" title="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
             <button type="button" class="cp" id="saveBeamQr" title="Share: the QR code as a picture"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3M3 9v4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button type="button" class="cp" id="nameBeamAddr" title="Rename: a name only you see, who it was given to"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="cp" id="nameBeamAddr" title="Rename: a name visible only to you"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13h3l7.5-7.5-3-3L3 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="cp" id="delBeamAddr" title="Remove this address: it stops taking payments"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>
         </div>
@@ -219,7 +219,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <p class="hint after" id="bsKind"></p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"></span></label>
     <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">network fee</span> <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
-    <label class="field">Comment (only in your history, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
+    <label class="field">Comment (visible only to you, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>

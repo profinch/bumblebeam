@@ -1273,7 +1273,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('newAddr').onclick = async () => {
     const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
     const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
-    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional', max: NAME_MAX }, yes: 'Create', check: nameCheck(null) });
+    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (visible only to you)', value: '', placeholder: 'optional', max: NAME_MAX }, yes: 'Create', check: nameCheck(null) });
     if (!r.ok) return;
     const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
     try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
@@ -1289,7 +1289,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     e.preventDefault();
     const x = addrs.find((y) => y.address === shownAddr);
     if (!x) return;
-    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '', max: NAME_MAX }, yes: 'Save', check: nameCheck(x.address) });
+    const r = await ask({ title: 'Name the address', input: { label: 'Name (visible only to you)', value: x.comment || '', max: NAME_MAX }, yes: 'Save', check: nameCheck(x.address) });
     if (!r.ok) return;
     try {
       if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
