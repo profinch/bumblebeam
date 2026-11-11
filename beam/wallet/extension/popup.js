@@ -296,6 +296,7 @@
     qa('.err').forEach((x) => x.classList.remove('err')); qa('.act-msg').forEach((x) => { x.textContent = ''; });
     try { bsOwn.set(''); esOwn.set(''); bsAsset.set('0'); esAsset.set('ETH'); } catch {}
     bsType = null; bsMine = ''; esQuote = null;
+    bxWallet = null;                                  // the bridge drawn anew at the next open: its typed address gone too
     clearNotes('x-beamSend'); clearNotes('x-ethSend'); clearNotes('t-bridge');
   }
 
@@ -700,7 +701,7 @@
       case 'bb_failed': if (progressScreen === 's-progress') note('s-progress', 'bad', m.result); break;
       case 'bb_locked': st = null; resetForms(); route(); break;
       case 'bb_error': if (!$('tabs').hidden) note('bErr', 'bad', m.result); break;
-      case 'bb_bridge': if (curTab === 'bridge') bridgeLists(); break;
+      case 'bb_bridge': if (!$('t-bridge').hidden) listsSoon(); break;
       case 'bb_dapp': if (inWin && st && st.phase === 'unlocked') dappScreen(); else { dappRefresh(); if (!$('x-dapps').hidden) dappListOpen(); } break;
       // a request ended or a site was disconnected (here or in another window): the request window shows
       // what is still waiting (it closes when nothing is); a popup its site's state, the sites list, the balances
@@ -714,7 +715,7 @@
         if (m.wallet && st && st.beam && st.beam[m.wallet]) { st.beam[m.wallet].sync = m.result && m.result.total ? { done: m.result.done, total: m.result.total } : null; if (here) renderBeam(); }
         break;
       case 'ev_system_state': case 'ev_utxos_changed': if (here) beamSoon(); break;
-      case 'ev_txs_changed': if (here) { beamSoon(); if (curTab === 'activity') activity(); } break;
+      case 'ev_txs_changed': if (here) { beamSoon(); if (!$('t-activity').hidden) actSoon(); } break;      // shown only, and once for a burst
     }
   };
   // a network's state on its card: the dot by its name (its colour: live; yellow: starting, syncing,
@@ -741,6 +742,10 @@
   // its wallet_status, asked once for many events in a row; an answer older than the last one asked is dropped
   let beamTimer = 0;
   function beamSoon() { clearTimeout(beamTimer); beamTimer = setTimeout(beamRefresh, 250); }
+  // Activity and the bridge's transfers: a burst of events (a tx's states, one after another) asks once
+  let actTimer = 0, listsTimer = 0;
+  function actSoon() { clearTimeout(actTimer); actTimer = setTimeout(activity, 400); }
+  function listsSoon() { clearTimeout(listsTimer); listsTimer = setTimeout(bridgeLists, 400); }
   async function beamRefresh() {
     const w = W();
     if (!w || !beamHere()) return renderBeam();
@@ -1685,13 +1690,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function typed(take) {
     const inp = $('bxAddrIn'), v = inp.value.trim();
     if (take && v && !isEthAddress(v)) { inp.classList.add('bad'); return false; }
-    inp.hidden = true; $('bxAcct').classList.remove('typing');
+    inp.hidden = true; inp.value = ''; $('bxAcct').classList.remove('typing');      // emptied: a later blur takes nothing
     if (take && v) { other = v; cur = 'none'; fillAccts(); pick('typed'); }
     return true;
   }
   $('bxAddrIn').onkeydown = (e) => { if (e.key === 'Enter') typed(true); if (e.key === 'Escape') typed(false); };
   $('bxAddrIn').oninput = () => $('bxAddrIn').classList.remove('bad');
-  $('bxAddrIn').onblur = () => { if (!typed(true)) typed(false); };
+  $('bxAddrIn').onblur = () => { if (!$('bxAddrIn').hidden && !typed(true)) typed(false); };
   // the wheel over it steps through one's own accounts, without opening the list
   let wheelAt = 0;
   $('bxAcct').querySelector('.dd-btn').addEventListener('wheel', (e) => {
@@ -1747,7 +1752,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const keys = feeData ? feeData.options.map((x) => x.key) : ['cheap', 'normal', 'safe'], li = keys.indexOf(level);
     qa('#bxFee .arc').forEach((a, k) => { a.classList.toggle('on', !!o && k <= li); a.setAttribute('aria-checked', String(k === li)); });
     $('bxNeedle').style.transform = `rotate(${(li - 1) * 60}deg)`;
-    $('bxFeeLv').innerHTML = o ? `<span class="w">${level}</span> <b>${o.fee.toFixed(2)}</b>` : '';
+    $('bxFeeLv').innerHTML = o ? `<span class="w">${esc(level)}</span> <b>${o.fee.toFixed(2)}</b>` : '';
     let l1, l2;
     if (toEth) {
       l1 = feeData ? `gas now <b>${feeData.base.toFixed(3)}</b> gwei, ${esc(feeData.level)}` : feeErr ? 'not priced' : 'pricing…';
@@ -1800,14 +1805,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     bxCalc(); $('bxAmt').focus();
   };
   BB.amountField($('bxAmt'), 4, 8);                    // digits and one point (or comma) only: up to 99 999 999.9999
-  $('bxAmt').oninput = () => { actErr($('bxGo'), null); bxCalc(); };
+  $('bxAmt').oninput = () => { actErr($('bxGo'), null); feeSay(); bxCalc(); };
   // the gauge: a click on an arc, or anywhere on the dial (its third under the pointer), or dragged across
   const gauge = document.querySelector('#bxFee .bx-gauge');
   const byX = (e) => { const r = gauge.getBoundingClientRect(), keys = feeData.options.map((x) => x.key); return keys[Math.min(keys.length - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * keys.length)))]; };
   let dragging = false;
   gauge.addEventListener('pointerdown', (e) => { if (!feeData) return; dragging = true; gauge.setPointerCapture(e.pointerId); level = byX(e); bxCalc(); });
   gauge.addEventListener('pointermove', (e) => { if (!dragging) return; const k = byX(e); if (k !== level) { level = k; bxCalc(); } });
-  gauge.addEventListener('pointerup', () => { dragging = false; });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) gauge.addEventListener(ev, () => { dragging = false; });
 
   // a turn: the content (not the titles) tears into strips that jerk sideways, turns to the other way at the middle,
   // and comes back torn, settling
@@ -1837,6 +1842,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function turned() {
     $('bxSwap').classList.toggle('back', dir === 'fromEth');
     if (dir === 'fromEth' && cur === 'typed') cur = mine;
+    bxAccAd._bbDecode = (bxAccAd._bbDecode || 0) + 1;      // a decode still running would write the old address on the new button
     fillAccts(); bxAcct.set(cur); bxStill();
     $('bxAmt').value = ''; actErr($('bxGo'), null);
     bxPlace(); bxCalc();
@@ -1868,8 +1874,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     try { keyOf[w.id] = await host('beamKey', w.id); } catch { /* said as "…" */ }
     if (isOpen(w.id)) bxPlace();
   }
+  let bxWallet = null;                                // the wallet the form was drawn for
   function bridgeOpen() {
-    const a = acct(), l = ownAccts();
+    const a = acct(), l = ownAccts(), w = W();
+    if (w && w.id !== bxWallet) {                     // another wallet: its own account, nothing carried over
+      bxWallet = w.id; mine = ''; other = ''; if (cur === 'typed') cur = '';
+      $('bxAmt').value = ''; bxShown = 5; actErr($('bxGo'), null);
+      if ($('bxAcct').classList.contains('typing')) typed(false);
+    }
     if (!l.some((x) => x.address === mine)) mine = a ? a.address : l[0] ? l[0].address : '';
     if (cur !== 'typed' || dir !== 'toEth') cur = mine;
     fillAccts(); bxAcct.set(cur); bxStill();
@@ -1904,7 +1916,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const rcv = addrOf(cur);
     if (!isEthAddress(rcv)) throw fieldErr('bxAcct', 'choose the Ethereum account, or enter an address');
     const own = allAccounts().find((a) => a.address.toLowerCase() === rcv.toLowerCase());
-    const fd = feeData || await host('relayerFee');
+    const fd = feeData || await host('relayerFee').catch((e) => { throw Object.assign(e instanceof Error ? e : new Error(msg(e)), { pricing: true }); });
     const o = fd.options.find((x) => x.key === level) || fd.options[0];
     const a = toGroth($('bxAmt').value), f = toGroth(String(o.fee));
     const av = (beamStatus && beamStatus.available) || 0;
@@ -1944,12 +1956,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   }
   $('bxGo').onclick = async () => {
     actErr($('bxGo'), null);
-    if ($('bxGo').disabled) return;
     $('bxGo').disabled = true;
     try { if (dir === 'toEth') await goToEth(); else await goFromEth(); }
     catch (e) {
-      const short = FEE_SHORT.find(([re]) => re.test(msg(e)));      // a price that failed: said short, as the fee's own word
-      actErr($('bxGo'), short ? new Error(short[1]) : e, { bxAmt: /amount|enough|decimal|available|zero|number/i, bxAcct: /address|0x|account|gas/i });
+      const said = e.pricing && FEE_SHORT.find(([re]) => re.test(msg(e)));      // the fee's pricing that failed: said short
+      actErr($('bxGo'), said ? new Error(said[1]) : e, { bxAmt: /amount|enough|decimal|available|zero|number/i, bxAcct: /address|0x|account|gas/i });
     }
     finally { $('bxGo').disabled = false; }
   };
@@ -1961,16 +1972,17 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   let bxRows = [], bxShown = 5;
   const BADGE_OUT = { done: ['ok', 'arrived'], waiting: ['pending', 'relaying'], failed: ['bad', 'failed'], unknown: ['pending', 'unknown', 'not in the releases read: see the bridge monitor'] };
   const BADGE_IN = { approving: ['pending', 'approving'], sending: ['pending', 'sending'], sent: ['pending', 'mining'], unconfirmed: ['pending', 'unmined', 'not mined yet'], confirmed: ['ok', 'sent'], failed: ['bad', 'failed'] };
+  let bxListSeq = 0;
   async function bridgeLists() {
     note('bErr', 'bad', '');
-    const wid = W() && W().id;
+    const wid = W() && W().id, seq = ++bxListSeq;      // a slower older answer never draws over a newer one
     const extra = cur === 'typed' ? other : '';
     const [claims, out, ins] = await Promise.all([
       beamHere() ? host('incoming', wid).catch((e) => { note('bErr', 'bad', msg(e)); return []; }) : [],
       Object.values(st.beam || {}).some((b) => b.status === 'running') ? host('outgoing', extra).catch((e) => { note('bErr', 'bad', msg(e)); return { msgs: [] }; }) : { msgs: [] },
       host('bridgeIn').catch(() => []),
     ]);
-    if (wid && !isOpen(wid)) return;
+    if ((wid && !isOpen(wid)) || seq !== bxListSeq) return;
     const rows = [
       ...claims.map((m) => ({ t: Infinity, claim: true, way: 'in', no: m.MsgId, who: 'from Ethereum', when: 'arrived on Beam', amount: Number(m.amount) / GROTH, fee: null, msg: m.MsgId, raw: m.amount })),
       ...out.msgs.map((m) => ({ t: m.eth ? Date.parse(m.eth.time) : Infinity - 1, way: 'out', no: m.id, who: `to ${short(m.receiver)}`,
@@ -2071,7 +2083,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
             <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))} · <a class="text-link" href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? fdt(t.time) : 'pending')}</a></span></span>
             <span class="amt ${t.out ? '' : 'pos'}">${v ? `${t.out ? '−' : '+'}${esc(v)}` : ''}</span><span class="badge ${t.pending ? 'pending' : t.ok ? 'ok' : 'bad'}">${t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}</span></div>`;
         }).join('') || '<div class="empty">no transactions yet</div>';
-      } catch (e) { box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
+      } catch (e) { if (!stale()) box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
     }
   }
   $('actList').onclick = async (e) => {
@@ -2424,7 +2436,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!st || st.phase !== 'unlocked') return;
       priceTick();
       if (!$('t-home').hidden) ethRefresh();
-      if (!$('t-bridge').hidden) { if (dir === 'toEth') fee(); bridgeLists(); }
+      if (!$('t-bridge').hidden) { if (dir === 'toEth') fee(); readEth(addrOf(cur)); bridgeLists(); }
     }, 60000),
   ];
   window.addEventListener('pagehide', () => timers.forEach(clearInterval));
