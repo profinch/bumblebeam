@@ -1,0 +1,68 @@
+diff --git a/wasmclient/wasmclient.cpp b/wasmclient/wasmclient.cpp
+index 2d2c359ca..0bd3e1303 100644
+--- a/wasmclient/wasmclient.cpp
++++ b/wasmclient/wasmclient.cpp
+@@ -507,6 +507,54 @@ public:
+         });
+     }
+ 
++    // BumbleBeam: the wallet's data in Beam's own exchange format (storage::ExportDataToJson, as the CLI's export_data
++    // and the mobile wallets): its own addresses (with their key numbers), contacts and transactions; no keys.
++    // The callback gets the JSON string, or null when the wallet is not running or the export failed.
++    void ExportData(val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val::null());
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this]() -> boost::any
++        {
++            return std::string(storage::ExportDataToJson(*m_Client->GetWalletDB()));
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            try { (*cb)(val(boost::any_cast<std::string>(res))); }
++            catch (...) { (*cb)(val::null()); }
++        });
++    }
++
++    // BumbleBeam: the other way (storage::ImportDataFromJson): addresses, contacts and transactions added to this
++    // wallet's database. The callback gets true when all of it went in.
++    void ImportData(const std::string& data, val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val(false));
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this, data]() -> boost::any
++        {
++            return storage::ImportDataFromJson(*m_Client->GetWalletDB(), data.data(), data.size());
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            bool ok = false;
++            try { ok = boost::any_cast<bool>(res); } catch (...) {}
++            (*cb)(val(ok));
++        });
++    }
++
+     void StartWallet()
+     {
+         AssertMainThread();
+@@ -1060,6 +1108,8 @@ EMSCRIPTEN_BINDINGS()
+         .function("createAppAPI", &WasmWalletClient::CreateAppAPI3)
+         .function("importRecovery", &WasmWalletClient::ImportRecovery)
+         .function("importRecoveryFromFile", &WasmWalletClient::ImportRecoveryFromFile)
++        .function("exportData", &WasmWalletClient::ExportData)
++        .function("importData", &WasmWalletClient::ImportData)
+         .class_function("IsAppSupported", &WasmWalletClient::IsAppSupported)
+         .class_function("GenerateAppID", &WasmWalletClient::GenerateAppID)
+         .class_function("GeneratePhrase", &WasmWalletClient::GeneratePhrase)

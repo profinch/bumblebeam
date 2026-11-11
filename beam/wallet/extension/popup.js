@@ -495,15 +495,11 @@
   }
   qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
   async function go(what) {
-    // the backup file is chosen here too, as Settings' backup is (it opened a tab of its own before)
     pwFields();
     if (what === 'create') return showPhrase(await host('newPhrase'));
     clearNotes(`s-${what}`);
     show(`s-${what}`);
   }
-  // the backup file chosen by the wallet's own button, its name beside it (the browser's file field fits no design)
-  $('iFileBtn').onclick = () => $('iFile').click();
-  $('iFile').addEventListener('change', () => { const f = $('iFile').files && $('iFile').files[0]; $('iFileName').textContent = f ? f.name : 'none chosen'; $('iFileName').classList.toggle('on', !!f); });
   // Back from a way of adding a wallet: to the choice of ways (the header's arrow there goes back to the wallet)
   qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); welcome(); }; });
 
@@ -555,17 +551,6 @@
     const p = readPw('s-restore');
     await host('addWallet', ...addArgs({ kind: 'restore', phrase: words.join(' '), beam: k.beam && $('rBeam').checked, name: $('rName').value }, p));
     $('rSeed').value = ''; $('rName').value = ''; $('rKind').textContent = ''; clearPw();
-    curTab = 'home'; await enter();
-  });
-
-  $('doImport').onclick = () => longOp('s-import', 'doImport', async () => {
-    const f = $('iFile').files[0];
-    if (!f) throw new Error('choose the backup file');
-    const p = readPw('s-import');
-    const u8 = new Uint8Array(await f.arrayBuffer());
-    let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
-    await host('addWallet', ...addArgs({ kind: 'backup', b64: btoa(s), pass: $('iPass').value, name: $('iName').value }, p));
-    $('iPass').value = ''; $('iName').value = ''; $('iFile').value = ''; clearPw();
     curTab = 'home'; await enter();
   });
 
@@ -2660,8 +2645,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function wCard(w) {
     const g = (cap, acts) => `<div class="grp"><div class="cap">${cap}</div><div class="acts">${acts.join('')}</div></div>`;
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
-    // the Beam file: this wallet's Beam part alone as a wallet.db (what Open a Beam backup file takes)
-    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : ''].filter(Boolean);      // Rename is the pencil by the name
+    // the Beam file: Beam's own exchange file of this wallet (addresses, their names, contacts, transactions; no keys),
+    // as Beam's CLI and mobile wallets save and take it; and one taken in
+    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : '', w.beam ? b('beamIn', 'Import a Beam file') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethKey', 'Private key'), b('ethPhrase', 'Seed phrase')] : [];      // the key first (every account has one), its phrase after
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
@@ -2714,26 +2700,53 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   $('wList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.wr')) { e.preventDefault(); e.target.click(); } };
 
+  // a Beam file into a wallet: its addresses, names, contacts and transactions added (the same seed's wallet)
+  let bdFor = null;
+  $('bdFile').onchange = async () => {
+    const f = $('bdFile').files && $('bdFile').files[0], w = bdFor; if (!f || !w) return;
+    const text = await f.text();
+    const r = await ask({ title: `Import a Beam file into ${w.name}`, password: true, yes: 'Import', note: `${f.name}\nIts addresses, their names, contacts and transactions are added to this wallet. It should come from a wallet of the same seed phrase.`,
+      check: async ({ pass }) => { await host('beamData', w.id, pass, text); } });
+    if (r.ok) ask({ title: 'Imported', note: 'The addresses and the history are in this wallet now.', yes: 'OK', no: null });
+  };
+
   // ---------- Settings: Backup ----------
   // one file with every wallet (the vault as stored, sealed with the wallet password), Beam's databases if asked
   async function bkInfo() {
-    $('bkLast').innerHTML = st.lastBackup ? `<span>last: <b>${esc(fdt(st.lastBackup))}</b></span>` : '<span>none yet</span>';
+    $('bkLast').innerHTML = st.lastBackup ? `<span>last: <b>${esc(fdt(st.lastBackup))}</b>${st.lastBackupId != null ? `<button type="button" class="cp bk-show" title="Show the file in its folder">${DLI}</button>` : ''}</span>` : '<span>none yet</span>';
     try { const n = await host('beamDbSize'); $('bkSize').textContent = n ? `~${Math.max(1, Math.round(n / 2 ** 20))} MB now` : ''; } catch {}
   }
+  // Make: the backup made and kept in this browser (its time by the title); Download: that one saved into
+  // Downloads/BumbleBeam, counted only once it is complete on disk (the icon by the time then shows it in its folder)
   $('bkSave').onclick = async () => {
     let out = null;
-    const r = await ask({ title: 'Save a backup', password: true, yes: 'Save the file',
-      note: `Every wallet of this extension in one file, encrypted with the wallet password${$('bkDb').checked ? ', with Beam history and address names' : ''}. It opens only with the password it was saved with.`,
+    const r = await ask({ title: 'Make a backup', password: true, yes: 'Make it',
+      note: `Every wallet of BumbleBeam in one file, encrypted with the wallet password${$('bkDb').checked ? ', with Beam history and address names' : ''}. It opens only with the password it was made with. Download it to keep it outside the browser.`,
       check: async ({ pass }) => { out = await host('backupMake', pass, $('bkDb').checked); } });
     if (!r.ok || !out) return;
-    const d = new Date(out.at), name = `bumblebeam-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.bbk`;
-    const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
-    if (r2 && r2.error) return ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
-    st.lastBackup = out.at; bkInfo(); bkSay('saved into Downloads');
+    st.lastBackup = out.at; st.lastBackupId = null; bkInfo(); bkSay('made: download it to keep it');
+  };
+  $('bkDown').onclick = async () => {
+    const last = await host('backupLast').catch(() => null);
+    if (!last) return bkSay('make a backup first');
+    const d = new Date(last.at), name = `bumblebeam-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.bbk`;
+    bkSay('saving…');
+    const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: last.b64, name }).catch((e) => ({ error: e.message }));
+    if (!r2 || r2.error || !r2.result) { bkSay(''); return ask({ title: 'Not saved', note: (r2 && r2.error) || 'the browser did not save it', yes: 'OK', no: null }); }
+    await host('backupSaved', r2.result.id).catch(() => {});
+    st.lastBackupId = r2.result.id; bkInfo(); bkSay('saved into Downloads/BumbleBeam');
   };
   // the backup's word, in yellow on its own line under the buttons (its room kept), gone after 5 s
   let bkT = 0;
   const bkSay = (t) => { const m = $('bkMsg'); m.textContent = t; m.classList.remove('going'); clearTimeout(bkT); bkT = setTimeout(() => { m.classList.add('going'); setTimeout(() => { m.textContent = ''; m.classList.remove('going'); }, 600); }, 5000); };
+  // the download icon by the time: the file in its folder (Chrome's own Show in folder); gone, it says so
+  const DLI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7l3.2 3.2L11.2 7M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  $('bkLast').onclick = async (e) => {
+    if (!e.target.closest('.bk-show')) return;
+    const [d] = await chrome.downloads.search({ id: st.lastBackupId }).catch(() => []);
+    if (d && d.exists !== false && d.state === 'complete') chrome.downloads.show(st.lastBackupId);
+    else bkSay('that file is no longer where it was saved');
+  };
   $('bkImport').onclick = () => { $('bkFile').value = ''; $('bkFile').click(); };
   $('bkFile').onchange = async () => {
     const f = $('bkFile').files && $('bkFile').files[0]; if (!f) return;
@@ -2762,20 +2775,20 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const probe = {}, nOpen = new Set();
   const behind = (key, rows) => (nOpen.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
   // a check by hand, left of the time: that row asked again now, the 30 s counted from here
-  const RE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const RE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5A5.5 5.5 0 0 1 12.2 4.6M12.6 1.8v3h-3M13.5 8.5A5.5 5.5 0 0 1 3.8 11.4M3.4 14.2v-3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';      // two arrows round
   const reI = (k) => `<button type="button" class="cp re" data-re="${esc(k)}" title="Check it now">${RE}</button>`;
   const stOf = (p) => (!p ? '' : p.bad ? 'bad' : p.ms > 500 ? 'slow' : 'ok');
   const msOf = (p) => (!p ? '' : p.bad ? 'no answer' : `${p.ms} ms`);      // nothing until it is measured
   function drawNodes() {
     const list = st.nodes || [st.node];
-    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${reI(h)}${msOf(probe[h])}</span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
+    $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${reI(h)}<span class="t">${msOf(probe[h])}</span></span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
     const h = beamStatus && beamStatus.current_height;
     $('beamNet').innerHTML = h ? `<span>block: <b>${esc(h.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
   }
   function drawRpcs() {
     const own = st.ethRpc || '';
-    $('rpcs').innerHTML = (own ? `<div class="node use${nOpen.has(own) ? ' open' : ''}" data-k="${esc(own)}"><i class="st ${stOf(probe[own])}"></i><span class="h">${esc(own.replace(/^https:\/\//, ''))}</span><span class="meta">${reI(own)}${msOf(probe[own])}</span><button type="button" class="cp a-x" data-rx="1" title="Remove this RPC">${XI2}</button></div>${behind(own, [['What', 'an RPC added by you, asked first']])}` : '')
-      + `<div class="node${own ? '' : ' use'}${nOpen.has('public') ? ' open' : ''}" data-k="public"><i class="st ${stOf(probe.public)}"></i><span class="h">public RPCs</span><span class="meta end">${reI('public')}<span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">${PUBLIC_RPCS.length}</span></span></div>${behind('public', [['Asked in turn', PUBLIC_RPCS.join('\n')], ['Activity from', 'eth.blockscout.com']])}`;
+    $('rpcs').innerHTML = (own ? `<div class="node use${nOpen.has(own) ? ' open' : ''}" data-k="${esc(own)}"><i class="st ${stOf(probe[own])}"></i><span class="h">${esc(own.replace(/^https:\/\//, ''))}</span><span class="meta"><span class="t">${msOf(probe[own])}</span></span><button type="button" class="cp a-x" data-rx="1" title="Remove this RPC">${XI2}</button></div>${behind(own, [['What', 'an RPC added by you, asked first']])}` : '')
+      + `<div class="node${own ? '' : ' use'}${nOpen.has('public') ? ' open' : ''}" data-k="public"><i class="st ${stOf(probe.public)}"></i><span class="h">public RPCs</span><span class="meta end"><span class="t"><span class="tipped" title="Four public RPCs, asked in turn: when one does not answer, the next one is">${PUBLIC_RPCS.length}</span></span></span></div>${behind('public', [['Asked in turn', PUBLIC_RPCS.join('\n')], ['Activity from', 'eth.blockscout.com']])}`;
     const b = probe.ethBlock;
     $('ethNet').innerHTML = b ? `<span>block: <b>${esc(b.toLocaleString('en-US').replace(/,/g, '⁠ ⁠'))}</b></span>` : '';
   }
@@ -3116,21 +3129,19 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
           check: async ({ pass }) => ({ title: `${a2.name}: private key`, html: `<div class="hash box">${esc(await host('reveal', w.id, pass, 'ethKey', a2.i))}</div>` }) });
       }
       if (act === 'backup') {
-        let out = null;
-        // the file's password, if it is not the wallet's, in the same dialog; then the file, saved by the service
-        // worker (Chrome's download bubble takes the focus and may close the popup: the file is saved anyway)
+        let json = null;
         const r = await ask({ title: `Beam file of ${w.name}`, password: true, yes: 'Save the file',
-          note: 'Saves this wallet\'s Beam part as a wallet.db: keys, addresses and history, encrypted by Beam. Open a Beam backup file opens it later at once, unlike a seed restore.',
-          check: async (x) => {
-            out = await host('exportBeam', w.id, x.pass);
-            if (out.samePassword) return null;
-            const dbp = await host('reveal', w.id, x.pass, 'beamPass');
-            return { title: 'The file\'s password', html: `<div class="hash box">${esc(dbp)}</div>`, yes: 'Save the file', note: 'This file opens with the password the wallet had when it was created or imported, not with today\'s. Keep it with the file.' };
-          } });
-        if (!r.ok || !out) return;
-        const name = `bumblebeam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.db`;
-        const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
-        if (r2 && r2.error) await ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
+          note: 'Beam\'s own file of this wallet: its addresses with their names, contacts and transactions, as Beam\'s CLI and mobile wallets save it. No keys: it goes into a wallet restored from the same seed phrase, here or in another Beam wallet.',
+          check: async ({ pass }) => { json = await host('beamData', w.id, pass); } });
+        if (!r.ok || json == null) return;
+        const b64 = btoa(unescape(encodeURIComponent(json)));
+        const name = `beam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`;
+        const r2 = await chrome.runtime.sendMessage({ op: 'download', b64, name }).catch((e) => ({ error: e.message }));
+        if (!r2 || r2.error) await ask({ title: 'Not saved', note: (r2 && r2.error) || 'the browser did not save it', yes: 'OK', no: null });
+        else ask({ title: 'Saved', note: `Downloads/BumbleBeam/${name}`, yes: 'OK', no: null });
+      }
+      if (act === 'beamIn') {
+        bdFor = w; $('bdFile').value = ''; $('bdFile').click();
       }
       if (act === 'remove') {
         const r = await ask({ title: `Remove ${w.name}`, password: true, yes: 'Remove', rows: [['Parts', [w.beam && 'Beam', w.eth && 'Ethereum'].filter(Boolean).join(' + ')]],
@@ -3209,7 +3220,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         catch (e) { if (i >= 40 || !/went away/.test(e.message)) throw e; await new Promise((res) => setTimeout(res, 250)); }
       }
       await route();
-      if (inTab && location.hash === '#import' && st && (st.phase === 'new' || st.phase === 'unlocked')) go('import');
     } catch (e) { note('bootErr', 'bad', msg(e)); }
   })();
 })();

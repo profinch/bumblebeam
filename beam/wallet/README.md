@@ -85,7 +85,8 @@ words, a phrase or a key.
 
 ## Beam
 
-- **wasm-client:** `beam-wasm-7.5.14548` from BeamMW's CI (master, 2026-10-30), past HF6 (block 3928666, the
+- **wasm-client:** `beam-wasm-7.5.14548` (master, 2026-10-30) rebuilt as BeamMW's CI builds it, plus Beam's own data
+  export / import exposed (`engine-build/`), past HF6 (block 3928666, the
   Bulletproofs transcript fix). npm `beam-wasm-client` stops at 7.5.14349 (2025-12), before the fork.
   The files and their sha256 are in `extension/SHA256SUMS`.
 - **New wallet and seed restore** both start from Beam's recovery snapshot

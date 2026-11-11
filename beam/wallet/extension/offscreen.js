@@ -876,6 +876,8 @@
         })),
         nodes: nodeList(),
         lastBackup: settings.lastBackup || null,
+        lastBackupId: settings.lastBackupId ?? null,
+        lastDownload: settings.lastDownload || null,
         wallets: data.wallets.map((w) => ({
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
           beam: !!w.beam, eth: !!w.eth, hd: !!(w.eth && w.eth.phrase),
@@ -1216,6 +1218,25 @@
       return { b64, samePassword: w.beam.pass === pass };
     },
 
+    // Beam's own exchange file of a wallet (addresses with their key numbers, contacts, transactions; no keys): out of
+    // its running engine, or a short-lived one for a wallet not open now; and into it the same way
+    async beamData(id, pass, json) {
+      await verify(pass);
+      const w = wallet(id);
+      if (!w.beam) throw new Error('this wallet has no Beam part');
+      return withWallet(id, async () => {
+        const s = live(id);
+        const run = (e) => (json == null ? e.rpc('exportData', [], 120000) : e.rpc('importData', [json], 300000));
+        if (s) return run(s.e);
+        const e = await Engines.fresh(id);
+        try {
+          await e.rpc('open', [w.beam.db, w.beam.pass, node]);
+          for (let k = 0; k < 50 && !(await e.rpc('running')); k++) await new Promise((r) => setTimeout(r, 200));
+          return await run(e);
+        } finally { await e.close().catch(() => {}); }
+      });
+    },
+
     // ---------- settings ----------
     async setNode(n) {
       need();
@@ -1280,9 +1301,24 @@
       const out = { kind: 'bumblebeam-backup', v: 1, at: Date.now(), vault: vaultRec,
         settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {} };
       if (withBeam) for (const w of data.wallets) if (w.beam) out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await api.exportBeam(w.id, pass)).b64;
-      settings.lastBackup = out.at; await saveSettings();
-      return { b64: toB64(new TextEncoder().encode(JSON.stringify(out))), at: out.at };
+      // kept in this browser (backups/last.bbk) until it is downloaded: Download a backup saves it to disk
+      const bytes = new TextEncoder().encode(JSON.stringify(out));
+      const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('backups', { create: true });
+      const wr = await (await dir.getFileHandle('last.bbk', { create: true })).createWritable();
+      await wr.write(bytes); await wr.close();
+      settings.lastBackup = out.at; settings.lastBackupSize = bytes.length; settings.lastBackupId = null; await saveSettings();
+      return { at: out.at, size: bytes.length };
     },
+    // the backup last made, to download
+    async backupLast() {
+      need();
+      try {
+        const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('backups')).getFileHandle('last.bbk')).getFile();
+        return { b64: toB64(new Uint8Array(await f.arrayBuffer())), at: settings.lastBackup || f.lastModified };
+      } catch { return null; }
+    },
+    // the backup's file is on disk (the popup heard it from the download): its download kept, to show it in its folder
+    async backupSaved(id) { need(); settings.lastBackupId = id == null ? null : Number(id); settings.lastDownload = Date.now(); await saveSettings(); },
     // An import adds the wallets the file has and this extension does not (the same phrase, or the same first
     // Ethereum account, is the same wallet); nothing here is changed. A Beam part comes from the file's database,
     // else from its phrase through the recovery snapshot (minutes). Opened with the file's password, kept with this one's.

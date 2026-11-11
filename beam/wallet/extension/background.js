@@ -25,9 +25,21 @@ const OPS = {
   badge: (m) => Promise.all([chrome.action.setBadgeText({ text: m.text || '' }), chrome.action.setBadgeBackgroundColor({ color: '#00f6d2' })]),
   // a Beam backup file from the popup: saved here, so it completes even if the popup closes (Chrome's
   // download bubble takes the focus from the popup)
+  // Saved into Downloads/BumbleBeam/ without asking; the answer comes once the file is complete on disk (an
+  // interrupted one is an error), with its download id (to show it in its folder later)
   download: (m) => {
     if (!/^[\w.-]{1,120}$/.test(String(m.name)) || typeof m.b64 !== 'string') return Promise.reject(new Error('bad file'));
-    return chrome.downloads.download({ url: `data:application/octet-stream;base64,${m.b64}`, filename: m.name, saveAs: false });
+    return new Promise((res, rej) => {
+      let id = null;
+      const done = (d) => {
+        if (d.id !== id || !d.state) return;
+        if (d.state.current === 'complete') { chrome.downloads.onChanged.removeListener(done); res({ id }); }
+        else if (d.state.current === 'interrupted') { chrome.downloads.onChanged.removeListener(done); rej(new Error(`not saved: ${(d.error && d.error.current) || 'interrupted'}`)); }
+      };
+      chrome.downloads.onChanged.addListener(done);
+      chrome.downloads.download({ url: `data:application/octet-stream;base64,${m.b64}`, filename: `BumbleBeam/${m.name}`, saveAs: false, conflictAction: 'uniquify' })
+        .then((d) => { id = d; chrome.downloads.search({ id: d }).then(([x]) => { if (x && x.state === 'complete') { chrome.downloads.onChanged.removeListener(done); res({ id: d }); } }); }, (e) => { chrome.downloads.onChanged.removeListener(done); rej(e); });
+    });
   },
   // the window where a site's request is answered (one; a second request shows in it too)
   // (its id kept in session storage: this worker sleeps and forgets)

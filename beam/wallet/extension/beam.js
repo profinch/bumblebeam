@@ -334,6 +334,18 @@ const Beam = (() => {
     // the database file as it is on disk (a backup: read once the wallet has stopped)
     readDb: (db) => M.FS.readFile(db),
 
+    // Beam's own exchange file (storage::ExportDataToJson / ImportDataFromJson, as the CLI's export_data and the
+    // mobile wallets): its own addresses with their key numbers, contacts and transactions, no keys. Our engine
+    // build adds exportData / importData to the wasm client (beam/wallet/engine-build)
+    exportData: () => new Promise((res, rej) => {
+      if (!client || !client.isRunning()) return rej(new Error('the Beam part is not running'));
+      client.exportData((j) => (j == null ? rej(new Error('Beam did not export the data')) : res(String(j))));
+    }),
+    importData: (json) => new Promise((res, rej) => {
+      if (!client || !client.isRunning()) return rej(new Error('the Beam part is not running'));
+      client.importData(String(json), (ok) => (ok ? res(true) : rej(new Error('Beam did not take that file: not its data, or for another wallet'))));
+    }),
+
     // a backup file becomes this engine's wallet, if pass opens it
     async importDb(db, bytes, pass) {
       if (WC.IsInitialized(db)) throw new Error('a wallet already exists at ' + db);

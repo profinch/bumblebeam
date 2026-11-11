@@ -779,3 +779,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .node .meta .re { margin-right: 8px; vertical-align: -2px; }      /* a check by hand, left of the time */
 .node .meta .re svg { width: 12px; height: 12px; }
 .node .meta .re.turning svg { animation: ar-spin 0.8s linear infinite; }
+.node .meta { display: inline-flex; align-items: center; }
+.node .meta .t { display: inline-block; min-width: 9ch; text-align: right; }      /* the time's room kept (up to 4999 ms, or no answer): the check's icon never moves */
+.bk-show { margin-left: 6px; vertical-align: -2px; }
+.bk-show svg { width: 13px; height: 13px; }

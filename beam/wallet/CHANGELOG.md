@@ -212,6 +212,14 @@
   WebSocket only), each probed for whether it answers and how fast, a click shows what is behind it; our two
   nodes explained in a fold. Ethereum: one's own RPC above the public ones (four, asked in turn), the block from
   them. Adding a token by hand is gone from Settings (it comes to the wallet tab later).
+- Backup: Make a backup (kept in this browser, its time by the title), Download a backup (into
+  Downloads/BumbleBeam, counted only once the file is complete on disk; an icon by the time shows it in its
+  folder), Import a backup. It is BumbleBeam's own backup; for other Beam wallets a wallet's Beam file.
+- A wallet's Beam file is now Beam's own exchange file (JSON: its addresses with their key numbers and names,
+  contacts, transactions; no keys), as Beam's CLI (export_data / import_data) and mobile wallets save and take it;
+  Import a Beam file adds one to a wallet of the same seed. The Beam engine is rebuilt for it (the same 7.5.14548,
+  with Beam's own export and import exposed; beam/wallet/engine-build). Open a Beam backup file (a wallet.db) is
+  gone from Add a wallet.
 - Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing.
 - About: the version as a link to the changelog, the bridge's contracts with copy and explorer icons.
 

@@ -43,6 +43,8 @@
     open: (db, pass, node) => Beam.open(db, pass, node),
     stop: () => Beam.stop(),
     readDb: (db) => Beam.readDb(db),
+    exportData: () => Beam.exportData(),
+    importData: (json) => Beam.importData(json),
     importDb: (db, bytes, pass) => Beam.importDb(db, bytes, pass),
     copyFromShared: (src, db, pass) => Beam.copyFromShared(src, db, pass),
     exists: (db) => Beam.exists(db),
