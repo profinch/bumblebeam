@@ -1642,6 +1642,19 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const PEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>';
   const bx = document.querySelector('.bx'), bxCards = [$('bxSend'), $('bxRecv')];
   const opt = () => (feeData ? feeData.options.find((o) => o.key === level) || feeData.options[0] : null);
+  // the fee towards Ethereum: the gauge's level's ("auto"), or one typed into the Beam card's corner
+  let feeOwn = null;
+  const feeNow = () => (feeOwn != null ? feeOwn : opt() ? opt().fee : null);
+  // the needle by the fee itself: -60° at cheap, 0° at normal, 60° at safe, on a smooth scale between them, leaning
+  // further under cheap (to the relayer's minimum) and over safe (to twice it)
+  function feeAngle(f) {
+    const o = feeData.options, pts = [[feeData.min, -85], [o[0].fee, -60], [o[1].fee, 0], [o[2].fee, 60], [o[2].fee * 2, 85]];
+    if (f <= pts[0][0]) return -88;
+    for (let i = 1; i < pts.length; i++) if (f <= pts[i][0]) { const [a, x] = pts[i - 1], [b, y] = pts[i]; return b > a ? x + (y - x) * (f - a) / (b - a) : y; }
+    return 88;
+  }
+  const feeLow = (f) => !!feeData && f != null && f < feeData.min;
+  const feeHigh = (f) => !!feeData && f != null && f > feeData.options[feeData.options.length - 1].fee * 2;
   const ownAccts = () => { const w = W(); return [...(w ? w.accounts.map((a) => ({ ...a, wallet: w })) : []), ...allAccounts().filter((a) => !w || a.wallet.id !== w.id)]; };
   const addrOf = (v) => (v === 'typed' ? other : v);
   const beamHave = () => (beamStatus && beamStatus.available != null ? beamStatus.available / GROTH : null);
@@ -1731,6 +1744,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // each side in its card: its network on the title line (Beam's key at the bottom left when it receives),
   // Ethereum's picker
   const capMeter = document.createElement('canvas').getContext('2d');
+  // the middle of a word's capitals in its card, from the card's padding edge (as top is): its baseline less half a
+  // capital's height, read from the font
+  function capMid(word, card) {
+    if (!word || !word.getClientRects().length) return null;
+    word.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>');
+    const baseY = word.lastElementChild.getBoundingClientRect().top; word.lastElementChild.remove();
+    capMeter.font = getComputedStyle(word).font;
+    return baseY - capMeter.measureText('E').actualBoundingBoxAscent / 2 - card.getBoundingClientRect().top - card.clientTop;
+  }
   function bxPlace() {
     const beam = dir === 'toEth' ? $('bxSend') : $('bxRecv'), eth = dir === 'toEth' ? $('bxRecv') : $('bxSend'), bk = $('bxKey'), w = W();
     // each card's network in its left corner, as the wallet tab's card titles with the way before it: FROM ● BEAM,
@@ -1752,21 +1774,24 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       bk.style.transform = `translateY(${(base($('bxNetB').querySelector('.nm')) - base(bk)).toFixed(1)}px)`;      // the word's own line: the label is a flex box, a mark in it sits at its middle
     }
     eth.appendChild($('bxGearBox'));
+    // Beam on top: the fee typed by hand in its card's top right, its middle on BEAM's capitals' middle
+    const fb = $('bxFeeBox');
+    fb.hidden = dir !== 'toEth';
+    if (dir === 'toEth') {
+      $('bxSend').appendChild(fb);
+      const mid = capMid($('bxNetB').querySelector('.nm'), $('bxSend'));
+      if (mid != null) fb.style.top = `${(mid - fb.offsetHeight / 2).toFixed(1)}px`;
+    }
     // the picker shares its line with FROM / TO ● ETHEREUM (top or bottom): it begins 10 px after them, at most as
     // wide as the wallet tab's
     const g = $('bxGearBox');
     g.style.width = '';
     const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
     if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
-    // its middle on the middle of ETHEREUM's capitals (their baseline less half a capital's height, read from the font)
+    // its middle on the middle of ETHEREUM's capitals
     g.style.top = g.style.bottom = '';
-    const nm = $('bxNetE').querySelector('.nm');
-    if (nm && n.width) {
-      nm.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>');
-      const baseY = nm.lastElementChild.getBoundingClientRect().top; nm.lastElementChild.remove();
-      capMeter.font = getComputedStyle(nm).font;
-      const capH = capMeter.measureText('E').actualBoundingBoxAscent;
-      const mid = baseY - capH / 2 - c.top - eth.clientTop;      // from the padding edge, as top is (the card's border off)
+    const mid = capMid($('bxNetE').querySelector('.nm'), eth);
+    if (mid != null && n.width) {
       const b = g.querySelector('.dd-btn'), bMid = b ? b.getBoundingClientRect().top - g.getBoundingClientRect().top + b.offsetHeight / 2 : g.offsetHeight / 2;
       g.style.top = `${(mid - bMid).toFixed(1)}px`; g.style.bottom = 'auto';      // the button's middle, not its box's
     }
@@ -1778,7 +1803,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const toEth = dir === 'toEth', s = amount(), o = opt();
     const from = !toEth ? wbAt(addrOf(cur)) : null, to = toEth ? wbAt(addrOf(cur)) : null;
     const have = toEth ? beamHave() : from && !from.err ? from.wbeam : null;
-    const f = toEth ? (o ? o.fee : 0) : Number(FE_FEE);
+    const fN = feeNow(), f = toEth ? (fN || 0) : Number(FE_FEE);
     const total = (s || 0) + f + (toEth ? 0.02 : 0);   // with the fee (and, from Beam, its own ~0.02)
     const issue = s > 0 && have != null && total > have ? 'over balance + fee' : '';
     $('bxAmt').classList.toggle('bad', !!issue);
@@ -1798,18 +1823,29 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // the fee: the gauge's three levels this way, fixed the other; what it is for in two short lines
     $('bxFee').hidden = !toEth;
     const keys = feeData ? feeData.options.map((x) => x.key) : ['cheap', 'normal', 'safe'], li = keys.indexOf(level);
-    qa('#bxFee .arc').forEach((a, k) => { a.classList.toggle('on', !!o && k <= li); a.setAttribute('aria-checked', String(k === li)); });
-    $('bxNeedle').style.transform = `rotate(${(li - 1) * 60}deg)`;
-    $('bxFeeLv').innerHTML = o ? `<span class="w">${esc(level)}</span> <b>${o.fee.toFixed(2)}</b>` : '';
+    const low = toEth && feeLow(fN), high = toEth && feeHigh(fN);
+    // the arcs lit up to the fee (its own figure: the levels it reaches), yellow where it is too low or too high
+    const reach = feeOwn != null && feeData ? feeData.options.filter((x) => fN >= x.fee - 0.005).length - 1 : li;
+    qa('#bxFee .arc').forEach((a, k) => { a.classList.toggle('on', !!o && k <= reach && !high); a.classList.toggle('warn', (low && k === 0) || (high && k === keys.length - 1)); a.setAttribute('aria-checked', String(feeOwn == null && k === li)); });
+    $('bxNeedle').style.transform = `rotate(${feeOwn != null && feeData ? feeAngle(fN) : (li - 1) * 60}deg)`;
+    $('bxFeeLv').innerHTML = o ? `<span class="w">${feeOwn != null ? 'own' : esc(level)}</span> <b>${fN.toFixed(2)}</b>` : '';
+    // the corner field: the fee in force (not while it is being typed in), outlined yellow too low or too high; auto lit
+    // while the level sets it
+    $('bxFeeBox').hidden = !toEth;
+    if (document.activeElement !== $('bxFeeIn')) $('bxFeeIn').value = fN != null ? fN.toFixed(2) : '';
+    $('bxFeeIn').classList.toggle('warn', low || high);
+    $('bxAuto').classList.toggle('on', feeOwn == null);
     let l1, l2;
     if (toEth) {
       l1 = feeData ? `gas now <b>${feeData.base.toFixed(3)}</b> gwei, ${esc(feeData.level)}` : feeErr ? 'not priced' : 'pricing…';
-      l2 = s > 0 && o ? `total <b>${num(s + o.fee, 4)}</b> BEAM` : o ? `covers to <b>${o.upTo.toFixed(2)}</b> for <b>${usd(o.fee * feeData.rate.beam)}</b>` : '';
+      const up = feeOwn != null ? covers(fN) : o && o.upTo;
+      l2 = s > 0 && o ? `total <b>${num(s + fN, 4)}</b> BEAM` : o ? `covers to <b>${up > 0 ? up.toFixed(2) : '0'}</b> for <b>${usd(fN * feeData.rate.beam)}</b>` : '';
     } else {
       l1 = `<b>${FE_FEE}</b> WBEAM to the relayer`;
       l2 = s > 0 ? `total <b>${num(s + Number(FE_FEE), 4)}</b> WBEAM` : from && !from.err ? `gas from <b>${num(from.eth, 5)}</b> ETH` : 'its gas paid in ETH';
     }
     $('bxFeeInfo').innerHTML = `<span>${l1}</span><span>${l2}</span>`;
+    feeSay();
     bxFit();
   }
   // the amount: 24 px down to 12 when long, ending where the right's column begins; its figures halfway between the
@@ -1849,7 +1885,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // in whole units of 1e-8 (a groth, WBEAM's smallest), so all of it goes to the last digit, no dust left
     const have = toEth ? (beamStatus && beamStatus.available != null ? BigInt(Math.round(beamStatus.available)) : null) : from && !from.err ? BigInt(from.raw || '0') : null;
     if (have == null) return;
-    const keep = toEth ? BigInt(Math.round((o ? o.fee : 0) * 1e8)) + 2000000n : 2000000n;      // the fee, and from Beam its ~0.02
+    const keep = toEth ? BigInt(Math.round((feeNow() || 0) * 1e8)) + 2000000n : 2000000n;      // the fee, and from Beam its ~0.02
     let m = have - keep;
     if (m > 9999999999999999n) m = 9999999999999999n;                                             // as typed: at most 99 999 999.99999999
     $('bxAmt').value = m > 0n ? exact(m.toString(), 8) : '';
@@ -1861,16 +1897,22 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const gauge = document.querySelector('#bxFee .bx-gauge');
   const byX = (e) => { const r = gauge.getBoundingClientRect(), keys = feeData.options.map((x) => x.key); return keys[Math.min(keys.length - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * keys.length)))]; };
   let dragging = false;
-  gauge.addEventListener('pointerdown', (e) => { if (!feeData) return; dragging = true; gauge.setPointerCapture(e.pointerId); level = byX(e); bxCalc(); });
-  gauge.addEventListener('pointermove', (e) => { if (!dragging) return; const k = byX(e); if (k !== level) { level = k; bxCalc(); } });
+  gauge.addEventListener('pointerdown', (e) => { if (!feeData) return; dragging = true; gauge.setPointerCapture(e.pointerId); level = byX(e); feeOwn = null; bxCalc(); });
+  gauge.addEventListener('pointermove', (e) => { if (!dragging) return; const k = byX(e); if (k !== level) { level = k; feeOwn = null; bxCalc(); } });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) gauge.addEventListener(ev, () => { dragging = false; });
   // and from the keyboard: the arrows move the level, as a slider's
   gauge.addEventListener('keydown', (e) => {
     if (!feeData || !/^Arrow(Left|Right|Up|Down)$/.test(e.key)) return;
     e.preventDefault();
     const keys = feeData.options.map((x) => x.key), k = keys.indexOf(level) + (/Right|Up/.test(e.key) ? 1 : -1);
-    if (k >= 0 && k < keys.length) { level = keys[k]; bxCalc(); }
+    if (k >= 0 && k < keys.length) { level = keys[k]; feeOwn = null; bxCalc(); }
   });
+  // the fee typed in the corner: the needle follows it; auto puts the level's back
+  BB.amountField($('bxFeeIn'), 4, 4);
+  $('bxFeeIn').oninput = () => { const t = $('bxFeeIn').value.replace(',', '.'); const v = Number(t); if (t !== '' && t !== '.' && isFinite(v)) { feeOwn = v; bxCalc(); } };
+  $('bxFeeIn').onblur = () => bxCalc();
+  $('bxFeeIn').onkeydown = (e) => { if (e.key === 'Enter') $('bxFeeIn').blur(); if (e.key === 'Escape') { feeOwn = null; $('bxFeeIn').blur(); } };
+  $('bxAuto').onclick = () => { feeOwn = null; bxCalc(); };
 
   // a turn: the content (not the titles) tears into strips that jerk sideways, turns to the other way at the middle,
   // and comes back torn, settling
@@ -1950,7 +1992,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function bridgeOpen() {
     const a = acct(), l = ownAccts(), w = W();
     if (w && w.id !== bxWallet) {                     // another wallet: its own account, nothing carried over
-      bxWallet = w.id; mine = ''; other = ''; if (cur === 'typed') cur = '';
+      bxWallet = w.id; mine = ''; other = ''; feeOwn = null; if (cur === 'typed') cur = '';
       $('bxAmt').value = ''; bxShown = 5; actErr($('bxGo'), null);
       if ($('bxAcct').classList.contains('typing')) typed(false);
     }
@@ -1976,7 +2018,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   function feeSay() {
     const m = document.querySelector('.bx-go .act-msg');
     if (!m) return;
-    if (feeErr && dir === 'toEth') { m.textContent = (FEE_SHORT.find(([re]) => re.test(feeErr)) || [0, 'fee not priced, try in a minute'])[1]; m.title = feeErr; m.dataset.fee = '1'; m.classList.remove('ok'); }
+    const f = feeNow();
+    const say = dir !== 'toEth' ? '' : feeErr ? (FEE_SHORT.find(([re]) => re.test(feeErr)) || [0, 'fee not priced, try in a minute'])[1]
+      : feeLow(f) ? `under the relayer's minimum (${feeData.min.toFixed(2)}): it waits until gas drops to ${Math.max(0, covers(f)).toFixed(3)} gwei`
+      : feeHigh(f) ? 'more than twice safe: paying for nothing, it does not go faster' : '';
+    if (say) { if (m.textContent && !m.dataset.fee) return; m.textContent = say; m.title = feeErr || ''; m.dataset.fee = '1'; m.classList.remove('ok'); }      // an action's own word is not written over
     else if (m.dataset.fee) { m.textContent = ''; m.title = ''; delete m.dataset.fee; }
   }
   async function fee() {
@@ -1990,12 +2036,19 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const own = allAccounts().find((a) => a.address.toLowerCase() === rcv.toLowerCase());
     const fd = feeData || await host('relayerFee').catch((e) => { throw Object.assign(e instanceof Error ? e : new Error(msg(e)), { pricing: true }); });
     const o = fd.options.find((x) => x.key === level) || fd.options[0];
-    const a = toGroth($('bxAmt').value), f = toGroth(String(o.fee));
+    const a = toGroth($('bxAmt').value), f = toGroth(String(feeOwn != null ? feeOwn : o.fee));
+    if (f < Math.round(fd.min * GROTH)) {
+      const up = covers(f / GROTH);
+      const ok = await confirmBox('Fee under the minimum', [['Relayer minimum now', `${fd.min.toFixed(2)} BEAM`], ['This fee', `${amt(f, 8)} BEAM`],
+        ['Released once the base fee is', `≤ ${up > 0 ? up.toFixed(3) : '—'} gwei (${pct(shareOf(up))} of the last 24 h)`]],
+        'The relayer keeps the message and takes it when gas gets that cheap. If it never does, the BEAM stay locked: nothing can raise the fee later.');
+      if (!ok) return;
+    }
     const av = (beamStatus && beamStatus.available) || 0;
     if (a + f + 2e6 > av) throw fieldErr('bxAmt', `not enough: ${amt(av, 8)} BEAM available, needed amount + fee + ~0.02`);
     const txid = await host('sendToEth', W().id, {
       title: 'Bridge BEAM → WBEAM',
-      rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM (${level})`],
+      rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM (${feeOwn != null ? 'your own' : level})`],
         ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? o.upTo).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); ×${(f / GROTH / fd.min).toFixed(1)} today's minimum`],
         ['To', own ? `${own.wallet.name} · ${own.name} ${rcv}` : `${rcv} (not one of this wallet's accounts)`]],
       note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour.\nIt cannot be undone.',

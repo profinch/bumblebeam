@@ -489,7 +489,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-tear { position: absolute; inset: 0; padding: inherit; pointer-events: none; opacity: var(--fade, 1); }
 .bx-strip { position: absolute; inset: 0; padding: inherit; }
 .bx.turning .bx-side > .bx-l2, .bx.turning .bx-side > .bx-l1 > :not(.caps), .bx.turning .bx-side > .bx-right, .bx.turning .bx-side > .bx-right2,
-.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net, .bx.turning .bx-side > .bx-eta { visibility: hidden; }
+.bx.turning .bx-side > .bx-when, .bx.turning .bx-side > .bx-key, .bx.turning .bx-side > .bx-issue, .bx.turning .bx-side > .bx-net, .bx.turning .bx-side > .bx-eta, .bx.turning .bx-side > .bx-feebox { visibility: hidden; }
 .bx-strip .bx-l1 > .caps { visibility: hidden; }
 .bx-strip .dd-list { display: none; }
 /* Beam's account (the wallet's name) and its dot in its card's corner: top right on top, bottom right below */
@@ -537,6 +537,15 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 #bxAcct.typing .dd-btn { display: none; }
 .bx-addrin { display: block; width: 100%; height: 28px; padding: 0 10px; font: 12px var(--font-mono); color: var(--text); background: var(--field-fill); border: 1px solid rgba(var(--accent-rgb), 0.5); border-radius: 6px; outline: none; }
 .bx-addrin.bad { border-color: var(--color-red); }
+/* the fee typed by hand, in the Beam card's top right (towards Ethereum): fee [22.82] auto */
+.bx-feebox { position: absolute; right: var(--px); top: 6px; display: flex; align-items: center; gap: 6px; font: 11px var(--font-mono); color: var(--muted); }
+.bx-feebox input { width: 66px; height: 24px; padding: 0 6px; text-align: right; font: 700 13px var(--font-mono); color: var(--text); background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.bx-feebox input:focus { border-color: rgba(var(--accent-rgb), 0.5); }
+.bx-feebox input.warn { border-color: rgba(var(--yellow-rgb), 0.7); }
+.bx-auto { padding: 2px 6px; font: 10px var(--font-mono); color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: color 0.2s, border-color 0.2s; }
+.bx-auto:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }
+.bx-auto.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); }      /* lit while the gauge's level sets the fee; a click puts it back */
+.bx-auto:focus { outline: none; }
 /* the fee line, one height both ways: a gauge (cheap, normal, safe) this way, the fixed fee the other; what it is for */
 .bx-feeline { display: flex; align-items: center; gap: 10px; margin-top: 14px; height: 30px; padding: 0 calc(var(--px) + 1px); white-space: nowrap; }      /* in from both sides as the cards' content (their border + --px) */
 .bx-fee3 { display: inline-flex; align-items: center; gap: 8px; font: 11px var(--font-mono); color: var(--muted); }
@@ -546,6 +555,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-gauge .arc { fill: none; stroke: var(--border); stroke-width: 3.5; stroke-linecap: round; transition: stroke 0.25s; }
 .bx-gauge .arc.on { stroke: var(--accent); filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.6)); }
 .bx-gauge .arc:hover:not(.on) { stroke: rgba(var(--accent-rgb), 0.5); }
+.bx-gauge .arc.warn { stroke: var(--color-yellow); filter: none; }      /* the fee typed too low (cheap's arc) or too high (safe's) */
 .bx-gauge .needle { transform-origin: 37px 38px; transition: transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1); }
 .bx-gauge .needle path { stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; }
 .bx-gauge .hub { fill: var(--text); }
