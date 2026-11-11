@@ -2,6 +2,19 @@
 
 ## 0.4.0 (2026-11-10, not yet published)
 
+### Safety
+- The wallet's own channel (the one that signs and sends) and its storage answer only the extension's own pages.
+  The script it puts into sites carries the extension's id too: a site that took over its own page process could
+  have used it. The stored vault is out of that script's reach.
+- A site's transaction that calls a token is read out in its window: approve and increaseAllowance (the spender
+  and the amount, "all your WBEAM, with no limit" warned in yellow), transfer, transferFrom, setApprovalForAll. It
+  showed only the data's first bytes.
+- Typed data is refused when its named type is not the one its types make (the window would show one thing and
+  sign another), or when it is for another chain (a permit there, where the same address may hold coins).
+- A request just shown in the window keeps Approve off for 0.6 s: a quick second click meant for the request
+  before cannot agree to it.
+- An Ethereum node set by hand is taken only if it is Ethereum mainnet.
+
 ### Beam: Receive
 - The screen is BEAM Receive: My addresses on top, the shown address's card under it. What the list holds is
   told on its title's tip.
@@ -202,6 +215,14 @@
 - The Ethereum token list keeps the scroll bar's room when it does not scroll, so the rows stand where they do
   when it does.
 - A list's option too long for it ends with … instead of being cut mid-letter (the design library).
+- Prices are asked only as needed: ETH from Chainlink alone while it answers, BEAM from the oracle checked against
+  one market; one asking at a time; a service that refused for being asked too often is left alone for 10 minutes;
+  the 24 h change no longer holds the prices up (it could take 45 s).
+- ETH sent with All: the gas is checked at the moment's price before the confirmation (the node refused it after).
+- WBEAM sent to Beam: the send after the approval tries its estimate again while the node catches up with the
+  approval's block (it failed with the approval already spent).
+- A known token whose balance could not be read once stays in the list.
+- A bridge message whose first release attempt reverted no longer shows failed when a later one went through.
 - ETH's price is read from Chainlink's ETH/USD feed on Ethereum first, then CoinGecko and Coinpaprika: the free
   price services refuse when asked too often (CoinGecko 429, Coinpaprika 402 at 60 an hour), and the bridge's fee
   could not be priced.
