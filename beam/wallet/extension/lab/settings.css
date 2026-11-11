@@ -107,5 +107,4 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .nd-more .kv dd { white-space: pre-line; font-size: 11px; }
 /* the public RPCs' count at the row's right end, where the others' cross is */
 .node.solo .meta.end { grid-column: 3 / span 2; justify-self: end; }
-.kv.about .text-link.white { color: var(--text); }      /* the changelog after the version, white */
 .kv.about .sp { display: inline-block; width: 12px; }
