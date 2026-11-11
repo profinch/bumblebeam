@@ -314,7 +314,16 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
   <!-- ================= activity ================= -->
   <section id="t-activity" class="screen tab" hidden>
+    <!-- what to see: everything, what came, what went, the bridge, dApps; the search in their place beside its icon -->
+    <div class="af-bar">
+      <div class="af" id="afKind" role="radiogroup" aria-label="Show">
+        <button type="button" class="on" data-k="all">All</button><button type="button" data-k="in">In</button><button type="button" data-k="out">Out</button><button type="button" data-k="bridge">Bridge</button><button type="button" data-k="dapp">dApps</button>
+      </div>
+      <div class="af-search" id="afSearchRow" hidden><input id="afQ" placeholder="name, address, comment, amount" spellcheck="false" autocomplete="off" aria-label="Search"><button type="button" class="af-x" id="afX" aria-label="Clear">×</button></div>
+      <button type="button" class="ibtn af-find" id="afFind" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.3-4.3"/></svg></button>
+    </div>
     <div class="list" id="actList"><div class="empty">loading…</div></div>
+    <button type="button" class="btn af-more" id="afMore" hidden>Older</button>
   </section>
 
   <!-- ================= settings ================= -->

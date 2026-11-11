@@ -182,7 +182,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 /* the Activity network switch: small, on the left under the tabs */
 .wsub { max-width: 640px; margin: 0 auto; padding-top: 6px; }
 .seg.mini button { padding: 4px 8px; font-size: 10px; }
-#actList { margin-top: 4px; }
 
 /* ---- settings ---- */
 .wcard { padding: 10px 0; border-bottom: 1px solid var(--border-dim); }
@@ -596,3 +595,78 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 .bx-more span { font: 11px var(--font-mono); color: var(--muted); }
 /* the parts of an Activity row's line apart by a gap, not a dot */
 .sub .sp { display: inline-block; width: 12px; }
+
+/* ---------- Activity (worked out in lab/activity.html): the history by day, each row who and what in words, the
+   amount with its unit and its dollars; a row opens to its card (the details, the ids, the explorers, what can be
+   done); All / In / Out / Bridge / dApps, and a search in their place ---------- */
+.af-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.af { display: flex; gap: 6px; flex-wrap: nowrap; }
+.af[hidden], .af-search[hidden] { display: none; }
+.af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
+  font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.af button:hover { color: var(--text); }
+.af button.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.08); }
+.af button .n { margin-left: 5px; color: var(--muted); font-weight: 400; }
+.af-find { margin-left: auto; }
+.af-find.on { color: var(--accent); }
+.af-search { position: relative; flex: 1 1 auto; min-width: 0; }
+.af-search input { width: 100%; height: 26px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-fill); color: var(--text); font: 12px var(--font-mono); outline: none; }
+.af-search input:focus { border-color: rgba(var(--accent-rgb), 0.5); }
+.af-x { position: absolute; right: 2px; top: 2px; width: 22px; height: 22px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+.af-x:hover { color: var(--text); }
+/* a day's heading (Today, Yesterday, 9 Nov, 28 Dec 2025) with its net; Under way over them all */
+.ad-day { display: flex; justify-content: space-between; margin: 14px 0 0; padding: 0 8px 5px; border-bottom: 1px solid var(--border-dim);
+  font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ad-day .sum { font-weight: 400; letter-spacing: 0; text-transform: none; }
+.ad-day .sum b { color: var(--text); font-weight: 400; }      /* a day's net white (+ or −), its unit grey */
+.ad-day.now { color: var(--color-yellow); }
+/* a row: its icon, who and what, the amount right with its dollars under it; 8 px from the list's edges and square
+   under the pointer, as the tokens' and the addresses' rows */
+#actList .li.ar { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0 10px; padding: 9px 8px; cursor: pointer; }
+#actList .li.ar:hover, #actList .li.ar.open { background: rgba(255, 255, 255, 0.03); }
+.ar .what { font-size: var(--fs-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }      /* who and what on one line, cut with … */
+.ar .what .who { color: var(--muted); font-weight: 400; }
+.ar .what .who b { color: var(--text-dim); font-weight: 400; }
+.ar .what .who .ours { color: #a4e000; font-weight: 700; }      /* our pool by its name, in its colour as the explorer's */
+.ar .what .x { margin-left: 6px; font: 700 10px var(--font-mono); color: var(--muted); }      /* a pool's payouts in a day: their count */
+.ar .sub { font: 11px var(--font-mono); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ar .sub .st.bad { color: var(--color-red); }
+.ar .sub .cm { color: var(--text-dim); }
+.ar-r { text-align: right; white-space: nowrap; }
+.ar-r .amt { font: 700 var(--fs-m) var(--font-mono); }
+.ar-r .amt.zero { color: var(--muted); font-weight: 400; }
+.ar-r .amt u { text-decoration: none; font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }      /* what came white as what went, the unit grey */
+.ar-r .usd { display: block; font: 11px var(--font-mono); color: var(--muted); margin-top: 3px; }
+.ar.dim .what, .ar.dim .ar-r .amt { opacity: 0.5; }      /* cancelled: there, but nothing moved */
+#actList .li.ar.bad { box-shadow: none; background: rgba(var(--red-rgb), 0.14); }      /* failed: the wallet's red fill only (ui .li.bad), no bar at its left */
+#actList .li.ar.bad:hover, #actList .li.ar.bad.open { background: rgba(var(--red-rgb), 0.2); }
+/* the icons: the bridge's two arrows (Beam → Ethereum in the accent, the other way purple), a dApp's cube, an
+   approval's shield, a pool's stack; under way, a ring turns round it */
+.ic.br { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.1); }
+.ic.br.to-eth { color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
+.ic.dapp, .ic.ok2 { color: var(--text-dim); }
+.ic.spin { position: relative; }
+.ic.spin::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--color-yellow); animation: ar-spin 1.1s linear infinite; }
+@keyframes ar-spin { to { transform: rotate(360deg); } }
+/* a row opened: its card under it, aligned as a confirmation's (When, Now / Why and the address on one column, the
+   rest under them), then what can be done */
+.ar-more { margin: 0 8px 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-dim); }
+.ar-more .kv { gap: 6px 12px; }
+.ar-more .kv + .kv { margin-top: 6px; }
+.ar-more .kv dd { white-space: pre-line; overflow-wrap: anywhere; font-size: 11px; }
+.ar-more .kv dd .st { color: var(--color-yellow); }
+.ar-more .kv dd .st.bad { color: var(--color-red); }
+.ar-more .ics { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: -1px; white-space: nowrap; }      /* copy, then the explorer: 6 px apart as the tokens' */
+.ar-more .sub-li { display: grid; grid-template-columns: minmax(0, 1fr) auto; font: 11px var(--font-mono); color: var(--muted); padding: 3px 0; }
+.ar-more .sub-li b { color: var(--text); font-weight: 400; }
+.ar-more .sub-li b u { text-decoration: none; color: var(--muted); }
+.ar-acts { display: flex; gap: 8px; margin-top: 10px; }
+.ar-acts .btn { padding: 5px 12px; font-size: 11px; }
+.ar-acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
+.af-more { display: block; margin: 14px auto 0; }
+#actList .empty { padding: 30px 0; text-align: center; color: var(--muted); font-size: 12px; }
+/* a section's last row (or its card) without its line: the next day's heading draws one */
+#actList .li.ar:has(+ .ad-day), #actList .ar-more:has(+ .ad-day), #actList .ar-more:last-child { border-bottom: 0; }
+.ar-more .sub-li .sp, .ar .sub .sp { display: inline-block; width: 12px; }
+/* on Activity the scroll bar's room is kept before it comes (a short list, a search): nothing moves sideways */
+html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }

@@ -85,9 +85,24 @@
 - BEAM's price in a chip right after the card's name, on the line of the block (the design library's price
   chip, as on the pool and the explorer).
 
-### Beam: Activity
-- A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after Sent or
-  Received, cut with … when long, whole in its tip.
+### Activity (both networks; worked out in lab/activity.html)
+- By day: Today, Yesterday, 9 Nov (another year's with its year), each day's net in the network's coin. What is
+  under way stands above them all, a ring turning round its icon.
+- Each row says who and what: Sent to / Received from (one's own Ethereum accounts by name, else the short
+  address), Bridge → Ethereum / Bridge ← Ethereum / Bridge → Beam, a dApp's call by its name, an approval as
+  one. The date then the time (24 or 12 hours, as Settings has it), the comment after it.
+- The amount with its unit (an asset by its name, no longer as BEAM) and its dollars under it, white whether it
+  came or went.
+- A failed transfer in the wallet's red with why on its line; a cancelled one faded. No status badge on what is
+  done.
+- Our pool's payouts in a day as one row, Pool payouts ×N from BumbleBeam (in the pool's colour); another
+  pool's (three or more in a day from one address) by their count alone.
+- A click opens the row's card: When, Now (where it is, while under way) or Why, the address with its copy and
+  Etherscan icons, then the asset or token, the fee, the comment, the transaction (a link to our explorer or
+  Etherscan) and the block. Cancel, Send again and In the Bridge there.
+- All / In / Out / Bridge / dApps with their counts, and a search (name, address, comment, amount) in their
+  place; 30 rows, then Older. A refresh keeps the list until the new one is ready; the scroll bar's room is kept.
+- A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after its date.
 - It also lists coins this wallet holds that no transaction of its own made: another wallet of the same phrase,
   such as the mobile one, took the transfer. They are marked found on the chain.
 - A receipt sent by a wallet of the same seed (a pool's payouts, the wallet CLI) is shown, marked "from a

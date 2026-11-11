@@ -130,7 +130,7 @@ const Eth = (() => {
     const out = new Map();
     for (const t of txs.items || []) {
       out.set(t.hash, {
-        hash: t.hash, time: t.timestamp, ok: t.status === 'ok', pending: !t.block_number && !t.block,
+        hash: t.hash, time: t.timestamp, ok: t.status === 'ok', pending: !t.block_number && !t.block, block: t.block_number || t.block || null,
         out: (t.from && t.from.hash || '').toLowerCase() === a,
         from: t.from && t.from.hash, to: t.to && t.to.hash, value: t.value || '0', fee: (t.fee && t.fee.value) || '0',
         method: t.method || null, token: null,
@@ -139,7 +139,7 @@ const Eth = (() => {
     for (const t of tts.items || []) {
       const h = t.transaction_hash || t.tx_hash;
       const tok = t.token || {};
-      const prev = out.get(h) || { hash: h, time: t.timestamp, ok: true, fee: '0', method: t.method || null };
+      const prev = out.get(h) || { hash: h, time: t.timestamp, ok: true, fee: '0', method: t.method || null, block: t.block_number || null };
       out.set(h, { ...prev, from: t.from && t.from.hash, to: t.to && t.to.hash, out: (t.from && t.from.hash || '').toLowerCase() === a,
         token: { symbol: tok.symbol || '?', decimals: Number(tok.decimals || (t.total && t.total.decimals) || 18), value: (t.total && t.total.value) || '0', address: tok.address_hash || tok.address } });
     }

@@ -857,6 +857,7 @@
         progress, phrase: !!pendingPhrase, node, autoLock: settings.autoLock,
         // the contracts the popup must never send tokens to (they would be lost): from bridge.js, not retyped
         contracts: { wbeam: Bridge.WBEAM.toLowerCase(), ethPipe: Bridge.ETH_PIPE.toLowerCase() },
+        bridgeCid: Bridge.PIPE_CID,                 // the bridge's contract on Beam: Activity names its calls
       };
       if (!data) return base;
       return {

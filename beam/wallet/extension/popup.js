@@ -2213,74 +2213,260 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
 
   // ---------- Activity ----------
-  let actNet = 'beam';
-  $('actNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); activity(); };
-  const BEAM_STATUS = { 0: ['pending', 'pending'], 1: ['pending', 'in progress'], 2: ['bad', 'cancelled'], 3: ['ok', 'completed'], 4: ['bad', 'failed'], 5: ['pending', 'registering'] };
-  // a coin no transaction of this wallet made, as a received transfer: when (its block's time), how much, and that
-  // it was found on the chain (another wallet of the same phrase made the transfer)
+  // (worked out in lab/activity.html) By day (Today, Yesterday, 9 Nov; another year's with its year), each day's net
+  // in the network's coin, and what is under way above them all. A row says who and what, the date and time, the
+  // amount with its unit (an asset by its name) and its dollars; a failed one in red, a cancelled one faded. A click
+  // opens its card: the details, the ids to copy, the explorers, what can be done. All / In / Out / Bridge / dApps,
+  // and a search in their place; 30 rows, then Older. A refresh keeps the list drawn until the new one is ready.
+  let actNet = 'beam', actKind = 'all', actQ = '', actShown = 30, actRows = [], actFor = '';
+  const actOpen = new Set();
+  $('actNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (!b) return; actNet = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); actOpen.clear(); actShown = 30; activity(); };
+  const SVG_DAPP = '<svg viewBox="0 0 24 24"><path d="M12 2.8 20 7.2v9.6L12 21.2 4 16.8V7.2z"/><path d="M4 7.2 12 11.6l8-4.4M12 11.6v9.6"/></svg>';
+  const SVG_SHIELD = '<svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
+  const SVG_POOL = '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg>';
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day0 = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const dayName = (t) => { const k = Math.round((day0(Date.now()) - day0(t)) / 864e5), d = new Date(t); return k === 0 ? 'Today' : k === 1 ? 'Yesterday' : `${d.getDate()} ${MON[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ''}`; };
+  const POOL_NOTE = 'BumbleBeam pool payout';           // what our pool writes on its payouts (beam/pool payouts.rs)
+  const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
+  const BEAM_STATUS = { 0: 'pending', 1: 'pending', 5: 'pending', 2: 'cancelled', 4: 'failed' };
+  // a coin no transaction of this wallet made, as a received transfer: another wallet of the same phrase made it
   const blockTime = new Map();
-  const coinTx = (c, time) => ({ income: true, create_time: time, value: c.amount, status: 3, status_string: 'received', found: true, own: c.own, asset_id: c.asset_id, coinHeight: c.maturity });
+  const zeroK = (k) => !k || /^0+$/.test(k);
+
+  // Beam: the wallet's transactions and the coins no transaction of its made, as rows
+  async function beamActRows(wid) {
+    const [txs, coins] = await Promise.all([host('beam', wid, 'tx_list', { count: 1000 }),
+      host('beam', wid, 'get_utxo', { count: 500, sort: { field: 'maturity', direction: 'desc' } }).catch(() => [])]);
+    const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
+    // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the wallet CLI)
+    const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
+    const found = cs.filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0).slice(0, 60);
+    await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
+      host('beam', wid, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
+    const syms = new Map();
+    for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
+    const cid = st.bridgeCid;
+    const rows = txs.map((t) => {
+      const aid = Number(t.asset_id || 0), contract = t.tx_type_string === 'contract', s = BEAM_STATUS[t.status] || '';
+      const inv = JSON.stringify(t.invoke_data || t.contract_cids || '');
+      const bridge = contract && ((cid && inv.includes(cid)) || /^(send|receive) funds$/i.test(String(t.comment || '').trim()));
+      const kind = bridge ? (t.income ? 'br-in' : 'br-out') : contract ? 'dapp' : t.income ? 'in' : 'out';
+      const ss = String(t.status_string || '');
+      return {
+        id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, comment: contract ? '' : t.comment || '',
+        what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
+        st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || null,
+        stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
+          : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
+        why: s === 'failed' ? (t.failure_reason || ss || 'failed') : s === 'cancelled' ? (t.income ? 'by the sender' : 'by you before the receiver signed') : '',
+        cancel: !t.income && !contract && (t.status === 0 || t.status === 1),
+        ours: !!t.income && String(t.comment || '').trim() === POOL_NOTE,
+      };
+    });
+    for (const c of found) {
+      const own = ownSent.has(c.createTxId);
+      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, kind: 'in', t: (blockTime.get(c.maturity) || 0) * 1000, g: c.amount, v: c.amount / GROTH,
+        sym: c.asset_id ? syms.get(Number(c.asset_id)) : 'BEAM', asset: Number(c.asset_id) || null, peer: null, st: '', block: c.maturity,
+        found: own ? 'from a wallet of this seed' : 'found on the chain',
+        foundTip: own ? 'Sent by a wallet of this seed phrase (a pool\'s payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took: this wallet has the coins but no record of the transfer'
+          : 'Another wallet of this seed phrase (the mobile or desktop one) took this transfer: this wallet has the coins but no record of it' });
+    }
+    // payouts from one place in a day as one row: our pool's by its note; another's when it pays three times or more
+    const key = (r) => `${r.peer}|${day0(r.t)}|${r.comment}`, n = new Map();
+    for (const r of rows) if (r.kind === 'in' && !r.st && r.peer) n.set(key(r), (n.get(key(r)) || 0) + 1);
+    for (const r of rows) if (r.kind === 'in' && !r.st && r.peer && (r.ours || n.get(key(r)) >= 3)) r.pool = true;
+    return rows.sort((a, b) => b.t - a.t);
+  }
+
+  // Ethereum: the account's transactions and token transfers, as rows
+  function ethActRows(list) {
+    const wb = st.contracts.wbeam, pipe = st.contracts.ethPipe, zero = '0x0000000000000000000000000000000000000000';
+    return list.map((t) => {
+      const to = String(t.to || '').toLowerCase(), from = String(t.from || '').toLowerCase(), tok = t.token;
+      const v = tok ? units(tok.value, tok.decimals) : units(t.value, 18), sym = tok ? tok.symbol : 'ETH';
+      const r = { id: t.hash, hash: t.hash, t: t.time ? Date.parse(t.time) : Date.now(), v, sym, tokAddr: tok && tok.address, peer: t.out ? t.to : t.from,
+        st: t.pending ? 'pending' : !t.ok ? 'failed' : '', stage: 'waiting for a block', why: 'the transaction reverted: its gas is spent, nothing else moved',
+        fee: units(t.fee, 18), block: t.block || null };
+      if (t.out && to === pipe) Object.assign(r, { kind: 'br-out', peer: null });
+      else if (!t.out && tok && tok.address && tok.address.toLowerCase() === wb && (from === pipe || from === zero)) Object.assign(r, { kind: 'in', peer: null, from: 'the bridge' });
+      else if (t.out && !tok && /^approve/i.test(t.method || '')) Object.assign(r, { kind: 'approve', what: to === wb ? 'Approve WBEAM for the bridge' : `Approve ${short(t.to)}`, v: null, sym: '', peer: null });
+      else if (t.out && !tok && t.method && !/^transfer/i.test(t.method)) Object.assign(r, { kind: 'dapp', what: t.method, app: short(t.to), contract: t.to });
+      else r.kind = t.out ? 'out' : 'in';
+      return r;
+    }).sort((a, b) => (b.st === 'pending') - (a.st === 'pending') || b.t - a.t);
+  }
+
+  // whom an address is: one of this extension's accounts ("Wallet | Account"), or none
+  const ethName = (a) => { const x = a && allAccounts().find((y) => y.address.toLowerCase() === a.toLowerCase()); return x ? (x.wallet.id === (W() && W().id) ? x.name : `${x.wallet.name} | ${x.name}`) : ''; };
+  const nameOf = (a) => (actNet === 'eth' ? ethName(a) : '');
+  // a pool's payouts in a day as one row with their count and sum (in groth for Beam)
+  function folded(list) {
+    const out = [], at = new Map();
+    for (const r of list) {
+      if (!r.pool) { out.push(r); continue; }
+      const k = `${r.peer}|${day0(r.t)}`, g = at.get(k);
+      if (g) { g.items.push(r); g.g += r.g; g.v += r.v; continue; }
+      const ng = { ...r, id: `pool-${r.id}`, items: [r], group: true };
+      at.set(k, ng); out.push(ng);
+    }
+    return out.map((r) => (r.group && r.items.length < 2 ? r.items[0] : r));
+  }
+  const actTitle = (r) => ({ in: r.group || r.pool ? 'Pool payouts' : 'Received', out: 'Sent', 'br-out': actNet === 'beam' ? 'Bridge → Ethereum' : 'Bridge → Beam', 'br-in': 'Bridge ← Ethereum', dapp: r.what || 'Contract call', approve: r.what })[r.kind];
+  const actWho = (r) => {
+    if (r.kind === 'br-out' || r.kind === 'br-in' || r.kind === 'approve') return '';
+    if (r.kind === 'dapp') return r.app ? `in <b>${esc(r.app)}</b>` : '';
+    if (r.pool) return r.ours ? 'from <span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
+    if (r.found) return `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`;
+    if (r.from) return `from <b>${esc(r.from)}</b>`;
+    if (!r.peer) return '';
+    return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nameOf(r.peer) || short(r.peer))}</b>`;
+  };
+  const actIc = (r) => (r.kind === 'in' ? ['in', r.group || r.pool ? SVG_POOL : SVG_IN] : r.kind === 'out' ? ['out', SVG_OUT]
+    : r.kind === 'br-out' || r.kind === 'br-in' ? [r.kind === 'br-out' && actNet === 'beam' ? 'br to-eth' : 'br', SVG_BRIDGE] : r.kind === 'dapp' ? ['dapp', SVG_DAPP] : ['ok2', SVG_SHIELD]);
+  const came = (r) => r.kind === 'in' || r.kind === 'br-in';
+  const vShown = (r, d) => (actNet === 'beam' ? amt(r.g, d) : num(r.v, d));
+  const rateOf = (sym) => (!rates ? null : sym === 'BEAM' ? rates.beam : sym === 'WBEAM' ? rates.wbeam || rates.beam : sym === 'ETH' ? rates.eth : /^(USDT|USDC|DAI)$/.test(sym) ? 1 : null);
+  const usdSmall = (x) => (x > 0 && x < 0.01 ? '< $0.01' : usd(x));
+  const actFits = (r, k = actKind) => {
+    if (k === 'in' && !came(r)) return false;
+    if (k === 'out' && r.kind !== 'out') return false;
+    if (k === 'bridge' && !r.kind.startsWith('br') && r.kind !== 'approve') return false;
+    if (k === 'dapp' && r.kind !== 'dapp') return false;
+    if (!actQ) return true;
+    const s = [actTitle(r), r.peer, nameOf(r.peer), r.comment, r.app, r.what, r.found, String(r.v), r.sym, r.id, r.kern, r.hash, ...(r.items || []).map((x) => String(x.v))].filter(Boolean).join(' ').toLowerCase();
+    return actQ.toLowerCase().split(/\s+/).every((w) => s.includes(w));
+  };
+  // the icons after what they are for: copy first, then the explorer, 6 px apart (as the wallet tab's tokens')
+  const cpI = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${CPI}</button>`;
+  const lnI = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${LINK}</a>`;
+  const ics = (...xs) => `<span class="ics">${xs.filter(Boolean).join('')}</span>`;
+  const addrDd = (a) => `${nameOf(a) ? `${esc(nameOf(a))}\n` : ''}${esc(a)}${ics(cpI(a, 'the address'), /^0x/i.test(a) && lnI(`${SCAN}/address/${a}`, 'Open the address on Etherscan'))}`;
+
+  function actRow(r) {
+    const [c, svg] = actIc(r), live = r.st === 'pending', open = actOpen.has(r.id);
+    const state = r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
+    const when = r.group ? `${fdate(r.t)} ${ftime(r.items[r.items.length - 1].t)}–${ftime(r.items[0].t)}` : r.t ? fdt(r.t) : '';
+    const sub = [when, state, r.comment && !r.ours ? `<span class="cm">${esc(r.comment)}</span>` : ''].filter(Boolean).join('<i class="sp"></i>');
+    const amtH = r.kind === 'approve' ? '<span class="amt zero">&nbsp;</span>' : r.v ? `<span class="amt">${came(r) ? '+' : '−'}${vShown(r)}<u>${esc(r.sym)}</u></span>` : '<span class="amt zero">&nbsp;</span>';
+    const rate = rateOf(r.sym);
+    const usdH = r.kind === 'approve' ? '<span class="usd">allowance</span>' : !r.v ? '<span class="usd">&nbsp;</span>' : rate ? `<span class="usd">${usdSmall(r.v * rate)}</span>` : '<span class="usd">no price</span>';
+    const cls = ['li', 'ar', r.st === 'failed' ? 'bad' : '', r.st === 'cancelled' ? 'dim' : '', open ? 'open' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" data-id="${esc(r.id)}" tabindex="0" role="button" aria-expanded="${open}"><span class="ic ${c}${live ? ' spin' : ''}">${svg}</span>
+      <span class="what">${esc(actTitle(r))}${r.group ? `<span class="x">×${r.items.length}</span>` : ''} <span class="who">${actWho(r)}</span><span class="sub">${sub}</span></span>
+      <span class="ar-r">${amtH}${usdH}</span></div>${open ? actCard(r) : ''}`;
+  }
+
+  // a row's card: When, Now / Why and the address lined up on one column, the rest under them (no address: one
+  // column), then what can be done
+  function actCard(r) {
+    if (r.group) {
+      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}${x.block ? `<i class="sp"></i>block ${x.block}` : ''}</span><b>+${vShown(x)} <u>${esc(x.sym)}</u></b></div>`).join('')}
+        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? `BumbleBeam pool${ics(lnI('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool'))}\n` : ''}${addrDd(r.peer)}</dd></dl></div>`;
+    }
+    const rows = [], coin = actNet === 'beam' ? 'BEAM' : 'ETH';
+    if (r.t) rows.push(['When', fdt(r.t)]);
+    if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
+    if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);
+    if (r.peer) rows.push([came(r) ? 'From' : 'To', `${r.ours ? `BumbleBeam pool${ics(lnI('https://pool.bumblebeam.org/', 'Open the BumbleBeam pool'))}\n` : ''}${addrDd(r.peer)}`], null);
+    if (r.found) rows.push(['From', `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`]);
+    if (r.kind === 'dapp' && r.contract) rows.push(['Contract', `${esc(r.contract)}${ics(cpI(r.contract, 'the contract address'), lnI(`${SCAN}/address/${r.contract}`, 'Open the contract on Etherscan'))}`]);
+    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cpI(String(r.asset), 'the asset id'), lnI(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
+    if (r.tokAddr && r.sym !== 'ETH') rows.push(['Token', `${esc(r.sym)}${ics(cpI(r.tokAddr, 'the token\'s contract address'), lnI(`${SCAN}/token/${r.tokAddr}`, 'Open the token on Etherscan'))}`]);
+    if (r.fee) rows.push([actNet === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${coin}${rateOf(coin) ? ` | ${usdSmall(r.fee * rateOf(coin))}` : ''}`]);
+    if (r.comment && !r.ours) rows.push(['Comment', esc(r.comment)]);
+    if (actNet === 'beam' && r.kern) rows.push(['Transaction', `${esc(short(r.kern))}${ics(lnI(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer'))}`]);
+    if (actNet === 'eth' && r.hash) rows.push(['Transaction', `${esc(short(r.hash))}${ics(lnI(`${SCAN}/tx/${r.hash}`, 'Open the transaction on Etherscan'))}`]);
+    if (r.block && !r.st) rows.push(['Block', String(r.block)]);
+    const acts = [];
+    if (r.cancel) acts.push(`<button type="button" class="btn warn" data-cancel="${esc(r.id)}">Cancel</button>`);
+    if (r.kind === 'out' && r.peer && r.st !== 'pending') acts.push(`<button type="button" class="btn" data-again="${esc(r.peer)}">Send again</button>`);
+    if (r.kind === 'br-out' || r.kind === 'br-in') acts.push(`<button type="button" class="btn" data-tobridge="${r.kind === 'br-out' && actNet === 'beam' ? 'toEth' : 'fromEth'}">In the Bridge</button>`);
+    const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
+    return `<div class="ar-more">${groups.map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`).join('')}${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;
+  }
+
+  function actDraw() {
+    const base = folded(actRows), all = base.filter((r) => actFits(r));
+    const live = all.filter((r) => r.st === 'pending'), rest = all.filter((r) => r.st !== 'pending');
+    let html = '';
+    if (live.length) html += `<div class="ad-day now"><span>Under way</span><span class="sum">${live.length}</span></div>${live.map(actRow).join('')}`;
+    const days = new Map();
+    for (const r of rest.slice(0, actShown)) { const k = day0(r.t); if (!days.has(k)) days.set(k, []); days.get(k).push(r); }
+    const main = actNet === 'beam' ? 'BEAM' : 'ETH';
+    for (const [k, rs] of days) {
+      // the day's net: what came minus what went, in the network's coin, done ones only
+      const sum = rs.filter((r) => r.sym === main && !r.st && r.v).reduce((s, r) => s + (came(r) ? r.v : r.kind === 'out' || r.kind === 'br-out' ? -r.v : 0), 0);
+      html += `<div class="ad-day"><span>${dayName(k)}</span><span class="sum">${Math.abs(sum) >= 1e-9 ? `<b>${sum > 0 ? '+' : '−'}${num(Math.abs(sum), 4)}</b> ${main}` : ''}</span></div>${rs.map(actRow).join('')}`;
+    }
+    $('actList').innerHTML = html || `<div class="empty">${actQ || actKind !== 'all' ? 'nothing like that here' : 'no transactions yet'}</div>`;
+    $('afMore').hidden = rest.length <= actShown;
+    // the filters' counts, for what is in the list now
+    for (const b of qa('#afKind button')) {
+      const k = b.dataset.k, c = base.filter((r) => actFits(r, k)).length;
+      b.innerHTML = `${k === 'dapp' ? 'dApps' : k[0].toUpperCase() + k.slice(1)}${k !== 'all' ? `<span class="n">${c}</span>` : ''}`;
+    }
+  }
+
   let actSeq = 0;
   async function activity() {
     const box = $('actList'), seq = ++actSeq, wid = W() && W().id, stale = () => seq !== actSeq || !isOpen(wid);
-    if (actNet === 'beam') {
-      if (!beamHere()) { box.innerHTML = '<div class="empty">this wallet has no running Beam part</div>'; return; }
-      try {
-        box.innerHTML = '<div class="empty">loading…</div>';
-        // the wallet's transactions, and the coins it holds that no transaction of its made: another wallet of the
-        // same phrase (the mobile one) took them, so this one has the coins but no record of the transfer
-        // (the newest coins first: by default Beam lists them oldest first, and a wallet that mined has thousands)
-        const [txs, coins] = await Promise.all([host('beam', W().id, 'tx_list', { count: 1000 }),
-          host('beam', W().id, 'get_utxo', { count: 500, sort: { field: 'maturity', direction: 'desc' } }).catch(() => [])]);
+    const say = (t) => { actRows = []; box.innerHTML = `<div class="empty">${esc(t)}</div>`; $('afMore').hidden = true; };
+    // the list stays while it refreshes; another wallet, network or account starts from loading…
+    const a = acct(), forNow = `${wid}|${actNet}|${actNet === 'eth' && a ? a.address : ''}`;
+    if (forNow !== actFor) { actFor = forNow; actRows = []; actOpen.clear(); box.innerHTML = '<div class="empty">loading…</div>'; }
+    try {
+      if (actNet === 'beam') {
+        if (!beamHere()) return say('this wallet has no running Beam part');
+        const rows = await beamActRows(wid);
         if (stale()) return;
-        const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
-        // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the
-        // wallet CLI): still a receipt for the address it went to, said so
-        const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
-        const found = cs.filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0).slice(0, 60);
-        await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
-          host('beam', W().id, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
-        if (stale()) return;
-        const rows = [...txs.map((t) => ({ t: t.create_time || 0, tx: t })), ...found.map((c) => ({ t: blockTime.get(c.maturity) || 0, coin: { ...c, own: ownSent.has(c.createTxId) } }))]
-          .sort((x, y) => y.t - x.t).slice(0, 50);
-        const list = rows.map((r) => r.tx || coinTx(r.coin, r.t));
-        box.innerHTML = list.map((t) => {
-          const contract = t.tx_type_string === 'contract';
-          // a transfer's comment (written on Send, only in this history) in grey after what it was
-          const what = contract ? (t.comment || 'contract') : t.income ? 'Received' : 'Sent';
-          const [cls, label] = BEAM_STATUS[t.status] || ['pending', t.status_string || String(t.status)];
-          const link = t.kernel && !/^0+$/.test(t.kernel) ? `<i class="sp"></i><a class="text-link" href="https://explorer.bumblebeam.org/kernel/${esc(t.kernel)}" target="_blank" rel="noopener">kernel</a>` : '';
-          const cancel = !t.income && !contract && (t.status === 0 || t.status === 1) ? `<i class="sp"></i><a href="#" class="text-link" data-cancel="${esc(t.txId)}">cancel</a>` : '';
-          return `<div class="li"><span class="ic ${t.income ? 'in' : 'out'}">${contract ? SVG_BRIDGE : t.income ? SVG_IN : SVG_OUT}</span>
-            <span class="what">${esc(what)}${!contract && t.comment ? ` <span class="cmt" title="${esc(t.comment)}">${esc(t.comment)}</span>` : ''}<span class="sub">${esc(t.create_time ? fdt(t.create_time * 1000) : '')}${t.fee ? `<i class="sp"></i>fee ${amt(t.fee, 3)}` : ''}${link}${cancel}${t.found ? `<i class="sp"></i><span class="tipped" title="${t.own ? `Block ${t.coinHeight}: sent by a wallet of this seed phrase (a pool's payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took. This wallet has the coins but no record of the transfer` : `Block ${t.coinHeight}: another wallet of this seed phrase (the mobile or desktop one) took this transfer, so this wallet has the coins but no record of it`}">${t.own ? 'from a wallet of this seed' : 'found on the chain'}</span>` : ''}</span></span>
-            <span class="amt ${t.income ? 'pos' : ''}">${t.value ? `${t.income ? '+' : '−'}${amt(t.value)}` : ''}</span><span class="badge ${cls}">${esc(t.status_string || label)}</span></div>`;
-        }).join('') || '<div class="empty">no transactions yet</div>';
-      } catch (e) { if (!stale()) box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
-    } else {
-      const a = acct();
-      if (!a) { box.innerHTML = '<div class="empty">this wallet has no Ethereum part</div>'; return; }
-      box.innerHTML = '<div class="empty">loading…</div>';
-      try {
+        actRows = rows;
+      } else {
+        if (!a) return say('this wallet has no Ethereum part');
         const list = await host('ethHistory', a.address);
         if (stale() || !acct() || acct().address !== a.address) return;
-        box.innerHTML = list.map((t) => {
-          const v = t.token ? `${num(units(t.token.value, t.token.decimals), 4)} ${t.token.symbol}` : units(t.value, 18) > 0 ? `${num(units(t.value, 18), 5)} ETH` : '';
-          const what = t.method && !t.token ? t.method : t.out ? 'Sent' : 'Received';
-          const other = t.out ? t.to : t.from;
-          return `<div class="li"><span class="ic ${t.out ? 'out' : 'in'}">${t.out ? SVG_OUT : SVG_IN}</span>
-            <span class="what">${esc(what)}<span class="sub">${t.out ? 'to' : 'from'} ${esc(short(other))}<i class="sp"></i><a class="text-link" href="https://etherscan.io/tx/${esc(t.hash)}" target="_blank" rel="noopener">${esc(t.time ? fdt(t.time) : 'pending')}</a></span></span>
-            <span class="amt ${t.out ? '' : 'pos'}">${v ? `${t.out ? '−' : '+'}${esc(v)}` : ''}</span><span class="badge ${t.pending ? 'pending' : t.ok ? 'ok' : 'bad'}">${t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}</span></div>`;
-        }).join('') || '<div class="empty">no transactions yet</div>';
-      } catch (e) { if (!stale()) box.innerHTML = `<div class="empty">${esc(msg(e))}</div>`; }
-    }
+        actRows = ethActRows(list);
+      }
+      actDraw();
+    } catch (e) { if (!stale()) say(msg(e)); }
   }
-  $('actList').onclick = async (e) => {
-    const c = e.target.closest('[data-cancel]');
-    if (!c) return;
-    e.preventDefault();
-    if (!(await confirmBox('Cancel the transfer', [['Transaction', c.dataset.cancel]], 'Only a transfer the other wallet has not signed yet can be cancelled.'))) return;
-    try { await host('beam', W().id, 'tx_cancel', { txId: c.dataset.cancel }); activity(); } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
+
+  $('afKind').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (!b) return; actKind = b.dataset.k; qa('#afKind button').forEach((x) => x.classList.toggle('on', x === b)); actDraw(); };
+  // the search takes the filters' place and shows all it finds (the filter back to All); closed, the filters come back
+  $('afFind').onclick = () => {
+    const r = $('afSearchRow'), on = r.hidden;
+    r.hidden = !on; $('afKind').hidden = on; $('afFind').classList.toggle('on', on);
+    if (on) { actKind = 'all'; qa('#afKind button').forEach((x) => x.classList.toggle('on', x.dataset.k === 'all')); $('afQ').focus(); } else { actQ = ''; $('afQ').value = ''; }
+    actDraw();
   };
+  $('afQ').onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); $('afFind').click(); } };
+  $('afQ').oninput = () => { actQ = $('afQ').value.trim(); actDraw(); };
+  $('afX').onclick = () => { $('afQ').value = ''; actQ = ''; actDraw(); $('afQ').focus(); };
+  $('afMore').onclick = () => { actShown += 30; actDraw(); };
+  $('actList').onclick = async (e) => {
+    const c = e.target.closest('[data-cp]');
+    if (c) return copyFlash(c, c.dataset.cp);
+    const x = e.target.closest('[data-cancel]');
+    if (x) {
+      if (!(await confirmBox('Cancel the transfer', [['Transaction', x.dataset.cancel]], 'Only a transfer the other wallet has not signed yet can be cancelled.'))) return;
+      try { await host('beam', W().id, 'tx_cancel', { txId: x.dataset.cancel }); activity(); } catch (err) { ask({ title: 'Not done', note: msg(err), yes: 'OK', no: null }); }
+      return;
+    }
+    const ag = e.target.closest('[data-again]');
+    if (ag) {
+      if (actNet === 'beam') { sheet('beamSend'); $('bsAddr').value = ag.dataset.again; $('bsAddr').dispatchEvent(new Event('input')); }
+      else { sheet('ethSend'); $('esTo').value = ag.dataset.again; $('esTo').oninput(); }
+      return;
+    }
+    const tb = e.target.closest('[data-tobridge]');
+    if (tb) { tab('bridge'); setDir(tb.dataset.tobridge); return; }
+    if (e.target.closest('.ar-more') || e.target.closest('a')) return;
+    const li = e.target.closest('.li.ar'); if (!li) return;
+    if (actOpen.has(li.dataset.id)) actOpen.delete(li.dataset.id); else actOpen.add(li.dataset.id);
+    actDraw();
+  };
+  $('actList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.ar')) { e.preventDefault(); e.target.click(); } };
 
   // ---------- Settings ----------
   const autoLockDd = BB.dropdown($('autoLock'), (v) => host('setAutoLock', Number(v)));
