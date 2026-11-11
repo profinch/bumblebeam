@@ -801,6 +801,7 @@
     const fav = (settings.addrFav ||= {})[id] ||= [];
     for (const a of l.addrFav || []) if (!fav.includes(a)) fav.push(a);
     if (l.offlineRef && !(settings.offlineRef ||= {})[id]) settings.offlineRef[id] = l.offlineRef;
+    if (l.beamAddr && !(settings.beamAddr ||= {})[id]) settings.beamAddr[id] = l.beamAddr;      // what Send offers for it while it is not open
   }
   const api = {
     // ---------- dApps ----------
@@ -890,7 +891,8 @@
           id: w.id, name: w.name, created: w.created, phraseKnown: !!w.phrase,
           beam: !!w.beam, eth: !!w.eth, hd: !!(w.eth && w.eth.phrase),
           ethKind: w.eth ? (w.eth.key ? 'key' : !w.eth.phrase ? 'imported' : w.eth.phrase === w.phrase ? 'same' : 'phrase') : null,
-          beamAddress: (settings.beamAddr[w.id] || {}).address || null,
+          // its public offline address as last read while it ran; else one added by hand and verified by its offline key
+          beamAddress: (settings.beamAddr[w.id] || {}).address || (((settings.addrExt || {})[w.id] || []).find((e) => e.type === 'public_offline' && e.verified === 'key') || {}).address || null,
           accounts: ethAccounts(w),
         })),
       };
@@ -1346,7 +1348,7 @@
       const out = { kind: 'bumblebeam-backup', v: 1, at: Date.now(), vault: vaultRec,
         settings: { node, backupNodes: settings.backupNodes || null, ethRpc: settings.ethRpc || '', tokens: settings.tokens || [] }, beam: {},
         // each wallet's own lists kept outside the vault: the addresses added by hand (verified or not), the favourites, the offline reference
-        lists: Object.fromEntries(data.wallets.map((w) => [w.id, { addrExt: (settings.addrExt || {})[w.id] || [], addrFav: (settings.addrFav || {})[w.id] || [], offlineRef: (settings.offlineRef || {})[w.id] || null }])) };
+        lists: Object.fromEntries(data.wallets.map((w) => [w.id, { addrExt: (settings.addrExt || {})[w.id] || [], addrFav: (settings.addrFav || {})[w.id] || [], offlineRef: (settings.offlineRef || {})[w.id] || null, beamAddr: (settings.beamAddr || {})[w.id] || null }])) };
       if (withBeam) for (const w of data.wallets) if (w.beam) out.beam[w.id] = (await copyRead(w.id).then((b) => (b ? toB64(b) : null))) || (await api.exportBeam(w.id, pass)).b64;
       // kept in this browser (backups/last.bbk) until it is downloaded: Download a backup saves it to disk
       const bytes = new TextEncoder().encode(JSON.stringify(out));
