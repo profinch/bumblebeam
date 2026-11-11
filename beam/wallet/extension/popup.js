@@ -2695,11 +2695,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
     // the Beam file: Beam's own exchange file of this wallet (addresses, their names, contacts, transactions; no keys),
     // as Beam's CLI and mobile wallets save and take it; and one taken in
-    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Export wallet data') : '', w.beam ? b('beamIn', 'Import wallet data') : ''].filter(Boolean);      // Rename is the pencil by the name
+    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Export wallet data') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethKey', 'Private key'), b('ethPhrase', 'Seed phrase')] : [];      // the key first (every account has one), its phrase after
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
-    return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${mine.length ? g('This wallet', mine) : '<div></div>'}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
+    return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${mine.length ? g('This wallet', mine) : '<div></div>'}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Manage', [w.beam ? b('beamIn', 'Import wallet data') : '', b('remove', 'Remove the wallet', 'warn')].filter(Boolean))}</div>`;      // Manage: what changes the wallet
   }
   const hasEthPhrase = (w, i) => { const a = w.accounts.find((x) => x.i === i); return !!a && (a.kind === 'phrase' || (a.kind === 'hd' && w.ethKind === 'phrase')); };
   // the Ethereum Seed phrase button only for an account that has one
