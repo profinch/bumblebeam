@@ -8,6 +8,7 @@
 /* what to see, and the search: one line under the network's tabs */
 .af-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
 .af { display: flex; gap: 6px; flex-wrap: nowrap; }
+.af[hidden] { display: none; }
 .af button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
   font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
 .af button:hover { color: var(--text); }
@@ -15,10 +16,11 @@
 .af button .n { margin-left: 5px; color: var(--muted); font-weight: 400; }
 .af-find { margin-left: auto; }
 .af-find.on { color: var(--accent); }
-.af-search { position: relative; margin: 6px 0 2px; }
-.af-search input { width: 100%; height: 30px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-fill); color: var(--text); font: 12px var(--font-mono); outline: none; }
+.af-search { position: relative; flex: 1 1 auto; min-width: 0; }
+.af-search[hidden] { display: none; }
+.af-search input { width: 100%; height: 26px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field-fill); color: var(--text); font: 12px var(--font-mono); outline: none; }
 .af-search input:focus { border-color: rgba(var(--accent-rgb), 0.5); }
-.af-x { position: absolute; right: 4px; top: 4px; width: 22px; height: 22px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+.af-x { position: absolute; right: 2px; top: 2px; width: 22px; height: 22px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
 .af-x:hover { color: var(--text); }
 
 /* a day's heading: Today, Yesterday, 9 Nov; In progress over them all */

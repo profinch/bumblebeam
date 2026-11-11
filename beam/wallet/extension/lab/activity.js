@@ -17,7 +17,11 @@
   const usd = (x) => (x < 0.01 ? '< $0.01' : `$${sep(x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`);
   const sh = (a) => (a.startsWith('0x') ? `${a.slice(0, 8)}…${a.slice(-6)}` : `${a.slice(0, 6)}…${a.slice(-6)}`);
   const pad = (n) => String(n).padStart(2, '0');
-  const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  // the date, then the time as Settings has it (24 or 12 hours), as the wallet's fdt
+  let time12 = false;
+  const hm = (t) => { const d = new Date(t), h = d.getHours(); return time12 ? `${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}` : `${pad(h)}:${pad(d.getMinutes())}`; };
+  const fdate = (t) => { const d = new Date(t); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; };
+  const fdt = (t) => `${fdate(t)} ${hm(t)}`;
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const day0 = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const dayName = (t) => { const k = Math.round((day0(Date.now()) - day0(t)) / 864e5); const d = new Date(t); return k === 0 ? 'Today' : k === 1 ? 'Yesterday' : `${d.getDate()} ${MON[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ''}`; };
@@ -46,7 +50,7 @@
   const kern = () => Array.from({ length: 64 }, (_, i) => '0123456789abcdef'[(i * 7 + n * 13) % 16]).join('');
   const BEAMH = [
     { kind: 'out', t: now - 3 * M, v: 250, sym: 'BEAM', peer: BADDR.alice, st: 'pending', stage: 'waiting for Alice', comment: 'for the bikes', fee: 0.011, cancel: true },
-    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', stage: 'arrives ≈ ' + hm(now + 38 * M), fee: 0.011, relayer: 22.82 },
+    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', eta: now + 38 * M, fee: 0.011, relayer: 22.82 },
     { kind: 'in', t: now - 2 * H, v: 1.25, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 3 * H, v: 1.31, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 5 * H, v: 1.18, sym: 'BEAM', peer: BADDR.pool, pool: true },
@@ -117,8 +121,8 @@
 
   function row(r) {
     const [c, svg] = ic(r), live = r.st === 'pending';
-    const state = r.st === 'pending' ? `<span class="st">${esc(r.stage)}</span>` : r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
-    const sub = [live || r.group ? '' : hm(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
+    const state = r.st === 'pending' ? `<span class="st">${esc(r.eta ? `arrives ≈ ${hm(r.eta)}` : r.stage)}</span>` : r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
+    const sub = [r.group ? '' : fdt(r.t), state, r.comment ? `<span class="cm">${esc(r.comment)}</span>` : '', r.group ? `${fdate(r.t)} ${hm(r.items[r.items.length - 1].t)}–${hm(r.items[0].t)}` : ''].filter(Boolean).join('<i class="sp"></i>');
     const shownV = r.kind === 'dapp' && r.got ? r.got : [r.v, r.sym];
     const amt = r.kind === 'approve' ? `<span class="amt zero">${num(r.v)}<u>${esc(r.sym)}</u></span>`
       : `<span class="amt ${r.kind === 'in' || r.kind === 'br-in' || (r.kind === 'dapp' && r.got) ? 'pos' : ''}">${r.kind === 'dapp' ? '+' : sign(r)}${num(shownV[0])}<u>${esc(shownV[1])}</u></span>`;
@@ -134,11 +138,10 @@
   function more(r) {
     const rows = [];
     if (r.group) {
-      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${hm(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
+      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
         <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${esc(name(r.peer) || '')}\n${esc(r.peer)}${cp(r.peer)}</dd></dl></div>`;
     }
-    const full = new Date(r.t);
-    rows.push(['When', `${pad(full.getDate())}.${pad(full.getMonth() + 1)}.${full.getFullYear()} ${hm(r.t)}`]);
+    rows.push(['When', fdt(r.t)]);
     if (r.peer && r.peer !== 'beam') rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', `${esc(name(r.peer) ? `${name(r.peer)}\n` : '')}${esc(r.peer)}${cp(r.peer)}`]);
     if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12']);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
@@ -188,7 +191,16 @@
 
   $('actNet').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (!b) return; net = b.dataset.n; qa('#actNet button').forEach((x) => x.classList.toggle('on', x === b)); open.clear(); shown = 12; draw(); };
   $('afKind').onclick = (e) => { const b = e.target.closest('button[data-k]'); if (!b) return; kind = b.dataset.k; qa('#afKind button').forEach((x) => x.classList.toggle('on', x === b)); draw(); };
-  $('afFind').onclick = () => { const r = $('afSearchRow'); r.hidden = !r.hidden; $('afFind').classList.toggle('on', !r.hidden); if (!r.hidden) $('afQ').focus(); else { q = ''; $('afQ').value = ''; draw(); } };
+  // the search takes the filters' place, and shows everything it finds (the filter back to All); closed, the filters
+  // come back and the search is cleared
+  $('afFind').onclick = () => {
+    const r = $('afSearchRow'), on = r.hidden;
+    r.hidden = !on; $('afKind').hidden = on; $('afFind').classList.toggle('on', on);
+    if (on) { kind = 'all'; qa('#afKind button').forEach((x) => x.classList.toggle('on', x.dataset.k === 'all')); $('afQ').focus(); }
+    else { q = ''; $('afQ').value = ''; }
+    draw();
+  };
+  $('afQ').onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); $('afFind').click(); } };
   $('afQ').oninput = () => { q = $('afQ').value.trim(); draw(); };
   $('afX').onclick = () => { $('afQ').value = ''; q = ''; draw(); $('afQ').focus(); };
   $('afMore').onclick = () => { shown += 12; draw(); };
@@ -202,4 +214,5 @@
   };
   $('actList').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.li.ar')) { e.preventDefault(); e.target.click(); } };
   draw();
+  chrome.storage.local.get('time12').then((v) => { time12 = !!v.time12; draw(); }).catch(() => {});
 })();
