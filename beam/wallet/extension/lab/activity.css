@@ -63,9 +63,7 @@
 .ar-more .kv { gap: 6px 12px; }
 .ar-more .kv dd { white-space: pre-line; overflow-wrap: anywhere; font-size: 11px; }
 .ar-more .kv dd a { color: var(--accent); }
-.ar-more .cp { margin-left: 6px; cursor: pointer; color: var(--muted); vertical-align: -2px; }
-.ar-more .cp:hover { color: var(--accent); }
-.ar-more .cp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
+.ar-more .cp { margin-left: 6px; vertical-align: -1px; }      /* the wallet's copy and explorer icons (ui .cp), after what they are for */
 .ar-acts { display: flex; gap: 8px; margin-top: 10px; }
 .ar-acts .btn { padding: 5px 12px; font-size: 11px; }
 .ar-acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
@@ -86,3 +84,5 @@
 
 /* a row's state under way, in its opened card (yellow as it was on the row) */
 .ar-more .kv dd .st { color: var(--color-yellow); }
+
+.ar-more .kv + .kv { margin-top: 6px; }      /* its groups a row's gap apart, as a confirmation's */

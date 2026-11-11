@@ -36,7 +36,10 @@
     dapp: '<svg viewBox="0 0 24 24"><path d="M12 2.8 20 7.2v9.6L12 21.2 4 16.8V7.2z"/><path d="M4 7.2 12 11.6l8-4.4M12 11.6v9.6"/></svg>',
     ok2: '<svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>',
     pool: '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg>',
-    copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+    // the wallet's own: copy (two sheets), copied (a tick, 2 s), open in the explorer
+    copy: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
+    ok: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    link: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
 
   // made up: whom the wallet knows (its address book, its own accounts), and a history on each network
@@ -49,8 +52,8 @@
   const id = () => (++n).toString(16).padStart(4, '0') + 'b7e1c94f0a2d6e38';
   const kern = () => Array.from({ length: 64 }, (_, i) => '0123456789abcdef'[(i * 7 + n * 13) % 16]).join('');
   const BEAMH = [
-    { kind: 'out', t: now - 3 * M, v: 250, sym: 'BEAM', peer: BADDR.alice, st: 'pending', stage: 'waiting for Alice', comment: 'for the bikes', fee: 0.011, cancel: true },
-    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', eta: now + 38 * M, fee: 0.011, relayer: 22.82 },
+    { kind: 'out', t: now - 3 * M, v: 250, sym: 'BEAM', peer: BADDR.alice, st: 'pending', stage: 'waiting for the receiver to come online', comment: 'for the bikes', fee: 0.011, cancel: true },
+    { kind: 'br-out', t: now - 22 * M, v: 5000, sym: 'BEAM', peer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', st: 'pending', stage: 'on Beam, waiting for the relayer', fee: 0.011, relayer: 22.82 },
     { kind: 'in', t: now - 2 * H, v: 1.25, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 3 * H, v: 1.31, sym: 'BEAM', peer: BADDR.pool, pool: true },
     { kind: 'in', t: now - 5 * H, v: 1.18, sym: 'BEAM', peer: BADDR.pool, pool: true },
@@ -134,37 +137,43 @@
       <span class="ar-r">${amt}${usdLine}</span></div>${open.has(r.id) ? more(r) : ''}`;
   }
 
-  const cp = (v) => `<span class="cp" data-copy="${esc(v)}" title="Copy">${SVG.copy}</span>`;
+  // copy, as the wallet's: its tip says what with the whole of it, a tick for 2 s once copied; a link to the explorer
+  const cp = (v, what) => `<button type="button" class="cp" data-cp="${esc(v)}" data-tip-wide title="Copy ${esc(what)}\n${esc(v)}">${SVG.copy}</button>`;
+  const ln = (href, what) => `<a class="cp" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(what)}">${SVG.link}</a>`;
+  const EXPL = 'https://explorer.bumblebeam.org', SCAN = 'https://etherscan.io';
+  const addrDd = (a) => `${esc(name(a) ? `${name(a)}\n` : '')}${esc(a)}${a.startsWith('0x') ? ln(`${SCAN}/address/${a}`, 'Open the address on Etherscan') : ''}${cp(a, 'the address')}`;
   function more(r) {
     const rows = [];
     if (r.group) {
       return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}<i class="sp"></i>block ${x.block}</span><b>+${num(x.v)} ${esc(x.sym)}</b></div>`).join('')}
-        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${esc(name(r.peer) || '')}\n${esc(r.peer)}${cp(r.peer)}</dd></dl></div>`;
+        <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${addrDd(r.peer)}</dd></dl></div>`;
     }
     rows.push(['When', fdt(r.t)]);
     // where it is, while it is under way: in the opened card, not on the row
-    if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.eta ? `arrives ≈ ${hm(r.eta)}` : r.stage)}</span>`]);
-    if (r.peer && r.peer !== 'beam') rows.push([r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', `${esc(name(r.peer) ? `${name(r.peer)}\n` : '')}${esc(r.peer)}${cp(r.peer)}`]);
-    if (r.kind === 'br-out' && net === 'eth') rows.push(['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12']);
+    if (r.st === 'pending') rows.push(['Now', `<span class="st">${esc(r.stage)}</span>`]);
+    // the address in a group of its own: its column as wide as its short label lets it, a whole address on one line
+    if (r.peer && r.peer !== 'beam' && !r.from) rows.push(null, [r.kind === 'in' || r.kind === 'br-in' ? 'From' : 'To', addrDd(r.peer)], null);
+    if (r.kind === 'br-out' && net === 'eth') rows.push(null, ['To', 'Personal on Beam\nBeam bridge key: 03a7c4…e49f12'], null);
     if (r.kind === 'dapp') rows.push(['Gave', `${num(r.gave ? r.gave[0] : r.v)} ${esc(r.gave ? r.gave[1] : r.sym)}`], ['Got', `${num(r.got[0])} ${esc(r.got[1])}`]);
-    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})`]);
+    if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ln(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer')}${cp(String(r.asset), 'the asset id')}`]);
     if (r.relayer) rows.push(['Relayer fee', `${num(r.relayer)} BEAM`]);
     if (r.fee) rows.push([net === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${net === 'beam' ? 'BEAM' : 'ETH'}${RATE[net === 'beam' ? 'BEAM' : 'ETH'] ? ` | ${usd(r.fee * RATE[net === 'beam' ? 'BEAM' : 'ETH'])}` : ''}`]);
     if (r.comment) rows.push(['Comment', esc(r.comment)]);
     if (r.st === 'failed') rows.push(['Why', esc(r.why)]);
     if (net === 'beam') {
-      rows.push(['Transaction', `${esc(sh(r.id + r.kern.slice(0, 16)))}${cp(r.id + r.kern.slice(0, 16))}`]);
-      if (r.st !== 'pending' && r.st !== 'cancelled' && r.st !== 'failed') rows.push(['Kernel', `<a href="#" onclick="return false">${esc(sh(r.kern))}</a>${cp(r.kern)}`], ['Block', String(r.block)]);
+      // on the chain only once it is in a block: then its kernel, in our explorer
+      if (r.st !== 'pending' && r.st !== 'cancelled' && r.st !== 'failed') rows.push(['Transaction', `${esc(sh(r.kern))}${ln(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer')}`], ['Block', String(r.block)]);
     } else {
-      rows.push(['Hash', `<a href="#" onclick="return false">${esc(sh('0x' + r.kern))}</a>${cp('0x' + r.kern)}`]);
+      rows.push(['Transaction', `${esc(sh('0x' + r.kern))}${ln(`${SCAN}/tx/0x${r.kern}`, 'Open the transaction on Etherscan')}`]);
       if (r.st !== 'pending') rows.push(['Block', String(23781200 - Math.round((now - r.t) / 12e3))]);
     }
     const acts = [];
     if (r.cancel) acts.push('<button type="button" class="btn warn">Cancel</button>');
     if (r.kind === 'out' && r.peer && r.st !== 'pending') acts.push('<button type="button" class="btn">Send again</button>');
     if (r.kind === 'br-out' || r.kind === 'br-in') acts.push('<button type="button" class="btn">In the Bridge</button>');
-    if (r.peer && !name(r.peer) && r.peer.length > 20 && r.kind !== 'br-out') acts.push('<button type="button" class="btn">Name it</button>');
-    return `<div class="ar-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;
+    if (r.peer && !r.from && !name(r.peer) && r.peer.length > 20 && r.kind !== 'br-out') acts.push('<button type="button" class="btn">Name it</button>');
+    const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
+    return `<div class="ar-more">${groups.map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`).join('')}${acts.length ? `<div class="ar-acts">${acts.join('')}</div>` : ''}</div>`;
   }
 
   function draw() {
@@ -207,8 +216,14 @@
   $('afX').onclick = () => { $('afQ').value = ''; q = ''; draw(); $('afQ').focus(); };
   $('afMore').onclick = () => { shown += 12; draw(); };
   $('actList').onclick = (e) => {
-    const c = e.target.closest('[data-copy]');
-    if (c) { navigator.clipboard.writeText(c.dataset.copy).catch(() => {}); c.title = 'Copied'; return; }
+    const c = e.target.closest('[data-cp]');
+    if (c) {
+      navigator.clipboard.writeText(c.dataset.cp).then(() => {
+        c.innerHTML = SVG.ok; c.classList.add('done');
+        clearTimeout(c._t); c._t = setTimeout(() => { c.innerHTML = SVG.copy; c.classList.remove('done'); }, 2000);
+      }).catch(() => {});
+      return;
+    }
     if (e.target.closest('.ar-more')) return;
     const li = e.target.closest('.li.ar'); if (!li) return;
     if (open.has(li.dataset.id)) open.delete(li.dataset.id); else open.add(li.dataset.id);
