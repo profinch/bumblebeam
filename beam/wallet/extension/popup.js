@@ -495,9 +495,7 @@
   }
   qa('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
   async function go(what) {
-    // choosing a file can close Chrome's popup (it loses focus to the file dialog): the backup file is
-    // opened in a tab, the one step that needs it
-    if (what === 'import' && !inTab) { chrome.tabs.create({ url: chrome.runtime.getURL('popup.html?tab=1#import') }); return window.close(); }
+    // the backup file is chosen here too, as Settings' backup is (it opened a tab of its own before)
     pwFields();
     if (what === 'create') return showPhrase(await host('newPhrase'));
     clearNotes(`s-${what}`);
