@@ -583,6 +583,52 @@
   $('doUnlock').onclick = () => unlock();
   $('uPass').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); unlock(); } };
 
+  // ---------- an account picker's rows dragged to order them ----------
+  // The same in every picker (the wallet tab's, the bridge's, a wallet's card in Settings): an account's row held and
+  // moved, a line above or below the row it would go to (as Beam's addresses); let go, the wallet's accounts take
+  // that order, every picker drawn again from it. Only within one wallet. The lists keep the pointer's mousedown
+  // (the focus stays on the button), so this is the pointer's own drag, not the browser's
+  function accDrag(list, rowInfo, onOrder) {
+    if (list.dataset.drag) return; list.dataset.drag = '1';
+    let from = null, sx = 0, sy = 0, moving = false;
+    const rows = () => [...list.querySelectorAll('[role="option"]')].filter((li) => rowInfo(li));
+    const marks = () => list.querySelectorAll('.drop-above, .drop-below, .dragging').forEach((r) => r.classList.remove('drop-above', 'drop-below', 'dragging'));
+    list.addEventListener('pointerdown', (e) => { const li = e.target.closest('[role="option"]'); if (!li || !rowInfo(li) || e.button !== 0) return; from = li; sx = e.clientX; sy = e.clientY; moving = false; });
+    list.addEventListener('pointermove', (e) => {
+      if (!from) return;
+      if (!moving && Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return;
+      if (!moving) { moving = true; from.classList.add('dragging'); try { list.setPointerCapture(e.pointerId); } catch {} }
+      list.querySelectorAll('.drop-above, .drop-below').forEach((r) => r.classList.remove('drop-above', 'drop-below'));
+      const el = document.elementFromPoint(e.clientX, e.clientY), r = el && el.closest('[role="option"]');
+      if (!r || r === from || !rowInfo(r) || rowInfo(r).wallet !== rowInfo(from).wallet) return;
+      const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
+    });
+    const end = async (e) => {
+      if (!from) return;
+      const was = from, moved = moving; from = null; moving = false;
+      const to = list.querySelector('.drop-above, .drop-below'), above = to && to.classList.contains('drop-above');
+      marks();
+      if (!moved) return;
+      // a drag is not a pick: the click that follows the pointer's release is swallowed
+      list.addEventListener('click', (c) => { c.stopPropagation(); c.preventDefault(); }, { capture: true, once: true });
+      if (!to) return;
+      const w = rowInfo(was).wallet, ids = rows().filter((li) => rowInfo(li).wallet === w).map((li) => rowInfo(li).i);
+      const a = rowInfo(was).i, b = rowInfo(to).i;
+      const order = ids.filter((x) => x !== a); order.splice(order.indexOf(b) + (above ? 0 : 1), 0, a);
+      try { await host('orderEthAccounts', w, order); } catch (err) { return ask({ title: 'Not moved', note: msg(err), yes: 'OK', no: null }); }
+      onOrder();
+    };
+    list.addEventListener('pointerup', end);
+    list.addEventListener('pointercancel', () => { from = null; moving = false; marks(); });
+  }
+  // after an order changed: every picker drawn again from the wallets as they are now
+  async function accOrdered() {
+    await load();
+    try { renderEth(); } catch {}
+    try { if (!$('t-bridge').hidden) fillAccts(); } catch {}
+    try { if (!$('t-settings').hidden) drawWallets(); } catch {}
+  }
+
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
@@ -666,6 +712,7 @@
       box.className = 'dd-scroll'; box.setAttribute('role', 'presentation'); ul.setAttribute('role', 'group');
       rows.forEach((li) => ul.appendChild(li));
       box.appendChild(ul); list.insertBefore(box, list.firstChild);
+      accDrag(list, (li) => { const v = li.dataset.v; return v && !v.startsWith('__') ? { wallet: W().id, i: Number(v) } : null; }, accOrdered);
     }
     return st;
   }
@@ -1681,6 +1728,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (dir === 'toEth' && other) rows.push(row('typed', 'Other address', other));
     const acts = dir === 'toEth' ? [{ sep: true }, { v: '__type', label: 'Enter an address', html: `<span class="mi">${PEN}</span><span>Enter an address</span>` }] : [];
     bxAcct.options([...rows, ...acts], cur);
+    accDrag($('bxAcct').querySelector('.dd-list'), (li) => { const x = allAccounts().find((y) => y.address === li.dataset.v); return x ? { wallet: x.wallet.id, i: x.i } : null; }, accOrdered);
     // the accounts (and the other wallets' names) in a box of their own that scrolls past 4, the action below it
     const list = $('bxAcct').querySelector('.dd-list'), box = document.createElement('li'), ul = document.createElement('ul');
     box.className = 'dd-scroll'; box.setAttribute('role', 'presentation'); ul.setAttribute('role', 'group');
@@ -2682,6 +2730,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       { sep: true },
       ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
       act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(at));
+    accDrag(d.querySelector('.dd-list'), (li) => { const v = li.dataset.v; return v && !v.startsWith('__') ? { wallet: w.id, i: Number(v) } : null; }, accOrdered);
   }
   $('wList').onclick = (e) => {
     const rn = e.target.closest('[data-ren]');
@@ -2707,7 +2756,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const text = await f.text();
     const r = await ask({ title: `Import a Beam file into ${w.name}`, password: true, yes: 'Import', note: `${f.name}\nIts addresses, their names, contacts and transactions are added to this wallet. It should come from a wallet of the same seed phrase.`,
       check: async ({ pass }) => { await host('beamData', w.id, pass, text); } });
-    if (r.ok) ask({ title: 'Imported', note: 'The addresses and the history are in this wallet now.', yes: 'OK', no: null });
+    if (!r.ok) return;
+    // the addresses added by hand and not verified yet are checked again against what came in: one now among the
+    // wallet's own (Beam took it from the file with its key number) or named by an imported payment is verified
+    const open0 = (await host('addrExt', w.id).catch(() => [])).filter((e) => !e.verified);
+    let now = 0;
+    if (open0.length && isOpen(w.id)) {
+      const own = new Set((await host('beam', w.id, 'addr_list', { own: true }).catch(() => [])).map((x) => x.address));
+      for (const e of open0) if (own.has(e.address)) { await host('setAddrExt', w.id, { ...e, verified: 'key' }).catch(() => {}); now++; }
+      await loadAddrs().catch(() => {});
+      now = open0.length - (await host('addrExt', w.id).catch(() => [])).filter((e) => !e.verified).length;
+    }
+    ask({ title: 'Imported', note: `The addresses and the history are in this wallet now.${open0.length ? (isOpen(w.id) ? `\nAdded by hand and not verified: ${open0.length}, verified now: ${now}.` : `\nAdded by hand and not verified: ${open0.length}. They are checked again when this wallet is opened.`) : ''}`, yes: 'OK', no: null });
   };
 
   // ---------- Settings: Backup ----------

@@ -1122,6 +1122,13 @@
       return i;
     },
     // two accounts of one wallet never share a name (the case aside), as two Beam addresses do not
+    // the accounts' order in a wallet (dragged in any of its pickers): the numbers given first, the rest after as they were
+    orderEthAccounts: (id, order) => mutate((d) => {
+      const w = wallet(id, d);
+      if (!w.eth) return;
+      const pos = new Map((Array.isArray(order) ? order : []).map((i, k) => [Number(i), k]));
+      w.eth.accounts = w.eth.accounts.map((a, k) => [a, pos.has(a.i) ? pos.get(a.i) : 1e6 + k]).sort((x, y) => x[1] - y[1]).map((x) => x[0]);
+    }),
     renameEthAccount: (id, i, name) => mutate((d) => {
       const w = wallet(id, d), a = (w.eth || { accounts: [] }).accounts.find((x) => x.i === i);
       const nm = String(name).trim().slice(0, 32);

@@ -783,3 +783,7 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .node .meta .t { display: inline-block; min-width: 9ch; text-align: right; }      /* the time's room kept (up to 4999 ms, or no answer): the check's icon never moves */
 .bk-show { margin-left: 6px; vertical-align: -2px; }
 .bk-show svg { width: 13px; height: 13px; }
+/* an account's row dragged in a picker: a line where it goes (as Beam's addresses), the row itself faded */
+.dd-list [role="option"].drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.dd-list [role="option"].drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+.dd-list [role="option"].dragging { opacity: 0.4; }
