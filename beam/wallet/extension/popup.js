@@ -1692,6 +1692,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     bxAcct.set(v);
     if (run && v !== was) BB.decode(bxAccAd, short(addrOf(v)));
     bxStill(); readEth(addrOf(v)); bxCalc();
+    toMain(v);
+  }
+  // one of the open wallet's accounts picked on the bridge is the wallet tab's too (as the wallet tab's picked follows
+  // here); once the picking stops (the wheel steps through several)
+  let toMainTimer = 0;
+  function toMain(v) {
+    clearTimeout(toMainTimer);
+    const w = W(), a = w && w.accounts.find((x) => x.address === v);
+    if (!a || (acct() && acct().address === v)) return;
+    toMainTimer = setTimeout(async () => {
+      try { await host('setActiveEth', w.id, a.i); bxMain = v; await load(); renderEth(); ethRefresh(); } catch { /* the wallet tab keeps its own */ }
+    }, 400);
   }
   // an Ethereum address's WBEAM (and ETH, for gas): read, then drawn
   async function readEth(a) {
