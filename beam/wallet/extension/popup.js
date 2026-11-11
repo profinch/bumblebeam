@@ -1820,24 +1820,38 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // and comes back torn, settling
   const TURN = 460;
   let turning = false;
-  function tear(t) {
-    const d = Math.sin(Math.PI * t);
-    bxCards.forEach((c) => {
+  // the strips: 7 copies of each card made once per half of the turn (its content changes at the middle), only
+  // their cuts and shifts drawn anew each frame (3 to 7 of them shown)
+  let torn = null;                                    // card -> its strip copies, for the half running
+  function tearCopies() {
+    torn = new Map(bxCards.map((c) => {
       let lay = c.querySelector('.bx-tear');
       if (!lay) { lay = document.createElement('div'); lay.className = 'bx-tear'; c.appendChild(lay); }
       lay.textContent = '';
-      const h = c.clientHeight, n = 3 + Math.floor(Math.random() * 5);
-      const cuts = [0, ...Array.from({ length: n - 1 }, () => Math.random() * h).sort((a, b) => a - b), h];
-      for (let k = 0; k < n; k++) {
+      const strips = Array.from({ length: 7 }, () => {
         const s = document.createElement('div');
         s.className = 'bx-strip';
         for (const ch of c.children) if (!ch.classList.contains('bx-tear')) s.appendChild(ch.cloneNode(true));
         s.querySelectorAll('[id]').forEach((e) => e.removeAttribute('id'));      // copies without ids: $() finds the real ones
+        lay.appendChild(s);
+        return s;
+      });
+      return [c, strips];
+    }));
+  }
+  function tear(t) {
+    const d = Math.sin(Math.PI * t);
+    if (!torn) tearCopies();
+    for (const [c, strips] of torn) {
+      const h = c.clientHeight, n = 3 + Math.floor(Math.random() * 5);
+      const cuts = [0, ...Array.from({ length: n - 1 }, () => Math.random() * h).sort((a, b) => a - b), h];
+      strips.forEach((s, k) => {
+        if (k >= n) { s.style.display = 'none'; return; }
+        s.style.display = '';
         s.style.clipPath = `inset(${cuts[k].toFixed(1)}px 0 ${(h - cuts[k + 1]).toFixed(1)}px 0)`;
         s.style.transform = `translateX(${Math.random() < 0.3 ? 0 : ((Math.random() - 0.5) * 80 * d).toFixed(1)}px)`;
-        lay.appendChild(s);
-      }
-    });
+      });
+    }
     bx.style.setProperty('--fade', String(1 - d * 0.65));
   }
   // the way turned: from Ethereum only one's own account can send (an address typed in gives way to the last own one)
@@ -1861,9 +1875,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     let swapped = false;
     const frame = (now) => {
       const t = Math.min(1, (now - t0) / TURN);
-      if (!swapped && t >= 0.5) { swapped = true; dir = dir === 'toEth' ? 'fromEth' : 'toEth'; turned(); }
+      if (!swapped && t >= 0.5) { swapped = true; dir = dir === 'toEth' ? 'fromEth' : 'toEth'; turned(); torn = null; }      // the other way's content copied for the second half
       if (t < 1) { tear(t); requestAnimationFrame(frame); }
-      else { bxCards.forEach((c) => c.querySelector('.bx-tear')?.remove()); bx.classList.remove('turning'); bx.style.removeProperty('--fade'); turning = false; bxLay(); }
+      else { torn = null; bxCards.forEach((c) => c.querySelector('.bx-tear')?.remove()); bx.classList.remove('turning'); bx.style.removeProperty('--fade'); turning = false; bxLay(); }
     };
     requestAnimationFrame(frame);
   };

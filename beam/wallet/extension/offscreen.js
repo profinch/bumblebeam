@@ -538,7 +538,7 @@
   // (a bridge's sendFunds and a send priced while its approval mined would otherwise share one).
   // If the chain has fewer pending than this host sent and its last one is gone from the network (dropped),
   // the count goes back to the chain's: no gap that every later transaction would wait behind.
-  const nonceNext = new Map(), lastSent = new Map(), signChain = new Map(), inFlight = new Set(), fromEthBusy = new Set();      // fromEthBusy: accounts with a bridge send on its way
+  const nonceNext = new Map(), lastSent = new Map(), signChain = new Map(), inFlight = new Set(), fromEthBusy = new Set(), ensSeen = new Map();      // fromEthBusy: accounts with a bridge send on its way; ensSeen: address -> its ENS name and avatar, a while
   function signSend(secret, p) {
     const a = p.from.toLowerCase();
     const run = async () => {
@@ -1282,6 +1282,11 @@
       const m = /^0xef0100([0-9a-f]{40})$/i.exec(code || '');
       const delegate = code == null ? undefined : m ? ethers.getAddress('0x' + m[1]) : null;
       let ens = null, avatar = null;
+      // the ENS name and avatar kept 10 min per address (up to 9 calls in a row each time the card opened); a
+      // lookup that failed is not kept
+      const known = ensSeen.get(address.toLowerCase());
+      if (known && Date.now() - known.at < 600000) return { nonce, ens: known.ens, avatar: known.avatar, delegate };
+      let looked = false;
       try {
         const REG = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e', abi = ethers.AbiCoder.defaultAbiCoder();
         const call = (to, data) => Eth.rpc('eth_call', [{ to, data }, 'latest']);
@@ -1310,7 +1315,9 @@
           const out = await ask(ens, '0x59d1d43c' + abi.encode(['bytes32', 'string'], [node, 'avatar']).slice(2)).catch(() => null);
           avatar = (out && out !== '0x' ? abi.decode(['string'], out)[0] : '').trim() || null;
         }
+        looked = true;
       } catch {}
+      if (looked) ensSeen.set(address.toLowerCase(), { at: Date.now(), ens, avatar });
       return { nonce, ens, avatar, delegate };
     },
     async ethBalances(address) {
