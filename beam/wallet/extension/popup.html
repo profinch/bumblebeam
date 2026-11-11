@@ -356,6 +356,17 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
       <p class="hint">On the wallet tab, the bridge, Send and Activity. Confirmations always show every decimal.</p>
     </div>
     <div class="panel">
+      <div class="panel-head"><h3 class="panel-title">Activity's memory</h3></div>
+      <p class="hint">What Activity worked out once and keeps in this browser, so it is not lost later: a transfer's kernel and block found when Beam gave none, our pool's payouts, blocks' times, and each list as last shown (it opens at once and refreshes behind). Kept per wallet; a removed wallet's goes by itself.</p>
+      <div class="field"><span id="keepAgeL">Clear</span>
+        <div class="inline">
+          <div class="dd" id="keepAge" data-value="90"><button type="button" class="dd-btn" id="keepAgeB" aria-labelledby="keepAgeL keepAgeB" aria-haspopup="listbox" aria-expanded="false"></button>
+            <ul class="dd-list" role="listbox" tabindex="-1" hidden>
+              <li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">all of it</li></ul></div>
+          <button class="btn ghost small" id="keepClear">Clear</button></div></div>
+      <p class="hint" id="keepInfo"></p>
+    </div>
+    <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Networks</h3></div>
       <label class="field">Beam node (wss, host:port)<span class="inline"><input id="node" spellcheck="false"><button class="btn ghost small" id="saveNode">Save</button></span></label>
       <label class="field">Backup Beam nodes (tried in turn when the node above does not answer for a minute)<span class="inline"><input id="backupNodes" spellcheck="false" placeholder="host:port, host:port"><button class="btn ghost small" id="saveBackups">Save</button></span></label>

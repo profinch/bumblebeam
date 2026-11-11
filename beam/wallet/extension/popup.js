@@ -2224,6 +2224,46 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     } catch (err) { note('bErr', 'bad', msg(err)); b.disabled = false; }
   };
 
+  // ---------- Activity's memory ----------
+  // What Activity worked out once, kept in this browser (chrome.storage.local, trusted pages only) per wallet:
+  //   tx  txId -> { k: kernel, b: block, o: 1 our pool's, t: its time } only what Beam did not give (a receipt's
+  //       kernel from the pool's list, its block from the coins it made): a spent coin or an old payout keeps it
+  //   coins  a coin with no record of its own (found on the chain, from a wallet of this seed): its row stays once spent
+  //   bt  block height -> its time (blocks do not change)
+  //   ls  the list as last shown, per network and account (it opens at once and refreshes behind), 300 rows at most
+  // A removed wallet's goes by itself; Settings clears what is older than a month, 3 months, a year, or all.
+  let keep = null, keepT = 0;
+  const keepAll = async () => { if (!keep) { try { keep = (await chrome.storage.local.get('actKeep')).actKeep || {}; } catch { keep = {}; } } return keep; };
+  const keepOf = async (wid) => { const k = await keepAll(); return (k[wid] ||= { tx: {}, bt: {}, ls: {}, coins: {} }); };
+  const keepSave = () => { clearTimeout(keepT); keepT = setTimeout(() => { chrome.storage.local.set({ actKeep: keep }).catch(() => {}); keepInfo(); }, 600); };
+  // the wallets gone from the extension take theirs with them
+  const keepTidy = async () => { const k = await keepAll(), ids = new Set(((st && st.wallets) || []).map((w) => w.id)); let n = 0; for (const id of Object.keys(k)) if (!ids.has(id)) { delete k[id]; n++; } if (n) keepSave(); };
+  async function keepInfo() {
+    if (!$('keepInfo')) return;
+    const k = await keepAll(); let tx = 0, bt = 0, ls = 0;
+    for (const w of Object.values(k)) { tx += Object.keys(w.tx || {}).length + Object.keys(w.coins || {}).length; bt += Object.keys(w.bt || {}).length; ls += Object.keys(w.ls || {}).length; }
+    const kb = Math.ceil(JSON.stringify(k).length / 1024);
+    $('keepInfo').textContent = tx + bt + ls ? `Kept now: ${tx} transfers, ${bt} blocks' times, ${ls} lists (${kb} KB).` : 'Nothing kept yet.';
+  }
+  const keepAge = BB.dropdown($('keepAge'), () => {});
+  keepAge.set('90');
+  $('keepClear').onclick = async () => {
+    const days = Number(keepAge.value()), k = await keepAll();
+    if (!days) { for (const id of Object.keys(k)) delete k[id]; }
+    else {
+      const cut = Date.now() - days * 864e5;
+      for (const w of Object.values(k)) {
+        for (const [id, x] of Object.entries(w.tx || {})) if (!x.t || x.t < cut) delete w.tx[id];
+        for (const [id, x] of Object.entries(w.coins || {})) if (!x.t || x.t < cut) delete w.coins[id];
+        for (const [h, t] of Object.entries(w.bt || {})) if (t * 1000 < cut) delete w.bt[h];
+        for (const [key, l] of Object.entries(w.ls || {})) { w.ls[key] = (l || []).filter((r) => r.st === 'pending' || (r.t && r.t >= cut)); if (!w.ls[key].length) delete w.ls[key]; }
+      }
+    }
+    await chrome.storage.local.set({ actKeep: k }).catch(() => {});
+    actOk($('keepClear'), 'cleared'); keepInfo();
+    actFor = ''; if (!$('t-activity').hidden) activity();      // Activity works it out again
+  };
+
   // ---------- Activity ----------
   // (worked out in lab/activity.html) By day (Today, Yesterday, 9 Nov; another year's with its year), each day's net
   // in the network's coin, and what is under way above them all. A row says who and what, the date and time, the
@@ -2244,6 +2284,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const BEAM_STATUS = { 0: 'pending', 1: 'pending', 5: 'pending', 2: 'cancelled', 4: 'failed' };
   // a coin no transaction of this wallet made, as a received transfer: another wallet of the same phrase made it
   const blockTime = new Map();
+  const FOUND_TIP = {
+    'from a wallet of this seed': 'Sent by a wallet of this seed phrase (a pool\'s payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took: this wallet has the coins but no record of the transfer',
+    'found on the chain': 'Another wallet of this seed phrase (the mobile or desktop one) took this transfer: this wallet has the coins but no record of it',
+  };
   const zeroK = (k) => !k || /^0+$/.test(k);
 
   // Beam: the wallet's transactions and the coins no transaction of its made, as rows
@@ -2262,8 +2306,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // a transaction's block from the coins it made, when Beam gives it no height (some receipts come with no kernel and no height)
     const madeAt = new Map(cs.filter((c) => c.createTxId && c.maturity > 0).map((c) => [c.createTxId, c.maturity]));
     const found = cs.filter((c) => c.type === 'norm' && (!c.createTxId || !ids.has(c.createTxId)) && c.maturity > 0).slice(0, 60);
+    const kp = await keepOf(wid);
+    for (const [h, t] of Object.entries(kp.bt)) if (!blockTime.has(Number(h))) blockTime.set(Number(h), t);
     await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
-      host('beam', wid, 'block_details', { height: h }).then((b) => blockTime.set(h, Number(b.timestamp) || 0), () => {})));
+      host('beam', wid, 'block_details', { height: h }).then((b) => { blockTime.set(h, Number(b.timestamp) || 0); if (b.timestamp) kp.bt[h] = Number(b.timestamp); }, () => {})));
     const syms = new Map();
     for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
     const cid = st.bridgeCid;
@@ -2277,7 +2323,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
         peer: contract ? null : (t.income ? t.sender : t.receiver) || null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
-        st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null,
+        st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
           : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
         why: s === 'failed' ? (t.failure_reason || ss || 'failed') : s === 'cancelled' ? (t.income ? 'by the sender' : 'by you before the receiver signed') : '',
@@ -2290,12 +2336,27 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const tm = blockTime.get(c.maturity) || 0;
       rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && poolAmt(Number(c.amount), tm),
         sym: c.asset_id ? syms.get(Number(c.asset_id)) : 'BEAM', asset: Number(c.asset_id) || null, peer: null, st: '', block: c.maturity,
-        found: own ? 'from a wallet of this seed' : 'found on the chain',
-        foundTip: own ? 'Sent by a wallet of this seed phrase (a pool\'s payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took: this wallet has the coins but no record of the transfer'
-          : 'Another wallet of this seed phrase (the mobile or desktop one) took this transfer: this wallet has the coins but no record of it' });
+        found: own ? 'from a wallet of this seed' : 'found on the chain' });
     }
+    // a coin with no record, once spent, is no longer among the coins: the one kept stays in the list
+    const now = new Set(rows.map((r) => r.id));
+    for (const [id, c] of Object.entries(kp.coins || {})) if (!now.has(id)) rows.push({ id, kind: 'in', t: c.t, g: c.g, v: c.g / GROTH, ours: !!c.o, sym: c.a ? syms.get(c.a) || `asset ${c.a}` : 'BEAM', asset: c.a || null, peer: null, st: '', block: c.b, found: c.f });
+    kp.coins ||= {};
+    for (const r of rows) if (r.found && r.t) kp.coins[r.id] = { t: r.t, g: r.g, a: r.asset || 0, b: r.block, f: r.found, o: r.ours ? 1 : 0 };
     // our pool's payout with no kernel from Beam (a receipt often has none): the pool's list has it
     for (const r of rows) if (r.ours && !r.kern) { const p = poolPay(r.g, r.t / 1000); if (p && p.kernel) r.kern = p.kernel; }
+    // what was worked out before fills what is missing now (the coin since spent, the payout gone from the pool's
+    // list); what is worked out now and Beam did not give is kept
+    const ids2 = new Set(rows.map((r) => r.id));
+    for (const r of rows) {
+      const m = kp.tx[r.id];
+      if (m) { if (!r.kern && m.k) r.kern = m.k; if (!r.block && m.b) r.block = m.b; if (m.o) r.ours = true; }
+      if (r.st || r.found) continue;
+      const own = { k: r.kern && r.kern !== r.beamK ? r.kern : undefined, b: r.block && r.block !== r.beamB ? r.block : undefined, o: r.ours ? 1 : undefined };
+      if (own.k || own.b || own.o) kp.tx[r.id] = { ...own, t: r.t };
+    }
+    for (const id of Object.keys(kp.tx)) if (!ids2.has(id) && !id.startsWith('coin-')) delete kp.tx[id];      // a transaction Beam no longer lists
+    keepSave();
     // payouts in a day as one row: our pool's (known above); another's when one address pays three times or more
     const key = (r) => `${r.peer}|${day0(r.t)}|${r.comment}`, n = new Map();
     for (const r of rows) if (r.kind === 'in' && !r.st && r.peer) n.set(key(r), (n.get(key(r)) || 0) + 1);
@@ -2343,7 +2404,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.kind === 'br-out' || r.kind === 'br-in' || r.kind === 'approve') return '';
     if (r.kind === 'dapp') return r.app ? `in <b>${esc(r.app)}</b>` : '';
     if (r.pool) return r.ours ? '<span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
-    if (r.found) return `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`;
+    if (r.found) return `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`;
     if (r.from) return `from <b>${esc(r.from)}</b>`;
     if (!r.peer) return '';
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nameOf(r.peer) || short(r.peer))}</b>`;
@@ -2401,7 +2462,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.st === 'failed' || r.st === 'cancelled') rows.push(['Why', `<span class="st bad">${r.st === 'failed' ? 'failed: ' : 'cancelled '}${esc(r.why)}</span>`]);
     if (r.ours) rows.push(['From', `${OUR_POOL}${r.peer ? `\n${addrDd(r.peer)}` : ''}`], null);
     else if (r.peer) rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)], null);
-    else if (r.found) rows.push(['From', `<span title="${esc(r.foundTip)}">${esc(r.found)}</span>`]);
+    else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);
     if (r.kind === 'dapp' && r.contract) rows.push(['Contract', `${esc(r.contract)}${ics(cpI(r.contract, 'the contract address'), lnI(`${SCAN}/address/${r.contract}`, 'Open the contract on Etherscan'))}`]);
     if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cpI(String(r.asset), 'the asset id'), lnI(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
     if (r.tokAddr && r.sym !== 'ETH') rows.push(['Token', `${esc(r.sym)}${ics(cpI(r.tokAddr, 'the token\'s contract address'), lnI(`${SCAN}/token/${r.tokAddr}`, 'Open the token on Etherscan'))}`]);
@@ -2454,7 +2515,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // whose list it is on Ethereum: the wallet tab's account, by name and short address at the bar's right end
     $('actAcct').hidden = actNet !== 'eth' || !a;
     if (actNet === 'eth' && a) { $('actAcct').innerHTML = `<span class="nm">${esc(a.name)}</span><span>|</span><span class="ad">${esc(short(a.address))}</span>`; }
-    if (forNow !== actFor) { actFor = forNow; actRows = []; actOpen.clear(); box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true; }      // the button only under a list that is there
+    keepTidy();
+    const lsKey = `${actNet}|${actNet === 'eth' && a ? a.address.toLowerCase() : ''}`;
+    if (forNow !== actFor) {
+      actFor = forNow; actRows = []; actOpen.clear();
+      // the list as last shown opens at once (from Activity's memory), the new one replaces it when it comes
+      const kept = wid ? ((await keepOf(wid)).ls || {})[lsKey] : null;
+      if (stale()) return;
+      if (kept && kept.length) { actRows = kept; actDraw(); }
+      else { box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true; }      // the button only under a list that is there
+    }
     try {
       if (actNet === 'beam') {
         if (!beamHere()) return say('this wallet has no running Beam part');
@@ -2468,6 +2538,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         actRows = ethActRows(list);
       }
       actDraw();
+      // kept as shown, for the next opening: the newest 300 rows, without what is only for drawing
+      const kp = await keepOf(wid);
+      if (actRows.length) kp.ls[lsKey] = actRows.slice(0, 300).map(({ beamK, beamB, items, group, ...r }) => r); else delete kp.ls[lsKey];
+      keepSave();
     } catch (e) { if (!stale()) say(msg(e)); }
   }
 
@@ -2515,6 +2589,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('backupNodes').value = (st.nodes || []).filter((n) => n !== st.node).join(', ');
     autoLockDd.set(String(st.autoLock));
     timeDd.set(time12 ? '12' : '24'); decDd.set(String(decShown));
+    keepTidy().then(keepInfo);
     $('wList').innerHTML = st.wallets.map((w) => `<div class="wcard${w.id === st.active ? ' on' : ''}" data-w="${esc(w.id)}">
       <div class="wname"><b>${esc(w.name)}</b>${w.id === st.active ? '<span class="badge ok">active</span>' : ''}
         ${w.beam ? '<span class="badge net-beam">Beam</span>' : ''}${w.eth ? `<span class="badge net-eth">Ethereum${w.accounts.length > 1 ? ` ×${w.accounts.length}` : ''}</span>` : ''}</div>
@@ -2701,6 +2776,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       ['explorer.bumblebeam.org', 'Explorer', 'Blocks, kernels, assets, DEX, contracts', ''],
       ['pool.bumblebeam.org', 'Mining pool', 'Beam mining, PPLNS and solo', ''],
       ['puzzle.bumblebeam.org', 'Puzzle', 'The Bitcoin puzzle, searched together in the browser', ''],
+      ['buybeam.my', 'Buy BEAM', 'Any token on any chain swapped to BEAM, no account', ''],      // checked 2026-11-11: answers, no wallet connection (BEAM goes to the address given)
     ] },
   ];
   // a group with fold folds by a click on its head (an arrow right of it): Beam's official sites start folded, the

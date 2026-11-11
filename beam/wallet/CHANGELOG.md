@@ -105,6 +105,11 @@
 - All / In / Out / Bridge / dApps with their counts, and a search (name, address, comment, amount) in their
   place; 30 rows, then Older. A refresh keeps the list until the new one is ready; the scroll bar's room is kept.
 - A transfer's comment (written on Send, kept only in this wallet's history) shows in grey after its date.
+- Activity's memory: what it worked out once is kept in this browser per wallet, so it is not lost later: a
+  receipt's kernel and block when Beam gave none (from the pool's list, from the coins it made), our pool's
+  payouts, blocks' times, a coin with no record of its own (its row stays once spent), and each list as last
+  shown (it opens at once and refreshes behind). A removed wallet's goes by itself; Settings shows what is kept
+  and clears what is older than a month, 3 months, a year, or all of it.
 - It also lists coins this wallet holds that no transaction of its own made: another wallet of the same phrase,
   such as the mobile one, took the transfer. They are marked found on the chain.
 - A receipt sent by a wallet of the same seed (a pool's payouts, the wallet CLI) is shown, marked "from a
@@ -177,6 +182,7 @@
   card reaches down to where the wallet tab's Ethereum card ends.
 
 ### dApps
+- The Catalog lists buybeam.my (any token on any chain swapped to BEAM, no account) among the whitelisted.
 - Each wallet keeps its own site connections, Beam and Ethereum. A site connected in one wallet saw another
   wallet's Beam balance after a switch, and kept its Ethereum account. After a switch:
   - the sites are told;
