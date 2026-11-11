@@ -128,10 +128,11 @@
   the cards cut round it. A click turns the way round; the cards' content tears into strips that jerk sideways
   and comes back the other way. The direction tabs and ⇄ are gone. The design was worked out in a lab page of
   its own (`lab/bridge.html`, made-up figures, nothing is sent).
-- From: the amount (up to 99 999 999.9999, its figures smaller when long rather than running under the balance),
+- From: the amount (up to 99 999 999.99999999, BEAM's and WBEAM's 8 decimals, its figures smaller when long rather
+  than running under the balance),
   "available" over the balance at the right. The balance is the All button: under the pointer it lights and its
-  word reads "send all"; a click puts in the most that can go, the fee left for. A problem with the amount
-  ("over balance + fee") shows in yellow under it, on the balance's line.
+  word reads "send all"; a click puts in the most that can go to the last decimal, the fee left for (no dust). A
+  problem with the amount ("over balance + fee") shows in yellow under it, on the balance's line.
 - To: what the receiving side holds now ("there now"), and how long it takes: "usually about an hour", or "about
   an hour, then claim" towards Beam.
 - Beam's side shows the wallet's name and its green dot in its card's corner (top right on top, bottom right

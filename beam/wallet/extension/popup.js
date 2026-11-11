@@ -1825,13 +1825,16 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // all of it: a click on the balance puts in the most that can go, the fee (and from Beam its ~0.02) left for
   $('bxAll').onclick = () => {
     const toEth = dir === 'toEth', o = opt(), from = wbAt(addrOf(cur));
-    const have = toEth ? beamHave() : from && !from.err ? from.wbeam : null;
+    // in whole units of 1e-8 (a groth, WBEAM's smallest), so all of it goes to the last digit, no dust left
+    const have = toEth ? (beamStatus && beamStatus.available != null ? BigInt(Math.round(beamStatus.available)) : null) : from && !from.err ? BigInt(from.raw || '0') : null;
     if (have == null) return;
-    const m = Math.min(99999999.9999, Math.max(0, Math.floor((have - (toEth ? (o ? o.fee : 0) + 0.02 : Number(FE_FEE))) * 1e4 + 1e-6) / 1e4));
-    $('bxAmt').value = m > 0 ? String(m) : '';
+    const keep = toEth ? BigInt(Math.round((o ? o.fee : 0) * 1e8)) + 2000000n : 2000000n;      // the fee, and from Beam its ~0.02
+    let m = have - keep;
+    if (m > 9999999999999999n) m = 9999999999999999n;                                             // as typed: at most 99 999 999.99999999
+    $('bxAmt').value = m > 0n ? exact(m.toString(), 8) : '';
     bxCalc(); $('bxAmt').focus();
   };
-  BB.amountField($('bxAmt'), 4, 8);                    // digits and one point (or comma) only: up to 99 999 999.9999
+  BB.amountField($('bxAmt'), 8, 8);                    // digits and one point (or comma) only: up to 99 999 999.99999999 (BEAM's and WBEAM's 8 decimals)
   $('bxAmt').oninput = () => { actErr($('bxGo'), null); feeSay(); bxCalc(); };
   // the gauge: a click on an arc, or anywhere on the dial (its third under the pointer), or dragged across
   const gauge = document.querySelector('#bxFee .bx-gauge');
