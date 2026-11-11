@@ -679,3 +679,4 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .hint .all .lb { position: relative; }
 .hint .all:hover .lb { color: transparent; }
 .hint .all:hover .lb::after { content: "send all"; position: absolute; left: 0; color: var(--muted); }      /* as the bridge's: available reads send all under the pointer, in available's room (the figures stay put) */
+.ar-more .sub-li .bk { margin-left: 6px; }      /* a payout's block as far from its icon as the icon from the time */
