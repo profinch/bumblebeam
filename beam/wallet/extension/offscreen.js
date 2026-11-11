@@ -131,14 +131,14 @@
     await w.write(bytes); await w.close();
   }
   async function saveCopy(id) {
-    const s = live(id);
-    if (!s || !data) return;
-    const bytes = await s.e.rpc('readDb', [s.cfg.db], 60000);
+    const s = live(id), cfg = s && s.cfg;                 // taken now: a stop meanwhile forgets it
+    if (!s || !data || !cfg) return;
+    const bytes = await s.e.rpc('readDb', [cfg.db], 60000);
     if (!bytes || bytes.length < 1024) return;
     const cur = await copyRead(id);
     if (cur && (await sha(cur)) === (await sha(bytes))) return;
     // only a copy that opens with the wallet's password is kept (checked in the util engine's scratch file)
-    if (!(await (await util()).rpc('checkBytes', [bytes, s.cfg.pass]))) { console.warn(`copy of ${id}: read torn, not kept`); return; }
+    if (!(await (await util()).rpc('checkBytes', [bytes, cfg.pass]))) { console.warn(`copy of ${id}: read torn, not kept`); return; }
     if (cur) await copyWrite(copyName(id, true), cur);
     await copyWrite(copyName(id), bytes);
   }
@@ -231,6 +231,7 @@
     s.gen++;                                            // its events and crashes count no more
     const e = s.e;
     s.e = null; s.sync = null;
+    s.cfg = null;                                       // its database password not kept past its run (beamCfg gives it again at a start)
     if (!e) { if (s.status !== 'missing') setStatus(id, 'stopped'); return; }
     setStatus(id, 'stopping');
     await e.close();
