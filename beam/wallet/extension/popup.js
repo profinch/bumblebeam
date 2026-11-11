@@ -322,6 +322,9 @@
     e.preventDefault(); e.target.setRangeText(t.trim(), e.target.selectionStart, e.target.selectionEnd, 'end'); e.target.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const NAME_MAX = 32;                                // a wallet's, an account's, an address's name: as the host keeps it (offscreen slice(0, 32))
+  const unring = () => { const a = document.activeElement; if (a && a !== document.body && a.matches('button, a, .li[tabindex]')) a.blur(); };
+  // and when the popup gets its focus back (a file chooser, the download bubble), the same for the button it lands on
+  window.addEventListener('focus', () => setTimeout(() => unring(), 0));
   function ask({ title, before = null, rows = [], note: n = '', password = false, passLabel = 'Wallet password', input = null, yes = 'Confirm', no = 'Cancel', html = null, check = null }) {
     const run = () => new Promise((resolve) => {
       if (before && !before()) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
@@ -344,7 +347,8 @@
       $('dlg').showModal();
       (password ? $('dPass') : input ? $('dInput') : $('dYes')).focus();
       const inVal = () => (input && input.secret ? $('dInput').value : $('dInput').value.trim());
-      const done = (ok) => { dlgCancel = null; $('dlg').close(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
+      // the button that opened it gets the focus back from the dialog, and Chrome would ring it: not a key's focus
+      const done = (ok) => { dlgCancel = null; $('dlg').close(); unring(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
       dlgCancel = () => done(false);
       // A check may answer { title, html, note }: the same dialog, still open, then shows that (a seed phrase,
       // a key) with one button. Closing a modal dialog and opening the next at once lost the popup's focus on
