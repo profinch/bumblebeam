@@ -2034,7 +2034,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const f = feeNow();
     const say = dir !== 'toEth' ? '' : feeErr ? (FEE_SHORT.find(([re]) => re.test(feeErr)) || [0, 'fee not priced, try in a minute'])[1]
       : feeLow(f) ? `under minimum ${feeData.min.toFixed(2)}: waits for gas ≤ ${Math.max(0, covers(f)).toFixed(3)} gwei`
-      : feeHigh(f) ? 'over twice safe: pays more, not faster' : '';      // one line under the button
+      : feeHigh(f) ? 'over twice safe: paying for nothing, not faster' : '';      // one line under the button
     if (say) { if (m.textContent && !m.dataset.fee) return; m.textContent = say; m.title = feeErr || ''; m.dataset.fee = '1'; m.classList.remove('ok'); }      // an action's own word is not written over
     else if (m.dataset.fee) { m.textContent = ''; m.title = ''; delete m.dataset.fee; }
   }
