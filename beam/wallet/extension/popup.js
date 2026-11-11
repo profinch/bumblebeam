@@ -1377,7 +1377,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!kind) return;
     try {
       let n = vouchersIn.get(x.address);
-      if (n == null) { const v = await host('beam', wid, 'validate_address', { address: x.address }); n = Number(v && v.payments) || 0; vouchersIn.set(x.address, n); }
+      // max privacy: always one key (Beam's GenerateMaxPrivacyToken; validate_address counts only an offline one's)
+      if (n == null && kind === 'max') n = 1;
+      if (n == null) { const v = await host('beam', wid, 'validate_address', { address: x.address }); n = v && v.payments != null ? Number(v.payments) : null; }
+      if (!(n > 0)) { if (shownAddr === x.address) $('beamAddrPay').textContent = 'unknown'; return; }
+      vouchersIn.set(x.address, n);
       const txs = await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => []);
       const got = txs.filter((t) => t.income && t.receiver && t.status !== 2 && t.status !== 4 && (t.receiver === x.wallet_id || t.receiver === x.address || tokenHas(x.address, String(t.receiver)))).length;
       if (shownAddr !== x.address || W().id !== wid) return;
