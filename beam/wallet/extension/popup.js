@@ -348,7 +348,7 @@
       (password ? $('dPass') : input ? $('dInput') : $('dYes')).focus();
       const inVal = () => (input && input.secret ? $('dInput').value : $('dInput').value.trim());
       // the button that opened it gets the focus back from the dialog, and Chrome would ring it: not a key's focus
-      const done = (ok) => { dlgCancel = null; $('dlg').close(); unring(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
+      const done = (ok) => { dlgCancel = null; $('dlg').close(); $('dBody').innerHTML = ''; unring(); resolve({ ok, pass: $('dPass').value, input: inVal() }); $('dPass').value = ''; $('dInput').value = ''; };
       dlgCancel = () => done(false);
       // A check may answer { title, html, note }: the same dialog, still open, then shows that (a seed phrase,
       // a key) with one button. Closing a modal dialog and opening the next at once lost the popup's focus on
@@ -2360,9 +2360,20 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   let keep = null, keepT = 0;
   const keepAll = async () => { if (!keep) { try { keep = (await chrome.storage.local.get('actKeep')).actKeep || {}; } catch { keep = {}; } } return keep; };
   const keepOf = async (wid) => { const k = await keepAll(); return (k[wid] ||= { tx: {}, bt: {}, ls: {}, coins: {} }); };
-  const keepSave = () => { clearTimeout(keepT); keepT = setTimeout(() => { chrome.storage.local.set({ actKeep: keep }).catch(() => {}); keepInfo(); }, 600); };
+  const keepSave = () => { clearTimeout(keepT); keepT = setTimeout(() => { chrome.storage.local.set({ actKeep: keep }).catch(() => {}); if (!$('t-settings').hidden && setSec === 'storage') keepInfo(); }, 600); };
   // the wallets gone from the extension take theirs with them
-  const keepTidy = async () => { const k = await keepAll(), ids = new Set(((st && st.wallets) || []).map((w) => w.id)); let n = 0; for (const id of Object.keys(k)) if (!ids.has(id)) { delete k[id]; n++; } if (n) keepSave(); };
+  const keepTidy = async () => {
+    if (!st || !st.wallets || !st.wallets.length) return;      // nothing known yet: nothing dropped
+    const k = await keepAll(), ws = new Map(st.wallets.map((w) => [w.id, w])); let n = 0;
+    for (const id of Object.keys(k)) {
+      const w = ws.get(id);
+      if (!w) { delete k[id]; n++; continue; }
+      // a list kept for an Ethereum account no longer in the wallet goes too
+      const have = new Set(w.accounts.map((a) => `eth|${a.address.toLowerCase()}`));
+      for (const key of Object.keys(k[id].ls || {})) if (key.startsWith('eth|') && !have.has(key)) { delete k[id].ls[key]; n++; }
+    }
+    if (n) keepSave();
+  };
   async function keepInfo() {
     if (!$('keepInfo')) return;
     const k = await keepAll(); let tx = 0, coins = 0, bt = 0, ls = 0;
@@ -2423,8 +2434,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // our pool's payouts: a transaction by its kernel; a coin with no record by its amount, near the run's time.
     // The pool pays from a fresh address each day and its note does not reach the receiver, so neither tells
     const poolK = new Set(pool.map((p) => p.kernel).filter(Boolean));
-    const poolPay = (g, t) => pool.find((p) => p.amount === g && Math.abs(p.ts - t) < 2 * 86400);
-    const poolAmt = (g, t) => !!poolPay(g, t);
+    // by amount: each payout taken once (two receipts of one amount are not both the pool's), within 2 days of its run
+    const byAmt = new Map();
+    for (const p of pool) { if (!byAmt.has(p.amount)) byAmt.set(p.amount, []); byAmt.get(p.amount).push(p); }
+    const poolPay = (g, t) => { const l = byAmt.get(g); if (!l) return null; const k = l.findIndex((p) => Math.abs(p.ts - t) < 2 * 86400); return k < 0 ? null : l.splice(k, 1)[0]; };
     const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
     // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the wallet CLI)
     const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
@@ -2439,13 +2452,17 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
     // which of this wallet's addresses a payment came to: Beam's own by their SBBS id, one added by hand by the id inside its token
     const ownL = await host('beam', wid, 'addr_list', { own: true }).catch(() => []), extL = await host('addrExt', wid).catch(() => []);
-    const receivedAt = (sbbs) => {
+    // One SBBS id can stand behind several addresses of different kinds (a regular, an offline and a max privacy
+    // token of one id): all of them are named, the kind the payment used first (a push, Beam's offline payment, to
+    // the offline kinds; a simple transfer to a regular one)
+    const OFFL = ['offline', 'public_offline', 'max_privacy'];
+    const receivedAt = (sbbs, push) => {
       if (!sbbs) return null;
       const id = String(sbbs).toLowerCase().replace(/^0+/, '');
-      const o = ownL.find((a) => String(a.wallet_id || '').toLowerCase().replace(/^0+/, '') === id);
-      if (o) return { name: o.comment || '', address: o.address, type: o.type };
-      const e = extL.find((x) => tokenHas(x.address, sbbs));
-      return e ? { name: e.name || '', address: e.address, type: e.type } : { name: '', address: sbbs, type: '' };
+      const l = [...ownL.filter((a) => String(a.wallet_id || '').toLowerCase().replace(/^0+/, '') === id).map((o) => ({ name: o.comment || '', address: o.address, type: o.type })),
+        ...extL.filter((x) => tokenHas(x.address, sbbs)).map((e) => ({ name: e.name || '', address: e.address, type: e.type }))].filter((a, k, all) => all.findIndex((b) => b.address === a.address) === k);
+      if (!l.length) return [{ name: '', address: sbbs, type: '' }];
+      return l.sort((a, b) => (OFFL.includes(b.type) === !!push) - (OFFL.includes(a.type) === !!push));
     };
     const cid = st.bridgeCid;
     const rows = txs.map((t) => {
@@ -2456,20 +2473,23 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ss = String(t.status_string || '');
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver) : null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver, /push/i.test(t.tx_type_string || '')) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
           : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
         why: s === 'failed' ? (t.failure_reason || ss || 'failed') : s === 'cancelled' ? (t.income ? 'by the sender' : 'by you before the receiver signed') : '',
         cancel: !t.income && !contract && (t.status === 0 || t.status === 1),
-        ours: !!t.income && !contract && (String(t.comment || '').trim() === POOL_NOTE || poolK.has(t.kernel) || poolAmt(Number(t.value), t.create_time || 0)),
+        // our pool's: its kernel in the pool's list; with no kernel from Beam, its amount (a payout taken once); a
+        // comment proves nothing (anyone can write it)
+        ours: !!t.income && !contract && (zeroK(t.kernel) ? !!(t.poolP = poolPay(Number(t.value), t.create_time || 0)) : poolK.has(t.kernel)),
+        poolK: zeroK(t.kernel) && t.poolP ? t.poolP.kernel : null,
       };
     });
     for (const c of found) {
       const own = ownSent.has(c.createTxId);
       const tm = blockTime.get(c.maturity) || 0;
-      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, x: c.createTxId || null, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && poolAmt(Number(c.amount), tm),
+      rows.push({ id: `coin-${c.id || c.createTxId || c.maturity}-${c.amount}`, x: c.createTxId || null, kind: 'in', t: tm * 1000, g: c.amount, v: c.amount / GROTH, ours: !c.asset_id && !!(c.poolP = poolPay(Number(c.amount), tm)), poolK: c.poolP ? c.poolP.kernel : null,
         sym: c.asset_id ? syms.get(Number(c.asset_id)) : 'BEAM', asset: Number(c.asset_id) || null, peer: null, st: '', block: c.maturity,
         found: own ? 'from a wallet of this seed' : 'found on the chain' });
     }
@@ -2487,7 +2507,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     for (const r of rows) if (r.found && r.t) kp.coins[r.id] = { t: r.t, g: r.g, a: r.asset || 0, b: r.block, f: r.found, o: r.ours ? 1 : 0, x: r.x || null };
     // our pool's payout with no kernel from Beam (a receipt often has none): the pool's list has it
-    for (const r of rows) if (r.ours && !r.kern) { const p = poolPay(r.g, r.t / 1000); if (p && p.kernel) r.kern = p.kernel; }
+    for (const r of rows) if (r.ours && !r.kern && r.poolK) r.kern = r.poolK;      // the very payout matched above
     // what was worked out before fills what is missing now (the coin since spent, the payout gone from the pool's
     // list); what is worked out now and Beam did not give is kept
     const ids2 = new Set(rows.map((r) => r.id));
@@ -2557,7 +2577,19 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     : r.kind === 'br-out' || r.kind === 'br-in' ? [(r.kind === 'br-out') === (actNet === 'beam') ? 'br to-eth' : 'br', SVG_BRIDGE] : r.kind === 'dapp' ? ['dapp', SVG_DAPP] : ['ok2', SVG_SHIELD]);
   const came = (r) => r.kind === 'in' || r.kind === 'br-in';
   const vShown = (r, d) => (actNet === 'beam' ? amt(r.g, d) : num(r.v, d));
-  const rateOf = (sym) => (!rates ? null : sym === 'BEAM' ? rates.beam : sym === 'WBEAM' ? rates.wbeam || rates.beam : sym === 'ETH' ? rates.eth : /^(USDT|USDC|DAI)$/.test(sym) ? 1 : null);
+  // a price by what a coin is, not by its name (anyone can name a token ETH or an asset BEAM): BEAM itself (no asset
+  // id), ETH (no token), WBEAM by its contract, the three dollar coins by theirs
+  const STABLE = new Set(['0xdac17f958d2ee523a2206206994597c13d831ec7', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', '0x6b175474e89094c44da98b954eedeac495271d0f']);
+  const rateOf = (coin) => (!rates ? null : coin === 'BEAM' ? rates.beam : coin === 'ETH' ? rates.eth : null);
+  const rateOfRow = (r) => {
+    if (!rates) return null;
+    if (actNet === 'beam') return r.asset ? null : rates.beam;
+    const a = String(r.tokAddr || '').toLowerCase();
+    if (!a) return rates.eth;
+    if (a === st.contracts.wbeam) return rates.wbeam || rates.beam;
+    return STABLE.has(a) ? 1 : null;
+  };
+  const isMain = (r) => (actNet === 'beam' ? !r.asset : !r.tokAddr);
   const usdSmall = (x) => (x > 0 && x < 0.01 ? '< $0.01' : usd(x));
   const actFits = (r, k = actKind) => {
     if (k === 'in' && !came(r)) return false;
@@ -2581,7 +2613,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const when = r.group ? `${fdate(r.t)} ${ftime(r.items[r.items.length - 1].t)}–${ftime(r.items[0].t)}` : r.t ? fdt(r.t) : '';
     const sub = [when, state, r.comment && !r.ours ? `<span class="cm">${esc(r.comment)}</span>` : ''].filter(Boolean).join('<i class="sp"></i>');
     const amtH = r.kind === 'approve' ? '<span class="amt zero">&nbsp;</span>' : r.v ? `<span class="amt">${came(r) ? '+' : '−'}${vShown(r)}<u>${esc(r.sym)}</u></span>` : '<span class="amt zero">&nbsp;</span>';
-    const rate = rateOf(r.sym);
+    const rate = rateOfRow(r);
     const usdH = r.kind === 'approve' ? '<span class="usd">allowance</span>' : !r.v ? '<span class="usd">&nbsp;</span>' : rate ? `<span class="usd">${usdSmall(r.v * rate)}</span>` : '<span class="usd">no price</span>';
     const cls = ['li', 'ar', r.st === 'failed' ? 'bad' : '', r.st === 'cancelled' ? 'dim' : '', open ? 'open' : ''].filter(Boolean).join(' ');
     return `<div class="${cls}" data-id="${esc(r.id)}" tabindex="0" role="button" aria-expanded="${open}"><span class="ic ${c}${live ? ' spin' : ''}">${svg}</span>
@@ -2607,7 +2639,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     else if (r.peer) {
       // a receipt: From is the sender's SBBS id (Beam names the sending side so), To the address of this wallet it came to
       rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)]);
-      if (came(r) && r.at) rows.push(['To', `${r.at.name ? `${esc(r.at.name)}\n` : ''}${esc(short(r.at.address))}${r.at.type ? ` (${esc(TYPE_NAME[r.at.type] || r.at.type)})` : ''}`]);
+      if (came(r) && r.at && r.at.length) rows.push(['To', r.at.map((x) => `${x.name ? `${esc(x.name)}\n` : ''}${esc(short(x.address))}${x.type ? ` (${esc(TYPE_NAME[x.type] || x.type)})` : ''}`).join('\n')]);      // every address of that id, the one paid first
       rows.push(null);
     }
     else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);
@@ -2639,7 +2671,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const main = actNet === 'beam' ? 'BEAM' : 'ETH';
     for (const [k, rs] of days) {
       // the day's net: what came minus what went, in the network's coin, done ones only
-      const sum = rs.filter((r) => r.sym === main && !r.st && r.v).reduce((s, r) => s + (came(r) ? r.v : r.kind === 'out' || r.kind === 'br-out' ? -r.v : 0), 0);
+      const sum = rs.filter((r) => isMain(r) && !r.st && r.v).reduce((s, r) => s + (came(r) ? r.v : r.kind === 'out' || r.kind === 'br-out' ? -r.v : 0), 0);
       html += `<div class="ad-day"><span>${dayName(k)}</span><span class="sum">${Math.abs(sum) >= 1e-9 ? `<b>${sum > 0 ? '+' : '−'}${num(Math.abs(sum), 4)}</b> ${main}` : ''}</span></div>${rs.map(actRow).join('')}`;
     }
     $('actList').innerHTML = html || `<div class="empty">${actQ || actKind !== 'all' ? 'nothing like that here' : 'no transactions yet'}</div>`;
@@ -2667,28 +2699,30 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const lsKey = `${actNet}|${actNet === 'eth' && a ? a.address.toLowerCase() : ''}`;
     if (forNow !== actFor) {
       actFor = forNow; actRows = []; actOpen.clear();
+      box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true;      // the other list off at once
       // the list as last shown opens at once (from Activity's memory), the new one replaces it when it comes
       const kept = wid ? ((await keepOf(wid)).ls || {})[lsKey] : null;
-      if (stale()) return;
-      if (kept && kept.length) { actRows = kept; actDraw(); }
-      else { box.innerHTML = '<div class="empty">loading…</div>'; $('afMore').hidden = true; }      // the button only under a list that is there
+      if (stale()) { if (actFor === forNow) actFor = ''; return; }
+      if (kept && kept.length) { actRows = kept; actDraw(); }      // (else loading… stays, no button under it)
     }
     try {
+      let rows;
       if (actNet === 'beam') {
         if (!beamHere()) return say('this wallet has no running Beam part');
-        const rows = await beamActRows(wid);
+        rows = await beamActRows(wid);
         if (stale()) return;
-        actRows = rows;
       } else {
         if (!a) return say('this wallet has no Ethereum part');
         const list = await host('ethHistory', a.address);
         if (stale() || !acct() || acct().address !== a.address) return;
-        actRows = ethActRows(list);
+        rows = ethActRows(list);
       }
+      actRows = rows;
       actDraw();
-      // kept as shown, for the next opening: the newest 300 rows, without what is only for drawing
+      // kept as shown, for the next opening (these rows, not whatever is shown by then): the newest 300, without what
+      // is only for drawing and without Cancel (a kept transfer may be done by the next opening)
       const kp = await keepOf(wid);
-      if (actRows.length) kp.ls[lsKey] = actRows.slice(0, 300).map(({ beamK, beamB, items, group, ...r }) => r); else delete kp.ls[lsKey];
+      if (rows.length) kp.ls[lsKey] = rows.slice(0, 300).map(({ beamK, beamB, items, group, cancel, poolP, ...r }) => r); else delete kp.ls[lsKey];
       keepSave();
     } catch (e) { if (!stale()) say(msg(e)); }
   }
@@ -2909,7 +2943,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   // the backup's word, in yellow on its own line under the buttons (its room kept), gone after 5 s
   let bkT = 0;
-  const bkSay = (t) => { const m = $('bkMsg'); m.textContent = t; m.classList.remove('going'); clearTimeout(bkT); bkT = setTimeout(() => { m.classList.add('going'); setTimeout(() => { m.textContent = ''; m.classList.remove('going'); }, 600); }, 5000); };
+  let bkT2 = 0;
+  const bkSay = (t) => { const m = $('bkMsg'); m.textContent = t; m.classList.remove('going'); clearTimeout(bkT); clearTimeout(bkT2); bkT = setTimeout(() => { m.classList.add('going'); bkT2 = setTimeout(() => { m.textContent = ''; m.classList.remove('going'); }, 600); }, 5000); };
   // the download icon by the time: the file in its folder (Chrome's own Show in folder); gone, it says so
   const DLI = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7l3.2 3.2L11.2 7M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   $('bkLast').onclick = async (e) => {
@@ -3023,7 +3058,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   let nDrag = null;
   const nMarks = () => qa('#nodes .drop-above, #nodes .drop-below').forEach((r) => r.classList.remove('drop-above', 'drop-below'));
   $('nodes').addEventListener('dragstart', (e) => { const r = e.target.closest('.node'); if (!r) return; nDrag = Number(r.dataset.i); r.classList.add('dragging'); });
-  $('nodes').addEventListener('dragend', () => { nMarks(); qa('#nodes .dragging').forEach((r) => r.classList.remove('dragging')); });
+  $('nodes').addEventListener('dragend', () => { nDrag = null; nMarks(); qa('#nodes .dragging').forEach((r) => r.classList.remove('dragging')); });
   $('nodes').addEventListener('dragover', (e) => {
     e.preventDefault(); const r = e.target.closest('.node'); nMarks(); if (!r || Number(r.dataset.i) === nDrag) return;
     const b = r.getBoundingClientRect(); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-above' : 'drop-below');
@@ -3032,7 +3067,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     e.preventDefault(); const r = e.target.closest('.node'); if (!r || nDrag == null) return nMarks();
     const above = r.classList.contains('drop-above'); nMarks();
     const list = (st.nodes || []).slice(); let to = Number(r.dataset.i) + (above ? 0 : 1); const [n] = list.splice(nDrag, 1); if (nDrag < to) to--; list.splice(to, 0, n); nDrag = null;
-    setNodes(list);
+    if (list.join() !== (st.nodes || []).join()) setNodes(list);      // dropped where it was: nothing to do
   });
   $('nodes').onclick = (e) => {
     const re = e.target.closest('[data-re]'); if (re) return recheck(re.dataset.re);
@@ -3048,7 +3083,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   $('rpcs').onclick = async (e) => {
     const re = e.target.closest('[data-re]'); if (re) return recheck(re.dataset.re);
-    if (e.target.closest('[data-rx]')) { try { await host('setEthRpc', ''); st.ethRpc = ''; } catch (err) { actErr($('rpcAdd'), err); } drawRpcs(); return; }
+    if (e.target.closest('[data-rx]')) {
+      const was = st.ethRpc;
+      try { await host('setEthRpc', ''); st.ethRpc = ''; if (was) chrome.permissions.remove({ origins: [new URL(was).origin + '/*'] }).catch(() => {}); } catch (err) { actErr($('rpcAdd'), err); }
+      drawRpcs(); return;
+    }
     const r = e.target.closest('.node[data-k]'); if (!r) return; const k = r.dataset.k; if (nOpen.has(k)) nOpen.delete(k); else nOpen.add(k); drawRpcs();
   };
   $('rpcAdd').onclick = async () => {
@@ -3056,6 +3095,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const url = $('ethRpc').value.trim();
     try {
       if (!url) throw new Error('an https:// address');
+      if (new URL(url).protocol !== 'https:') throw new Error('an https:// address (not http)');
       const origin = new URL(url).origin + '/*';
       if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('the browser did not allow that address');
       await host('setEthRpc', url); st.ethRpc = url; $('ethRpc').value = ''; drawRpcs(); probeAll();
@@ -3089,12 +3129,20 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const ethAmt = (wei) => `${num(units(wei, 18), 6)} ETH`;
   // the window's screen: the oldest waiting request, what it asks, Approve / Reject; none left: the window closes
   let dpCur = null, dpShown = null;                 // the request in the window; the one last put in it
+  // a request just shown: its button waits 0.6 s, so a quick second click meant for the one before cannot agree to
+  // it (every kind, Beam's too)
+  function dpHold(r, can) {
+    if (!can || r.id === dpShown) return;
+    dpShown = r.id; $('dpYes').disabled = true;
+    setTimeout(() => { if (dpCur && dpCur.id === r.id && !dpBusy) $('dpYes').disabled = false; }, 600);
+  }
   async function dappScreen() {
     let list = [];
     try { list = await host('dappPending'); } catch {}
     if (!list.length) { dpCur = null; if (inWin) { await host('dappWinDone').catch(() => {}); return window.close(); } return; }
+    const same = dpCur && dpCur.id === list[0].id;
     const r = dpCur = list[0];
-    clearNotes('s-dapp');
+    if (!same) clearNotes('s-dapp');      // the same request again (its answer failed): its error stays
     const acc = r.address ? (st.wallets || []).flatMap((w) => w.accounts.map((a) => ({ w, a }))).find((x) => x.a.address.toLowerCase() === r.address.toLowerCase()) : null;
     // the name, then the whole address on the next line (they do not fit on one)
     const accRow = r.address ? [['Account', `${acc ? `${acc.a.name}\n` : ''}${r.address}`]] : [['Account', 'this wallet has no Ethereum account']];
@@ -3110,6 +3158,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('dpYes').textContent = 'Connect';
       $('dpYes').disabled = !(r.wallet && r.wallet.beam);
       $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
+      dpHold(r, !!(r.wallet && r.wallet.beam));
       return show('s-dapp');
     }
     if (r.kind === 'beamtx') {
@@ -3120,6 +3169,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('dpYes').textContent = 'Approve';
       $('dpYes').disabled = false;
       $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
+      dpHold(r, true);
       return show('s-dapp');
     }
     if (r.kind === 'connect') {
@@ -3137,7 +3187,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('dpTitle').textContent = 'Send a transaction';
       const t = r.tx || {};
       const rows = [...accRow, ['To', t.to || '(creates a contract)'], ['Value', ethAmt(t.value || '0')],
-        ['Data', !t.data || t.data === '0x' ? 'none' : `${t.data.slice(0, 10)}… (${(t.data.length - 2) / 2} bytes)`],
+        ['Data', !t.data || t.data === '0x' ? 'none' : `${String(t.data).slice(0, 10)}… (${(String(t.data).length - 2) / 2} bytes)`],
         ['Network fee', r.fee ? `${ethAmt(r.fee.now)} now, up to ${ethAmt(r.fee.max)}` : r.feeErr ? (/insufficient funds/i.test(r.feeErr) ? 'not enough ETH for the value and the fee' : /revert/i.test(r.feeErr) ? 'the contract refuses it (it would revert)' : `not priced: ${r.feeErr.slice(0, 120)}`) : '…']];
       // a token call read out (the host decoded it): who may take what, or what moves where
       const c = r.call, tok = c && c.token ? ` ${c.token.symbol}` : ' (in the token\'s smallest units)';
@@ -3160,11 +3210,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     const can = r.kind === 'connect' || !!r.address;
     $('dpYes').disabled = !can;
-    // a request just shown: its button waits 0.6 s, so a quick second click meant for the one before cannot agree to it
-    if (can && r.id !== dpShown) {
-      dpShown = r.id; $('dpYes').disabled = true;
-      setTimeout(() => { if (dpCur && dpCur.id === r.id && !dpBusy) $('dpYes').disabled = false; }, 600);
-    }
+    dpHold(r, can);
     $('dpMore').textContent = list.length > 1 ? `${list.length - 1} more waiting` : '';
     show('s-dapp');
   }
@@ -3343,7 +3389,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   // the Add buttons beside a field: the room for their message under the field from the start
   for (const b of ['nodeAdd', 'rpcAdd']) if ($(b)) actErr($(b), null);
-  $('dropSnap').onclick = async () => { await host('dropSnapshot'); snapInfo(); };
+  $('dropSnap').onclick = async () => {
+    const r = await ask({ title: 'Remove the snapshot', note: 'A restore from a seed phrase then downloads it again (~320 MB, a few minutes).', yes: 'Remove' });
+    if (!r.ok) return;
+    await host('dropSnapshot').catch((e) => ask({ title: 'Not removed', note: msg(e), yes: 'OK', no: null }));
+    snapInfo();
+  };
 
   // the auto-lock counts only what the user does here: a click or a key tells the host, at most every 15 s
   let touched = 0;
