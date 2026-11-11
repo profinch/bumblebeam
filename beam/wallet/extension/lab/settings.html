@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en" class="popup">
+<head>
+<meta charset="utf-8">
+<title>Settings lab</title>
+<!-- A lab page: the Settings screen's next design, worked on apart from the wallet (made-up wallets, nothing is saved).
+     chrome-extension://<id>/lab/settings.html -->
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="../ui/base.css">
+<link rel="stylesheet" href="../ui/components.css">
+<link rel="stylesheet" href="../wallet.css">
+<link rel="stylesheet" href="settings.css">
+<script src="../ui/components/bb.js"></script>
+</head>
+<body>
+<header class="top wtop">
+  <div class="wrow">
+    <span class="brand" id="brand"><bb-logo size="30"></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Wallet</i></span></span>
+    <div class="dd compact" id="walletDd">
+      <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+      <ul class="dd-list" role="listbox" tabindex="-1" hidden></ul>
+    </div>
+    <button class="ibtn" id="backBtn" aria-label="Back to the wallet" hidden>
+      <svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+    <button class="ibtn" id="lockBtn" title="Lock: the password opens it again. Beam goes offline once its transfers in progress are done">
+      <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+    <button class="ibtn" id="dappsBtn" aria-label="dApps">
+      <svg viewBox="0 0 24 24"><path d="M12 2.8 20 7.2v9.6L12 21.2 4 16.8V7.2z"/><path d="M4 7.2 12 11.6l8-4.4M12 11.6v9.6"/></svg></button>
+    <button class="ibtn on" id="setBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
+  <nav class="main-nav wnav" id="tabs">
+    <a href="#" data-tab="home">Wallet</a>
+    <a href="#" data-tab="bridge">Bridge</a>
+    <a href="#" data-tab="activity">Activity</a>
+  </nav>
+  <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
+      <!-- Connected sites' network: in the same place -->
+  <div class="wsub split" id="dappBar" hidden><div class="seg mini" id="dappNet"><button class="on" data-n="beam">Beam</button><button data-n="eth">Ethereum</button></div> <div class="seg mini"><button type="button" data-n="cat">Catalog</button></div></div>
+  <div class="wsub" id="setBar"><div class="subtabs" id="setNav"><button type="button" class="on" data-s="wallets">Wallets</button><button type="button" data-s="general">General</button><button type="button" data-s="networks">Networks</button><button type="button" data-s="storage">Storage</button><button type="button" data-s="about">About</button></div></div>
+</header>
+
+<main>
+  <section id="t-settings" class="screen tab">
+    <!-- Wallets: one row each (its networks, open or not); a click opens its card: use it, rename, its keys and
+         backups, remove. Add a wallet under them -->
+    <div class="sp-sec" data-s="wallets">
+      <div class="list" id="wList"></div>
+      <div class="more"><button type="button" class="btn ghost small" id="addWallet">+ add a wallet</button></div>
+    </div>
+
+    <!-- General: security and display -->
+    <div class="sp-sec" data-s="general" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Security</h3></div>
+        <div class="field"><span id="autoLockL">Lock after idle</span>
+          <div class="dd" id="autoLock" data-value="60"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+            <ul class="dd-list" role="listbox" tabindex="-1" hidden>
+              <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
+              <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">never (until the browser closes)</li></ul></div></div>
+        <p class="hint">Locking takes Beam offline (a transfer being made finishes first); closing the browser locks it. Only the open wallet's regular addresses are online.</p>
+        <div class="row"><button class="btn ghost" id="chPass">Change the password</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Display</h3></div>
+        <div class="two">
+          <div class="field"><span>Time</span>
+            <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></div>
+          <div class="field"><span>Decimals</span>
+            <div class="dd" id="decFmt" data-value="6"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="2">2 (0.12)</li><li role="option" data-v="4">4 (0.1234)</li><li role="option" data-v="6">6 (0.123456)</li><li role="option" data-v="8">8 (all)</li></ul></div></div>
+        </div>
+        <p class="hint" id="dispEx"></p>
+      </div>
+    </div>
+
+    <!-- Networks: each network what it talks to, with whether it answers; Ethereum's tokens with it -->
+    <div class="sp-sec" data-s="networks" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title"><i class="chain beam"></i>Beam</h3><span class="panel-meta" id="beamNet"></span></div>
+        <div class="nodes" id="nodes"></div>
+        <label class="field">Add a node<span class="inline"><input id="nodeIn" spellcheck="false" placeholder="host:port"><button class="btn ghost small" id="nodeAdd">Add</button></span></label>
+        <p class="hint">The first that answers is used; the others are tried in turn when it stops answering for a minute. Drag to order.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title"><i class="chain eth"></i>Ethereum</h3><span class="panel-meta" id="ethNet"></span></div>
+        <label class="field">RPC<span class="inline"><input id="ethRpc" spellcheck="false" placeholder="public ones (empty)"><button class="btn ghost small" id="rpcSave">Save</button></span></label>
+        <div class="field"><span>Tokens added</span></div>
+        <div class="list" id="tokList"></div>
+        <label class="field">Add a token<span class="inline"><input id="tokAddr" maxlength="42" placeholder="0x… its contract" spellcheck="false"><button class="btn ghost small" id="tokAdd">Add</button></span></label>
+        <p class="hint">ETH and WBEAM always show, and tokens with a market price by themselves.</p>
+      </div>
+    </div>
+
+    <!-- Storage: what this browser keeps besides the wallets, each with its size and its clearing -->
+    <div class="sp-sec" data-s="storage" hidden>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Recovery snapshot</h3><span class="panel-meta">308 MB</span></div>
+        <p class="hint">Beam's snapshot kept from the last restore (05.11.2026): a restore from a seed phrase starts from it instead of downloading it again (~320 MB, a few minutes).</p>
+        <div class="row"><button class="btn ghost small" id="snapDrop">Remove it</button><span class="act-msg" id="snapMsg"></span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">Activity's memory</h3><span class="panel-meta" id="keepSize"></span></div>
+        <div class="kv keep" id="keepKv"></div>
+        <div class="field"><span>Clear</span>
+          <div class="inline">
+            <div class="dd" id="keepAge" data-value="90"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+              <ul class="dd-list" role="listbox" tabindex="-1" hidden><li role="option" data-v="30">older than a month</li><li role="option" data-v="90">older than 3 months</li><li role="option" data-v="365">older than a year</li><li role="option" data-v="0">all of it</li></ul></div>
+            <button class="btn ghost small" id="keepClear">Clear</button></div></div>
+        <p class="hint">What Activity worked out once (kernels and blocks Beam did not give, our pool's payouts, blocks' times, spent coins with no record) and each list as last shown. A removed wallet's goes by itself.</p>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="sp-sec" data-s="about" hidden>
+      <div class="panel">
+        <dl class="kv about" id="aboutKv"></dl>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="foot"><p class="foot-copy">Settings lab: made-up wallets, nothing is saved</p></footer>
+<script src="../ui/components/dd.js"></script>
+<script src="../ui/components/tips.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

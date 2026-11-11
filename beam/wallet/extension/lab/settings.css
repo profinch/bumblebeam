@@ -1,0 +1,67 @@
+/* The Settings lab (lab/settings.html): the screen split into quiet tabs in the header (Wallets, General, Networks,
+   Storage, About) instead of one long page; each wallet a row that opens to its card; nodes with whether they answer. */
+
+/* the lab header as the wallet's inside (as the other labs): no brand, the wallet picker its usual width */
+#brand { display: none !important; }
+#walletDd { flex: 0 1 200px; margin-right: auto; }
+/* none of the main tabs is lit: Settings is the gear's */
+#tabs a.active { border-bottom-color: transparent; color: var(--muted); }
+
+.sp-sec[hidden] { display: none; }
+.sp-sec > .panel:first-child { margin-top: 0; }
+html.popup main { scrollbar-gutter: stable; }
+
+/* a wallet: its dot(s), its name, the open one marked; a click opens its card */
+#wList .li.wr { grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 11px 8px; cursor: pointer; }
+#wList .li.wr:hover, #wList .li.wr.open { background: rgba(255, 255, 255, 0.03); }
+.wr .what { font-size: var(--fs-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr .what .nets { display: inline-flex; gap: 5px; margin-right: 9px; vertical-align: 1px; }
+.wr .what .nets .chain { width: 7px; height: 7px; }
+.wr .sub { font: 11px var(--font-mono); margin-top: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr .sub .sp { display: inline-block; width: 12px; }
+.wr .sub .warn { color: var(--color-yellow); }
+.wr .end { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.wr .end.use { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 11px; }
+#wList .li.wr:hover .end.use { color: var(--accent); }
+
+/* a wallet's card: groups of actions under a quiet caption each; remove last, apart */
+.wcard2 { margin: 0 8px 4px; padding: 6px 0 12px; border-bottom: 1px solid var(--border-dim); }
+.wcard2 .grp { margin-top: 10px; }
+.wcard2 .cap { font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.wcard2 .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.wcard2 .acts .btn { flex: none; width: auto; white-space: nowrap; padding: 5px 12px; font-size: 11px; }
+.wcard2 .acts .btn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
+.wcard2 .acct { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 11px var(--font-mono); color: var(--muted); }
+.wcard2 .acct .dd { flex: 1 1 auto; min-width: 0; }
+.wcard2 .note { font: 11px var(--font-mono); color: var(--color-yellow); margin-top: 6px; }
+#wList .li.wr:has(+ .wcard2), #wList .li:last-child, #wList .wcard2:last-child { border-bottom: 0; }
+
+/* General: the two display choices side by side */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.two .field { min-width: 0; }
+
+/* Networks: each node a row, whether it answers before it, the one in use marked; remove at its end */
+.nodes { margin: 4px 0 6px; }
+.node { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 16px; align-items: center; gap: 0 10px; padding: 7px 8px; border-bottom: 1px solid var(--border-dim); font: 12px var(--font-mono); cursor: grab; }
+.node:last-child { border-bottom: 0; }
+.node:hover { background: rgba(255, 255, 255, 0.03); }
+.node .st { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.node .st.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.node .st.slow { background: var(--color-yellow); }
+.node .st.bad { background: var(--color-red); }
+.node .h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.node.use .h { color: var(--text); }
+.node .meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.node .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.node .x:hover { color: var(--color-red); }
+.node.dragging { opacity: 0.4; }
+.panel-title .chain { margin-right: 8px; }
+#tokList .li { grid-template-columns: minmax(0, 1fr) auto; padding: 6px 8px; }
+#tokList .empty { padding: 6px 8px; text-align: left; color: var(--muted); font-size: 12px; }
+
+/* Storage and About: their figures as a confirmation's */
+.kv.keep { margin: 4px 0 10px; }
+.kv.about dd .ics, .kv.keep dd .ics { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: -1px; }
+.two .dd { min-width: 0; width: 100%; }
+.two .dd .dd-btn { min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv.about dd { white-space: pre-line; }      /* a line each: the engine and its fork, the bridge's two sides */
