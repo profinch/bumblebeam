@@ -2738,7 +2738,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const probe = {}, nOpen = new Set();
   const behind = (key, rows) => (nOpen.has(key) ? `<div class="nd-more"><dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>` : '');
   const stOf = (p) => (!p ? '' : p.bad ? 'bad' : p.ms > 500 ? 'slow' : 'ok');
-  const msOf = (p) => (!p ? '…' : p.bad ? 'no answer' : `${p.ms} ms`);
+  const msOf = (p) => (!p ? '' : p.bad ? 'no answer' : `${p.ms} ms`);      // nothing until it is measured
   function drawNodes() {
     const list = st.nodes || [st.node];
     $('nodes').innerHTML = list.map((h, i) => `<div class="node${i === 0 ? ' use' : ''}${nOpen.has(h) ? ' open' : ''}" draggable="true" data-i="${i}" data-k="${esc(h)}"><i class="st ${stOf(probe[h])}"></i><span class="h">${esc(h)}</span><span class="meta">${msOf(probe[h])}</span>${OURS.includes(h) ? '<span></span>' : `<button type="button" class="cp a-x" data-x="${i}" title="Remove this node">${XI2}</button>`}</div>${behind(h, BEHIND[h] || [['What', 'a node added by you'], ['Answers', msOf(probe[h])]])}`).join('');
