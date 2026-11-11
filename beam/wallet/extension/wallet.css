@@ -768,3 +768,5 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 /* the dots' glow inside the row's clip: the name cut with … keeps its overflow hidden, so 6 px of room round them */
 .wr .what { padding: 6px 0 6px 6px; margin: -6px 0 -6px -6px; }
 .key-addr { margin: 0; font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }      /* the account's whole address, white, above what the key means */
+#bkMsg { color: var(--color-yellow); margin: 6px 0 0; }      /* the backup's word, yellow, its line kept */
+#bkMsg + .hint { margin-top: 4px; }

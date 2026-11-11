@@ -364,7 +364,8 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
         <p class="hint">One file with every wallet of this extension: phrases and keys, names, accounts and settings, encrypted with the wallet password.</p>
         <label class="check"><input type="checkbox" id="bkDb"><span>with Beam history and address names <b id="bkSize"></b></span></label>
         <input type="file" id="bkFile" accept=".bbk,application/json" hidden>
-        <div class="row"><button type="button" class="sbtn" id="bkSave">Save a backup now</button><button type="button" class="sbtn" id="bkImport">Import a backup</button><span class="act-msg" id="bkMsg"></span></div>
+        <div class="row"><button type="button" class="sbtn" id="bkSave">Save a backup now</button><button type="button" class="sbtn" id="bkImport">Import a backup</button></div>
+        <p class="act-msg under" id="bkMsg" role="status"></p>
         <p class="hint">An import adds the wallets the file has and this extension does not. It asks for the password the file was saved with. Nothing here is changed or removed.</p>
       </div>
     </div>

@@ -2703,8 +2703,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const d = new Date(out.at), name = `bumblebeam-backup-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.bbk`;
     const r2 = await chrome.runtime.sendMessage({ op: 'download', b64: out.b64, name }).catch((e) => ({ error: e.message }));
     if (r2 && r2.error) return ask({ title: 'Not saved', note: r2.error, yes: 'OK', no: null });
-    st.lastBackup = out.at; bkInfo(); actOk($('bkSave'), 'saved into Downloads');
+    st.lastBackup = out.at; bkInfo(); bkSay('saved into Downloads');
   };
+  // the backup's word, in yellow on its own line under the buttons (its room kept), gone after 5 s
+  let bkT = 0;
+  const bkSay = (t) => { const m = $('bkMsg'); m.textContent = t; m.classList.remove('going'); clearTimeout(bkT); bkT = setTimeout(() => { m.classList.add('going'); setTimeout(() => { m.textContent = ''; m.classList.remove('going'); }, 600); }, 5000); };
   $('bkImport').onclick = () => { $('bkFile').value = ''; $('bkFile').click(); };
   $('bkFile').onchange = async () => {
     const f = $('bkFile').files && $('bkFile').files[0]; if (!f) return;
@@ -2716,7 +2719,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const r2 = await ask({ title: 'Import a backup', password: true, yes: 'Import', note: 'The wallets it has and this extension does not are added. A Beam part without its database in the file comes back from its phrase through the recovery snapshot, which takes a few minutes.',
       check: async ({ pass }) => { res = await host('backupImport', text, filePass, pass); } });
     if (!r2.ok || !res) return;
-    await load(); drawWallets();
+    await load(); drawWallets(); bkSay(res.added.length ? `imported: ${res.added.join(', ')}` : 'nothing new in the file');
     ask({ title: res.added.length ? 'Imported' : 'Nothing new', rows: [['Added', res.added.join('\n') || 'none'], ...(res.skipped.length ? [['Already here', res.skipped.join('\n')]] : [])], yes: 'OK', no: null });
   };
 
