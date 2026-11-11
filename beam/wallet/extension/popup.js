@@ -2254,7 +2254,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // our pool's payouts: a transaction by its kernel; a coin with no record by its amount, near the run's time.
     // The pool pays from a fresh address each day and its note does not reach the receiver, so neither tells
     const poolK = new Set(pool.map((p) => p.kernel).filter(Boolean));
-    const poolAmt = (g, t) => pool.some((p) => p.amount === g && Math.abs(p.ts - t) < 2 * 86400);
+    const poolPay = (g, t) => pool.find((p) => p.amount === g && Math.abs(p.ts - t) < 2 * 86400);
+    const poolAmt = (g, t) => !!poolPay(g, t);
     const ids = new Set(txs.map((t) => t.txId)), cs = Array.isArray(coins) ? coins : [];
     // a transfer that also gave this seed change came from a wallet of this seed too (a pool's payouts, the wallet CLI)
     const ownSent = new Set(cs.filter((c) => c.type === 'chng' && c.createTxId).map((c) => c.createTxId));
@@ -2293,6 +2294,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         foundTip: own ? 'Sent by a wallet of this seed phrase (a pool\'s payouts, the wallet CLI) to one of its addresses that another wallet of the phrase took: this wallet has the coins but no record of the transfer'
           : 'Another wallet of this seed phrase (the mobile or desktop one) took this transfer: this wallet has the coins but no record of it' });
     }
+    // our pool's payout with no kernel from Beam (a receipt often has none): the pool's list has it
+    for (const r of rows) if (r.ours && !r.kern) { const p = poolPay(r.g, r.t / 1000); if (p && p.kernel) r.kern = p.kernel; }
     // payouts in a day as one row: our pool's (known above); another's when one address pays three times or more
     const key = (r) => `${r.peer}|${day0(r.t)}|${r.comment}`, n = new Map();
     for (const r of rows) if (r.kind === 'in' && !r.st && r.peer) n.set(key(r), (n.get(key(r)) || 0) + 1);
