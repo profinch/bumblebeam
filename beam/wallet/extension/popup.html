@@ -29,10 +29,10 @@
     <button class="ibtn" id="setBtn" aria-label="Settings" hidden>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
-  <nav class="main-nav wnav" id="tabs" hidden>
-    <a href="#" data-tab="home" class="active">Wallet</a>
-    <a href="#" data-tab="bridge">Bridge</a>
-    <a href="#" data-tab="activity">Activity</a>
+  <nav class="main-nav wnav" id="tabs" role="tablist" hidden>
+    <a href="#" role="tab" data-tab="home" class="active">Wallet</a>
+    <a href="#" role="tab" data-tab="bridge">Bridge</a>
+    <a href="#" role="tab" data-tab="activity">Activity</a>
   </nav>
   <!-- the Activity tab's network, under the tabs in the fixed header: it stays while the list scrolls -->
       <!-- Connected sites' network: in the same place -->
@@ -212,9 +212,9 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
   <section id="x-beamSend" class="screen sheet" hidden>
     <div class="sheet-head"><h2 class="screen-title">BEAM Send</h2></div>
-    <div class="field">Asset
-      <div class="dd compact" id="bsAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
-    <label class="field own-label" id="bsOwnL">To one of my wallets</label><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
+    <div class="field"><span id="bsAssetL">Asset</span>
+      <div class="dd compact" id="bsAsset"><button type="button" class="dd-btn" id="bsAssetB" aria-labelledby="bsAssetL bsAssetB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
+    <div class="field own-label" id="bsOwnL">To one of my wallets</div><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" id="bsOwnB" aria-labelledby="bsOwnL bsOwnB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
     <p class="hint after" id="bsKind"></p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="bsMax">All</button></span></span></label>
@@ -247,9 +247,9 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
   <section id="x-ethSend" class="screen sheet" hidden>
     <div class="sheet-head"><h2 class="screen-title">Send on Ethereum</h2></div>
-    <div class="field">Asset
-      <div class="dd compact" id="esAsset"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
-    <label class="field own-label" id="esOwnL">To one of my accounts</label><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
+    <div class="field"><span id="esAssetL">Asset</span>
+      <div class="dd compact" id="esAsset"><button type="button" class="dd-btn" id="esAssetB" aria-labelledby="esAssetL esAssetB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
+    <div class="field own-label" id="esOwnL">To one of my accounts</div><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" id="esOwnB" aria-labelledby="esOwnL esOwnB" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<input id="esTo" autocomplete="off" spellcheck="false" placeholder="0x…"></label>
     <p class="hint after" id="esToHint"></p>
     <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="esMax">All</button></span></span></label>
@@ -296,7 +296,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
 
     <div class="bx-feeline">
       <span class="caps" title="What the relayer takes: more does not speed it up (about an hour either way), it covers gas rising meanwhile">Fee</span>
-      <span class="bx-fee3" id="bxFee" role="radiogroup" aria-label="Relayer fee"><svg class="bx-gauge" viewBox="0 0 74 42" aria-hidden="false"><path class="arc" data-k="cheap" role="radio" aria-label="cheap" d="M6.1 35.8A31 31 0 0 1 19.7 12.3"/><path class="arc" data-k="normal" role="radio" aria-label="normal" d="M23.4 10.1A31 31 0 0 1 50.6 10.1"/><path class="arc" data-k="safe" role="radio" aria-label="safe" d="M54.3 12.3A31 31 0 0 1 67.9 35.8"/><g class="needle" id="bxNeedle"><path d="M37 38V13"/></g><circle class="hub" cx="37" cy="38" r="2.5"/></svg><span class="lv" id="bxFeeLv"></span></span>
+      <span class="bx-fee3" id="bxFee" role="radiogroup" aria-label="Relayer fee"><svg class="bx-gauge" viewBox="0 0 74 42" tabindex="0" aria-label="Relayer fee level: the arrow keys move it"><path class="arc" data-k="cheap" role="radio" aria-label="cheap" d="M6.1 35.8A31 31 0 0 1 19.7 12.3"/><path class="arc" data-k="normal" role="radio" aria-label="normal" d="M23.4 10.1A31 31 0 0 1 50.6 10.1"/><path class="arc" data-k="safe" role="radio" aria-label="safe" d="M54.3 12.3A31 31 0 0 1 67.9 35.8"/><g class="needle" id="bxNeedle"><path d="M37 38V13"/></g><circle class="hub" cx="37" cy="38" r="2.5"/></svg><span class="lv" id="bxFeeLv"></span></span>
       <span class="bx-feeinfo" id="bxFeeInfo"></span>
     </div>
     <div class="row bx-go"><button class="btn solid" id="bxGo">Bridge</button><span class="act-msg"></span></div>
@@ -322,8 +322,8 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Security</h3></div>
-      <div class="field">Lock after idle
-        <div class="dd" id="autoLock" data-value="60"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+      <div class="field"><span id="autoLockL">Lock after idle</span>
+        <div class="dd" id="autoLock" data-value="60"><button type="button" class="dd-btn" id="autoLockB" aria-labelledby="autoLockL autoLockB" aria-haspopup="listbox" aria-expanded="false"></button>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
             <li role="option" data-v="5">5 minutes</li><li role="option" data-v="15">15 minutes</li><li role="option" data-v="60">1 hour</li>
             <li role="option" data-v="240">4 hours</li><li role="option" data-v="0">Never (until the browser closes)</li></ul></div></div>
@@ -332,8 +332,8 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">Display</h3></div>
-      <div class="field">Time format
-        <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+      <div class="field"><span id="timeFmtL">Time format</span>
+        <div class="dd" id="timeFmt" data-value="24"><button type="button" class="dd-btn" id="timeFmtB" aria-labelledby="timeFmtL timeFmtB" aria-haspopup="listbox" aria-expanded="false"></button>
           <ul class="dd-list" role="listbox" tabindex="-1" hidden>
             <li role="option" data-v="24">24-hour (14:05)</li><li role="option" data-v="12">12-hour (2:05 PM)</li></ul></div></div>
       <p class="hint">Dates are always day.month.year (06.11.2026).</p>
@@ -368,7 +368,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/beam/wallet" target="_blank" rel="noopener">GitHub</a></span></p>
 </footer>
 
-<dialog id="dlg">
+<dialog id="dlg" aria-labelledby="dTitle">
   <h3 class="panel-title" id="dTitle">Confirm</h3>
   <div class="dbody" id="dBody"></div>
   <p class="hint" id="dNote"></p>

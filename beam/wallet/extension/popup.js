@@ -244,8 +244,8 @@
     $('setBtn').classList.toggle('on', id === 't-settings');
     $('dappsBtn').hidden = $('setBtn').hidden; $('dappsBtn').classList.toggle('on', id === 'x-dapps');
     // dApps is not part of a tab (as Settings): no tab underlined; Receive, Send and the like stay their tab's
-    if (id === 'x-dapps') qa('#tabs a').forEach((a) => a.classList.remove('active'));
-    else if (id.startsWith('t-') || id.startsWith('x-')) qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === curTab));
+    if (id === 'x-dapps') qa('#tabs a').forEach((a) => { a.classList.remove('active'); a.setAttribute('aria-selected', 'false'); });
+    else if (id.startsWith('t-') || id.startsWith('x-')) qa('#tabs a').forEach((a) => { a.classList.toggle('active', a.dataset.tab === curTab); a.setAttribute('aria-selected', String(a.dataset.tab === curTab)); });
     $('brand').hidden = inside;      // the brand on the start and lock screens only: the wallet itself has no room for it
     $('foot').hidden = !inside && id !== 's-unlock' && id !== 's-welcome';      // the copyright line: in the wallet, under the lock and the welcome
     $('walletDd').hidden = !(st && st.wallets && st.wallets.length) || !inside;
@@ -259,7 +259,7 @@
     if (name !== 'home') beamTokens(false, true);
     curTab = name;
     if (name !== 'settings') mainTab = name;
-    qa('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
+    qa('#tabs a').forEach((a) => { a.classList.toggle('active', a.dataset.tab === name); a.setAttribute('aria-selected', String(a.dataset.tab === name)); });
     show(`t-${name}`);
     paint(name);
   }
@@ -1810,6 +1810,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   gauge.addEventListener('pointerdown', (e) => { if (!feeData) return; dragging = true; gauge.setPointerCapture(e.pointerId); level = byX(e); bxCalc(); });
   gauge.addEventListener('pointermove', (e) => { if (!dragging) return; const k = byX(e); if (k !== level) { level = k; bxCalc(); } });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) gauge.addEventListener(ev, () => { dragging = false; });
+  // and from the keyboard: the arrows move the level, as a slider's
+  gauge.addEventListener('keydown', (e) => {
+    if (!feeData || !/^Arrow(Left|Right|Up|Down)$/.test(e.key)) return;
+    e.preventDefault();
+    const keys = feeData.options.map((x) => x.key), k = keys.indexOf(level) + (/Right|Up/.test(e.key) ? 1 : -1);
+    if (k >= 0 && k < keys.length) { level = keys[k]; bxCalc(); }
+  });
 
   // a turn: the content (not the titles) tears into strips that jerk sideways, turns to the other way at the middle,
   // and comes back torn, settling
