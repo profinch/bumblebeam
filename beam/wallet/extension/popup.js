@@ -2384,9 +2384,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
 
   // a row's card: When, Now / Why and the address lined up on one column, the rest under them (no address: one
   // column), then what can be done
+  // each payout of a folded row: its transaction in the explorer by its kernel, else its block
+  const payLink = (x) => (x.kern ? ics(lnI(`${EXPL}/kernel/${x.kern}`, 'Open the transaction in the explorer'))
+    : x.block ? ics(lnI(`${EXPL}/block/${x.block}`, 'Open its block in the explorer (Beam gave no kernel to open the transaction by)')) : '');
   function actCard(r) {
     if (r.group) {
-      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}${x.block ? `<i class="sp"></i>block ${x.block}` : ''}</span><b>+${vShown(x)} <u>${esc(x.sym)}</u></b></div>`).join('')}
+      return `<div class="ar-more">${r.items.map((x) => `<div class="sub-li"><span>${fdt(x.t)}${x.block ? `<i class="sp"></i>block ${x.block}` : ''}${payLink(x)}</span><b>+${vShown(x)} <u>${esc(x.sym)}</u></b></div>`).join('')}
         <dl class="kv" style="margin-top:8px"><dt>From</dt><dd>${r.ours ? OUR_POOL : r.peer ? addrDd(r.peer) : ''}</dd></dl></div>`;      // our pool pays from a fresh address each day: by its name
     }
     const rows = [], coin = actNet === 'beam' ? 'BEAM' : 'ETH';
