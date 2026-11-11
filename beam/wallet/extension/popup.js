@@ -503,7 +503,8 @@
     clearNotes(`s-${what}`);
     show(`s-${what}`);
   }
-  qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); if (st && st.phase === 'unlocked') tab(curTab === 'settings' ? 'settings' : 'home'); else welcome(); }; });
+  // Back from a way of adding a wallet: to the choice of ways (the header's arrow there goes back to the wallet)
+  qa('[data-back]').forEach((b) => { b.onclick = () => { host('dropPhrase'); welcome(); }; });
 
   let checks = [];
   function showPhrase(phrase) {
