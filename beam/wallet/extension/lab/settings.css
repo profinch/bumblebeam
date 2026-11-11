@@ -121,3 +121,9 @@ html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last c
 .sp-sec .check input { margin-top: 3px; }
 .sp-sec .two + .hint { margin-top: 12px; }
 .sp-sec .hint:empty { display: none; }
+/* the checkbox in the wallet's colours: a turquoise frame, filled turquoise with a dark tick when on */
+.sp-sec .check input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 3px 0 0; border: 1px solid rgba(var(--accent-rgb), 0.6); border-radius: 3px; background: rgba(var(--accent-rgb), 0.06); cursor: pointer; display: grid; place-items: center; }
+.sp-sec .check input:hover { border-color: var(--accent); }
+.sp-sec .check input:checked { background: var(--accent); border-color: var(--accent); }
+.sp-sec .check input:checked::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg, #071a26); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.sp-sec .check input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
