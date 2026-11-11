@@ -11,7 +11,7 @@
   const inWin = new URLSearchParams(location.search).has('win');   // the window where a site's request is answered
   if (!inTab) document.documentElement.classList.add('popup');
   // the request window (popup.html?win=1): the popup's layout at the window's own size, not the popup's 400 x 600
-  if (new URLSearchParams(location.search).has('win')) document.documentElement.classList.add('win');
+  if (inWin) document.documentElement.classList.add('win');
 
   // ---------- what comes in later fades in ----------
   // Anything on the wallet's screens that fills in as it loads appears gradually instead of at once: a value
@@ -82,7 +82,7 @@
   // Send's amount, checked before anything is sent: what is wrong with it shows only on its own line (in place of
   // Available), never beside the button; an empty one asks for it. true: it can go
   // (asked once, the empty field keeps asking through any redraw of its line until something is typed)
-  const amtReady = (input, left, redraw) => {
+  const amtReady = (input, redraw) => {
     input.dataset.need = '1'; redraw();
     return !input.classList.contains('bad');
   };
@@ -208,8 +208,6 @@
     return w.accounts.find((a) => a.i === i) || w.accounts[0];
   };
   const allAccounts = () => (st && st.wallets ? st.wallets.flatMap((w) => w.accounts.map((a) => ({ ...a, wallet: w }))) : []);
-  // this wallet's Beam engine: running (all of them run while unlocked), and connected to its node
-
   // ---------- screens, tabs, sheets ----------
   let curTab = 'home';
   // how far the wallet tab's Ethereum card reaches past the end of main's content (into its bottom padding):
@@ -643,10 +641,9 @@
       const a = acct();
       // the accounts: the name on the left (cut with … if long), the address on the right; a line; then what
       // can be done, each with its icon in a column of its own so the words line up
-      const six = short;
       const act = (v, icon, text) => ({ v, label: text, html: `<span class="mi">${icon}</span><span>${esc(text)}</span>` });
-      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${six(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span>`,
-        btn: `<span class="acc-b"><span class="nm">${esc(x.name)}</span><span class="ad">${six(x.address)}</span></span>` })),
+      acctDd.options([...w.accounts.map((x) => ({ v: String(x.i), label: `${x.name} ${short(x.address)}`, html: `<span class="nm">${esc(x.name)}</span><span class="ad">${short(x.address)}</span>`,
+        btn: `<span class="acc-b"><span class="nm">${esc(x.name)}</span><span class="ad">${short(x.address)}</span></span>` })),
         { sep: true },
         ...(w.hd ? [act('__add', ICON.add, 'Add an account')] : []), act('__import', ICON.import, 'Import an account'),
         act('__rename', ICON.rename, 'Rename this account'), ...(w.accounts.length > 1 ? [act('__remove', ICON.remove, 'Remove this account')] : [])], String(a.i));
@@ -770,7 +767,7 @@
   // prices come
   const priceFmt = (x) => (x >= 1 ? usd(x) : `$${Number(x.toPrecision(3))}`);
   // a price chip's markup (ui .price-chip): the price, then its 24 h change in red or green; '' with no price
-  const pxChip = (p, ch, tip, plain) => {
+  const pxChip = (p, tip, plain) => {
     if (!(p > 0)) return '';
     // the plain one (ETH's row) reads as a product: 0.0101 ETH × $2 016.97 = the dollars right of it
     return `<span class="${plain ? 'price-plain' : 'price-chip'}"${tip ? ` title="${esc(tip)}"` : ''}>${plain ? '<i class="x">×</i>' : ''}<b>${esc(priceFmt(p))}</b></span>`;
@@ -826,7 +823,6 @@
   }
   $('beamMeta').onclick = (e) => { if (e.target.closest('[data-go-restore]')) { e.preventDefault(); tab('settings'); } };
 
-  // what is not spendable yet, as chips in the explorer's way: one colour per state
   // what is not spendable yet, as chips in the explorer's way: one colour per state, "name: amount" (to the
   // hundredth), what each is in its tip; the line scrolls when they do not fit
   function chips(s) {
@@ -936,7 +932,7 @@
     const showLow = ethShowLow === ethFor;
     // ETH (no contract) as Beam's balance: the amount, then its symbol, from the left edge
     // ETH's row: its price in the amount column, right-aligned as the tokens' amounts under it
-    const row = (r) => (!r.addr ? `<div class="asset native"><span class="lead"><span class="amt">${num(r.v)}</span><span class="unit">${esc(r.sym)}</span></span>${pxChip(rates && rates.eth, null, '', true)}<span class="usd">${usd(r.u)}</span></div>` : `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="Open on Etherscan">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" data-tip-wide title="Copy the token's contract address
+    const row = (r) => (!r.addr ? `<div class="asset native"><span class="lead"><span class="amt">${num(r.v)}</span><span class="unit">${esc(r.sym)}</span></span>${pxChip(rates && rates.eth, '', true)}<span class="usd">${usd(r.u)}</span></div>` : `<div class="asset"><span class="tok">${r.addr ? `<a class="cp" href="https://etherscan.io/token/${esc(r.addr)}" target="_blank" rel="noopener" title="Open on Etherscan">${LINK}</a><button type="button" class="cp" data-cp="${esc(r.addr)}" data-tip-wide title="Copy the token's contract address
 ${esc(r.addr)}">${CPI}</button>` : ''}</span><span class="sym">${esc(r.sym)}</span><span class="amt">${num(r.v)}</span><span class="usd">${usd(r.u)}</span></div>`);
     $('ethAssets').innerHTML = [...rows, ...high, ...(showLow ? low : [])].map(row).join('')
       + (low.length && !showLow ? `<div class="more"><button type="button" class="btn ghost small" data-more>load low-value tokens (${low.length})</button></div>` : '');
@@ -1388,7 +1384,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // complained about; at most 8 digits before the point (up to 99 999 999). Beam's and WBEAM's amounts at most
   // 8 decimals (a groth); Ethereum's Send by its token's decimals, said under it as before (the bridge's amount: its
   // own section)
-  ['bsAmt'].forEach((id) => BB.amountField($(id), 8, 8));
+  BB.amountField($('bsAmt'), 8, 8);
   BB.amountField($('esAmt'), null, 8);
   $('bsAmt').oninput = () => { delete $('bsAmt').dataset.need; bsAvail(); };
   let bsType = null, bsMine = '';      // the address's type; whether it is the open wallet's own ('yes', 'unverified')
@@ -1440,7 +1436,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!address) throw fieldErr('bsAddr', 'paste the address');
       await $('bsAddr').oninput();
       if (bsType === null) throw fieldErr('bsAddr', 'not a valid Beam address');
-      if (!amtReady($('bsAmt'), $('bsLeft'), bsAvail)) return;
+      if (!amtReady($('bsAmt'), bsAvail)) return;
       const value = toGroth($('bsAmt').value), fee = beamFee(), aid = bsAid(), sym = bsSym(), beam = (beamStatus && beamStatus.available) || 0;
       if (!(value > 0)) throw new Error('the amount must be above zero');
       if (!aid && value + fee > beam) throw new Error(`not enough: ${amt(beam, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
@@ -1538,7 +1534,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!to) throw fieldErr('esTo', 'paste the address');
       if (!isEthAddress(to)) throw fieldErr('esTo', '0x and 40 hex characters');
       if (Object.values(st.contracts).includes(to.toLowerCase())) throw fieldErr('esTo', 'that is the WBEAM token or the bridge contract: tokens sent there are lost. Use the Bridge tab');
-      if (!amtReady($('esAmt'), $('esLeft'), esAvail)) return;
+      if (!amtReady($('esAmt'), esAvail)) return;
       const p = await host('ethPrepare', { from: a.address, to, amount: $('esAmt').value, token: c.token });
       const feeNow = units(p.feeNow, 18), feeMax = units(p.feeMax, 18);
       // the amount in dollars at today's price, after a bar: ETH's, WBEAM's market, a token's from its list
@@ -1628,7 +1624,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   const ownAccts = () => { const w = W(); return [...(w ? w.accounts.map((a) => ({ ...a, wallet: w })) : []), ...allAccounts().filter((a) => !w || a.wallet.id !== w.id)]; };
   const addrOf = (v) => (v === 'typed' ? other : v);
   const beamHave = () => (beamStatus && beamStatus.available != null ? beamStatus.available / GROTH : null);
-  const fmt4 = (x) => num(x, 4);
 
   // the Ethereum account's picker: the wallet tab's look (name | short address; the accounts scroll past 4, this
   // wallet's first, the others' under their names); going to Ethereum, "Enter an address" below them
@@ -1743,10 +1738,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('bxAmt').classList.toggle('bad', !!issue);
     $('bxIssue').textContent = issue;
     const unitHave = toEth ? 'BEAM' : 'WBEAM';
-    $('bxHave').innerHTML = have != null ? `${fmt4(have)} <span class="u">${unitHave}</span>` : `<span class="u">${toEth ? (W() && W().beam ? '…' : 'no Beam part') : from && from.err ? 'unread' : '…'}</span>`;
+    $('bxHave').innerHTML = have != null ? `${num(have, 4)} <span class="u">${unitHave}</span>` : `<span class="u">${toEth ? (W() && W().beam ? '…' : 'no Beam part') : from && from.err ? 'unread' : '…'}</span>`;
     // the lower card: what the receiving side holds now; under To, how long it takes
     const there = toEth ? (to && !to.err ? to.wbeam : null) : beamHave();
-    $('bxThereHave').innerHTML = there != null ? `${fmt4(there)} <span class="u">${toEth ? 'WBEAM' : 'BEAM'}</span>` : '<span class="u">…</span>';
+    $('bxThereHave').innerHTML = there != null ? `${num(there, 4)} <span class="u">${toEth ? 'WBEAM' : 'BEAM'}</span>` : '<span class="u">…</span>';
     $('bxWhen').textContent = toEth ? 'usually about an hour' : 'about an hour, then claim';
     $('bxGo').innerHTML = s > 0 && !issue ? `<span>Bridge ${num(s, 4)} ${unitHave}</span>` : 'Bridge';
     // the fee: the gauge's three levels this way, fixed the other; what it is for in two short lines

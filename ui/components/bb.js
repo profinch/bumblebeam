@@ -99,11 +99,13 @@
   }
 
   function amountField(input, decimals, whole) {
-    function clean() {
+    function clean(e) {
       var v = input.value, at = input.selectionStart == null ? v.length : input.selectionStart;
       var out = '', caret = 0, point = -1;
-      // both a point and a comma (pasted "1,234.5"): the last of them is the decimal point, the others group thousands
-      var dec = v.indexOf('.') >= 0 && v.indexOf(',') >= 0 ? Math.max(v.lastIndexOf('.'), v.lastIndexOf(',')) : -1;
+      // pasted with both a point and a comma ("1,234.5"): the last of them is the decimal point, the others group
+      // thousands; typed, a second separator is simply dropped
+      var pasted = !e || /^insertFrom(Paste|Drop)$/.test(e.inputType || '');
+      var dec = pasted && v.indexOf('.') >= 0 && v.indexOf(',') >= 0 ? Math.max(v.lastIndexOf('.'), v.lastIndexOf(',')) : -1;
       for (var k = 0; k < v.length; k++) {
         var c = v[k], keep = false;
         if (c >= '0' && c <= '9') keep = point < 0 ? whole == null || out.length < whole : decimals == null || out.length - point - 1 < decimals;
