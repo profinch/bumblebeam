@@ -1260,7 +1260,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (key || n > 0) host('setAddrExt', wid, { ...e, verified: key ? 'key' : 'payment' }).catch(() => {});
       return { address: e.address, comment: e.name, type: e.type, create_time: e.at / 1000, ext: true, verified: key || n > 0, n, key };
     });
-    addrs = [...list, ...added].sort(byFav);
+    // one added by hand that is now among Beam's own (an import gave Beam its key number): still marked as added,
+    // and verified (Beam took it as this seed's), its verification kept
+    const extOf = new Map(ext.map((e) => [e.address, e]));
+    const ownMarked = list.map((x) => {
+      const e = extOf.get(x.address); if (!e) return x;
+      if (!e.verified) host('setAddrExt', wid, { ...e, verified: 'own' }).catch(() => {});
+      return { ...x, ext: true, verified: true, key: e.verified === 'key', own: true };
+    });
+    addrs = [...ownMarked, ...added].sort(byFav);
     renderAddrs();
     return true;
   }
@@ -1315,7 +1323,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('beamAddrLen').textContent = String(x.address.length);      // how long it is: 67 for a regular one, hundreds for the offline kinds
     // an address added manually: whether a payment to it showed it is this wallet's
     $('beamAddrStK').hidden = $('beamAddrSt').hidden = !x.ext;
-    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? (x.key ? '<span class="tipped" title="It carries this wallet\'s own offline key: Beam makes every public offline address of a wallet from one key of its seed">verified</span>' : 'verified')
+    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? (x.own && !x.key ? '<span class="tipped" title="Beam took it as this wallet\'s own: its key number comes from this seed">verified</span>' : x.key ? '<span class="tipped" title="It carries this wallet\'s own offline key: Beam makes every public offline address of a wallet from one key of its seed">verified</span>' : 'verified')
       : '<span class="tipped" title="Added manually: Beam cannot tell whether an address belongs to this wallet. It becomes verified once this wallet\'s history has a payment to it">not verified</span>';
     $('beamAddrSt').classList.toggle('warn', !!x.ext && !x.verified);
     BB.qr($('beamQr'), x.address, QR_SIZE);
