@@ -9,7 +9,6 @@
 html.popup, html.popup body { height: 600px; overflow: hidden; }
 html.popup body { width: 400px; min-height: 0; display: flex; flex-direction: column; }
 html.popup.win, html.popup.win body { width: 100%; height: 100vh; }
-html.popup main { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 html.popup #t-home { display: flex; flex-direction: column; height: 100%; }
 html.popup #ethCard { flex: none; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }      /* never squeezed: its buttons as far from its edge as Beam's */
 html.popup #ethBody { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -17,9 +16,8 @@ html.popup #ethBody { flex: 0 1 auto; min-height: 0; display: flex; flex-directi
    tokens; the address line and the buttons never shrink */
 html.popup #ethAssets { flex: none; height: 116px; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable;      /* the scroll bar's room kept when it is not there: the rows stand where they do with it */ scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
 main { max-width: 640px; padding: 4px 16px 20px; }
-html.popup main { padding: 4px 12px 5px; }
+html.popup main { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; padding: 4px 12px 5px; }
 .wtop { padding: 0 16px; }
-html.popup .wtop { padding: 0 12px; }
 .wrow { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; }
 /* the brand as in the pool's and the explorer's header (ui .brand: 19px, the logo 11px from the word), on the start
    and lock screens; inside the wallet the picker takes its place on the left, the lock on the right */
@@ -39,7 +37,7 @@ html.popup .wtop { padding: 0 12px; }
 .wfoot .foot-copy { margin: 0; font-size: 10px; line-height: 14px; }
 .wfoot .foot-copy .fp { display: block; }
 .wfoot .foot-copy a { font-size: 10px; }
-html.popup .wtop { padding-bottom: 5px; }      /* the fixed header ends 5 px under the tabs' underline */
+html.popup .wtop { padding: 0 12px; padding-bottom: 5px; }      /* the fixed header ends 5 px under the tabs' underline */
 
 /* ---- start screens ---- */
 .hero { text-align: center; padding: 18px 0 6px; }
@@ -86,7 +84,6 @@ html.popup .seed { columns: 2; }
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
 .panel.net .panel-head { margin-bottom: 6px; flex-wrap: nowrap; }
 /* Beam's balance: one big line, the amount, the unit, its dollars */
-.bigamt { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-family: var(--font-mono); }
 .bigamt .amt { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .bigamt .unit { font: 700 var(--fs-m) var(--font-mono); color: var(--text-dim); }
 .bigamt .usd { margin-left: auto; font-size: var(--fs-s); color: var(--muted); }
@@ -109,7 +106,7 @@ html.popup .seed { columns: 2; }
 #beamMeta .l2.bad { color: var(--color-red); }
 /* before the first balance: no "— BEAM", the line keeps its height */
 #beamCard.nodata .bigamt > * { visibility: hidden; }
-.bigamt { min-height: 33px; }
+.bigamt { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-family: var(--font-mono); min-height: 33px; }
 .asset { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; grid-template-areas: "sym amt usd"; align-items: baseline; column-gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
 .asset:last-child { border-bottom: 0; }
 .asset .sym { grid-area: sym; font: 700 var(--fs-base) var(--font-mono); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -117,11 +114,10 @@ html.popup .seed { columns: 2; }
 .asset .usd { grid-area: usd; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: left; }      /* the dollars from the column's left edge, in line with each other */
 /* a token row: its contract's link and copy button, the symbol, the amount, the dollars; the row (and its line)
    ends 5 px before the scroll bar */
-#ethAssets .asset, #beamAssets .asset { grid-template-columns: 30px minmax(0, 1fr) auto 86px; grid-template-areas: "tok sym amt usd"; margin-right: 5px; }
 /* the content 8 px inside the row's light (as 3BMiner's rows): the list itself reaches 8 px into the card's
    margin (a scrolling box clips what sticks out of it), so the text stays in line with the rest of the card */
 #ethAssets, #beamAssets { margin-left: -8px; }
-#ethAssets .asset, #beamAssets .asset { padding-left: 8px; padding-right: 8px; }
+#ethAssets .asset, #beamAssets .asset { grid-template-columns: 30px minmax(0, 1fr) auto 86px; grid-template-areas: "tok sym amt usd"; margin-right: 5px; padding-left: 8px; padding-right: 8px; }
 /* the symbol as far from the icons as they are from each other (6 px; the grid's gap is 12) */
 #ethAssets .tok, #beamAssets .tok { grid-area: tok; display: flex; gap: 6px; align-self: center; margin-right: -6px; }
 html.popup #ethBody > .addr-line, html.popup #ethBody > .acts { flex: none; }
@@ -238,8 +234,6 @@ dialog .row { margin-top: 14px; }
 .dapp-wrap { flex: none; display: flex; flex-direction: column; align-items: flex-end; padding: 12px 2px 0; max-width: 150px; }
 .dapp-cap { position: relative; margin-bottom: 2px; font: 700 var(--fs-xs) var(--font-mono); line-height: normal; }      /* the line of TOTAL's caption (.caps): the same font and line height */
 
-.dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; }
-.dapp-box .dapp-st { font: 400 var(--fs-base) var(--font-sans); color: var(--text-dim); }      /* a plain link's look (ui's a), its colour by state */
 .dapp-box .dapp-sub { color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dapp-box.ok .dapp-st { color: var(--accent); }
 .dapp-box.warn .dapp-st { color: var(--color-yellow); }
@@ -250,17 +244,15 @@ dialog .row { margin-top: 14px; }
 #s-dapp .row { gap: 8px; margin-top: 0; }
 #s-dapp .row .btn.wide { flex: 1; }
 /* the request fills the window; its buttons sit at the bottom; the note clear of the rows above it */
-html.win main { display: flex; flex-direction: column; }
 html.win #s-dapp:not([hidden]) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 #s-dapp #dpBody { overflow-y: auto; min-height: 0; }
 #s-dapp #dpNote { margin-top: 14px; }
-#s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; white-space: pre-line; }      /* a name, then a whole address on its own line */
 /* the dialogs and the request window: the label close to its value (10 px, not 18), values at 12 px, so a whole
    Ethereum address (42 characters) fits on one line next to its label */
 #s-dapp .kv, dialog .kv { column-gap: 10px; }
-#s-dapp .kv dd, dialog .kv dd { font-size: 12px; }
+#s-dapp .kv dd, dialog .kv dd { overflow-wrap: anywhere; white-space: pre-line; font-size: 12px; }      /* a name, then a whole address on its own line */
 #s-dapp .dp-foot { margin-top: auto; padding-top: 14px; }
-html.win main { padding-bottom: 14px; }
+html.win main { display: flex; flex-direction: column; padding-bottom: 14px; }
 #s-dapp #dpMore:empty { display: none; }
 #s-dapp #dpMore { margin: 0 0 8px; text-align: center; }
 
@@ -298,8 +290,8 @@ html.popup #beamCard { flex: none; }      /* grown over Ethereum, it is not sque
 /* a site's name: a plain link (ui: the accent, a line under the pointer), cut with … when long */
 .site-a { justify-self: start; max-width: 100%; font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }      /* clickable on its text only */
 /* only the status is clicked (the box passes the rest through), and under the pointer it gets a line, as a plain link */
-.dapp-box { pointer-events: none; }
-.dapp-box .dapp-st { pointer-events: auto; cursor: pointer; }
+.dapp-box { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 0; background: none; border: 0; cursor: pointer; font: var(--fs-s) var(--font-mono); color: var(--muted); text-align: right; max-width: 150px; pointer-events: none; }
+.dapp-box .dapp-st { font: 400 var(--fs-base) var(--font-sans); color: var(--text-dim); pointer-events: auto; cursor: pointer; }      /* a plain link's look (ui's a), its colour by state */
 .dapp-box:hover .dapp-st { text-decoration: underline; }
 /* Connected sites: the scroll bar's room kept from the start (both sides, so the cards stay centred), so
    nothing moves when the requests grow past the popup */
@@ -345,13 +337,12 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .li.addr.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
 .li.addr.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
 /* the catalog's folding group: the whole head clicks, the arrow right turns; folded, only the head shows */
-#dappCatalog .fold > .panel-head { cursor: pointer; user-select: none; }
 #dappCatalog .fold-arrow { display: grid; place-items: center; color: var(--muted); }
 #dappCatalog .fold-arrow svg { width: 16px; height: 16px; transition: transform 0.15s; transform: rotate(180deg); }
 #dappCatalog .fold > .panel-head:hover .fold-arrow { color: var(--text); }
 #dappCatalog .folded .fold-arrow svg { transform: none; }
 #dappCatalog .fold > .list { overflow: hidden; transition: height 0.25s ease; }
-#dappCatalog .fold > .panel-head { transition: margin-bottom 0.25s ease; }
+#dappCatalog .fold > .panel-head { cursor: pointer; user-select: none; transition: margin-bottom 0.25s ease; }
 #dappCatalog .folded > .list { height: 0; }
 #dappCatalog .folded > .panel-head { margin-bottom: 0; }
 /* a sheet's title left, the way back right on its line */
@@ -404,15 +395,13 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* an action's error: in yellow right of its button (or under the field its Save/Add sits in); the field it is
    about outlined in red until it is edited */
 .row:has(> .act-msg) { display: flex; align-items: center; gap: 12px; }
-.act-msg { font-size: 12px; line-height: 1.4; color: var(--color-yellow); min-width: 0; }
 .act-msg:empty { display: none; }
-.act-msg.under { margin: 6px 0 0; }
 .field input.err, .field textarea.err, .dd-btn.err, .field input.err:focus, .field textarea.err:focus { border-color: rgba(var(--red-rgb), 0.7); }
 .row > .act-msg { flex: 1 1 0; }      /* beside the button, its text wrapping there rather than under it */
 /* a caution in a confirmation: under its rows, in yellow */
 .dlg-warn { margin: 10px 0 0; font-size: 12px; }
 /* room kept for a message that may come (a dialog's error, a Save/Add field's), so nothing moves when it does */
-.act-msg.under { min-height: 17px; }
+.act-msg.under { margin: 6px 0 0; min-height: 17px; }
 .act-msg.under:empty { display: block; }
 #dErr.keep { min-height: 17px; }
 /* a unit after its amount (Available, Network fee): grey, not bold */
@@ -438,7 +427,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .dbody .kv + .kv { margin-top: 8px; }
 #dNote, #dpNote { white-space: pre-line; }      /* a confirmation's note keeps its line breaks ("It cannot be undone." on its own line) */
 /* a done message fades away (popup.js actOk, 5 s after it shows) */
-.act-msg { transition: opacity 0.6s ease; }
+.act-msg { font-size: 12px; line-height: 1.4; color: var(--color-yellow); min-width: 0; transition: opacity 0.6s ease; }
 .act-msg.going { opacity: 0; }
 /* the quiet tabs (ui .subtabs): Activity's and Connected sites' networks in the header's bar; a network's dot
    before its name */
