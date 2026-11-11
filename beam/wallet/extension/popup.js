@@ -1714,8 +1714,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // each card's network in its left corner, as the wallet tab's card titles with the way before it: FROM ● BEAM,
     // TO ● ETHEREUM (Beam's key at the right of its line when it receives)
     const way = (card) => (card === $('bxSend') ? 'From' : 'To');
-    beam.appendChild($('bxNetB')); $('bxNetB').innerHTML = `<span class="way">${way(beam)}</span><i class="chain beam"></i>Beam`;
-    eth.appendChild($('bxNetE')); $('bxNetE').innerHTML = `<span class="way">${way(eth)}</span><i class="chain eth"></i>Ethereum`;
+    beam.appendChild($('bxNetB')); $('bxNetB').innerHTML = `<span class="way">${way(beam)}</span><i class="chain beam"></i><span class="nm">Beam</span>`;
+    eth.appendChild($('bxNetE')); $('bxNetE').innerHTML = `<span class="way">${way(eth)}</span><i class="chain eth"></i><span class="nm">Ethereum</span>`;
     $('bxNetB').classList.toggle('low', beam === $('bxRecv')); $('bxNetE').classList.toggle('low', eth === $('bxRecv'));
     bk.hidden = dir === 'toEth';
     if (dir !== 'toEth') {
@@ -1725,7 +1725,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       // on TO ● BEAM's line, measured (their sizes differ, and so do fonts)
       const base = (el) => { el.insertAdjacentHTML('beforeend', '<i style="display:inline-block;width:0;height:0"></i>'); const y = el.lastElementChild.getBoundingClientRect().top; el.lastElementChild.remove(); return y; };
       bk.style.transform = '';
-      bk.style.transform = `translateY(${(base($('bxNetB')) - base(bk)).toFixed(1)}px)`;
+      bk.style.transform = `translateY(${(base($('bxNetB').querySelector('.nm')) - base(bk)).toFixed(1)}px)`;      // the word's own line: the label is a flex box, a mark in it sits at its middle
     }
     eth.appendChild($('bxGearBox'));
     // the picker shares its line with FROM / TO ● ETHEREUM (top or bottom): it begins 10 px after them, at most as
