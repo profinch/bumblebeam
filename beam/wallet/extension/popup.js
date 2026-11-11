@@ -317,7 +317,7 @@
     const run = () => new Promise((resolve) => {
       if (before && !before()) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
       $('dTitle').textContent = title;
-      $('dBody').innerHTML = html != null ? html : rows.length ? `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '';
+      $('dBody').innerHTML = html != null ? html : rows.length ? kvHtml(rows) : '';
       $('dNote').textContent = n; $('dNote').hidden = !n;
       $('dPassBox').hidden = !password; $('dPass').value = ''; $('dPassLabel').textContent = passLabel;
       $('dInputBox').hidden = !input; $('dInput').value = input ? input.value || '' : '';
@@ -378,8 +378,9 @@
   // A null among the rows starts a group of its own: each group's values line up on its own longest label, so a
   // whole address fits beside short labels (Amount, From, To) while the fee's rows keep theirs
   const kvGroups = (rows) => rows.reduce((g, r) => { if (r === null) g.push([]); else g[g.length - 1].push(r); return g; }, [[]]).filter((g) => g.length);
+  function kvHtml(rows) { return kvGroups(rows).map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`).join(''); }
   const confirmBox = async (title, rows, n, warn = '') => (await ask({ title, note: n,
-    html: `${kvGroups(rows).map((g) => `<dl class="kv">${g.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`).join('')}${warn ? `<p class="warn-own dlg-warn">⚠️ ${esc(warn)}</p>` : ''}` })).ok;
+    html: `${kvHtml(rows)}${warn ? `<p class="warn-own dlg-warn">⚠️ ${esc(warn)}</p>` : ''}` })).ok;
 
   // Beam's own consent hands amounts and the fee as decimal strings already in coins ("10", "9.64504489",
   // beamAmountToUIString in wasm_beamapi.cpp), not in groth. An asset other than BEAM is named from its
@@ -422,7 +423,7 @@
   handlers.consentDone = ({ id }) => { consentGone.add(id); if (consentShown === id && dlgCancel) dlgCancel(); };
   handlers.consent = async ({ id, info, amounts, ctx }) => {
     const c = ctx || { title: 'Contract transaction', rows: [], note: 'Not started by this wallet: reject it unless you know what it is.' };
-    const rows = [...(c.rows || []), ...await consentRows(info, amounts)];
+    const rows = [...(c.rows || []), null, ...await consentRows(info, amounts)];
     const r = await ask({ title: c.title, rows, note: c.note, before: () => { consentShown = id; return !consentGone.has(id); } });
     consentShown = null;
     if (!consentGone.has(id)) port && port.postMessage({ type: 'consent', id, ok: r.ok });
@@ -2106,7 +2107,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       title: 'Bridge BEAM → WBEAM',
       rows: [['Receive', `${amt(a, 8)} WBEAM`], ['Relayer fee', `${amt(f, 8)} BEAM (${feeOwn != null ? 'your own' : level})`],
         ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? o.upTo).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); ×${(f / GROTH / fd.min).toFixed(1)} today's minimum`],
-        ['To', own ? `${own.wallet.name} | ${own.name}\n${rcv}` : `${rcv}\n(not one of this wallet's accounts)`]],      // the name, the whole address on a line of its own
+        null, ['To', own ? `${own.wallet.name} | ${own.name}\n${rcv}` : `${rcv}\n(not one of this wallet's accounts)`]],      // the name, the whole address on a line of its own
       note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour.\nIt cannot be undone.',
     }, a, rcv, f);
     actOk($('bxGo'), `transaction ${esc(txid)} sent`);
@@ -2124,7 +2125,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const acc = allAccounts().find((a) => a.address.toLowerCase() === from.toLowerCase());
     const ok = await confirmBox('Bridge WBEAM → BEAM', [
       ['Receive', `${exact(p.value, 8)} BEAM`], ['Relayer fee', `${exact(p.fee, 8)} WBEAM`],
-      ['From', `${acc ? `${acc.wallet.name} | ${acc.name}\n` : ''}${p.from}`], ['To', `${p.beamWallet}\nBeam bridge key: ${short(p.key)}`],
+      null, ['From', `${acc ? `${acc.wallet.name} | ${acc.name}\n` : ''}${p.from}`], ['To', `${p.beamWallet}\nBeam bridge key: ${short(p.key)}`], null,
       ['Transactions', p.approve ? 'Ethereum: 2\napprove WBEAM to the bridge, then send' : 'Ethereum: 1\nsend'],
       // the gas as Ethereum Send says it: what it should cost, and the most it can
       ['Net fee', `≈ ${num(fn, 6)} ETH${rates ? ` | ${usd(fn * rates.eth)}` : ''}`],
