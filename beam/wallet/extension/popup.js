@@ -1323,8 +1323,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     $('beamAddrLen').textContent = String(x.address.length);      // how long it is: 67 for a regular one, hundreds for the offline kinds
     // an address added manually: whether a payment to it showed it is this wallet's
     $('beamAddrStK').hidden = $('beamAddrSt').hidden = !x.ext;
-    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? (x.own && !x.key ? '<span class="tipped" title="Beam took it as this wallet\'s own: its key number comes from this seed">verified</span>' : x.key ? '<span class="tipped" title="It carries this wallet\'s own offline key: Beam makes every public offline address of a wallet from one key of its seed">verified</span>' : 'verified')
-      : '<span class="tipped" title="Added manually: Beam cannot tell whether an address belongs to this wallet. It becomes verified once this wallet\'s history has a payment to it">not verified</span>';
+    // why it counts as this wallet's: the tip says how it was verified (or how it would be)
+    const vTip = x.own && !x.key ? 'Added manually, then taken by Beam as this wallet\'s own from imported wallet data: Beam checked its key number against this seed phrase'
+      : x.key ? 'Added manually: a public offline address carrying this wallet\'s own offline key (Beam makes every public offline address of a wallet from one key of its seed phrase)'
+      : 'Added manually: a payment to it shows in this wallet\'s history';
+    $('beamAddrSt').innerHTML = !x.ext ? '' : x.verified ? `<span class="tipped" title="${esc(vTip)}">verified</span>`
+      : '<span class="tipped" title="Added manually: whose an address of this kind is cannot be checked. It becomes verified once a payment to it shows in this wallet\'s history, or imported wallet data makes it Beam\'s own">not verified</span>';
     $('beamAddrSt').classList.toggle('warn', !!x.ext && !x.verified);
     BB.qr($('beamQr'), x.address, QR_SIZE);
     renderAddrs();
