@@ -626,6 +626,13 @@
   }
   $('doUnlock').onclick = () => unlock();
   $('uPass').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); unlock(); } };
+  // Enter in a field of a way of adding a wallet (a backup's import, a restore, a key, a new wallet) presses that
+  // screen's own button, as on the lock screen
+  for (const id of ['s-bkimport', 's-restore', 's-ethkey', 's-create']) $(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.matches('input')) return;
+    const b = $(id).querySelector('.row .btn.solid'); if (!b || b.disabled) return;
+    e.preventDefault(); b.click();
+  });
 
   // ---------- an account picker's rows dragged to order them ----------
   // The same in every picker (the wallet tab's, the bridge's, a wallet's card in Settings): an account's row held and
