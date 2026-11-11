@@ -2695,7 +2695,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
     // the Beam file: Beam's own exchange file of this wallet (addresses, their names, contacts, transactions; no keys),
     // as Beam's CLI and mobile wallets save and take it; and one taken in
-    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Beam file') : '', w.beam ? b('beamIn', 'Import a Beam file') : ''].filter(Boolean);      // Rename is the pencil by the name
+    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Export wallet data') : '', w.beam ? b('beamIn', 'Import wallet data') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethKey', 'Private key'), b('ethPhrase', 'Seed phrase')] : [];      // the key first (every account has one), its phrase after
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
@@ -2754,7 +2754,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('bdFile').onchange = async () => {
     const f = $('bdFile').files && $('bdFile').files[0], w = bdFor; if (!f || !w) return;
     const text = await f.text();
-    const r = await ask({ title: `Import a Beam file into ${w.name}`, password: true, yes: 'Import', note: `${f.name}\nIts addresses, their names, contacts and transactions are added to this wallet. It should come from a wallet of the same seed phrase.`,
+    const r = await ask({ title: `Import wallet data into ${w.name}`, password: true, yes: 'Import', note: `${f.name}\nIts addresses, their names, contacts and transactions are added to this wallet. It should come from a wallet of the same seed phrase.`,
       check: async ({ pass }) => { await host('beamData', w.id, pass, text); } });
     if (!r.ok) return;
     // the addresses added by hand and not verified yet are checked again against what came in: one now among the
@@ -3190,12 +3190,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       }
       if (act === 'backup') {
         let json = null;
-        const r = await ask({ title: `Beam file of ${w.name}`, password: true, yes: 'Save the file',
-          note: 'Beam\'s own file of this wallet: its addresses with their names, contacts and transactions, as Beam\'s CLI and mobile wallets save it. No keys: it goes into a wallet restored from the same seed phrase, here or in another Beam wallet.',
+        const r = await ask({ title: `Export wallet data: ${w.name}`, password: true, yes: 'Save the file',
+          note: 'Beam\'s wallet data of this wallet (a JSON file): its addresses with their names, contacts and transactions, as Beam\'s CLI (export_data) and mobile wallets export it. No keys: it goes into a wallet restored from the same seed phrase, here or in another Beam wallet.',
           check: async ({ pass }) => { json = await host('beamData', w.id, pass); } });
         if (!r.ok || json == null) return;
         const b64 = btoa(unescape(encodeURIComponent(json)));
-        const name = `beam-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`;
+        const name = `beam-wallet-data-${w.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`;
         const r2 = await chrome.runtime.sendMessage({ op: 'download', b64, name }).catch((e) => ({ error: e.message }));
         if (!r2 || r2.error) await ask({ title: 'Not saved', note: (r2 && r2.error) || 'the browser did not save it', yes: 'OK', no: null });
         else ask({ title: 'Saved', note: `Downloads/BumbleBeam/${name}`, yes: 'OK', no: null });

@@ -200,7 +200,7 @@
 - Quiet tabs in the header instead of one long page: Wallets, General, Networks, Storage, About; the wallet's
   small buttons (as All) and compact pickers throughout.
 - Wallets: one row each (its networks' dots, its name, what it holds, the open one marked current; the header's
-  picker switches). A click opens its card: This wallet (Seed phrase, Beam file: its Beam part as a wallet.db) and Ethereum (its own Seed phrase when
+  picker switches). A click opens its card: This wallet (Seed phrase, Export / Import wallet data) and Ethereum (its own Seed phrase when
   added by one, Private key) side by side, the account picker under them as the wallet tab's (with add, import,
   rename, remove; it opens at the wallet tab's account and does not change it), Remove last; Rename is a pencil by the
   name. Use and the manual Beam restore are gone from here.
@@ -214,14 +214,14 @@
   them. Adding a token by hand is gone from Settings (it comes to the wallet tab later).
 - Backup: Make a backup (kept in this browser, its time by the title), Download a backup (into
   Downloads/BumbleBeam, counted only once the file is complete on disk; an icon by the time shows it in its
-  folder), Import a backup. It is BumbleBeam's own backup; for other Beam wallets a wallet's Beam file.
+  folder), Import a backup. It is BumbleBeam's own backup; for other Beam wallets, Export wallet data.
 - An Ethereum account's row is dragged to order the accounts in any picker (the wallet tab's, the bridge's, a
   wallet's card in Settings), a line showing where it goes; the order is the wallet's, the same in every picker.
-- Importing a Beam file checks the addresses added by hand and not verified yet again: one now among the wallet's
+- Importing wallet data checks the addresses added by hand and not verified yet again: one now among the wallet's
   own (Beam verifies own addresses against the seed when it takes them) or named by an imported payment is verified.
-- A wallet's Beam file is now Beam's own exchange file (JSON: its addresses with their key numbers and names,
+- A wallet's Export wallet data / Import wallet data (Beam's own words, the CLI's export_data / import_data) is Beam's exchange file (JSON: its addresses with their key numbers and names,
   contacts, transactions; no keys), as Beam's CLI (export_data / import_data) and mobile wallets save and take it;
-  Import a Beam file adds one to a wallet of the same seed. The Beam engine is rebuilt for it (the same 7.5.14548,
+  its import adds one to a wallet of the same seed. The Beam engine is rebuilt for it (the same 7.5.14548,
   with Beam's own export and import exposed; beam/wallet/engine-build). Open a Beam backup file (a wallet.db) is
   gone from Add a wallet.
 - Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing.
