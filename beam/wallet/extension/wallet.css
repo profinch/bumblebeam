@@ -770,3 +770,4 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .key-addr { margin: 0; font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }      /* the account's whole address, white, above what the key means */
 #bkMsg { color: var(--color-yellow); margin: 6px 0 0; }      /* the backup's word, yellow, its line kept */
 #bkMsg + .hint { margin-top: 4px; }
+.w-add { display: flex; justify-content: flex-end; margin: 0 0 6px; }      /* + Add a wallet at the right, above the wallets */
