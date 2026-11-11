@@ -2695,7 +2695,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const b = (a, t, cls = '') => `<button type="button" class="sbtn${cls ? ` ${cls}` : ''}" data-a="${a}">${t}</button>`;
     // the Beam file: Beam's own exchange file of this wallet (addresses, their names, contacts, transactions; no keys),
     // as Beam's CLI and mobile wallets save and take it; and one taken in
-    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Export wallet data') : ''].filter(Boolean);      // Rename is the pencil by the name
+    const mine = [w.phraseKnown ? b('phrase', 'Seed phrase') : '', w.beam ? b('backup', 'Export data') : ''].filter(Boolean);      // Rename is the pencil by the name
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethKey', 'Private key'), b('ethPhrase', 'Seed phrase')] : [];      // the key first (every account has one), its phrase after
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
