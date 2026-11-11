@@ -112,6 +112,15 @@
     clearTimeout(m._fade); m.classList.remove('ok', 'going');
     m.textContent = e ? msg(e) : '';
     if (!e) return;
+    // turned down in its own confirmation ("Call is rejected by user", Beam's word): not an error, no field
+    // outlined; it fades as a done word does, after 5 s
+    if (/rejected by user|user rejected|rejected the request|user (closed|cancell?ed)/i.test(msg(e))) {
+      m._fade = setTimeout(() => {
+        m.classList.add('going');
+        m._fade = setTimeout(() => { if (m.classList.contains('going')) { m.textContent = ''; m.classList.remove('going'); } }, 600);
+      }, 5000);
+      return;
+    }
     let id = e.field;
     if (!id) for (const [k, re] of Object.entries(guess)) if (re.test(msg(e))) { id = k; break; }
     if (!id && !row && fld) { const i = fld.querySelector('input, textarea'); id = i && i.id; }
