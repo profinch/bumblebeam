@@ -2399,9 +2399,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.tokAddr && r.sym !== 'ETH') rows.push(['Token', `${esc(r.sym)}${ics(cpI(r.tokAddr, 'the token\'s contract address'), lnI(`${SCAN}/token/${r.tokAddr}`, 'Open the token on Etherscan'))}`]);
     if (r.fee) rows.push([actNet === 'beam' ? 'Net fee' : 'Gas', `${num(r.fee, 8)} ${coin}${rateOf(coin) ? ` | ${usdSmall(r.fee * rateOf(coin))}` : ''}`]);
     if (r.comment && !r.ours) rows.push(['Comment', esc(r.comment)]);
+    // the transaction in our explorer by its kernel; Beam gives a receipt none at times (then this wallet's own id, to copy)
     if (actNet === 'beam' && r.kern) rows.push(['Transaction', `${esc(short(r.kern))}${ics(lnI(`${EXPL}/kernel/${r.kern}`, 'Open the transaction in the explorer'))}`]);
+    else if (actNet === 'beam' && r.id && !r.found && !String(r.id).startsWith('coin-')) rows.push(['Transaction', `${esc(short(r.id))}${ics(cpI(r.id, 'this wallet\'s id of the transaction (Beam gave no kernel to look it up by)'))}`]);
     if (actNet === 'eth' && r.hash) rows.push(['Transaction', `${esc(short(r.hash))}${ics(lnI(`${SCAN}/tx/${r.hash}`, 'Open the transaction on Etherscan'))}`]);
-    if (r.block && !r.st) rows.push(['Block', String(r.block)]);
+    if (r.block && !r.st) rows.push(['Block', `${r.block}${ics(lnI(actNet === 'beam' ? `${EXPL}/block/${r.block}` : `${SCAN}/block/${r.block}`, actNet === 'beam' ? 'Open the block in the explorer' : 'Open the block on Etherscan'))}`]);
     const acts = [];
     if (r.cancel) acts.push(`<button type="button" class="btn warn" data-cancel="${esc(r.id)}">Cancel</button>`);
     const groups = rows.reduce((g, x) => { if (x === null) g.push([]); else g[g.length - 1].push(x); return g; }, [[]]).filter((g) => g.length);
