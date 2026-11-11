@@ -313,6 +313,14 @@
 
   // ---------- the dialog: confirm, password, one input ----------
   let dlgBusy = Promise.resolve();
+  // an Ethereum address field takes no more than an address (42); a pasted one is trimmed first, so spaces round it
+  // do not push its last letters out
+  for (const id of ['esTo', 'bxAddrIn', 'tokAddr']) $(id).addEventListener('paste', (e) => {
+    const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (t.trim() === t) return;
+    e.preventDefault(); e.target.setRangeText(t.trim(), e.target.selectionStart, e.target.selectionEnd, 'end'); e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const NAME_MAX = 32;                                // a wallet's, an account's, an address's name: as the host keeps it (offscreen slice(0, 32))
   function ask({ title, before = null, rows = [], note: n = '', password = false, passLabel = 'Wallet password', input = null, yes = 'Confirm', no = 'Cancel', html = null, check = null }) {
     const run = () => new Promise((resolve) => {
       if (before && !before()) return resolve({ ok: false, pass: '', input: '' });     // no longer asked
@@ -321,8 +329,12 @@
       $('dNote').textContent = n; $('dNote').hidden = !n;
       $('dPassBox').hidden = !password; $('dPass').value = ''; $('dPassLabel').textContent = passLabel;
       $('dInputBox').hidden = !input; $('dInput').value = input ? input.value || '' : '';
-      $('dInputLabel').textContent = input ? input.label : '';
+      // the limit said in the label: "Name (up to 32 characters)", or inside its own brackets
+      const lim = input && input.max ? `up to ${input.max} characters` : '';
+      $('dInputLabel').textContent = !input ? '' : !lim ? input.label : /\)$/.test(input.label) ? input.label.replace(/\)$/, `, ${lim})`) : `${input.label} (${lim})`;
       $('dInput').placeholder = (input && input.placeholder) || '';
+      // a name no longer than the wallet keeps (input.max): typing stops there, as the wallet names' own fields
+      if (input && input.max) $('dInput').maxLength = input.max; else $('dInput').removeAttribute('maxlength');
       $('dInput').classList.toggle('secret', !!(input && input.secret));
       // a dialog that takes something typed keeps the room for its error, so nothing moves when one shows
       $('dErr').classList.toggle('keep', !!(input || password || check));
@@ -640,7 +652,7 @@
   async function renameAccount() {
     const w = W(), a = acct();
     if (!a) return;
-    const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name }, yes: 'Save',
+    const r = await ask({ title: 'Rename the account', input: { label: 'Name', value: a.name, max: NAME_MAX }, yes: 'Save',
       check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameEthAccount', w.id, a.i, input); } });
     if (!r.ok) return;
     await load(); ethRefresh();
@@ -1261,7 +1273,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   $('newAddr').onclick = async () => {
     const types = ['regular', 'offline', 'public_offline', 'max_privacy'];
     const html = `<div class="seg mini" id="newType">${types.map((t, k) => `<button type="button" data-t="${t}"${k ? '' : ' class="on"'}>${esc(TYPE_NAME[t])}</button>`).join('')}</div><div class="hint type-hints" id="newTypeHint">${types.map((t, k) => `<span data-t="${t}"${k ? ' class="off"' : ''}>${esc(ADDR_HINT[t])}</span>`).join('')}</div>`;
-    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional' }, yes: 'Create', check: nameCheck(null) });
+    const r = await ask({ title: `New ${TYPE_NAME.regular} address`, html, input: { label: 'Name (only you see it)', value: '', placeholder: 'optional', max: NAME_MAX }, yes: 'Create', check: nameCheck(null) });
     if (!r.ok) return;
     const b = document.querySelector('#newType button.on'), type = (b && b.dataset.t) || 'regular';
     try { await newAddress(type, r.input || ''); } catch (e) { note('x-beamRecv', 'bad', msg(e)); }
@@ -1277,7 +1289,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     e.preventDefault();
     const x = addrs.find((y) => y.address === shownAddr);
     if (!x) return;
-    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '' }, yes: 'Save', check: nameCheck(x.address) });
+    const r = await ask({ title: 'Name the address', input: { label: 'Who it was given to (only you see it)', value: x.comment || '', max: NAME_MAX }, yes: 'Save', check: nameCheck(x.address) });
     if (!r.ok) return;
     try {
       if (x.ext) await host('setAddrExt', W().id, { address: x.address, name: r.input, type: x.type, at: x.create_time * 1000, verified: x.verified ? (x.key ? 'key' : 'payment') : undefined });
@@ -2732,7 +2744,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         return;
       }
       if (act === 'rename') {
-        const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name }, yes: 'Save',
+        const r = await ask({ title: 'Rename the wallet', input: { label: 'Name', value: w.name, max: NAME_MAX }, yes: 'Save',
           check: async ({ input }) => { if (!input) throw new Error('a name, please'); await host('renameWallet', w.id, input); } });
         if (r.ok) { await load(); settingsOpen(); }
       }

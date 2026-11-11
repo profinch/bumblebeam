@@ -65,7 +65,7 @@
     <div class="row"><button class="btn ghost small" id="copySeed" title="Copies the words. A clipboard is read by other programs: paper is safer">Copy</button></div>
     <label class="field">Check: words <span id="checkIdx"></span><input id="seedCheck" autocomplete="off" spellcheck="false" placeholder="three words, space-separated"></label>
     <div class="pw-new"></div>
-    <label class="field">Wallet name<input id="cName" maxlength="32" placeholder="Wallet"></label>
+    <label class="field">Wallet name (up to 32 characters)<input id="cName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doCreate">Create the wallet</button></div>
     <p class="hint small-print">The Beam part starts from Beam's published snapshot (~320 MB, kept 3 days for the next wallet) instead of syncing millions of headers: about two minutes.</p>
     <div class="progress" hidden><div class="bar accent"><i></i></div><span></span></div>
@@ -79,7 +79,7 @@
     <p class="hint" id="rKind"></p>
     <label class="check" id="rBeamBox"><input type="checkbox" id="rBeam" checked> Restore the Beam part (downloads the snapshot)</label>
     <div class="pw-new"></div>
-    <label class="field">Wallet name<input id="rName" maxlength="32" placeholder="Wallet"></label>
+    <label class="field">Wallet name (up to 32 characters)<input id="rName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doRestore">Restore</button></div>
     <div class="progress" hidden><div class="bar accent"><i></i></div><span></span></div>
     <p class="note bad" hidden></p>
@@ -91,7 +91,7 @@
     <label class="field">Backup file<input type="file" id="iFile" accept=".db,application/octet-stream"></label>
     <label class="field">Password of that file<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="iPass"></label>
     <div class="pw-new"></div>
-    <label class="field">Wallet name<input id="iName" maxlength="32" placeholder="Wallet"></label>
+    <label class="field">Wallet name (up to 32 characters)<input id="iName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doImport">Open</button></div>
     <p class="note bad" hidden></p>
   </section>
@@ -101,7 +101,7 @@
     <p class="hint">One Ethereum account, from a key exported from another wallet (64 hex characters). The key is kept encrypted in this extension.</p>
     <label class="field">Private key<input type="text" class="secret" autocomplete="off" autocapitalize="off" spellcheck="false" id="kKey"></label>
     <div class="pw-new"></div>
-    <label class="field">Wallet name<input id="kName" maxlength="32" placeholder="Wallet"></label>
+    <label class="field">Wallet name (up to 32 characters)<input id="kName" maxlength="32" placeholder="Wallet"></label>
     <div class="row"><button class="btn ghost" data-back>Back</button><button class="btn solid" id="doEthKey">Import</button></div>
     <p class="note bad" hidden></p>
   </section>
@@ -219,7 +219,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <p class="hint after" id="bsKind"></p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="bsMax">All</button></span></span></label>
     <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">Network fee</span>: <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
-    <label class="field">Comment (only in your history)<input id="bsNote" maxlength="64" placeholder="optional"></label>
+    <label class="field">Comment (only in your history, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>
@@ -250,7 +250,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
     <div class="field"><span id="esAssetL">Asset</span>
       <div class="dd compact" id="esAsset"><button type="button" class="dd-btn" id="esAssetB" aria-labelledby="esAssetL esAssetB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
     <div class="field own-label" id="esOwnL">To one of my accounts</div><div class="dd compact own" id="esOwn" hidden><button type="button" class="dd-btn" id="esOwnB" aria-labelledby="esOwnL esOwnB" aria-haspopup="listbox" aria-expanded="false" title="Send to one of your own accounts, in this wallet or another"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
-    <label class="field">To address<input id="esTo" autocomplete="off" spellcheck="false" placeholder="0x…"></label>
+    <label class="field">To address<input id="esTo" maxlength="42" autocomplete="off" spellcheck="false" placeholder="0x…"></label>
     <p class="hint after" id="esToHint"></p>
     <label class="field">Amount<span class="inline"><input id="esAmt" inputmode="decimal" placeholder="0"><span class="seg mini"><button type="button" id="esMax">All</button></span></span></label>
     <p class="hint after split" id="esAvail"></p>
@@ -280,7 +280,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
       </div>
       <!-- Ethereum's account: the wallet tab's picker, outside the cards (they are cut and would clip its list), laid
            over its place in the Ethereum card (#bxGearBox) -->
-      <div class="dd compact acct" id="bxAcct"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul><input class="bx-addrin" id="bxAddrIn" hidden placeholder="0x… the address it goes to" spellcheck="false" autocomplete="off" aria-label="Ethereum address"></div>
+      <div class="dd compact acct" id="bxAcct"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul><input class="bx-addrin" id="bxAddrIn" maxlength="42" hidden placeholder="0x… the address it goes to" spellcheck="false" autocomplete="off" aria-label="Ethereum address"></div>
       <button type="button" class="bx-swap" id="bxSwap" aria-label="The other way round"><i class="bx-b"></i><i class="bx-e"></i></button>
       <div class="bx-side" id="bxRecv">
         <div class="bx-l1"><span class="caps">To</span></div>
@@ -365,7 +365,7 @@ Beam keeps no addresses on its chain, so addresses made in another wallet (befor
       <div class="panel-head"><h3 class="panel-title">Tokens</h3></div>
       <p class="hint">ETH and WBEAM always show. Other tokens with a market price show by themselves. Add any other ERC-20 by its contract address.</p>
       <div class="list" id="tokList"></div>
-      <label class="field">Token contract<span class="inline"><input id="tokAddr" placeholder="0x…" spellcheck="false"><button class="btn ghost small" id="addTok">Add</button></span></label>
+      <label class="field">Token contract<span class="inline"><input id="tokAddr" maxlength="42" placeholder="0x…" spellcheck="false"><button class="btn ghost small" id="addTok">Add</button></span></label>
     </div>
     <div class="panel">
       <div class="panel-head"><h3 class="panel-title">About</h3></div>
