@@ -527,8 +527,8 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-when { position: absolute; left: var(--px); top: 22px; font: 11px var(--font-mono); line-height: 16px; color: var(--muted); white-space: nowrap; }
 /* Ethereum's account: the wallet tab's picker (#bxAcct) over its place in the Ethereum card; the place holds a still
    copy of it, seen only in the torn strips. As wide as the wallet tab's (256 px in the popup) */
-.bx-gearbox { position: absolute; right: calc(var(--px) - 2px); bottom: 7px; width: 256px; visibility: hidden; }
-#bxSend .bx-gearbox { bottom: auto; top: 6px; }
+.bx-gearbox { position: absolute; right: calc(var(--px) - 2px); bottom: 5px; width: 256px; visibility: hidden; }
+#bxSend .bx-gearbox { bottom: auto; top: 5px; }      /* 5 px from the card's edge on top as below */
 .bx-strip .bx-gearbox { visibility: visible; }
 .bx-gearbox .dd-btn { background-attachment: scroll; background-size: var(--gw) var(--gh); background-position: var(--gx) var(--gy); }      .bx > #bxAcct { position: absolute; z-index: 5; margin: 0; }
 .bx.turning > #bxAcct { visibility: hidden; }

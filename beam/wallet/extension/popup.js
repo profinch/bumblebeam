@@ -1719,6 +1719,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (fi.width) { fs.setProperty('--gx', `${-fi.left}px`); fs.setProperty('--gy', `${-fi.top}px`); fs.setProperty('--gw', `${innerWidth}px`); fs.setProperty('--gh', `${innerHeight}px`); }
   }
   addEventListener('resize', bxLay);
+  // and whenever the cards change size: a scroll bar that comes (the transfers loaded) narrows them, and the picker,
+  // laid over its place by figures, stayed where it was (nearer the right edge below than on top)
+  new ResizeObserver(() => { if (!turning) bxLay(); }).observe(bx);
   // an address typed in, in the picker's place: Enter (or leaving it) with a good address takes it, Escape (or
   // leaving it empty) puts the account back
   function typeIn() { const inp = $('bxAddrIn'); $('bxAcct').classList.add('typing'); inp.hidden = false; inp.value = ''; inp.classList.remove('bad'); inp.focus(); }
@@ -1792,12 +1795,14 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     g.style.width = '';
     const c = eth.getBoundingClientRect(), n = $('bxNetE').getBoundingClientRect(), right = c.right - parseFloat(getComputedStyle(g).right);
     if (n.width) g.style.width = `${Math.min(g.offsetWidth, Math.floor(right - n.right - 10))}px`;
-    // its middle on the middle of ETHEREUM's capitals
-    g.style.top = g.style.bottom = '';
-    const mid = capMid($('bxNetE').querySelector('.nm'), eth);
-    if (mid != null && n.width) {
-      const b = g.querySelector('.dd-btn'), bMid = b ? b.getBoundingClientRect().top - g.getBoundingClientRect().top + b.offsetHeight / 2 : g.offsetHeight / 2;
-      g.style.top = `${(mid - bMid).toFixed(1)}px`; g.style.bottom = 'auto';      // the button's middle, not its box's
+    // the picker as far from its card's edge on top as below (5 px, wallet.css): ETHEREUM's capitals centred on it, not
+    // it on them (a font's own measure put it 4 px from the bottom and 6 from the top with Windows' fonts)
+    const ne = $('bxNetE');
+    ne.style.transform = '';
+    const mid = capMid(ne.querySelector('.nm'), eth), b = g.querySelector('.dd-btn');
+    if (mid != null && b) {
+      const bb = b.getBoundingClientRect(), bMid = (bb.top + bb.bottom) / 2 - eth.getBoundingClientRect().top - eth.clientTop;
+      ne.style.transform = `translateY(${(bMid - mid).toFixed(1)}px)`;
     }
     bxLay();
   }
