@@ -496,7 +496,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* each in its card's left corner, the way first in grey: FROM ● BEAM, TO ● ETHEREUM; top on top, bottom below, the letters as far from either edge (+1 on top: capitals sit high in their line) */
 .bx-net.nb, .bx-net.ne { position: absolute; top: calc(var(--net-y) + 1px); margin: 0; }
 .bx-net.nb, .bx-net.ne { left: var(--px); }      /* both networks at the left */
-.bx-net.low { top: auto; bottom: var(--net-y); }      /* classes, not ids: the turn's torn copies have no ids */
+.bx-net.low { top: auto; bottom: calc(var(--net-y) - 1px); }      /* the letters 16 px from the bottom, as from the top on top (measured on the letters) */      /* classes, not ids: the turn's torn copies have no ids */
 .bx-net .way { color: var(--muted); margin-right: 8px; }      /* as far from the dot as the dot from the name */
 .bx-l1 > .caps { visibility: hidden; }      /* the way is said by each network's corner now (the line keeps its height) */
 .bx-net:empty { display: none; }
@@ -504,6 +504,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* Beam below: its bridge key at the bottom right, on TO ● BEAM's line (the tip on the word "key" alone) */
 .bx-key { position: absolute; right: var(--px); bottom: var(--net-y); line-height: 16px; font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .bx-key .tipped { color: var(--text-dim); cursor: help; }
+.bx-key .cp { margin-left: 6px; vertical-align: -1px; }      /* copy the key: the whole key in its tip */
 /* the upper card: "available" over the balance at its bottom right; the balance is the "all" button */
 .bx-l3 { margin-left: auto; text-align: right; font: 11px var(--font-mono); color: var(--muted); }
 .bx-have { flex: none; margin-left: auto; font: 700 var(--fs-m) var(--font-mono); color: var(--text); white-space: nowrap; }
