@@ -668,5 +668,7 @@ html.popup #t-bridge .bx-list { flex: 1 0 auto; margin-bottom: 0; }
 /* on Activity the scroll bar's room is kept before it comes (a short list, a search): nothing moves sideways */
 html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 /* Ethereum's Activity is the wallet tab's account's: its name and short address at the bar's right end, quiet */
-.act-acct { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 0 7px; font: 11px var(--font-mono); color: var(--muted); }
-.act-acct b { font-weight: 400; color: var(--text-dim); }
+.act-acct { margin-left: auto; min-width: 0; display: flex; gap: 6px; white-space: nowrap; padding: 4px 0 7px; font: 11px var(--font-mono); color: var(--muted); }
+.act-acct[hidden] { display: none; }
+.act-acct .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }      /* the name gives way (cut with …) */
+.act-acct .ad { flex: none; }      /* the address always whole as 0x + 6 … 6 */
