@@ -765,3 +765,5 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .fold-b b { color: var(--text-dim); font-weight: 400; font-family: var(--font-mono); font-size: 11px; }
 #tokList .li { grid-template-columns: minmax(0, 1fr) auto; padding: 6px 8px; }
 #tokList .empty { padding: 4px 8px 8px; text-align: left; color: var(--muted); font-size: 12px; }
+/* the dots' glow inside the row's clip: the name cut with … keeps its overflow hidden, so 6 px of room round them */
+.wr .what { padding: 6px 0 6px 6px; margin: -6px 0 -6px -6px; }
