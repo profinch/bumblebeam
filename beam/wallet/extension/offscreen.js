@@ -543,7 +543,13 @@
     const run = async () => {
       const pending = Number(BigInt(await Eth.rpc('eth_getTransactionCount', [p.from, 'pending'])));
       let mine = nonceNext.get(a) || 0;
-      if (mine > pending && lastSent.has(a) && !(await Eth.rpc('eth_getTransactionByHash', [lastSent.get(a)]).catch(() => true))) mine = pending;
+      // our last transaction dropped (never mined, gone from the pool): its nonce is free again. Only when it is still
+      // unknown 3 s later: an RPC behind the others knows neither the count nor the hash yet, and taking its word at
+      // once sent a second transaction on the same nonce ("replacement underpriced")
+      if (mine > pending && lastSent.has(a)) {
+        const seen = () => Eth.rpc('eth_getTransactionByHash', [lastSent.get(a)]).catch(() => true);
+        if (!(await seen())) { await new Promise((r) => setTimeout(r, 3000)); if (!(await seen())) mine = pending; }
+      }
       const nonce = Math.max(pending, mine);
       const hash = await Eth.broadcast(await Eth.sign(secret, { ...p, nonce }));
       nonceNext.set(a, nonce + 1); lastSent.set(a, hash);
