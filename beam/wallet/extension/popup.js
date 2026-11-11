@@ -2625,15 +2625,35 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // switches); a click opens its card: This wallet (Rename, Seed phrase) and Ethereum (its own Seed phrase when added
   // by one, Private key) side by side, the account picker under them as the wallet tab's, Remove last
   const wOpen = new Set(), wPick = {};
+  // drawn again in place: a row or a card is replaced only when what it shows changed (a switch changes two rows'
+  // marks), so an open card's picker does not blink
+  const wRowSig = (w) => JSON.stringify([w.name, !!w.beam, !!w.eth, w.accounts.length, w.id === st.active]);
+  const wCardSig = (w) => JSON.stringify([w.accounts.map((a) => [a.i, a.name, a.address, a.kind]), w.phraseKnown, w.ethKind, !!w.eth, w.hd]);
+  function wRowHtml(w) {
+    const isOpen = wOpen.has(w.id);
+    const holds = [w.beam ? 'Beam' : '', w.eth ? `Ethereum ×${w.accounts.length}` : ''].filter(Boolean).join('<i class="sp"></i>');
+    return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${esc(w.id)}" data-sig="${esc(wRowSig(w))}" tabindex="0" role="button" aria-expanded="${isOpen}">
+      <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
+      ${w.id === st.active ? '<span class="end">current</span>' : '<span></span>'}</div>`;
+  }
+  const html1 = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; };
   function drawWallets() {
-    $('wList').innerHTML = st.wallets.map((w) => {
-      const on = w.id === st.active, isOpen = wOpen.has(w.id);
-      const holds = [w.beam ? 'Beam' : '', w.eth ? `Ethereum ×${w.accounts.length}` : ''].filter(Boolean).join('<i class="sp"></i>');
-      return `<div class="li wr${isOpen ? ' open' : ''}" data-w="${esc(w.id)}" tabindex="0" role="button" aria-expanded="${isOpen}">
-        <span class="what"><span class="nets">${w.beam ? '<i class="chain beam"></i>' : ''}${w.eth ? '<i class="chain eth"></i>' : ''}</span>${esc(w.name)}<span class="sub">${holds}</span></span>
-        ${on ? '<span class="end">current</span>' : '<span></span>'}</div>${isOpen ? wCard(w) : ''}`;
-    }).join('');
-    for (const d of qa('#wList [data-acct]')) { const w = st.wallets.find((x) => x.id === d.dataset.acct); wAcctDd(d, w); ethPhraseBtn(w); }
+    const box = $('wList'), ids = new Set(st.wallets.map((w) => w.id));
+    for (const li of qa('#wList .li.wr')) if (!ids.has(li.dataset.w)) { const c = li.nextElementSibling; if (c && c.classList.contains('wcard2')) c.remove(); li.remove(); }
+    let at = null;      // the last element placed
+    for (const w of st.wallets) {
+      let li = box.querySelector(`.li.wr[data-w="${CSS.escape(w.id)}"]`);
+      if (!li || li.dataset.sig !== wRowSig(w)) { const n = html1(wRowHtml(w)); if (li) li.replaceWith(n); li = n; }
+      if (at ? at.nextElementSibling !== li : box.firstElementChild !== li) { if (at) at.after(li); else box.prepend(li); }
+      at = li;
+      let c = li.nextElementSibling && li.nextElementSibling.classList.contains('wcard2') ? li.nextElementSibling : null;
+      if (!wOpen.has(w.id)) { if (c) c.remove(); continue; }
+      if (!c || c.dataset.sig !== wCardSig(w)) {
+        const n = html1(wCard(w)); if (c) c.replaceWith(n); else li.after(n); c = n;
+        const d = c.querySelector('[data-acct]'); if (d) { wAcctDd(d, w); ethPhraseBtn(w); }
+      }
+      at = c;
+    }
   }
   function wCard(w) {
     const g = (cap, acts) => `<div class="grp"><div class="cap">${cap}</div><div class="acts">${acts.join('')}</div></div>`;
@@ -2642,7 +2662,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // Ethereum's Seed phrase: the picked account's own (imported by a phrase), or the Ethereum part's when added by one
     const eth = w.eth && w.accounts.length ? [b('ethPhrase', 'Seed phrase'), b('ethKey', 'Private key')] : [];
     const picker = eth.length ? `<div class="acct-row"><div class="dd compact acct" data-acct="${esc(w.id)}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>` : '';
-    return `<div class="wcard2"><div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
+    return `<div class="wcard2" data-sig="${esc(wCardSig(w))}"><div class="cols">${g('This wallet', mine)}${eth.length ? g('Ethereum', eth) : ''}</div>${picker}${g('Remove', [b('remove', 'Remove the wallet', 'warn')])}</div>`;
   }
   const hasEthPhrase = (w, i) => { const a = w.accounts.find((x) => x.i === i); return !!a && (a.kind === 'phrase' || (a.kind === 'hd' && w.ethKind === 'phrase')); };
   // the Ethereum Seed phrase button only for an account that has one
@@ -2683,8 +2703,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const id = li.dataset.w, w = st.wallets.find((x) => x.id === id), was = li.nextElementSibling && li.nextElementSibling.classList.contains('wcard2') ? li.nextElementSibling : null;
     if (wOpen.has(id)) { wOpen.delete(id); if (was) was.remove(); }
     else if (w) {
-      wOpen.add(id); li.insertAdjacentHTML('afterend', wCard(w));
-      const d = li.nextElementSibling.querySelector('[data-acct]'); if (d) { wAcctDd(d, w); ethPhraseBtn(w); }
+      wOpen.add(id); drawWallets();
     }
     li.classList.toggle('open', wOpen.has(id)); li.setAttribute('aria-expanded', String(wOpen.has(id)));
   };
