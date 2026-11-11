@@ -2612,7 +2612,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   // what a section reads when it is shown
   function setSecOpen() {
     if (setSec === 'general') bkInfo();
-    if (setSec === 'networks') { drawNodes(); drawRpcs(); drawToks(); probeAll(); }
+    if (setSec === 'networks') { drawNodes(); drawRpcs(); probeAll(); }
     probeLoop();
     if (setSec === 'storage') { snapInfo(); keepTidy().then(keepInfo); }
     if (setSec === 'about') drawAbout();
@@ -2829,12 +2829,6 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       await host('setEthRpc', url); st.ethRpc = url; $('ethRpc').value = ''; drawRpcs(); probeAll();
     } catch (e) { actErr($('rpcAdd'), e); }
   };
-  // the tokens added by hand (to move to the wallet tab's list later)
-  function drawToks() {
-    $('tokList').innerHTML = (st.tokens || []).map((t) => `<div class="li"><span class="what">${esc(t.symbol)}<span class="sub hash">${esc(t.address)}</span></span><a href="#" class="text-link" data-tok="${esc(t.address)}">remove</a></div>`).join('')
-      || '<div class="empty">none added</div>';
-  }
-
   // ---------- Settings: Storage and About ----------
   async function snapInfo() {
     const s = await host('snapshotInfo').catch(() => null);
@@ -3101,12 +3095,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r2.ok) await ask({ title: 'Password changed', note: 'The new password opens the wallet from now on.', yes: 'OK', no: null });
   };
   // the Add buttons beside a field: the room for their message under the field from the start
-  for (const b of ['nodeAdd', 'rpcAdd', 'addTok']) if ($(b)) actErr($(b), null);
-  $('addTok').onclick = async () => {
-    actErr($('addTok'), null);
-    try { await host('addToken', $('tokAddr').value.trim()); $('tokAddr').value = ''; await load(); drawToks(); } catch (e) { actErr($('addTok'), e); }
-  };
-  $('tokList').onclick = async (e) => { const t = e.target.closest('[data-tok]'); if (!t) return; e.preventDefault(); await host('removeToken', t.dataset.tok); await load(); drawToks(); };
+  for (const b of ['nodeAdd', 'rpcAdd']) if ($(b)) actErr($(b), null);
   $('dropSnap').onclick = async () => { await host('dropSnapshot'); snapInfo(); };
 
   // the auto-lock counts only what the user does here: a click or a key tells the host, at most every 15 s

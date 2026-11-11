@@ -178,7 +178,6 @@ html.popup main:has(#t-home:not([hidden])) { overflow: visible; }
 .ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); color: var(--text-dim); }
 .ic.in { color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .ic.out { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.08); }
-#tokList .li { grid-template-columns: minmax(0, 1fr) auto; }
 /* the Activity network switch: small, on the left under the tabs */
 .wsub { max-width: 640px; margin: 0 auto; padding-top: 6px; }
 .seg.mini button { padding: 4px 8px; font-size: 10px; }
@@ -763,8 +762,6 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .fold.open .fold-b { display: block; }
 .fold-b p { margin: 0 0 6px; }
 .fold-b b { color: var(--text-dim); font-weight: 400; font-family: var(--font-mono); font-size: 11px; }
-#tokList .li { grid-template-columns: minmax(0, 1fr) auto; padding: 6px 8px; }
-#tokList .empty { padding: 4px 8px 8px; text-align: left; color: var(--muted); font-size: 12px; }
 /* the dots' glow inside the row's clip: the name cut with … keeps its overflow hidden, so 6 px of room round them */
 .wr .what { padding: 6px 0 6px 6px; margin: -6px 0 -6px -6px; }
 .key-addr { margin: 0; font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }      /* the account's whole address, white, above what the key means */

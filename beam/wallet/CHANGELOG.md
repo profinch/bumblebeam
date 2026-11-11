@@ -211,7 +211,7 @@
 - Networks: Beam's nodes as one list (the first is used, the others in turn; drag to order, the list's cross,
   WebSocket only), each probed for whether it answers and how fast, a click shows what is behind it; our two
   nodes explained in a fold. Ethereum: one's own RPC above the public ones (four, asked in turn), the block from
-  them; the tokens added by hand (to move to the wallet tab).
+  them. Adding a token by hand is gone from Settings (it comes to the wallet tab later).
 - Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing.
 - About: the version as a link to the changelog, the bridge's contracts with copy and explorer icons.
 
