@@ -599,14 +599,14 @@
   // ---------- the running wallet ----------
   const walletDd = BB.dropdown($('walletDd'), async (v) => {
     if (v === '__add') { walletDd.set(st.active); return welcome(); }
-    // the same place in the wallet chosen: its tab (Wallet, Bridge, Activity) or dApps, drawn for it; Settings, or a
-    // Receive or Send page (the other wallet's addresses), goes to the Wallet tab. Where one is is read before
+    // the same place in the wallet chosen: its tab (Wallet, Bridge, Activity, Settings) or dApps, drawn for it; a
+    // Receive or Send page (the other wallet's addresses) goes to the Wallet tab. Where one is is read before
     // the switch: the events of the switch (the new wallet's Beam part starting) come in while it is made
     const shown = qa('.screen').find((x) => !x.hidden), was = shown ? shown.id : 't-home';
     try { await host('switchWallet', v); } catch (e) { return ask({ title: 'Not switched', note: msg(e), yes: 'OK', no: null }); }
     await load();
     if (was === 'x-dapps') sheet('dapps');
-    else tab(was.startsWith('t-') && was !== 't-settings' ? was.slice(2) : 'home');      // from Settings: the Wallet tab
+    else tab(was.startsWith('t-') ? was.slice(2) : 'home');      // Settings stays Settings (its section too), drawn for the wallet chosen
   });
   const acctDd = BB.dropdown($('acctDd'), async (v) => {
     const w = W();
