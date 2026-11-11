@@ -897,8 +897,9 @@
           beam: !!w.beam, eth: !!w.eth, hd: !!(w.eth && w.eth.phrase),
           ethKind: w.eth ? (w.eth.key ? 'key' : !w.eth.phrase ? 'imported' : w.eth.phrase === w.phrase ? 'same' : 'phrase') : null,
           // its public offline address as last read while it ran; else one added by hand and verified by its offline key
-          // its offline and public offline addresses (read while it ran), and the added ones of those kinds that are verified
-          beamAddresses: [...((settings.beamAddrs || {})[w.id] || []), ...((settings.addrExt || {})[w.id] || []).filter((e) => e.verified && (e.type === 'public_offline' || e.type === 'offline')).map((e) => ({ address: e.address, type: e.type, name: e.name || '' }))].filter((a, k, l) => l.findIndex((b) => b.address === a.address) === k),
+          // its offline and public offline addresses (read while it ran), and the ones of those kinds added by hand (a
+          // payment to an unverified one, if it arrives, verifies it)
+          beamAddresses: [...((settings.beamAddrs || {})[w.id] || []), ...((settings.addrExt || {})[w.id] || []).filter((e) => e.type === 'public_offline' || e.type === 'offline').map((e) => ({ address: e.address, type: e.type, name: e.name || '', unverified: !e.verified }))].filter((a, k, l) => l.findIndex((b) => b.address === a.address) === k),
           beamAddress: (settings.beamAddr[w.id] || {}).address || (((settings.addrExt || {})[w.id] || []).find((e) => e.type === 'public_offline' && e.verified === 'key') || {}).address || null,
           accounts: ethAccounts(w),
         })),

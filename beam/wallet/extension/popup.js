@@ -1487,6 +1487,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
 
   // my other Beam wallets as receivers: the offline address each keeps for this (made once it has run)
   const bsOwn = BB.dropdown($('bsOwn'), (v) => { if (v) { $('bsAddr').value = v; $('bsAddr').oninput(); } });
+  // one of the other wallets' addresses added by hand and not verified: whose ("Main, not verified"), or ''
+  const otherUnver = (address) => { for (const w of st.wallets) { if (w.id === st.active) continue; const a = (w.beamAddresses || []).find((x) => x.address === address && x.unverified); if (a) return w.name; } return ''; };
   function bsOwnFill() {
     const others = st.wallets.filter((w) => w.beam && w.id !== st.active);
     // each other wallet by its offline and public offline addresses (both take a payment while it does not run),
@@ -1496,7 +1498,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const l = (w.beamAddresses && w.beamAddresses.length) ? w.beamAddresses : w.beamAddress ? [{ address: w.beamAddress, type: 'public_offline', name: '' }] : [];
       rows.push({ group: w.name });
       if (!l.length) { rows.push({ v: `-${w.id}`, label: w.name, disabled: true, html: `${esc(w.name)}: no offline address known yet` }); continue; }
-      for (const a of l) rows.push({ v: a.address, label: `${w.name} | ${a.name || TYPE_NAME[a.type] || a.type}`, html: `<span class="nm">${esc(a.name || short(a.address))}</span><span class="ad">${esc(TYPE_NAME[a.type] || a.type)}</span>` });
+      for (const a of l) rows.push({ v: a.address, label: `${w.name} | ${a.name || TYPE_NAME[a.type] || a.type}`, html: `<span class="nm${a.unverified ? ' unver' : ''}">${esc(a.name || short(a.address))}</span><span class="ad">${a.unverified ? 'not verified, ' : ''}${esc(TYPE_NAME[a.type] || a.type)}</span>` });      // one added by hand and not verified in yellow: a payment to it that arrives verifies it
     }
     bsOwn.options([{ v: '', label: 'My wallets…' }, ...rows], '');
     $('bsOwn').hidden = $('bsOwnL').hidden = !others.length;
@@ -1588,7 +1590,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (aid && fee > beam) throw new Error(`the fee is paid in BEAM: ${amt(fee, 8)} needed, ${amt(beam, 8)} available`);
       if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
         bsType === 'regular' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : '',
-        bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee` : ''))) return;
+        bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee`
+          : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If it is that wallet's, the payment verifies it; if not, the coins go to whoever it belongs to` : ''))) return;
       const r = await host('beam', W().id, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined });
       actOk($('doBeamSend'), `transaction ${esc(r.txId)} sent`);
       $('bsAmt').value = ''; delete $('bsAmt').dataset.need; $('bsNote').value = ''; bsAvail();

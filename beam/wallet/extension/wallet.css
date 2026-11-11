@@ -799,3 +799,4 @@ dialog .btn:focus-visible { outline: none; }
 #bsOwn .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; }
 #bsOwn .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #bsOwn .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+#bsOwn .dd-list .nm.unver { color: var(--color-yellow); }
