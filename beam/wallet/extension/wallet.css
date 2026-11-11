@@ -676,3 +676,5 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .hint .all { cursor: pointer; }
 .hint .all b { transition: color 0.2s; }
 .hint .all:hover b { color: var(--accent); }
+.hint .all:hover .lb { font-size: 0; }
+.hint .all:hover .lb::after { content: "send all"; font-size: 12px; }      /* as the bridge's: available reads send all under the pointer */
