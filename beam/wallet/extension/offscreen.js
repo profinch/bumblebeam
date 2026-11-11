@@ -1472,7 +1472,9 @@
       });
       return;
     }
-    if (port.name !== 'wallet-ui' || port.sender.id !== chrome.runtime.id) return port.disconnect();
+    // the wallet's own pages only (popup, the dApp window): a content script carries the extension's id too, and this
+    // port can sign and send
+    if (port.name !== 'wallet-ui' || port.sender.id !== chrome.runtime.id || !String(port.sender.url || '').startsWith(chrome.runtime.getURL(''))) return port.disconnect();
     ports.add(port);
     port.onDisconnect.addListener(() => {
       ports.delete(port);
@@ -1489,7 +1491,7 @@
   });
   // the request window was closed: what it still showed is a no
   chrome.runtime.onMessage.addListener((m, sender) => {
-    if (sender.id !== chrome.runtime.id || !m || m.op !== 'dappClosed' || m.windowId !== dappWin) return;
+    if (sender.id !== chrome.runtime.id || !String(sender.url || '').startsWith(chrome.runtime.getURL('')) || !m || m.op !== 'dappClosed' || m.windowId !== dappWin) return;
     dappWin = null;
     // the user closed it: a no to all that waits. It closed itself (all answered, dappWinDone): what came
     // meanwhile gets a window of its own

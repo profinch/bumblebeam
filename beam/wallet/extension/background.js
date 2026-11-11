@@ -79,11 +79,19 @@ async function lockedIcon() {
   }
   return (lockedImages = out);
 }
+// Who may ask: the extension's own pages (popup, the dApp window, the host) for every op; a content script, which
+// runs inside a site's page and carries the extension's id too, only for ensureHost. A site that took over its own
+// renderer could otherwise read or overwrite the vault through get/set.
+const ownPage = (sender) => sender.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !Object.hasOwn(OPS, m?.op)) return;
+  if (m.op !== 'ensureHost' && !ownPage(sender)) return;
   OPS[m.op](m).then((result) => reply({ result }), (e) => reply({ error: String(e && e.message || e) }));
   return true;
 });
+
+// the stored vault out of content scripts' reach (local storage is open to them by default)
+chrome.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
 
 // keep the wallet running across a service-worker restart and from browser start (locked: the host sets the icon)
 chrome.runtime.onStartup.addListener(ensureHost);
