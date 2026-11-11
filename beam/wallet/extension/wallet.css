@@ -78,7 +78,7 @@ html.popup .seed { columns: 2; }
 
 /* ---- the wallet tab ---- */
 .total { padding: 12px 2px; }
-.total-line { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
+.total-line { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; min-height: 30px; }      /* the total's height before it comes ($626.37 −2.33% 24h): nothing under it moves when it does */
 .total-v { font: 700 26px var(--font-mono); font-variant-numeric: tabular-nums; }
 .total-ch { align-self: flex-start; margin-top: 4px; font: var(--fs-s) var(--font-mono); color: var(--muted); white-space: nowrap; }      /* at the top of the total's line */
 .panel.net { padding: 12px 14px; margin-bottom: 10px; }
@@ -557,7 +557,7 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 .bx-gauge .arc.on { stroke: var(--accent); filter: drop-shadow(0 0 2px rgba(var(--accent-rgb), 0.6)); }
 .bx-gauge .arc:hover:not(.on) { stroke: rgba(var(--accent-rgb), 0.5); }
 .bx-gauge .arc.warn { stroke: var(--color-yellow); filter: none; }      /* the fee typed too low (cheap's arc) or too high (safe's) */
-.bx-gauge .needle { transform-origin: 37px 38px; transition: transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.bx-gauge .needle { transform-origin: 37px 34px; transition: transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1); }
 .bx-gauge .needle path { stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; }
 .bx-gauge .hub { fill: var(--text); }
 .bx-fee3 .lv b, .bx-feeinfo b { color: var(--text); font-weight: 700; }
