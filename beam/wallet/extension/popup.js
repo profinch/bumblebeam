@@ -114,7 +114,8 @@
     if (!e) return;
     // turned down in its own confirmation ("Call is rejected by user", Beam's word): not an error, no field
     // outlined; it fades as a done word does, after 5 s
-    if (/rejected by user|user rejected|rejected the request|user (closed|cancell?ed)/i.test(msg(e))) {
+    // so is the bridge's "not enough …" (a balance short, said in one line: nothing to fix in a field)
+    if (/rejected by user|user rejected|rejected the request|user (closed|cancell?ed)/i.test(msg(e)) || (btn.id === 'bxGo' && /^not enough /i.test(msg(e)))) {
       m._fade = setTimeout(() => {
         m.classList.add('going');
         m._fade = setTimeout(() => { if (m.classList.contains('going')) { m.textContent = ''; m.classList.remove('going'); } }, 600);
@@ -408,7 +409,7 @@
     // an asset other than BEAM named as a well-known coin (anyone can make one called BEAM): said so
     const FAMOUS = /^(BEAM|W?BTC|W?ETH|USDT|USDC|DAI|BNB)$/i;
     for (const [aid, n] of ids) rows.push(['Asset ID', `${aid} (${n})${FAMOUS.test(String(n).trim()) ? ` ⚠️ not ${String(n).trim().toUpperCase() === 'BEAM' ? 'BEAM itself' : `the real ${String(n).trim()}`}: a Beam asset of that name` : ''}`]);
-    if (info && info.fee != null) rows.push(['Beam network fee', `${coins(info.fee)} BEAM`]);
+    if (info && info.fee != null) rows.push(['Beam net fee', `${coins(info.fee)} BEAM`]);
     if (info && info.comment) rows.push(['Contract says', String(info.comment)]);
     return rows;
   };
@@ -1713,6 +1714,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // page were the button; its own place in the window says where it is cut from
     const g = $('bxGearBox').style;
     g.setProperty('--gx', `${-r.left}px`); g.setProperty('--gy', `${-r.top}px`); g.setProperty('--gw', `${innerWidth}px`); g.setProperty('--gh', `${innerHeight}px`);
+    // the fee field likewise: its torn copies cut from the gradient where the field stands
+    const fi = $('bxFeeIn').getBoundingClientRect(), fs = $('bxFeeBox').style;
+    if (fi.width) { fs.setProperty('--gx', `${-fi.left}px`); fs.setProperty('--gy', `${-fi.top}px`); fs.setProperty('--gw', `${innerWidth}px`); fs.setProperty('--gh', `${innerHeight}px`); }
   }
   addEventListener('resize', bxLay);
   // an address typed in, in the picker's place: Enter (or leaving it) with a good address takes it, Escape (or
@@ -1989,6 +1993,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (isOpen(w.id)) bxPlace();
   }
   let bxWallet = null;                                // the wallet the form was drawn for
+  let bxMain = null;                                  // the wallet tab's Ethereum account when the bridge last opened
   function bridgeOpen() {
     const a = acct(), l = ownAccts(), w = W();
     if (w && w.id !== bxWallet) {                     // another wallet: its own account, nothing carried over
@@ -1996,6 +2001,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       $('bxAmt').value = ''; bxShown = 5; actErr($('bxGo'), null);
       if ($('bxAcct').classList.contains('typing')) typed(false);
     }
+    // the wallet tab's account changed since the bridge last looked: the bridge takes it (one picked on the bridge
+    // itself stays while the wallet tab's does not change)
+    if (a && a.address !== bxMain) { bxMain = a.address; mine = a.address; if (cur !== 'typed') cur = ''; }
     if (!l.some((x) => x.address === mine)) mine = a ? a.address : l[0] ? l[0].address : '';
     if (cur !== 'typed' || dir !== 'toEth') cur = mine;
     fillAccts(); bxAcct.set(cur); bxStill();
@@ -2020,8 +2028,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!m) return;
     const f = feeNow();
     const say = dir !== 'toEth' ? '' : feeErr ? (FEE_SHORT.find(([re]) => re.test(feeErr)) || [0, 'fee not priced, try in a minute'])[1]
-      : feeLow(f) ? `under the relayer's minimum (${feeData.min.toFixed(2)}): it waits until gas drops to ${Math.max(0, covers(f)).toFixed(3)} gwei`
-      : feeHigh(f) ? 'more than twice safe: paying for nothing, it does not go faster' : '';
+      : feeLow(f) ? `under minimum ${feeData.min.toFixed(2)}: waits for gas ≤ ${Math.max(0, covers(f)).toFixed(3)} gwei`
+      : feeHigh(f) ? 'over twice safe: pays more, not faster' : '';      // one line under the button
     if (say) { if (m.textContent && !m.dataset.fee) return; m.textContent = say; m.title = feeErr || ''; m.dataset.fee = '1'; m.classList.remove('ok'); }      // an action's own word is not written over
     else if (m.dataset.fee) { m.textContent = ''; m.title = ''; delete m.dataset.fee; }
   }
@@ -2045,12 +2053,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!ok) return;
     }
     const av = (beamStatus && beamStatus.available) || 0;
-    if (a + f + 2e6 > av) throw fieldErr('bxAmt', `not enough: ${amt(av, 8)} BEAM available, needed amount + fee + ~0.02`);
+    if (a + f + 2e6 > av) throw new Error('not enough BEAM with the fee');      // short, one line under the button (it goes after 5 s)
     const txid = await host('sendToEth', W().id, {
       title: 'Bridge BEAM → WBEAM',
-      rows: [['WBEAM to receive', amt(a, 8)], ['Relayer fee', `${amt(f, 8)} BEAM (${feeOwn != null ? 'your own' : level})`],
+      rows: [['Receive', `${amt(a, 8)} WBEAM`], ['Relayer fee', `${amt(f, 8)} BEAM (${feeOwn != null ? 'your own' : level})`],
         ['Fee covers', `base fee up to ${(covers(f / GROTH) ?? o.upTo).toFixed(3)} gwei (${pct(shareOf(covers(f / GROTH)))} of the last 24 h); ×${(f / GROTH / fd.min).toFixed(1)} today's minimum`],
-        ['To', own ? `${own.wallet.name} · ${own.name} ${rcv}` : `${rcv} (not one of this wallet's accounts)`]],
+        ['To', own ? `${own.wallet.name} | ${own.name}\n${rcv}` : `${rcv}\n(not one of this wallet's accounts)`]],      // the name, the whole address on a line of its own
       note: 'The official bridge pipe on Beam, released by its relayer on Ethereum in about an hour.\nIt cannot be undone.',
     }, a, rcv, f);
     actOk($('bxGo'), `transaction ${esc(txid)} sent`);
@@ -2064,13 +2072,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!isEthAddress(from)) throw fieldErr('bxAcct', 'choose the Ethereum account');
     const p = await host('fromEthPrepare', { from, wallet: W().id, amount: $('bxAmt').value.replace(',', '.'), fee: FE_FEE });
     const fn = units(p.feeNow, 18), fm = units(p.feeMax, 18);
-    if (!p.enoughGas) throw fieldErr('bxAcct', `not enough ETH for gas on ${short(from)}: up to ${num(fm, 6)} ETH needed, ${num(units(p.ethBalance, 18), 6)} there`);
+    if (!p.enoughGas) throw new Error(`not enough ETH for gas on ${short(from)}`);
     const acc = allAccounts().find((a) => a.address.toLowerCase() === from.toLowerCase());
     const ok = await confirmBox('Bridge WBEAM → BEAM', [
-      ['BEAM to receive', exact(p.value, 8)], ['Relayer fee', `${exact(p.fee, 8)} WBEAM`],
-      ['From', `${acc ? `${acc.wallet.name} · ${acc.name} ` : ''}${p.from}`], ['To', `${p.beamWallet}: Beam bridge key ${short(p.key)}`],
-      ['Ethereum transactions', p.approve ? '2: approve WBEAM to the bridge, then send' : '1: send'],
-      ['Gas', `≈ ${num(fn, 6)} ETH ${rates ? usd(fn * rates.eth) : ''} (at most ${num(fm, 6)})`]],
+      ['Receive', `${exact(p.value, 8)} BEAM`], ['Relayer fee', `${exact(p.fee, 8)} WBEAM`],
+      ['From', `${acc ? `${acc.wallet.name} | ${acc.name}\n` : ''}${p.from}`], ['To', `${p.beamWallet}\nBeam bridge key: ${short(p.key)}`],
+      ['Transactions - Ethereum', p.approve ? '2\napprove WBEAM to the bridge, then send' : '1\nsend'],
+      // the gas as Ethereum Send says it: what it should cost, and the most it can
+      ['Net fee', `≈ ${num(fn, 6)} ETH${rates ? ` | ${usd(fn * rates.eth)}` : ''}`],
+      ['Max fee', `${num(fm, 6)} ETH${rates ? ` | ${usd(fm * rates.eth)}` : ''}`]],
       'The approval is for exactly this amount. Once the relayer has brought it to Beam (usually under an hour), claim it in the transfers below.');
     if (!ok) return;
     actOk($('bxGo'), p.approve ? 'approving WBEAM, then sending…' : 'sending…', true);

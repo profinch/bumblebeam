@@ -1412,7 +1412,7 @@
     // WBEAM -> BEAM from one of this wallet's Ethereum accounts to the running Beam wallet's bridge key:
     // approve (if the pipe may not take enough yet) and sendFunds, priced together, signed after a yes
     async fromEthPrepare(o) {
-      if (Eth.isAddress(o.from) && fromEthBusy.has(o.from.toLowerCase())) throw new Error('a bridge transfer from this account is still on its way: send this one once it is sent');
+      if (Eth.isAddress(o.from) && fromEthBusy.has(o.from.toLowerCase())) throw new Error('a transfer from this account is on its way');
       const { w, a } = findEth(o.from);
       const bw = beamFor(o.wallet).w;                  // the Beam wallet that receives: the one the popup named
       const key = await Bridge.beamKey(beamFor(o.wallet).e);
@@ -1423,7 +1423,7 @@
       const [bal, allow] = await Promise.all([
         Eth.callBig(Bridge.WBEAM, Eth.ERC20.balanceOf(a.address)), Eth.callBig(Bridge.WBEAM, Eth.ERC20.allowance(a.address, Bridge.ETH_PIPE)),
       ]);
-      if (bal < total) throw new Error(`not enough WBEAM on ${a.address.slice(0, 8)}…${a.address.slice(-6)}: ${Number(total) / 1e8} needed, ${Number(bal) / 1e8} there`);
+      if (bal < total) throw new Error(`not enough WBEAM on ${a.address.slice(0, 8)}…${a.address.slice(-6)}`);
       const send = { from: a.address, to: Bridge.ETH_PIPE, data: Bridge.sendFundsData(value, fee, key), value: 0n };
       let approve = null, sendP;
       if (allow < total) {
@@ -1449,11 +1449,11 @@
       // one bridge send per account at a time: an approve sets the allowance (it does not add to it), so a second
       // one meanwhile left the first sendFunds without its allowance (reverted, its gas lost)
       const acc = x.from.toLowerCase();
-      if (fromEthBusy.has(acc)) throw new Error('a bridge transfer from this account is still on its way: send this one once it is sent');
+      if (fromEthBusy.has(acc)) throw new Error('a transfer from this account is on its way');
       // the ETH for the gas checked again: time may have passed since the confirmation
       const ethNow = BigInt(await Eth.rpc('eth_getBalance', [x.from, 'latest']));
       const gasMax = BigInt(x.sendFeeMax) + (x.approve ? BigInt(x.approve.feeMax) : 0n);
-      if (ethNow < gasMax) throw new Error(`not enough ETH for the gas now: up to ${Eth.fromUnits(gasMax, 18)} ETH, ${Eth.fromUnits(ethNow, 18)} there`);
+      if (ethNow < gasMax) throw new Error(`not enough ETH for gas on ${x.from.slice(0, 8)}…${x.from.slice(-6)}`);
       fromEthBusy.add(acc);
       const rec = { from: x.from, value: x.value, fee: x.fee, key: x.key, time: Date.now(), approve: null, hash: null, state: 'approving' };
       inFlight.add(rec.time);
@@ -1475,7 +1475,7 @@
         }
         // signed without asking again only within what was confirmed (+50 % for the estimate's room)
         if (BigInt(p.feeMax) > (BigInt(x.sendFeeMax) * 3n) / 2n) {
-          throw new Error(`gas rose while the approval mined: sendFunds would cost up to ${Number(BigInt(p.feeMax)) / 1e18} ETH, more than confirmed. The approval is in place: send again`);
+          throw new Error('gas rose while approving: send again (the approval is in place)');
         }
         rec.hash = await signSend(secret, p);
         rec.state = 'sent'; await tell();
