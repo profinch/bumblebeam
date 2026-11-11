@@ -3,6 +3,9 @@
 ## 0.4.0 (2026-11-10, not yet published)
 
 ### Safety
+- Forgot the password? on the lock screen: it cannot be recovered (the vault is sealed with it alone), said plainly;
+  typing RESET deletes every wallet from this browser (the vault, Beam's databases and their copies, the backup kept
+  here, the old shared folder) and keeps the network settings, to restore the wallets from their seed phrases.
 - The wallet's own channel (the one that signs and sends) and its storage answer only the extension's own pages.
   The script it puts into sites carries the extension's id too: a site that took over its own page process could
   have used it. The stored vault is out of that script's reach.

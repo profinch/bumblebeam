@@ -1052,6 +1052,25 @@
       if (before && before !== id) sweep(before);
     },
     renameWallet: (id, name) => mutate((d) => { const w = wallet(id, d); w.name = String(name).trim().slice(0, 32) || w.name; }),
+    // A forgotten password cannot be got back: the vault is sealed with it alone (that is what keeps it safe). What is
+    // left is to start again: everything of the wallets is deleted from this browser (the vault, every wallet's
+    // Beam database and its copies, the backup kept here, the wallets' own settings), the network settings stay;
+    // then the wallets come back from their seed phrases (or a backup with its own password)
+    resetAll: (word) => serial(async () => {
+      if (word !== 'RESET') throw new Error('type RESET to delete it all');
+      for (const id of [...slots.keys()]) { try { await stop(id); } catch {} slots.delete(id); }
+      // every wallet's store, and the old shared folder (0.1's wallet.db: left there, it would come back as a wallet)
+      const dbs = indexedDB.databases ? await indexedDB.databases().catch(() => []) : [];
+      for (const d of dbs) if (d.name && (d.name.startsWith('/bw_') || d.name === '/beam_wallet')) await new Promise((res) => { const r = indexedDB.deleteDatabase(d.name); r.onsuccess = r.onerror = r.onblocked = () => res(); });
+      const root = await navigator.storage.getDirectory();
+      for (const dir of ['db-copies', 'backups']) await root.removeEntry(dir, { recursive: true }).catch(() => {});
+      await kv.set('vault', null);
+      vaultRec = null; data = null; vk = null; legacyDb = false; pendingPhrase = null;
+      settings = { autoLock: settings.autoLock, active: null, activeEth: {}, tokens: settings.tokens || [], ethRpc: settings.ethRpc || '', beamAddr: {}, addrFav: {}, addrExt: {}, backupNodes: settings.backupNodes };
+      await saveSettings();
+      lockIcon();
+      broadcast({ type: 'event', method: 'bb_changed' });
+    }),
     removeWallet: (id, pass) => serial(async () => {
       await verify(pass);
       const w = wallet(id);

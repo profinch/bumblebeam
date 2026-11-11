@@ -442,6 +442,21 @@
     if (!consentGone.has(id)) port && port.postMessage({ type: 'consent', id, ok: r.ok });
   };
 
+  // ---------- a forgotten password ----------
+  // It cannot be got back (the vault is sealed with it alone). Said plainly; then, if wanted, everything of the
+  // wallets is deleted here and the start screen opens, to bring them back from their seed phrases
+  $('forgotPass').onclick = async (e) => {
+    e.preventDefault();
+    const r = await ask({ title: 'Forgot the password', yes: 'Reset BumbleBeam', no: 'Cancel',
+      input: { label: 'To delete it all, type RESET', value: '', placeholder: 'RESET' },
+      note: 'The password cannot be recovered: the wallets are encrypted with it alone, and nobody has a copy.\nWhat you can do is start again: every wallet is deleted from this browser, then you restore each one from its seed phrase (or import a backup with the password it was made with). The coins stay on their chains. Beam history and address names come back from an exported wallet data file, accounts imported by a private key only from that key.',
+      check: async ({ input }) => { if (input !== 'RESET') throw new Error('type RESET (capital letters) to delete it all'); await host('resetAll', input); } });
+    if (!r.ok) return;
+    try { await chrome.storage.local.remove(['actKeep']); } catch {}
+    keep = null;
+    await load(); route();
+  };
+
   // ---------- passwords on the start screens ----------
   // the first wallet sets the password (two fields); a further one asks for it again (one field)
   function pwFields() {

@@ -790,3 +790,4 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 .dd-list [role="option"].drop-below::after { bottom: var(--db, 0); }      /* inside the row: the list box clips what goes past it */
 .dd-list [role="option"].dragging { opacity: 0.4; }
 :is(#acctDd, #bxAcct, .wcard2 .dd.acct) .dd-list [role="option"]:is(.drop-above, .drop-below) { border-radius: 0; }
+.forgot { margin: 10px 0 0; text-align: center; font-size: 12px; }
