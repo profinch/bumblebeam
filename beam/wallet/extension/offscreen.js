@@ -599,7 +599,12 @@
   const BEAM_SITE = new Set(['wallet_status', 'assets_list', 'get_asset_info', 'tx_list', 'tx_status', 'addr_list', 'get_utxo',
     'ev_subunsub', 'invoke_contract', 'process_invoke_data', 'block_details', 'get_version', 'create_address', 'validate_address', 'calc_change']);
   const BEAM_TX = new Set(['invoke_contract', 'process_invoke_data', 'tx_send']);
-  const beamCtx = new Map();                      // wallet id -> { origin, appname, n }: a site's call that may ask consent
+  const beamCtx = new Map();                      // wallet id -> { origin, appname }: the site whose contract call runs now
+  // A wallet's contract calls (a site's, the wallet's own bridge send and claim) one at a time: Beam's consent does
+  // not say which call it is for, so the one running is the one asking. Two at once named one site for another's
+  // transaction, or a site for the wallet's own.
+  const lanes = new Map();
+  const lane = (id, fn) => { const r = (lanes.get(id) || Promise.resolve()).then(fn, fn); lanes.set(id, r.catch(() => {})); return r; };
   // A site is connected to a wallet: the one open when it was allowed. Each wallet keeps its own sites (wallet id
   // -> origin -> ...), and everything below reads the open wallet's: after a switch a site sees nothing of the
   // other wallet until it is connected there too.
@@ -689,9 +694,9 @@
         const id = settings.active, s = live(id);
         if (!s) throw err(4900, 'the Beam part of the open wallet is not running');
         const tx = BEAM_TX.has(q.method);
-        if (tx) { const c = beamCtx.get(id) || { origin, appname: site.appname, n: 0 }; c.n++; beamCtx.set(id, c); }
-        try { return await s.e.rpc('siteCall', [origin, site.appname, origin, q.method, q.params || {}], 7 * 60 * 1000); }
-        finally { if (tx) { const c = beamCtx.get(id); if (c && --c.n <= 0) beamCtx.delete(id); } }
+        const call = () => s.e.rpc('siteCall', [origin, site.appname, origin, q.method, q.params || {}], 7 * 60 * 1000);
+        if (!tx) return call();
+        return lane(id, async () => { beamCtx.set(id, { origin, appname: site.appname }); try { return await call(); } finally { beamCtx.delete(id); } });
       }
       case 'personal_sign': case 'eth_signTypedData_v4': case 'eth_sendTransaction': {
         // locked: a connected site's request still goes to the window, which asks for the password first
@@ -1374,12 +1379,12 @@
     sendToEth: (walletId, c, a, rcv, f) => {
       const w = beamFor(walletId);
       const args = [uint(a, 'amount'), Eth.checkAddress(rcv), uint(f, 'relayer fee')];
-      return withCtx({ ...c, rows: [['Beam wallet', w.name], ...((c && c.rows) || [])] }, () => Bridge.sendToEth(beamFor(walletId).e, ...args));
+      return withCtx({ ...c, rows: [['Beam wallet', w.name], ...((c && c.rows) || [])] }, () => lane(walletId, () => { beamCtx.delete(walletId); return Bridge.sendToEth(beamFor(walletId).e, ...args); }));
     },
     receive: (walletId, c, msgId) => {
       const w = beamFor(walletId);
       const id = uint(msgId, 'message');
-      return withCtx({ ...c, rows: [['Beam wallet', w.name], ...((c && c.rows) || [])] }, () => Bridge.receive(beamFor(walletId).e, id));
+      return withCtx({ ...c, rows: [['Beam wallet', w.name], ...((c && c.rows) || [])] }, () => lane(walletId, () => { beamCtx.delete(walletId); return Bridge.receive(beamFor(walletId).e, id); }));
     },
 
     // WBEAM -> BEAM from one of this wallet's Ethereum accounts to the running Beam wallet's bridge key:
