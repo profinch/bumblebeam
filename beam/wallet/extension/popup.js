@@ -2077,7 +2077,8 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (!m) return;
     const f = feeNow();
     const say = dir !== 'toEth' ? '' : feeErr ? (FEE_SHORT.find(([re]) => re.test(feeErr)) || [0, 'fee not priced, try in a minute'])[1]
-      : feeLow(f) ? `under minimum ${feeData.min.toFixed(2)}: waits for gas ≤ ${Math.max(0, covers(f)).toFixed(3)} gwei`
+      // under the minimum the relayer takes it only when gas falls that low; a fee that covers next to no gas may never go
+      : feeLow(f) ? (covers(f) < 0.0005 ? `under minimum ${feeData.min.toFixed(2)}: may get stuck for good` : `under minimum ${feeData.min.toFixed(2)}: stuck till gas ≤ ${covers(f).toFixed(3)} gwei`)
       : feeHigh(f) ? 'over twice safe: paying for nothing, not faster' : '';      // one line under the button
     if (say) { if (m.textContent && !m.dataset.fee) return; m.textContent = say; m.title = feeErr || ''; m.dataset.fee = '1'; m.classList.remove('ok'); }      // an action's own word is not written over
     else if (m.dataset.fee) { m.textContent = ''; m.title = ''; delete m.dataset.fee; }
