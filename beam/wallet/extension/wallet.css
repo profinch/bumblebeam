@@ -363,8 +363,9 @@ html.popup main:has(> .screen:not(#t-home):not([hidden])) { scrollbar-gutter: st
 /* the Send screens' asset lists: 10 rows (26 px each in a compact list), then they scroll */
 #bsAsset .dd-list, #esAsset .dd-list { max-height: calc(10 * 26px + 8px); }
 /* the address's type line keeps its room (one line) whether or not an address is in: nothing under it moves */
-#bsKind { min-height: 18px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#bsKind:empty { margin: 6px 0 12px; }
+.hint.split.bs-kind { min-height: 18px; margin-top: 6px; flex-wrap: nowrap; align-items: center; }
+#bsKind { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-kind:has(#bsKind:empty) { margin: 6px 0 12px; }
 .warn-own { color: var(--color-yellow); }
 /* the line under Ethereum Send's address keeps its room too (one line, more for the contract warning) */
 #esToHint { min-height: 18px; }
@@ -722,11 +723,11 @@ html.popup main:has(> #t-activity:not([hidden])) { scrollbar-gutter: stable; }
 /* the checkbox in the wallet's colours */
 .sp-sec .check { margin: 4px 0 10px; font-size: 12px; align-items: flex-start; }
 .sp-sec .check b { color: var(--text); font-weight: 400; }
-.sp-sec .check input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 3px 0 0; border: 1px solid rgba(var(--accent-rgb), 0.6); border-radius: 3px; background: rgba(var(--accent-rgb), 0.06); cursor: pointer; display: grid; place-items: center; }
-.sp-sec .check input:hover { border-color: var(--accent); }
-.sp-sec .check input:checked { background: var(--accent); border-color: var(--accent); }
-.sp-sec .check input:checked::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg, #071a26); border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.sp-sec .check input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
+:is(.sp-sec .check, .check.ours) input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 3px 0 0; border: 1px solid rgba(var(--accent-rgb), 0.6); border-radius: 3px; background: rgba(var(--accent-rgb), 0.06); cursor: pointer; display: grid; place-items: center; }
+:is(.sp-sec .check, .check.ours) input:hover { border-color: var(--accent); }
+:is(.sp-sec .check, .check.ours) input:checked { background: var(--accent); border-color: var(--accent); }
+:is(.sp-sec .check, .check.ours) input:checked::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg, #071a26); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+:is(.sp-sec .check, .check.ours) input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
 /* Networks: each node or RPC a row as Beam's addresses: whether it answers, its host, how fast, the list's cross;
    the first, in use, lit; dragged, a line where it goes; a click opens what is behind it */
 .nodes { margin: 4px 0 6px; }
@@ -805,3 +806,7 @@ dialog .btn:focus-visible { outline: none; }
 .ibtn:focus-visible { outline: none; border-color: rgba(var(--accent-rgb), 0.5); color: var(--text); }
 /* a window taller than the popup (a long offline address to confirm) scrolls with the wallet's own thin bar */
 dialog, .dp-msg, #s-dapp .kv { scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+/* Send's anonymous box at the right end of the address type's line, in the line's small letters */
+.bs-kind { align-items: center; }
+.bs-kind .check.ours { margin: 0; gap: 6px; font-size: inherit; color: var(--text-dim); white-space: nowrap; }
+.bs-kind .check.ours input { margin: 0; }

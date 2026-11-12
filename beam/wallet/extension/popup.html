@@ -219,11 +219,11 @@ while the wallet is locked.</p>
       <div class="dd compact" id="bsAsset"><button type="button" class="dd-btn" id="bsAssetB" aria-labelledby="bsAssetL bsAssetB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
     <div class="field own-label" id="bsOwnL">To one of my wallets</div><div class="dd compact own" id="bsOwn" hidden><button type="button" class="dd-btn" id="bsOwnB" aria-labelledby="bsOwnL bsOwnB" aria-haspopup="listbox" aria-expanded="false"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div>
     <label class="field">To address<textarea id="bsAddr" rows="2" autocomplete="off" spellcheck="false" placeholder="a Beam address or token"></textarea></label>
-    <p class="hint after" id="bsKind"></p>
+    <!-- the address's type and what it has left; at the right end, for an offline kind, whether the sender is left out -->
+    <p class="hint after split bs-kind"><span id="bsKind"></span><label class="check ours" id="bsAnonBox" hidden><input type="checkbox" id="bsAnon"><span class="tipped" title="Send anonymously: an offline payment carries the sender's own identity for the receiver's history (Beam does so by default). Sent anonymously it carries none: the receiver sees the coins and the address they came to, not who sent them. The network never sees either way.">anonymous</span></label></p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"></span></label>
     <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">network fee</span> <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
     <label class="field">Comment (visible only to you, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
-    <label class="check" id="bsAnonBox" hidden><input type="checkbox" id="bsAnon"><span class="tipped" title="An offline payment carries the sender's own identity for the receiver's history (Beam does so by default). Sent anonymously it carries none: the receiver sees the coins and the address they came to, not who sent them. The network never sees either way.">Send anonymously: the receiver does not see who sent it</span></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>
