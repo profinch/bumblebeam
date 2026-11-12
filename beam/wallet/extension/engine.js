@@ -45,6 +45,7 @@
     readDb: (db) => Beam.readDb(db),
     exportData: () => Beam.exportData(),
     importData: (json) => Beam.importData(json),
+    shieldedTickets: () => Beam.shieldedTickets(),
     importDb: (db, bytes, pass) => Beam.importDb(db, bytes, pass),
     copyFromShared: (src, db, pass) => Beam.copyFromShared(src, db, pass),
     exists: (db) => Beam.exists(db),

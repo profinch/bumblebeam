@@ -1315,6 +1315,34 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const out = []; while (v > 0n) { out.unshift(Number(v & 255n)); v >>= 8n; }
     return Uint8Array.from(out);
   };
+  // An offline or max privacy address's one-time keys (Beam's vouchers): the ticket of each, as hex SerialPub X|Y,
+  // read out of the address itself. The token is base58 of Beam's TxToken (yas, compacted sizes): parameter 124 a list
+  // of 226-byte vouchers [flags | SerialPub.X | NoncePub.X | k0 | k1 | shared secret | signature], 125 the single one
+  // of a max privacy address. Checked 2026-11-12 against Beam's source and a payment found on chain by its ticket.
+  const hex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  const voucherTicket = (v) => hex(v.subarray(1, 33)) + hex([v[0] & 1]);
+  const voucherSerials = (token) => {
+    const b = b58(String(token || '').trim());
+    const cu = (i) => (b[i] & 0x80 ? [b[i] & 0x7f, i + 1] : [b.subarray(i + 1, i + 1 + b[i]).reduceRight((v, x) => v * 256 + x, 0), i + 1 + b[i]]);
+    for (let i = 0; i < b.length - 3; i++) {
+      if (b[i] === 0x7c) {
+        const [L, j] = cu(i + 1), c = b[j] & 0x7f;
+        if (b[j] & 0x80 && c && L === 1 + 226 * c && j + L <= b.length) return Array.from({ length: c }, (_, k) => voucherTicket(b.subarray(j + 1 + 226 * k, j + 1 + 226 * (k + 1))));
+      }
+      if (b[i] === 0x7d) { const [L, j] = cu(i + 1); if (L === 226 && j + L <= b.length) return [voucherTicket(b.subarray(j, j + 226))]; }
+    }
+    return [];
+  };
+  // the open wallet's shielded coins with their tickets (its engine works them out from its own keys; nothing asked
+  // of the node): receipt's transaction id -> ticket, and every ticket received; kept 20 s
+  let tixC = { wid: null, at: 0, p: null };
+  function ticketsOf(wid) {
+    if (tixC.wid === wid && Date.now() - tixC.at < 20000 && tixC.p) return tixC.p;
+    const p = host('beamTickets', wid).then((l) => ({ byTx: new Map((l || []).filter((c) => c.tx).map((c) => [c.tx, c.serial])), all: new Set((l || []).map((c) => c.serial)) }))
+      .catch(() => ({ byTx: new Map(), all: new Set() }));
+    tixC = { wid, at: Date.now(), p };
+    return p;
+  }
   // An address has two forms: its token (what is handed out: the long base58 string) and its SBBS id (hex, what a
   // transaction names as sender or receiver). The token carries the SBBS id inside it
   const tokHex = new Map();
@@ -1392,16 +1420,21 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (n == null) { const v = await host('beam', wid, 'validate_address', { address: x.address }); n = v && v.payments != null ? Number(v.payments) : null; }
       if (!(n > 0)) { if (shownAddr === x.address) $('beamAddrPay').textContent = 'unknown'; return; }
       vouchersIn.set(x.address, n);
-      const txs = await host('beam', wid, 'tx_list', { count: 1000 }).catch(() => []);
+      const [txs, tix] = await Promise.all([host('beam', wid, 'tx_list', { count: 1000 }).catch(() => []), ticketsOf(wid)]);
       const nid = (v) => String(v || '').toLowerCase().replace(/^0+/, '');
       // an offline payment (a push) to it: a regular transfer to the same SBBS id used no key of it
       const got = txs.filter((t) => t.income && t.receiver && t.status !== 2 && t.status !== 4 && /push/i.test(t.tx_type_string || '')
         && ((x.wallet_id && nid(t.receiver) === nid(x.wallet_id)) || t.receiver === x.address || tokenHas(x.address, String(t.receiver)))).length;
+      // exact: the address's own keys whose tickets came in as coins (Beam records an offline receipt without its
+      // address, so a receipt alone cannot tell); the history's count only when the address could not be read
+      const keys = voucherSerials(x.address);
+      const spent = keys.length ? keys.filter((k) => tix.all.has(k)).length : got;
+      if (keys.length) n = keys.length;
       if (shownAddr !== x.address || W().id !== wid) return;
-      const left = Math.max(0, n - got);
+      const left = Math.max(0, n - spent);
       const tip = kind === 'max'
-        ? `A max privacy address carries one one-time key: it takes one payment. ${got ? 'It has had its payment: make a new one for the next.' : 'Make a new one for each payment.'}`
-        : `It carries ${n} one-time key${n === 1 ? '' : 's'}: each payment to it takes one (${got} came so far). When a sender's wallet has none left, it asks this wallet for new ones over Beam's messages: they come while this wallet is open and online, so a payment then waits for that. A sender keeps its own copy of the address: counted here from the payments that came.`;
+        ? `A max privacy address carries one one-time key: it takes one payment. ${spent ? 'It has had its payment: make a new one for the next.' : 'Make a new one for each payment.'}`
+        : `It carries ${n} one-time key${n === 1 ? '' : 's'}: each offline payment to it takes one (${spent} spent: the payments that came with its keys). When a sender's wallet has none left, it asks this wallet for new ones over Beam's messages: they come while this wallet is open and online, so a payment then waits for that. A sender keeps its own copy of the address: counted here from the payments that came.`;
       $('beamAddrPay').innerHTML = `<span class="tipped${left ? '' : ' warn'}" title="${esc(tip)}">${left} of ${n} left</span>`;
     } catch { if (shownAddr === x.address) $('beamAddrPay').textContent = 'unknown'; }
   }
@@ -2525,7 +2558,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const syms = new Map();
     for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
     // which of this wallet's addresses a payment came to: Beam's own by their SBBS id, one added by hand by the id inside its token
-    const ownL = await host('beam', wid, 'addr_list', { own: true }).catch(() => []), extL = await host('addrExt', wid).catch(() => []);
+    const [ownL, extL, tix] = await Promise.all([host('beam', wid, 'addr_list', { own: true }).catch(() => []), host('addrExt', wid).catch(() => []), ticketsOf(wid)]);
+    // an offline payment's address: the one whose key's ticket the coin came with (Beam records the receipt without it)
+    const bySerial = new Map();
+    for (const a of [...ownL.map((o) => ({ name: o.comment || '', address: o.address, type: o.type })), ...extL.map((e) => ({ name: e.name || '', address: e.address, type: e.type }))])
+      if (a.type === 'offline' || a.type === 'max_privacy') for (const k of voucherSerials(a.address)) if (!bySerial.has(k)) bySerial.set(k, a);
+    const paidTo = (t) => { const k = tix.byTx.get(String(t.txId || '').toLowerCase()); const a = k && bySerial.get(k); return a ? [a] : null; };
     // One SBBS id can stand behind several addresses of different kinds (a regular, an offline and a max privacy
     // token of one id). Only the kind the payment used is named: a regular transfer came to the regular one(s); an
     // offline payment (a push) to the kind Beam recorded (address_type), else the offline kinds. When none of that
@@ -2549,7 +2587,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ss = String(t.status_string || '');
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'

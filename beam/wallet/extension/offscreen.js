@@ -1317,6 +1317,15 @@
       await mutate(() => {}, await Vault.keyFor(newPass));
     },
 
+    // the open wallet's shielded coins with their tickets (worked out in its engine from its own keys: nothing asked
+    // of the node), so the popup tells which offline address each offline payment came to
+    async beamTickets(id) {
+      need();
+      const s = live(id);
+      if (!s) throw new Error('the Beam part is not running');
+      return s.e.rpc('shieldedTickets', [], 60000);
+    },
+
     // Beam's own exchange file of a wallet (addresses with their key numbers, contacts, transactions; no keys): out of
     // its running engine, or a short-lived one for a wallet not open now; and into it the same way
     async beamData(id, pass, json) {

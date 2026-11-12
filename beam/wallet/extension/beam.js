@@ -342,6 +342,12 @@ const Beam = (() => {
       if (!client || !client.isRunning()) return rej(new Error('the Beam part is not running'));
       client.exportData((j) => (j == null ? rej(new Error('Beam did not export the data')) : res(String(j))));
     }),
+    // each shielded coin received with the ticket (SerialPub) it came with: which offline address it was paid to is the
+    // one whose voucher carries that ticket (our engine build: shieldedTickets, beam/wallet/engine-build)
+    shieldedTickets: () => new Promise((res, rej) => {
+      if (!client || !client.isRunning()) return rej(new Error('the Beam part is not running'));
+      client.shieldedTickets((j) => { if (j == null) return rej(new Error('Beam did not list its shielded coins')); try { res(JSON.parse(String(j))); } catch (e) { rej(e); } });
+    }),
     importData: (json) => new Promise((res, rej) => {
       if (!client || !client.isRunning()) return rej(new Error('the Beam part is not running'));
       client.importData(String(json), (ok) => (ok ? res(true) : rej(new Error('Beam did not take that file: not its data, or for another wallet'))));

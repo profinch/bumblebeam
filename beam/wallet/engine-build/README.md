@@ -4,7 +4,10 @@
 master after HF6), built as BeamMW's CI builds it (`.github/workflows/build.yml`, job wasm), with one addition:
 `wasmclient-export-import.patch` gives the client `exportData(callback)` and `importData(json, callback)`, thin
 wrappers over Beam's own `storage::ExportDataToJson` / `ImportDataFromJson` (the CLI's `export_data` /
-`import_data`, the mobile wallets' export). The JS glue is BeamMW's, unchanged but for its constants' addresses.
+`import_data`, the mobile wallets' export), and `shieldedTickets(callback)`: each shielded coin the wallet received
+with the ticket (SerialPub) it came with, worked out from the coin's own key (`TicketParams::Restore` with the owner's
+viewer, then kG·G + kJ·J), and the receipt's transaction id (the coin's `m_createTxId`). The sender puts the voucher's
+ticket into the output as it is, so the ticket names the offline address paid (Beam records the receipt without it). The JS glue is BeamMW's, unchanged but for its constants' addresses.
 
 Build (Linux, no root):
 

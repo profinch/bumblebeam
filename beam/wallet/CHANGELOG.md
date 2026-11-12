@@ -33,6 +33,12 @@
     own from imported data is renamed and removed in Beam.
   - Back on the start screens and the lock clear a typed phrase, key and passwords; node probes of an older round
     are not drawn over newer ones, and the public RPCs show red when none answers; a card's picked account checked.
+- Offline payments are tied to the address they came to, in the wallet itself. Beam records a received offline
+  payment without its address; the engine (rebuilt, `shieldedTickets`) now gives each received shielded coin's
+  ticket, worked out from the wallet's own keys, and each offline or max privacy address carries its keys' tickets.
+  So Receive's card counts what is left exactly (Payments: 4 of 5 left), and an offline receipt in Activity names
+  its address (To). Nothing is asked of a node or a server. Checked against the chain: a test payment's ticket
+  found in the node's database at the block the receipt shows.
 - Send to an offline address makes an offline payment (Beam's API since 6.0 turns it into a regular, online one
   unless asked: the receiving wallet then had to be open, and the address's one-time key was never used).
 - Second full audit (2026-11-12):

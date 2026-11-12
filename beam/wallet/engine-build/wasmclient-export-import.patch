@@ -1,8 +1,17 @@
 diff --git a/wasmclient/wasmclient.cpp b/wasmclient/wasmclient.cpp
-index 2d2c359ca..0bd3e1303 100644
+index 2d2c359ca..8f2855a1d 100644
 --- a/wasmclient/wasmclient.cpp
 +++ b/wasmclient/wasmclient.cpp
-@@ -507,6 +507,54 @@ public:
+@@ -31,6 +31,8 @@
+ #include "mnemonic/mnemonic.h"
+ #include "utility/string_helpers.h"
+ #include "wasm_beamapi.h"
++#include "core/shielded.h"
++#include "nlohmann/json.hpp"
+ 
+ namespace fs = std::filesystem;
+ using namespace beam;
+@@ -507,6 +509,115 @@ public:
          });
      }
  
@@ -54,15 +63,77 @@ index 2d2c359ca..0bd3e1303 100644
 +        });
 +    }
 +
++    // BumbleBeam: each shielded coin this wallet received, with the ticket (SerialPub) it came with. The ticket is the
++    // one inside the voucher of the offline address it was paid to (the sender puts the voucher's ticket into the
++    // output as it is), so the wallet can tell which of its offline addresses a payment came to: Beam itself records
++    // a received offline payment without the address. Worked out here from the coin's own key (kSerG and the viewer's
++    // index), nothing asked of the node. The callback gets a JSON array of
++    // { tx: the receipt's transaction id (hex) or "", serial: SerialPub X|Y (hex, 33 bytes), txo, value, asset, height },
++    // or null when the wallet is not running.
++    void ShieldedTickets(val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val::null());
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this]() -> boost::any
++        {
++            auto db = m_Client->GetWalletDB();
++            auto owner = db->get_OwnerKdf();
++            std::map<Key::Index, ShieldedTxo::Viewer> viewers;
++            auto hex = [](const uint8_t* p, size_t n) { static const char d[] = "0123456789abcdef"; std::string s; s.reserve(n * 2); for (size_t i = 0; i < n; i++) { s += d[p[i] >> 4]; s += d[p[i] & 15]; } return s; };
++            nlohmann::json out = nlohmann::json::array();
++            db->visitShieldedCoins([&](const ShieldedCoin& c) -> bool
++            {
++                const auto& key = c.m_CoinID.m_Key;
++                auto it = viewers.find(key.m_nIdx);
++                if (it == viewers.end())
++                {
++                    it = viewers.emplace(key.m_nIdx, ShieldedTxo::Viewer()).first;
++                    it->second.FromOwner(*owner, key.m_nIdx);
++                }
++                ShieldedTxo::Data::TicketParams tp;
++                tp.m_pK[0] = key.m_kSerG;
++                tp.m_IsCreatedByViewer = key.m_IsCreatedByViewer;
++                tp.Restore(it->second);
++                ECC::Point::Native pt;
++                pt = ECC::Context::get().G * tp.m_pK[0];      // SerialPub = kG·G + kJ·J (TicketParams' double-blinded commitment)
++                pt += ECC::Context::get().J * tp.m_pK[1];
++                ECC::Point serial = pt;
++                std::string ser = hex(serial.m_X.m_pData, serial.m_X.nBytes) + hex(&serial.m_Y, 1);
++                out.push_back(nlohmann::json{
++                    { "tx", c.m_createTxId ? hex(c.m_createTxId->data(), c.m_createTxId->size()) : std::string() },
++                    { "serial", ser },
++                    { "txo", c.m_TxoID },
++                    { "value", c.m_CoinID.m_Value },
++                    { "asset", c.m_CoinID.m_AssetID },
++                    { "height", c.m_confirmHeight }
++                });
++                return true;
++            });
++            return out.dump();
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            try { (*cb)(val(boost::any_cast<std::string>(res))); }
++            catch (...) { (*cb)(val::null()); }
++        });
++    }
++
      void StartWallet()
      {
          AssertMainThread();
-@@ -1060,6 +1108,8 @@ EMSCRIPTEN_BINDINGS()
+@@ -1060,6 +1171,9 @@ EMSCRIPTEN_BINDINGS()
          .function("createAppAPI", &WasmWalletClient::CreateAppAPI3)
          .function("importRecovery", &WasmWalletClient::ImportRecovery)
          .function("importRecoveryFromFile", &WasmWalletClient::ImportRecoveryFromFile)
 +        .function("exportData", &WasmWalletClient::ExportData)
 +        .function("importData", &WasmWalletClient::ImportData)
++        .function("shieldedTickets", &WasmWalletClient::ShieldedTickets)
          .class_function("IsAppSupported", &WasmWalletClient::IsAppSupported)
          .class_function("GenerateAppID", &WasmWalletClient::GenerateAppID)
          .class_function("GeneratePhrase", &WasmWalletClient::GeneratePhrase)
