@@ -157,6 +157,11 @@
   chip, as on the pool and the explorer).
 
 ### Activity (both networks; worked out in lab/activity.html)
+- A contract call (a DEX trade, a farm) says what it moved: the row shows what came in (+) with what went out under
+  it, the card Gave and Got per asset (Beam's invoke_data amounts).
+- A receipt names the address of this wallet it came to (To): a regular transfer its regular address, an offline
+  payment the very address whose key it used (by the coin's ticket; matched by its amount and block when the coin
+  carries no transaction id).
 - By day: Today, Yesterday, 9 Nov (another year's with its year), each day's net in the network's coin. What is
   under way stands above them all, a ring turning round its icon.
 - Each row says who and what: Sent to / Received from (one's own Ethereum accounts by name, else the short
@@ -296,6 +301,8 @@
   with Beam's own export and import exposed; beam/wallet/engine-build). Open a Beam backup file (a wallet.db) is
   gone from Add a wallet.
 - Storage: the recovery snapshot (moved from About) and Activity's memory, each with its size and its clearing.
+  Activity's memory: Transactions, Spent coins, Timestamps and Lists, each with a tip on what it is, all
+  wallets together, then a table with each wallet's own figures and size.
 - About: the version as a link to the changelog, the bridge's contracts with copy and explorer icons.
 
 ### Everywhere
