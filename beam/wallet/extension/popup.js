@@ -2563,8 +2563,15 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     for (const [h, t] of Object.entries(kp.bt)) if (!blockTime.has(Number(h))) blockTime.set(Number(h), t);
     await Promise.all([...new Set(found.map((c) => c.maturity))].filter((h) => !blockTime.has(h)).map((h) =>
       host('beam', wid, 'block_details', { height: h }).then((b) => { blockTime.set(h, Number(b.timestamp) || 0); if (b.timestamp) kp.bt[h] = Number(b.timestamp); }, () => {})));
+    // what a contract call moved (a DEX trade, a farm): Beam's invoke_data amounts per asset, positive what the wallet
+    // gave, negative what it got; summed over the call's contracts
+    const movesOf = (t) => {
+      const m = new Map();
+      for (const d of Array.isArray(t.invoke_data) ? t.invoke_data : []) for (const x of d.amounts || []) m.set(Number(x.asset_id) || 0, (m.get(Number(x.asset_id) || 0) || 0) + (Number(x.amount) || 0));
+      return [...m].filter(([, g]) => g).map(([aid, g]) => ({ aid, g }));
+    };
     const syms = new Map();
-    for (const aid of new Set([...txs, ...found].map((t) => Number(t.asset_id || 0)).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
+    for (const aid of new Set([...txs, ...found].flatMap((t) => [Number(t.asset_id || 0), ...movesOf(t).map((x) => x.aid)]).filter(Boolean))) syms.set(aid, (await assetSymOf(aid).catch(() => '')) || `asset ${aid}`);
     // which of this wallet's addresses a payment came to: Beam's own by their SBBS id, one added by hand by the id inside its token
     const [ownL, extL, tix] = await Promise.all([host('beam', wid, 'addr_list', { own: true }).catch(() => []), host('addrExt', wid).catch(() => []), ticketsOf(wid)]);
     // an offline payment's address: the one whose key's ticket the coin came with (Beam records the receipt without it)
@@ -2601,6 +2608,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
         peer: contract ? null : (t.income ? t.sender : t.receiver) || null, anon: !contract && !!t.income && /push/i.test(t.tx_type_string || '') && !t.sender, at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
+        moves: contract && !bridge ? movesOf(t).map((x) => ({ ...x, sym: x.aid ? syms.get(x.aid) : 'BEAM' })) : null,
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
           : t.status === 5 ? 'registering on the chain' : bridge ? 'on its way to the chain' : ss || 'in progress',
@@ -2739,6 +2747,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const state = r.st === 'failed' ? `<span class="st bad">failed: ${esc(r.why)}</span>` : r.st === 'cancelled' ? '<span class="st bad">cancelled</span>' : '';
     const when = r.group ? `${fdate(r.t)} ${ftime(r.items[r.items.length - 1].t)}–${ftime(r.items[0].t)}` : r.t ? fdt(r.t) : '';
     const sub = [when, state, r.comment && !r.ours ? `<span class="cm">${esc(r.comment)}</span>` : ''].filter(Boolean).join('<i class="sp"></i>');
+    // a contract call (a DEX trade): what it got, then under it what it gave, each in its own asset
+    const mv = r.kind === 'dapp' && Array.isArray(r.moves) && r.moves.length ? r.moves : null;
+    const got = mv && mv.find((x) => x.g < 0), gave = mv && mv.find((x) => x.g > 0);
+    const mvH = (x, sign) => `${sign}${amt(Math.abs(x.g))}<u>${esc(x.sym)}</u>`;
+    if (mv) {
+      const top = got ? `<span class="amt">${mvH(got, '+')}</span>` : `<span class="amt">${mvH(gave, '−')}</span>`;
+      const under = got && gave ? `<span class="usd">−${amt(gave.g)} ${esc(gave.sym)}</span>` : '<span class="usd">&nbsp;</span>';      // in the dollars' place, their small letters
+      const cls = ['li', 'ar', r.st === 'failed' ? 'bad' : '', r.st === 'cancelled' ? 'dim' : '', actOpen.has(r.id) ? 'open' : ''].filter(Boolean).join(' ');
+      return `<div class="${cls}" data-id="${esc(r.id)}" tabindex="0" role="button" aria-expanded="${actOpen.has(r.id)}"><span class="ic ${c}${live ? ' spin' : ''}">${svg}</span>
+      <span class="what">${esc(actTitle(r))} <span class="who">${actWho(r)}</span><span class="sub">${sub}</span></span>
+      <span class="ar-r">${top}${under}</span></div>${open ? actCard(r) : ''}`;
+    }
     const amtH = r.kind === 'approve' ? '<span class="amt zero">&nbsp;</span>' : r.v ? `<span class="amt">${came(r) ? '+' : '−'}${vShown(r)}<u>${esc(r.sym)}</u></span>` : '<span class="amt zero">&nbsp;</span>';
     const rate = rateOfRow(r);
     const usdH = r.kind === 'approve' ? '<span class="usd">allowance</span>' : !r.v ? '<span class="usd">&nbsp;</span>' : rate ? `<span class="usd">${usdSmall(r.v * rate)}</span>` : '<span class="usd">no price</span>';
@@ -2782,6 +2802,12 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       rows.push(null);
     }
     else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);
+    if (r.kind === 'dapp' && Array.isArray(r.moves) && r.moves.length) {
+      const line = (l) => l.map((x) => `${amt(Math.abs(x.g), 8)} ${esc(x.sym)}${x.aid ? ` <span class="k">(id ${x.aid})</span>` : ''}`).join('\n');
+      const gaveL = r.moves.filter((x) => x.g > 0), gotL = r.moves.filter((x) => x.g < 0);
+      if (gaveL.length) rows.push(['Gave', line(gaveL)]);
+      if (gotL.length) rows.push(['Got', line(gotL)]);
+    }
     if (r.kind === 'dapp' && r.contract) rows.push(['Contract', `${esc(r.contract)}${ics(cpI(r.contract, 'the contract address'), lnI(`${SCAN}/address/${r.contract}`, 'Open the contract on Etherscan'))}`]);
     if (r.asset) rows.push(['Asset', `${esc(r.sym)} (id ${r.asset})${ics(cpI(String(r.asset), 'the asset id'), lnI(`${EXPL}/asset/${r.asset}`, 'Open the asset in the explorer'))}`]);
     if (r.tokAddr && r.sym !== 'ETH') rows.push(['Token', `${esc(r.sym)}${ics(cpI(r.tokAddr, 'the token\'s contract address'), lnI(`${SCAN}/token/${r.tokAddr}`, 'Open the token on Etherscan'))}`]);
