@@ -2596,9 +2596,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const bridge = contract && ((cid && inv.includes(cid)) || /^(send|receive) funds$/i.test(String(t.comment || '').trim()));
       const kind = bridge ? (t.income ? 'br-in' : 'br-out') : contract ? 'dapp' : t.income ? 'in' : 'out';
       const ss = String(t.status_string || '');
+      // anon: an offline payment whose sender left itself out
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, anon: !contract && !!t.income && /push/i.test(t.tx_type_string || '') && !t.sender,      // an offline payment whose sender left itself out at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, anon: !contract && !!t.income && /push/i.test(t.tx_type_string || '') && !t.sender, at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
