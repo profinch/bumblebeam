@@ -1672,11 +1672,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if ($('bsAddr').value.trim() !== a) return;
       bsMine = mine;
       // the type, then a caution for one's own wallet, then what the address has left, each by its emoji
-      // the one-time keys THIS wallet holds for that address (the ones in it, and the 30 more its wallet sends whenever
-      // a sender has fewer than 5 and both are online, Beam's RequestVouchersFrom): offline payments this wallet can make
-      const left = v.payments != null ? `${v.payments} offline payment${v.payments === 1 ? '' : 's'} ready` : '';
+      const left = v.payments != null ? `${v.payments} payment${v.payments === 1 ? '' : 's'} left` : '';
       $('bsKind').innerHTML = kindRow('Address type', TYPE_NAME[v.type] || v.type || 'regular')
-        + (mine ? ` <span class="warn-own">⚠️ your current wallet${mine === 'unverified' ? ' (unverified)' : ''}</span>` : '') + (left ? ` <span class="k tipped" title="One-time keys this wallet holds for this address: the ones inside the address, and more that the receiver's wallet sends while both are online (30 at a time once fewer than 5 are left). Each offline payment takes one. The address's own card counts only the keys inside it.">ℹ️ ${esc(left)}</span>` : '');
+        + (mine ? ` <span class="warn-own">⚠️ your current wallet${mine === 'unverified' ? ' (unverified)' : ''}</span>` : '') + (left ? ` <span class="k">ℹ️ ${esc(left)}</span>` : '');
       bsAvail();
     } catch {}
   };
