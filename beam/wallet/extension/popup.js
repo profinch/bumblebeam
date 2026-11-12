@@ -2496,7 +2496,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const of = (w) => ({ tx: n(w.tx), coins: n(w.coins), bt: n(w.bt), ls: n(w.ls) });
     const all = { tx: 0, coins: 0, bt: 0, ls: 0 };
     for (const w of Object.values(k)) { const f = of(w); for (const x in all) all[x] += f[x]; }
-    $('keepSize').textContent = `${kb(k)} KB, all wallets`;
+    $('keepSize').textContent = `${kb(k)} KB`;
     const TIP = {
       tx: 'Transactions Activity worked out something for that Beam did not give: a kernel or a block (from the pool\'s list, from the coins it made), or that it is our pool\'s payout',
       coins: 'Coins with no transaction of their own (found on the chain, from a wallet of this seed), kept once they are spent so their row stays',
@@ -2504,11 +2504,11 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       ls: 'Activity\'s lists as last shown (a network, an Ethereum account): they show at once when Activity opens, then the new one replaces them',
     };
     const dt = (x, label) => `<dt><span class="tipped" title="${esc(TIP[x])}">${label}</span></dt>`;
-    $('keepInfo').innerHTML = `${dt('tx', 'Transactions')}<dd>${all.tx}</dd>${dt('coins', 'Spent coins')}<dd>${all.coins}</dd>${dt('bt', 'Blocks\' times')}<dd>${all.bt}</dd>${dt('ls', 'Lists')}<dd>${all.ls}</dd>`;
+    $('keepInfo').innerHTML = `${dt('tx', 'Transactions')}<dd>${all.tx}</dd>${dt('coins', 'Spent coins')}<dd>${all.coins}</dd>${dt('bt', 'Timestamps')}<dd>${all.bt}</dd>${dt('ls', 'Lists')}<dd>${all.ls}</dd>`;
     // by wallet: its name (one no longer here: the memory goes with it by itself), its figures, its size
     const ids = Object.keys(k);
     $('keepBy').hidden = !ids.length;
-    $('keepBy').innerHTML = !ids.length ? '' : '<tr><th>Wallet</th><th title="Transactions">Tx</th><th title="Spent coins">Coins</th><th title="Blocks\' times">Blocks</th><th title="Lists">Lists</th><th>Size</th></tr>'
+    $('keepBy').innerHTML = !ids.length ? '' : '<tr><th>Wallet</th><th title="Transactions">Tx</th><th title="Spent coins">Coins</th><th title="Timestamps">Timestamps</th><th title="Lists">Lists</th><th>Size</th></tr>'
       + ids.map((id) => { const w = (st.wallets || []).find((x) => x.id === id), f = of(k[id]); return `<tr><td>${esc(w ? w.name : 'removed wallet')}</td><td>${f.tx}</td><td>${f.coins}</td><td>${f.bt}</td><td>${f.ls}</td><td>${kb(k[id])} KB</td></tr>`; }).join('');
   }
   const keepAge = BB.dropdown($('keepAge'), () => {});
