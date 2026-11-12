@@ -811,7 +811,7 @@ dialog, .dp-msg, #s-dapp .kv { scrollbar-width: thin; scrollbar-color: rgba(var(
 .bs-kind .check.ours { margin: 0; gap: 6px; font-size: inherit; color: var(--text-dim); white-space: nowrap; }
 .bs-kind .check.ours input { margin: 0; }
 /* Activity's memory by wallet: a quiet table under the totals, the figures right */
-.keep-by { width: 100%; margin: 4px 0 10px; border-collapse: collapse; font: 11px var(--font-mono); color: var(--text-dim); }
+.keep-by { width: 100%; margin: 16px 0 10px; border-collapse: collapse; font: 11px var(--font-mono); color: var(--text-dim); }
 .keep-by th { font-weight: 700; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: right; padding: 0 0 4px 8px; }
 .keep-by td { text-align: right; padding: 3px 0 3px 8px; border-top: 1px solid var(--border-dim); white-space: nowrap; }
 .keep-by :is(th, td):first-child { text-align: left; padding-left: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
