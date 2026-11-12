@@ -2527,16 +2527,18 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // which of this wallet's addresses a payment came to: Beam's own by their SBBS id, one added by hand by the id inside its token
     const ownL = await host('beam', wid, 'addr_list', { own: true }).catch(() => []), extL = await host('addrExt', wid).catch(() => []);
     // One SBBS id can stand behind several addresses of different kinds (a regular, an offline and a max privacy
-    // token of one id): all of them are named, the kind the payment used first (a push, Beam's offline payment, to
-    // the offline kinds; a simple transfer to a regular one)
+    // token of one id). Only the kind the payment used is named: a regular transfer came to the regular one(s); an
+    // offline payment (a push) to the kind Beam recorded (address_type), else the offline kinds. When none of that
+    // kind is known here, all of them are.
     const OFFL = ['offline', 'public_offline', 'max_privacy'];
-    const receivedAt = (sbbs, push) => {
+    const receivedAt = (sbbs, push, atype) => {
       if (!sbbs) return null;
       const id = String(sbbs).toLowerCase().replace(/^0+/, '');
       const l = [...ownL.filter((a) => String(a.wallet_id || '').toLowerCase().replace(/^0+/, '') === id).map((o) => ({ name: o.comment || '', address: o.address, type: o.type })),
         ...extL.filter((x) => tokenHas(x.address, sbbs)).map((e) => ({ name: e.name || '', address: e.address, type: e.type }))].filter((a, k, all) => all.findIndex((b) => b.address === a.address) === k);
       if (!l.length) return [{ name: '', address: sbbs, type: '' }];
-      return l.sort((a, b) => (OFFL.includes(b.type) === !!push) - (OFFL.includes(a.type) === !!push));
+      const fits = l.filter((a) => (push ? (atype ? a.type === atype : OFFL.includes(a.type)) : !OFFL.includes(a.type)));
+      return fits.length ? fits : l;
     };
     const cid = st.bridgeCid;
     const rows = txs.map((t) => {
@@ -2547,7 +2549,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ss = String(t.status_string || '');
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver, /push/i.test(t.tx_type_string || '')) : null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
