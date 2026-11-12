@@ -33,10 +33,11 @@
     own from imported data is renamed and removed in Beam.
   - Back on the start screens and the lock clear a typed phrase, key and passwords; node probes of an older round
     are not drawn over newer ones, and the public RPCs show red when none answers; a card's picked account checked.
-- Send anonymously: an offline, public offline or max privacy payment can leave the sender out (a box under the
-  comment; the confirmation says Sender: anonymous). Beam puts the sender's identity into every offline payment
-  for the receiver's history; our engine now leaves it out when asked. Such a receipt reads "from anonymous" in
-  Activity, with the address it came to.
+- Hide sender ID: an offline, public offline or max privacy payment can leave the sender's wallet ID out (a box at the
+  right of the address type's line; the confirmation says Sender ID: hidden from the receiver). Every Beam
+  transaction is already private on the chain; Beam puts the sender's ID into an offline payment for the receiver's
+  history, and our engine now leaves it out when asked. Such a receipt reads "from hidden sender" in Activity, with
+  the address it came to.
 - Offline payments are tied to the address they came to, in the wallet itself. Beam records a received offline
   payment without its address; the engine (rebuilt, `shieldedTickets`) now gives each received shielded coin's
   ticket, worked out from the wallet's own keys, and each offline or max privacy address carries its keys' tickets.

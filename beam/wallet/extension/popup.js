@@ -1703,7 +1703,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!aid && value + fee > beam) throw new Error(`not enough: ${amt(beam, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
       if (aid && value > bsHave()) throw new Error(`not enough: ${amt(bsHave(), 8)} ${sym} available`);
       if (aid && fee > beam) throw new Error(`the fee is paid in BEAM: ${amt(fee, 8)} needed, ${amt(beam, 8)} available`);
-      if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ...(bsAnonOn() ? [['Sender', 'anonymous']] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
+      if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ...(bsAnonOn() ? [['Sender ID', 'hidden from the receiver']] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
         bsType === 'regular' || bsType === 'regular_new' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : '',
         bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee`
           : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If the address is that wallet's, this payment verifies it. If not, the coins go to whoever it belongs to.` : ''))) return;
@@ -2705,7 +2705,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.pool) return r.ours ? '<span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
     if (r.found) return `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`;
     if (r.from) return `from <b>${esc(r.from)}</b>`;
-    if (r.anon) return 'from <b>anonymous</b>';
+    if (r.anon) return 'from <b>hidden sender</b>';
     if (!r.peer) return '';
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nameOf(r.peer) || short(r.peer))}</b>`;
   };
@@ -2798,7 +2798,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     }
     else if (r.anon) {
       // sent anonymously: no sender in it; the address it came to found by its key's ticket
-      rows.push(['From', '<span class="tipped" title="The sender left its identity out of this offline payment">anonymous</span>']);
+      rows.push(['From', '<span class="tipped" title="The sender hid its wallet ID from this offline payment: the coins and the address they came to are known, not who sent them">hidden sender</span>']);
       const at = Array.isArray(r.at) ? r.at : [];
       if (at.length) rows.push(['To', atHtml(at)]);
       rows.push(null);
