@@ -1338,8 +1338,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   let tixC = { wid: null, at: 0, p: null };
   function ticketsOf(wid) {
     if (tixC.wid === wid && Date.now() - tixC.at < 20000 && tixC.p) return tixC.p;
-    const p = host('beamTickets', wid).then((l) => ({ byTx: new Map((l || []).filter((c) => c.tx).map((c) => [c.tx, c.serial])), all: new Set((l || []).map((c) => c.serial)) }))
-      .catch(() => ({ byTx: new Map(), all: new Set() }));
+    // by the receipt's transaction id; else by its amount and block (one coin of that amount in that block)
+    const p = host('beamTickets', wid).then((l) => {
+      l = l || [];
+      const vh = new Map();
+      for (const c of l) { const k = `${c.value}:${c.height}`; vh.set(k, vh.has(k) ? null : c.serial); }
+      return { byTx: new Map(l.filter((c) => c.tx).map((c) => [String(c.tx).toLowerCase(), c.serial])), byVH: vh, all: new Set(l.map((c) => c.serial)) };
+    }).catch(() => ({ byTx: new Map(), byVH: new Map(), all: new Set() }));
     tixC = { wid, at: Date.now(), p };
     return p;
   }
@@ -2566,7 +2571,10 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     const bySerial = new Map();
     for (const a of [...ownL.map((o) => ({ name: o.comment || '', address: o.address, type: o.type })), ...extL.map((e) => ({ name: e.name || '', address: e.address, type: e.type }))])
       if (a.type === 'offline' || a.type === 'max_privacy') for (const k of voucherSerials(a.address)) if (!bySerial.has(k)) bySerial.set(k, a);
-    const paidTo = (t) => { const k = tix.byTx.get(String(t.txId || '').toLowerCase()); const a = k && bySerial.get(k); return a ? [a] : null; };
+    const paidTo = (t) => {
+      const k = tix.byTx.get(String(t.txId || '').toLowerCase()) || tix.byVH.get(`${Number(t.value) || 0}:${t.height || madeAt.get(t.txId) || 0}`);
+      const a = k && bySerial.get(k); return a ? [a] : null;
+    };
     // One SBBS id can stand behind several addresses of different kinds (a regular, an offline and a max privacy
     // token of one id). Only the kind the payment used is named: a regular transfer came to the regular one(s); an
     // offline payment (a push) to the kind Beam recorded (address_type), else the offline kinds. When none of that
