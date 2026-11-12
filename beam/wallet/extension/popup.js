@@ -1568,7 +1568,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const l = (w.beamAddresses && w.beamAddresses.length) ? w.beamAddresses : w.beamAddress ? [{ address: w.beamAddress, type: 'public_offline', name: '' }] : [];
       rows.push({ group: w.name });
       if (!l.length) { rows.push({ v: `-${w.id}`, label: w.name, disabled: true, html: `${esc(w.name)}: no offline address known yet` }); continue; }
-      for (const a of l) rows.push({ v: a.address, label: `${w.name} | ${a.name || TYPE_NAME[a.type] || a.type}`, html: `<span class="nm${a.unverified ? ' unver' : ''}">${esc(a.name || short(a.address))}</span><span class="ad">${a.unverified ? 'not verified, ' : ''}${esc(TYPE_NAME[a.type] || a.type)}</span>` });      // one added by hand and not verified in yellow: a payment to it that arrives verifies it
+      for (const a of l) rows.push({ v: a.address, label: `${w.name} | ${a.name || short(a.address)}`, html: `<span class="nm${a.unverified ? ' unver' : ''}">${esc(a.name || short(a.address))}</span><span class="ad">${a.unverified ? 'not verified, ' : ''}${esc(TYPE_NAME[a.type] || a.type)}</span>` });      // one added by hand and not verified in yellow: a payment to it that arrives verifies it
     }
     const cur = $('bsAddr').value.trim();      // a redraw (the state changed) keeps the one picked while it is still there
     bsOwn.options([{ v: '', label: 'My wallets…' }, ...rows], rows.some((x) => x.v === cur) ? cur : '');
