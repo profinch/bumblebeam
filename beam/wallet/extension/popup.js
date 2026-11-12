@@ -2491,10 +2491,25 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
   };
   async function keepInfo() {
     if (!$('keepInfo')) return;
-    const k = await keepAll(); let tx = 0, coins = 0, bt = 0, ls = 0;
-    for (const w of Object.values(k)) { tx += Object.keys(w.tx || {}).length; coins += Object.keys(w.coins || {}).length; bt += Object.keys(w.bt || {}).length; ls += Object.keys(w.ls || {}).length; }
-    $('keepSize').textContent = `${Math.ceil(JSON.stringify(k).length / 1024)} KB`;
-    $('keepInfo').innerHTML = `<dt>Transfers</dt><dd>${tx}</dd><dt>Spent coins</dt><dd>${coins}</dd><dt>Blocks' times</dt><dd>${bt}</dd><dt>Lists</dt><dd>${ls}</dd>`;
+    // every wallet's memory together (the figures and the size), then each wallet's own on a line of the table under them
+    const k = await keepAll(), n = (o) => Object.keys(o || {}).length, kb = (o) => Math.ceil(JSON.stringify(o).length / 1024);
+    const of = (w) => ({ tx: n(w.tx), coins: n(w.coins), bt: n(w.bt), ls: n(w.ls) });
+    const all = { tx: 0, coins: 0, bt: 0, ls: 0 };
+    for (const w of Object.values(k)) { const f = of(w); for (const x in all) all[x] += f[x]; }
+    $('keepSize').textContent = `${kb(k)} KB, all wallets`;
+    const TIP = {
+      tx: 'Transactions Activity worked out something for that Beam did not give: a kernel or a block (from the pool\'s list, from the coins it made), or that it is our pool\'s payout',
+      coins: 'Coins with no transaction of their own (found on the chain, from a wallet of this seed), kept once they are spent so their row stays',
+      bt: 'The time of each block a coin came in, so a coin with no record still shows when',
+      ls: 'Activity\'s lists as last shown (a network, an Ethereum account): they show at once when Activity opens, then the new one replaces them',
+    };
+    const dt = (x, label) => `<dt><span class="tipped" title="${esc(TIP[x])}">${label}</span></dt>`;
+    $('keepInfo').innerHTML = `${dt('tx', 'Transactions')}<dd>${all.tx}</dd>${dt('coins', 'Spent coins')}<dd>${all.coins}</dd>${dt('bt', 'Blocks\' times')}<dd>${all.bt}</dd>${dt('ls', 'Lists')}<dd>${all.ls}</dd>`;
+    // by wallet: its name (one no longer here: the memory goes with it by itself), its figures, its size
+    const ids = Object.keys(k);
+    $('keepBy').hidden = !ids.length;
+    $('keepBy').innerHTML = !ids.length ? '' : '<tr><th>Wallet</th><th title="Transactions">Tx</th><th title="Spent coins">Coins</th><th title="Blocks\' times">Blocks</th><th title="Lists">Lists</th><th>Size</th></tr>'
+      + ids.map((id) => { const w = (st.wallets || []).find((x) => x.id === id), f = of(k[id]); return `<tr><td>${esc(w ? w.name : 'removed wallet')}</td><td>${f.tx}</td><td>${f.coins}</td><td>${f.bt}</td><td>${f.ls}</td><td>${kb(k[id])} KB</td></tr>`; }).join('');
   }
   const keepAge = BB.dropdown($('keepAge'), () => {});
   keepAge.set('90');
