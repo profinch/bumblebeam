@@ -803,3 +803,5 @@ dialog .btn:focus-visible { outline: none; }
 .wnav a:focus-visible, .subtabs button:focus-visible, .seg button:focus-visible { outline: none; color: var(--text); }
 /* the header's icon buttons (back, lock, dApps, Settings): no ring either; reached by the keyboard, their frame lit */
 .ibtn:focus-visible { outline: none; border-color: rgba(var(--accent-rgb), 0.5); color: var(--text); }
+/* a window taller than the popup (a long offline address to confirm) scrolls with the wallet's own thin bar */
+dialog, .dp-msg, #s-dapp .kv { scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
