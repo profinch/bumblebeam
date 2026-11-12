@@ -7,7 +7,10 @@ wrappers over Beam's own `storage::ExportDataToJson` / `ImportDataFromJson` (the
 `import_data`, the mobile wallets' export), and `shieldedTickets(callback)`: each shielded coin the wallet received
 with the ticket (SerialPub) it came with, worked out from the coin's own key (`TicketParams::Restore` with the owner's
 viewer, then kG·G + kJ·J), and the receipt's transaction id (the coin's `m_createTxId`). The sender puts the voucher's
-ticket into the output as it is, so the ticket names the offline address paid (Beam records the receipt without it). The JS glue is BeamMW's, unchanged but for its constants' addresses.
+ticket into the output as it is, so the ticket names the offline address paid (Beam records the receipt without it).
+The same patch adds `tx_send`'s `anonymous: true` for offline kinds: a private transaction parameter (`AnonymousSender`
+= 146, never on the wire) makes the key keeper leave the output's `User.m_Sender` zero, so the receiver is not told
+who sent it (Beam's receiving side already takes a zero sender: "Sender may prefer to send anonymously"). The JS glue is BeamMW's, unchanged but for its constants' addresses.
 
 Build (Linux, no root):
 

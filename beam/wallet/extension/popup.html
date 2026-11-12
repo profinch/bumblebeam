@@ -223,6 +223,7 @@ while the wallet is locked.</p>
     <label class="field">Amount<span class="inline"><input id="bsAmt" inputmode="decimal" placeholder="0"></span></label>
     <p class="hint after split"><span id="bsLeft"></span><span><span class="tipped" title="The network fee depends on the address's type: 0.001 BEAM to a regular address, 0.011 to an offline, public offline or max privacy one. Paid in BEAM whatever is sent.">network fee</span> <b id="bsFee" class="fee-v">0.001 <span class="unit">BEAM</span></b></span></p>
     <label class="field">Comment (visible only to you, up to 64 characters)<input id="bsNote" maxlength="64" placeholder="optional"></label>
+    <label class="check" id="bsAnonBox" hidden><input type="checkbox" id="bsAnon"><span class="tipped" title="An offline payment carries the sender's own identity for the receiver's history (Beam does so by default). Sent anonymously it carries none: the receiver sees the coins and the address they came to, not who sent them. The network never sees either way.">Send anonymously: the receiver does not see who sent it</span></label>
     <div class="row"><button class="btn solid" id="doBeamSend">Send</button></div>
     <p class="note ok" hidden></p><p class="note bad" hidden></p>
   </section>

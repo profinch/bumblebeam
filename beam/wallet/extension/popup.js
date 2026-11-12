@@ -307,7 +307,7 @@
     for (const id of ['bsKind', 'esToHint']) if ($(id)) $(id).textContent = '';
     qa('.err').forEach((x) => x.classList.remove('err')); qa('.act-msg').forEach((x) => { x.textContent = ''; });
     try { bsOwn.set(''); esOwn.set(''); bsAsset.set('0'); esAsset.set('ETH'); } catch {}
-    bsType = null; bsMine = ''; esQuote = null;
+    bsType = null; bsMine = ''; esQuote = null; $('bsAnon').checked = false; $('bsAnonBox').hidden = true;
     bxWallet = null;                                  // the bridge drawn anew at the next open: its typed address gone too
     clearNotes('x-beamSend'); clearNotes('x-ethSend'); clearNotes('t-bridge');
     clearStart();
@@ -1642,7 +1642,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     // My wallets follows the field: another wallet's address picks its name, anything else "My wallets…"
     const hit = !!a && st.wallets.some((w) => w.id !== st.active && (w.beamAddress === a || (w.beamAddresses || []).some((x) => x.address === a)));
     bsOwn.set(hit ? a : '');
-    bsType = null; bsMine = ''; $('bsKind').textContent = ''; bsAvail();
+    bsType = null; bsMine = ''; $('bsKind').textContent = ''; $('bsAnonBox').hidden = true; bsAvail();
     if (!a || !beamHere()) return;
     // Beam's validate_address calls almost any word a valid token, so the shape is checked first: an SBBS
     // address is 60-70 hex characters, a token (offline, max privacy, the new regular) a long base58 string
@@ -1652,6 +1652,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if ($('bsAddr').value.trim() !== a) return;          // an older answer for an address since changed
       if (!v.is_valid) { $('bsKind').innerHTML = '<span class="warn-own">not a valid Beam address</span>'; return; }
       bsType = v.type;
+      $('bsAnonBox').hidden = !OFFLINE_KINDS.includes(bsType);      // only an offline payment can leave its sender out
       // an address of the open wallet itself (Beam lists it, or one added manually and verified): the coins
       // would come back to it, so it is said with a caution
       // Beam says is_mine for its own SBBS addresses only, not for its tokens (offline, max privacy, public
@@ -1672,7 +1673,9 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       bsAvail();
     } catch {}
   };
-  const beamFee = () => (bsType === 'offline' || bsType === 'max_privacy' || bsType === 'public_offline' ? 1100000 : 100000);
+  const OFFLINE_KINDS = ['offline', 'max_privacy', 'public_offline'];
+  const beamFee = () => (OFFLINE_KINDS.includes(bsType) ? 1100000 : 100000);
+  const bsAnonOn = () => OFFLINE_KINDS.includes(bsType) && $('bsAnon').checked;
   // All: the whole of a token (the fee is paid in BEAM), BEAM less the fee
   // Available is All, as the bridge's balance: a click sends all of it (but the fee)
   $('bsLeft').onclick = (e) => {
@@ -1693,13 +1696,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       if (!aid && value + fee > beam) throw new Error(`not enough: ${amt(beam, 8)} BEAM available, ${amt(value + fee, 8)} needed with the fee`);
       if (aid && value > bsHave()) throw new Error(`not enough: ${amt(bsHave(), 8)} ${sym} available`);
       if (aid && fee > beam) throw new Error(`the fee is paid in BEAM: ${amt(fee, 8)} needed, ${amt(beam, 8)} available`);
-      if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
+      if (!(await confirmBox(`Send ${sym}`, [['From wallet', W().name], ['Amount', `${amt(value, 8)} ${sym}`], ...(aid ? [['Asset ID', String(aid)]] : []), ...(bsAnonOn() ? [['Sender', 'anonymous']] : []), ['Network fee', `${amt(fee, 8)} BEAM`], ['To', address], ['Address type', TYPE_NAME[bsType] || bsType || 'regular']],
         bsType === 'regular' || bsType === 'regular_new' || !bsType ? 'A regular transfer completes when both wallets are online: keep this browser open until it does.' : '',
         bsMine ? `your current wallet${bsMine === 'unverified' ? ' (unverified)' : ''}: the coins come back to it, less the fee`
           : otherUnver(address) ? `${otherUnver(address)}: added there by hand and not verified. If the address is that wallet's, this payment verifies it. If not, the coins go to whoever it belongs to.` : ''))) return;
       if (!isOpen(wid)) throw new Error('another wallet was opened meanwhile: nothing was sent');
       // to an offline address: an offline payment (Beam's API since 6.0 makes it a regular, online one unless asked: the receiver then has to be online)
-      const r = await host('beam', wid, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined, ...(bsType === 'offline' ? { offline: true } : {}) });
+      const r = await host('beam', wid, 'tx_send', { value, fee, address, asset_id: aid, comment: $('bsNote').value.trim() || undefined, ...(bsType === 'offline' ? { offline: true } : {}), ...(bsAnonOn() ? { anonymous: true } : {}) });      // anonymous: our engine leaves the sender out of the output
       actOk($('doBeamSend'), `transaction ${esc(r.txId)} sent`);
       // to a regular address of another of one's wallets: it completes once that wallet is opened (this one keeps
       // running meanwhile, its transfer under way)
@@ -2587,7 +2590,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       const ss = String(t.status_string || '');
       return {
         id: t.txId, kind, t: (t.create_time || 0) * 1000, g: Number(t.value) || 0, v: (Number(t.value) || 0) / GROTH, sym: aid ? syms.get(aid) : 'BEAM', asset: aid || null,
-        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
+        peer: contract ? null : (t.income ? t.sender : t.receiver) || null, anon: !contract && !!t.income && /push/i.test(t.tx_type_string || '') && !t.sender,      // an offline payment whose sender left itself out at: !contract && t.income ? (/push/i.test(t.tx_type_string || '') && paidTo(t)) || receivedAt(t.receiver, /push/i.test(t.tx_type_string || ''), t.address_type) : null, comment: contract ? '' : t.comment || '',
         what: contract && !bridge ? (t.comment || 'Contract call') : '', app: t.appname || '',
         st: s, fee: (Number(t.fee) || 0) / GROTH, kern: zeroK(t.kernel) ? '' : t.kernel, block: t.height || madeAt.get(t.txId) || null, beamK: zeroK(t.kernel) ? '' : t.kernel, beamB: t.height || null,
         stage: /waiting for receiver/i.test(ss) ? 'waiting for the receiver to come online' : /waiting for sender/i.test(ss) ? 'waiting for the sender'
@@ -2683,6 +2686,7 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
     if (r.pool) return r.ours ? '<span class="ours">BumbleBeam</span>' : '';      // our pool by its name in its colour; another: its count alone
     if (r.found) return `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`;
     if (r.from) return `from <b>${esc(r.from)}</b>`;
+    if (r.anon) return 'from <b>anonymous</b>';
     if (!r.peer) return '';
     return `${r.kind === 'in' ? 'from' : 'to'} <b>${esc(nameOf(r.peer) || short(r.peer))}</b>`;
   };
@@ -2759,6 +2763,13 @@ ${aid}">${CPI}</button></span><span class="sym" data-aid="${aid}">${esc(sym)}</s
       rows.push([came(r) ? 'From' : 'To', addrDd(r.peer)]);
       const at = Array.isArray(r.at) ? r.at : r.at ? [r.at] : [];      // kept by an earlier version: one object
       if (came(r) && at.length) rows.push(['To', atHtml(at)]);      // every address of that id, the one paid first
+      rows.push(null);
+    }
+    else if (r.anon) {
+      // sent anonymously: no sender in it; the address it came to found by its key's ticket
+      rows.push(['From', '<span class="tipped" title="The sender left its identity out of this offline payment">anonymous</span>']);
+      const at = Array.isArray(r.at) ? r.at : [];
+      if (at.length) rows.push(['To', atHtml(at)]);
       rows.push(null);
     }
     else if (r.found) rows.push(['From', `<span title="${esc(FOUND_TIP[r.found] || '')}">${esc(r.found)}</span>`]);

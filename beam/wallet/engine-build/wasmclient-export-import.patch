@@ -1,3 +1,104 @@
+diff --git a/keykeeper/local_private_key_keeper.cpp b/keykeeper/local_private_key_keeper.cpp
+index 36ef5fd8e..f7ae62ebe 100644
+--- a/keykeeper/local_private_key_keeper.cpp
++++ b/keykeeper/local_private_key_keeper.cpp
+@@ -671,6 +671,10 @@ namespace beam::wallet
+ 
+             if (!get_SelfEndpoint(x, kKrn, x.m_User.m_Sender))
+                 return Status::Unspecified;
++
++            // BumbleBeam: an anonymous payment tells the receiver nothing of the sender (kKrn is chosen anew below)
++            if (x.m_Anonymous)
++                x.m_User.m_Sender = Zero;
+         }
+ 
+         ShieldedTxo::Data::Params pars;
+diff --git a/wallet/api/v6_0/v6_api_defs.h b/wallet/api/v6_0/v6_api_defs.h
+index dd783946e..b85eccee5 100644
+--- a/wallet/api/v6_0/v6_api_defs.h
++++ b/wallet/api/v6_0/v6_api_defs.h
+@@ -159,6 +159,7 @@ namespace beam::wallet
+         boost::optional<CoinIDList>  coins;
+         boost::optional<TxID>        txId;
+         boost::optional<Asset::ID>   assetId;
++        bool anonymous = false;      // BumbleBeam: an offline payment that does not tell the receiver who sent it
+ 
+         struct Response
+         {
+diff --git a/wallet/api/v6_0/v6_api_handle.cpp b/wallet/api/v6_0/v6_api_handle.cpp
+index a8a5ca7e7..a275b71a3 100644
+--- a/wallet/api/v6_0/v6_api_handle.cpp
++++ b/wallet/api/v6_0/v6_api_handle.cpp
+@@ -288,6 +288,8 @@ namespace beam::wallet
+                 .SetParameter(TxParameterID::PreselectedCoins, coins)
+                 .SetParameter(TxParameterID::Message, message)
+                 .SetParameter(beam::wallet::TxParameterID::OriginalToken, data.tokenTo);
++            if (data.anonymous)
++                params.SetParameter(TxParameterID::AnonymousSender, true);
+ 
+ 
+             if (data.tokenFrom)
+diff --git a/wallet/api/v6_0/v6_api_parse.cpp b/wallet/api/v6_0/v6_api_parse.cpp
+index 1b249322b..ede0a3a77 100644
+--- a/wallet/api/v6_0/v6_api_parse.cpp
++++ b/wallet/api/v6_0/v6_api_parse.cpp
+@@ -579,6 +579,13 @@ namespace beam::wallet
+             info.spendOffline = true;
+         }
+ 
++        // BumbleBeam: an offline payment that does not tell the receiver who sent it (offline kinds only: a regular
++        // transfer is a conversation between the two wallets, it cannot be anonymous)
++        if (auto anon = getOptionalParam<bool>(params, "anonymous"); anon && *anon && info.spendOffline)
++        {
++            send.anonymous = true;
++        }
++
+         send.value = getMandatoryParam<PositiveAmount>(params, "value");
+         send.assetId = readOptionalAssetID(*this, params);
+         info.appendSpend(send.assetId ? *send.assetId : beam::Asset::s_BeamID, send.value);
+diff --git a/wallet/core/common.h b/wallet/core/common.h
+index 037cc8b8f..e83440751 100644
+--- a/wallet/core/common.h
++++ b/wallet/core/common.h
+@@ -396,6 +396,10 @@ namespace beam::wallet
+         // Last armored negotiation message produced for this tx, kept so the user can
+         // re-copy/re-save it after dismissing the produce dialog.
+         SlatepackOutgoing = 145,
++        // BumbleBeam: an offline (shielded) payment that does not tell the receiver who sent it (the output's User.Sender
++        // left zero; the receiver's wallet already takes that: "Sender may prefer to send anonymously"). Private: never
++        // on the wire, set by the sender's own tx_send.
++        AnonymousSender = 146,
+ 
+         Status = 151,
+         KernelID = 152,
+diff --git a/wallet/core/private_key_keeper.h b/wallet/core/private_key_keeper.h
+index 7d88f42ae..189fb92c1 100644
+--- a/wallet/core/private_key_keeper.h
++++ b/wallet/core/private_key_keeper.h
+@@ -192,6 +192,7 @@ namespace beam::wallet
+ 
+                 // sent value and asset are derived from the tx balance (ins - outs)
+                 ShieldedTxo::User m_User; // the Sender will automatically be set to the one corresponding to the iEndpoint, iff the tx is conventional
++                bool m_Anonymous = false; // BumbleBeam: the Sender left zero (the receiver is not told who sent it)
+                 Asset::ID m_AidMax = 1u;
+             };
+ 
+diff --git a/wallet/transactions/lelantus/push_tx_builder.cpp b/wallet/transactions/lelantus/push_tx_builder.cpp
+index f5eba03e7..23e64e23f 100644
+--- a/wallet/transactions/lelantus/push_tx_builder.cpp
++++ b/wallet/transactions/lelantus/push_tx_builder.cpp
+@@ -68,6 +68,11 @@ namespace beam::wallet::lelantus
+         // sender info, both for send and split
+         m.m_iEndpoint = m_Tx.EnsureOwnID();
+         m_Tx.GetMyEndpointAlways(m.m_User.m_Sender); // just to make sure tx history contains our endpoint (not only own ID)
++        {
++            bool anonymous = false;
++            if (GetParameter(TxParameterID::AnonymousSender, anonymous) && anonymous)
++                m.m_Anonymous = true;      // BumbleBeam: the receiver is not told who sent it
++        }
+ 
+         if (GetParameter(TxParameterID::PeerEndpoint, m.m_Peer))
+         {
 diff --git a/wasmclient/wasmclient.cpp b/wasmclient/wasmclient.cpp
 index 2d2c359ca..8f2855a1d 100644
 --- a/wasmclient/wasmclient.cpp
