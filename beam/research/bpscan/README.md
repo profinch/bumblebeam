@@ -4,9 +4,12 @@
 
 Before Hard Fork 6 (height **3928666**, July 2026), Beam's inner-product argument
 (`core/ecc_bulletproof.cpp`, `InnerProduct` v0) drew round i's challenge **before**
-adding L_i, R_i to the transcript. Round i's pair still feeds the next round's
-challenge, but no challenge binds the **last** round's pair. A prover could pick
-L freely and solve R from the final verification equation. That proves a range
+adding L_i, R_i to the transcript, so the prover chose every pair with its own
+challenge already known. The cheapest forgery uses the **last** round's pair,
+where nothing has to stay consistent afterwards: pick L freely and solve R from
+the final verification equation. (An earlier pair can be tuned the same way, with
+the remaining rounds finished honestly; this is our reading of the v0 code, Beam's
+write-up describes the last pair.) That proves a range
 for any committed value, "negative" ones included: an output of −X balances an
 output of +X, and X coins appear. The fix is commit `37ca7d8ca` ("BP scheme
 upgraded", `iVersion` 1 from HF6 on).
@@ -30,8 +33,8 @@ shielded/Lelantus outputs (`TxKernelShieldedOutput` in the kernels), for every a
   uncancelled −X is still in the pre-HF6 UTXO set or in the pre-HF6 shielded
   pool. `unspent_pre_hf6.csv` lists the MW candidates (`txo_id,height,commitment`,
   commitment as X then Y, the way the Beam explorer prints it).
-- **The only definitive answer is lustration** (BIP-5 / HF7, branch
-  `2026-lustration`). Each pre-HF7 TXO must disclose its amount when first spent,
+- **The only definitive answer is lustration** (hard fork 7, branch
+  `2026-lustration`). Each confidential pre-HF7 TXO must disclose its amount when first spent,
   and a −X output can never disclose. Spends are capped by the per-asset supply
   snapshot (`Total`/`Consumed`). If inflation happened, the last legacy coins to
   move hit the cap. If it did not, there is never a full proof, because lost coins
@@ -49,10 +52,19 @@ For each confidential bulletproof (A, S, T1, T2, L0..R5, TauX, Mu, tDot, condens
 | `lr_eq` | two LR points of the same proof share X (e.g. L5 = ±R5) |
 | `scalar` | a scalar < 2^64 (incl. 0), or a == b |
 | `dup` | A/S/T1/T2/L5/R5/TauX/Mu equal to that of a proof of a **different** commitment (`--all-rounds`: L0..R4 too) |
-| `replay` | equal only within proofs of the same commitment (informational, the same output re-created) |
+| `replay` | equal only within proofs of the same commitment (informational, the same output re-created); `replay.csv` lists them per commitment with the fields they share |
+
+An honest wallet derives A and S from the coin alone and takes fresh randomness
+for the rest, so a re-created coin shares exactly `A|S` with its earlier proof.
+A forged template stamped onto one commitment would share more.
 
 Post-HF6 proofs use the sound scheme and act as the **control group**. The
 pre-HF6 flag rate should match the post-HF6 rate.
+
+`bpscan --selftest <dir>` is the positive control: it builds proofs that trip each
+detector (zero point, a point off the curve, 7·G, −7·G, 65536·H, R = −L, a small
+scalar, a = b, a point shared across commitments, a coin proven twice) and checks
+that honest v0 and v1 proofs trip none and do not verify as each other.
 
 ## Build
 
@@ -73,12 +85,13 @@ Any node works, as long as it has no TxoLo/TxoHi horizon (no fast sync):
 old block bodies are erased, but every TXO is kept in full.
 
 ```sh
+bpscan --selftest out/             # every detector fires on a crafted proof
 bpscan node.db out/ --check        # PRAGMA quick_check on the copy
 bpscan node.db out/ [--to=H] [--all-rounds]
 ```
 
 Output in `out/`: `summary.json` (counts per period, flags, unreadable ranges),
-`flagged.csv`, and `unspent_pre_hf6.csv`. On a 4-vCPU VM, ~40M TXOs take tens of
+`flagged.csv`, `replay.csv`, and `unspent_pre_hf6.csv`. On a 4-vCPU VM, ~40M TXOs take tens of
 minutes. Temporary key buckets take ~1 GB per 5M proofs.
 
 A copy of a live file can contain torn pages. `resync.py <live> <copy>` re-copies the

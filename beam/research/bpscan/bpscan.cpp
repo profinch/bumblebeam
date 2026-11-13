@@ -182,6 +182,14 @@ struct Scanner
 	Stat m_pStat[2]; // [0] = pre-HF6, [1] = post-HF6 (control)
 	bool m_AllRounds = false;
 
+	// same-commitment replays: which fields each proof shares with another proof of its commitment
+	struct ReplayRef
+	{
+		uint64_t m_Comm;
+		uint32_t m_Fields;
+	};
+	std::unordered_map<uint64_t, ReplayRef> m_Replay; // by proof ref
+
 	static const uint32_t s_nBuckets = 64;
 	std::string m_sOut;
 	std::vector<FILE*> m_vBuckets;
@@ -337,7 +345,11 @@ struct Scanner
 					{
 						Hit& r = m_Hits[v[i].m_Ref];
 						if (bSameComm)
+						{
 							r.m_Flags |= F_REPLAY;
+							ReplayRef& rr = m_Replay.emplace(v[i].m_Ref, ReplayRef{ v[i].m_Comm, 0 }).first->second;
+							rr.m_Fields |= 1u << v[i].m_Field;
+						}
 						else
 							r.Add(F_DUP, std::string("dup:") + kFieldNames[v[i].m_Field] + "x" + std::to_string(i1 - i0));
 					}
@@ -364,10 +376,184 @@ void PrintStat(const char* szName, const Stat& s, std::ostream& os, bool bLast)
 	os << "}}" << (bLast ? "" : ",") << "\n";
 }
 
+std::string FieldsStr(uint32_t m)
+{
+	std::string s;
+	for (uint32_t i = 0; i < sizeof(kFieldNames) / sizeof(kFieldNames[0]); i++)
+		if (m & (1u << i))
+		{
+			if (!s.empty()) s += '|';
+			s += kFieldNames[i];
+		}
+	return s;
+}
+
 int Usage()
 {
-	std::cerr << "usage: bpscan <node.db copy> <out dir> [--to=<height>] [--small=<k>] [--all-rounds] [--check]\n";
+	std::cerr << "usage: bpscan <node.db copy> <out dir> [--to=<height>] [--small=<k>] [--all-rounds] [--check]\n"
+		"       bpscan --selftest <out dir>\n";
 	return 2;
+}
+
+// Positive control: every detector must fire on a proof built to trip it, and stay silent on an honest one.
+int SelfTest(const std::string& sOut)
+{
+	Scanner sc;
+	sc.m_AllRounds = true;
+	sc.m_sOut = sOut;
+	sc.OpenBuckets();
+	sc.m_Small.Init(1u << 16);
+
+	struct Coin
+	{
+		ECC::Scalar::Native m_Sk;
+		ECC::Point::Native m_CommN;
+		ECC::Point m_Comm;
+		ECC::RangeProof::Params::Create m_Cp;
+
+		Coin(uint32_t n, Amount v)
+		{
+			ECC::Oracle o;
+			o << "bpscan.selftest" << n;
+			o >> m_Sk;
+			o >> m_Cp.m_Seed.V;
+			m_Cp.m_Value = v;
+			m_CommN = ECC::Commitment(m_Sk, v);
+			m_CommN.Export(m_Comm);
+		}
+
+		void Prove(ECC::RangeProof::Confidential& bp, uint32_t iVersion) const
+		{
+			ECC::Oracle o;
+			o << m_Comm;
+			bp.Create(m_Sk, m_Cp, iVersion, o);
+		}
+
+		bool IsValid(const ECC::RangeProof::Confidential& bp, uint32_t iVersion) const
+		{
+			ECC::Oracle o;
+			o << m_Comm;
+			return bp.IsValid(m_CommN, iVersion, o);
+		}
+	};
+
+	int nFail = 0;
+	auto report = [&](const char* szName, bool bOk, const std::string& sInfo) {
+		std::cout << (bOk ? "ok    " : "FAIL  ") << szName << (sInfo.empty() ? "" : "  [") << sInfo << (sInfo.empty() ? "" : "]") << "\n";
+		if (!bOk)
+			nFail++;
+	};
+
+	uint64_t ref = 0;
+	auto flags = [&](const ECC::RangeProof::Confidential& bp, const ECC::Point& comm) {
+		sc.OnProof(bp, comm, ++ref);
+		auto it = sc.m_Hits.find(ref);
+		return (sc.m_Hits.end() == it) ? 0u : it->second.m_Flags;
+	};
+	auto expect = [&](const char* szName, const ECC::RangeProof::Confidential& bp, const ECC::Point& comm, uint32_t fExp) {
+		uint32_t f = flags(bp, comm);
+		report(szName, f == fExp, FlagsStr(f));
+	};
+
+	const uint32_t nLast = ECC::InnerProduct::nCycles - 1;
+	Coin c1(1, 100500);
+	ECC::RangeProof::Confidential bp0;
+	c1.Prove(bp0, 0);
+
+	// the two transcript versions do not accept each other's proofs
+	report("honest v0 proof valid as v0", c1.IsValid(bp0, 0), "");
+	report("honest v0 proof invalid as v1", !c1.IsValid(bp0, 1), "");
+	{
+		ECC::RangeProof::Confidential bp1;
+		c1.Prove(bp1, 1);
+		report("honest v1 proof valid as v1", c1.IsValid(bp1, 1), "");
+		report("honest v1 proof invalid as v0", !c1.IsValid(bp1, 0), "");
+		expect("honest v1 proof: no flags", bp1, c1.m_Comm, 0);
+	}
+	expect("honest v0 proof: no flags", bp0, c1.m_Comm, 0);
+
+	{
+		auto bp = bp0;
+		bp.m_P_Tag.m_pLR[nLast][0].m_X = Zero;
+		expect("zeropt: L_last = 0", bp, c1.m_Comm, F_ZEROPT);
+	}
+	{
+		auto bp = bp0;
+		memset(bp.m_Part1.m_S.m_X.m_pData, 0xff, ECC::nBytes);
+		expect("badpt: S off the curve", bp, c1.m_Comm, F_BADPT);
+	}
+	{
+		auto bp = bp0;
+		ECC::Scalar::Native k;
+		k = 7U;
+		ECC::Point::Native pt = ECC::Context::get().G * k;
+		pt.Export(bp.m_P_Tag.m_pLR[nLast][0]);
+		expect("small: L_last = 7*G", bp, c1.m_Comm, F_SMALL);
+
+		bp = bp0;
+		pt = -pt;
+		pt.Export(bp.m_P_Tag.m_pLR[2][1]);
+		expect("small: R_2 = -7*G", bp, c1.m_Comm, F_SMALL);
+
+		bp = bp0;
+		pt = ECC::Context::get().H * Amount(65536);
+		pt.Export(bp.m_Part2.m_T1);
+		expect("small: T1 = 65536*H", bp, c1.m_Comm, F_SMALL);
+	}
+	{
+		auto bp = bp0;
+		bp.m_P_Tag.m_pLR[nLast][1] = bp.m_P_Tag.m_pLR[nLast][0];
+		bp.m_P_Tag.m_pLR[nLast][1].m_Y ^= 1;
+		expect("lr_eq: R_last = -L_last", bp, c1.m_Comm, F_LR_EQ);
+	}
+	{
+		auto bp = bp0;
+		bp.m_Part3.m_TauX.m_Value = 5U;
+		expect("scalar: TauX = 5", bp, c1.m_Comm, F_SCALAR);
+
+		bp = bp0;
+		bp.m_P_Tag.m_pCondensed[1] = bp.m_P_Tag.m_pCondensed[0];
+		expect("scalar: a = b", bp, c1.m_Comm, F_SCALAR);
+	}
+
+	// cross-proof pass
+	Coin c2(2, 7), c3(3, 8), c4(4, 9), c5(5, 10), c6(6, 11);
+	ECC::RangeProof::Confidential bp2, bp3, bp4, bp5, bp6a, bp6b;
+	c2.Prove(bp2, 0);
+	c3.Prove(bp3, 0);
+	c4.Prove(bp4, 0);
+	c5.Prove(bp5, 0);
+	c6.Prove(bp6a, 0);
+	c6.Prove(bp6b, 0); // the same coin proven twice, the way a wallet re-creates an output
+
+	bp3.m_P_Tag.m_pLR[nLast][0] = bp2.m_P_Tag.m_pLR[nLast][0]; // one L_last under two commitments
+	bp5.m_P_Tag.m_pLR[0][1] = bp4.m_P_Tag.m_pLR[0][1]; // one early-round R under two commitments (--all-rounds)
+
+	uint64_t r2 = ref + 1, r3 = ref + 2, r4 = ref + 3, r5 = ref + 4, r6a = ref + 5, r6b = ref + 6;
+	flags(bp2, c2.m_Comm);
+	flags(bp3, c3.m_Comm);
+	flags(bp4, c4.m_Comm);
+	flags(bp5, c5.m_Comm);
+	flags(bp6a, c6.m_Comm);
+	flags(bp6b, c6.m_Comm);
+	sc.DupPass();
+
+	auto got = [&](uint64_t r) {
+		auto it = sc.m_Hits.find(r);
+		return (sc.m_Hits.end() == it) ? 0u : it->second.m_Flags;
+	};
+	report("dup: shared L_last, different commitments", (F_DUP == got(r2)) && (F_DUP == got(r3)), FlagsStr(got(r2)) + " " + FlagsStr(got(r3)));
+	report("dup: shared early-round R, different commitments", (F_DUP == got(r4)) && (F_DUP == got(r5)), FlagsStr(got(r4)) + " " + FlagsStr(got(r5)));
+	report("replay: one coin proven twice", (F_REPLAY == got(r6a)) && (F_REPLAY == got(r6b)), FlagsStr(got(r6a)) + " " + FlagsStr(got(r6b)));
+	{
+		auto it = sc.m_Replay.find(r6a);
+		std::string s = (sc.m_Replay.end() == it) ? std::string() : FieldsStr(it->second.m_Fields);
+		// a wallet derives A and S from the coin alone, the rest takes fresh randomness
+		report("replay: an honest re-creation shares A and S only", s == "A|S", s);
+	}
+
+	std::cout << (nFail ? "SELFTEST FAILED" : "selftest passed") << "\n";
+	return nFail ? 1 : 0;
 }
 
 bool ReadTxo(sqlite3* pDb, TxoID id, Output& outp, Height& hSpend)
@@ -396,6 +582,12 @@ int main(int argc, char* argv[])
 {
 	if (argc < 3)
 		return Usage();
+
+	if (!strcmp(argv[1], "--selftest"))
+	{
+		ECC::InitializeContext();
+		return SelfTest(argv[2]);
+	}
 
 	std::string sDb = argv[1], sOut = argv[2];
 	Height hTo = MaxHeight;
@@ -622,6 +814,54 @@ int main(int argc, char* argv[])
 			<< (bShielded ? std::string("n/a") : (MaxHeight == hSpend ? std::string("unspent") : std::to_string(hSpend))) << ","
 			<< FlagsStr(r.m_Flags) << ",\"" << r.m_Note << "\"\n";
 	}
+
+	// same-commitment replays, one row per commitment
+	struct ReplayGroup
+	{
+		uint64_t m_Proofs = 0;
+		uint32_t m_Fields = 0;
+		uint64_t m_RefMin = static_cast<uint64_t>(-1);
+		uint64_t m_RefMax = 0;
+	};
+	std::map<uint64_t, ReplayGroup> mapReplay; // by commitment key
+	std::map<uint32_t, uint64_t> mapReplayFields; // fields shared -> proofs
+	for (const auto& [ref, rr] : sc.m_Replay)
+	{
+		ReplayGroup& g = mapReplay[rr.m_Comm];
+		g.m_Proofs++;
+		g.m_Fields |= rr.m_Fields;
+		g.m_RefMin = std::min(g.m_RefMin, ref);
+		g.m_RefMax = std::max(g.m_RefMax, ref);
+		mapReplayFields[rr.m_Fields]++;
+	}
+	{
+		std::ofstream rep(sOut + "/replay.csv");
+		rep << "kind,commitment,proofs,shared_fields,first_height,last_height\n";
+		for (const auto& [ck, g] : mapReplay)
+		{
+			bool bShielded = !!(g.m_RefMin & kShieldedBit);
+			ECC::Point comm;
+			Height h0, h1;
+			if (bShielded)
+			{
+				comm = sc.m_vShielded[g.m_RefMin & ~kShieldedBit].m_Comm;
+				h0 = sc.m_vShielded[g.m_RefMin & ~kShieldedBit].m_Height;
+				h1 = sc.m_vShielded[g.m_RefMax & ~kShieldedBit].m_Height;
+			}
+			else
+			{
+				Output outp;
+				Height hSpend;
+				if (ReadTxo(pDb, g.m_RefMin, outp, hSpend))
+					comm = outp.m_Commitment;
+				else
+					ZeroObject(comm);
+				h0 = sc.TxoHeight(g.m_RefMin);
+				h1 = sc.TxoHeight(g.m_RefMax);
+			}
+			rep << (bShielded ? "shielded" : "mw") << "," << Hex(comm) << "," << g.m_Proofs << "," << FieldsStr(g.m_Fields) << "," << h0 << "," << h1 << "\n";
+		}
+	}
 	sqlite3_close(pDb);
 
 	std::ostringstream os;
@@ -635,6 +875,17 @@ int main(int argc, char* argv[])
 		<< ",\n  \"state_errors\": " << nErrStates << ",\n  \"small_table\": " << sc.m_Small.m_Map.size()
 		<< ",\n  \"all_rounds_dup\": " << (bAllRounds ? "true" : "false")
 		<< ",\n  \"replay_only\": " << nReplayOnly
+		<< ",\n  \"replay_commitments\": " << mapReplay.size()
+		<< ",\n  \"replay_by_shared_fields\": {";
+	{
+		bool bFirst = true;
+		for (const auto& [m, n] : mapReplayFields)
+		{
+			os << (bFirst ? "" : ", ") << "\"" << FieldsStr(m) << "\": " << n;
+			bFirst = false;
+		}
+	}
+	os << "}"
 		<< ",\n  \"periods\": {\n";
 	PrintStat("pre_hf6", sc.m_pStat[0], os, false);
 	PrintStat("post_hf6", sc.m_pStat[1], os, true);

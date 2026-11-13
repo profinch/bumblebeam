@@ -227,7 +227,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
   <canvas id="dots" aria-hidden="true"></canvas>
   <div class="wrap">
     <div class="hero-top">
-      <div class="brand">BumbleBeam research · bpscan · snapshot Nov 11, 2026</div>
+      <div class="brand">BumbleBeam research · bpscan · snapshot Nov 13, 2026</div>
       <button class="theme-btn" id="themeBtn" type="button">Theme: auto</button>
     </div>
     <p class="kicker" style="color:#7fb6ff">Beam · Hard Fork 6 · forensic scan</p>
@@ -238,7 +238,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
       independently: we pulled every range proof ever written to the chain and went looking for fingerprints.</p>
     <div class="counter-row">
       <div class="counter"><div class="n" data-count="35086226">35,086,226</div><div class="l">pre-fork proofs examined</div></div>
-      <div class="counter"><div class="n" data-count="284000000" data-suffix="+">284,000,000+</div><div class="l">fingerprints cross-matched</div></div>
+      <div class="counter"><div class="n" data-count="640000000" data-suffix="+">640,000,000+</div><div class="l">fingerprints cross-matched</div></div>
       <div class="counter zero"><div class="n">0</div><div class="l">forgery traces found</div></div>
     </div>
     <div class="hero-note"><span>⚠</span><span><b>Clean is not the same as proven innocent.</b> This catches a <i>sloppy</i> forger. A careful one
@@ -266,8 +266,8 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
       <p class="kicker">The bug</p>
       <h2>One line in the wrong order</h2>
       <p>The inner-product argument folds the proof over 6 rounds. Each round the prover publishes two points, L<sub>i</sub> and R<sub>i</sub>,
-        and the verifier derives a challenge x<sub>i</sub> by hashing the transcript. A point is locked in only if it enters
-        the hash <i>before</i> a challenge is derived from it.</p>
+        and the verifier derives a challenge x<sub>i</sub> by hashing the transcript. A pair is locked in only if it enters
+        the hash <i>before</i> the challenge that is applied to it.</p>
     </div>
     <div class="seg" role="group" aria-label="Scheme">
       <button type="button" data-ver="0" aria-pressed="true">Before HF6 (v0)</button>
@@ -284,11 +284,12 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
   <div class="tx-note" id="txNote"></div>
   <div class="legend-row">
     <span><i class="sw" style="background:var(--accent-soft);border-color:var(--accent)"></i>challenge x<sub>i</sub> (transcript hash)</span>
-    <span><i class="sw" style="border-color:var(--good)"></i>L/R locked by a later challenge</span>
-    <span><i class="sw" style="background:var(--bad-soft);border-color:var(--bad)"></i>L/R locked by nothing</span>
+    <span><i class="sw" style="border-color:var(--good)"></i>L/R published before its challenge: locked</span>
+    <span><i class="sw" style="background:var(--bad-soft);border-color:var(--bad)"></i>L/R published after its challenge: can be tuned</span>
   </div>
   <p class="small muted" style="margin-top:12px">Fix: commit <code>37ca7d8ca</code> "BP scheme upgraded" in <code>core/ecc_bulletproof.cpp</code>,
-    <code>XSet::NextChallenge(…, iVersion)</code>. Since HF6, nodes accept v1 proofs only.</p>
+    <code>XSet::NextChallenge(…, iVersion)</code>. Since HF6, nodes accept v1 proofs only. Beam's write-up describes the last pair.
+    That the earlier rounds are open in the same way is our reading of the v0 code; we did not build such a forgery.</p>
 </section>
 
 <!-- LAB -->
@@ -330,9 +331,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
       the whole history.</p></div></div>
   <div class="funnel" id="funnel"></div>
   <div class="facts" style="margin-top:18px">
-    <div class="fact"><div class="v">74629 → 74629</div><div class="k">SQLite change counter during the final copy pass: no commit landed, so the snapshot is consistent</div></div>
+    <div class="fact"><div class="v">77714 → 77714</div><div class="k">SQLite change counter during the final copy pass: no commit landed, so the snapshot is consistent</div></div>
     <div class="fact"><div class="v">0 / 0 / 0</div><div class="k">decode errors / unreadable ranges / height gaps; integrity check: ok</div></div>
-    <div class="fact"><div class="v">~35 min</div><div class="k">full pass on a 4-vCPU VM, keys bucketed to disk to fit 7 GB of RAM</div></div>
+    <div class="fact"><div class="v">~36 min</div><div class="k">full pass on a 4-vCPU VM, keys bucketed to disk to fit 7 GB of RAM</div></div>
   </div>
 </section>
 
@@ -345,16 +346,22 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
     <thead><tr><th>Trace</th><th>What we look for</th><th class="num">pre-HF6</th><th class="num">post-HF6</th></tr></thead>
     <tbody id="checksBody"></tbody>
   </table></div>
+  <p class="small muted" style="margin-top:12px">Positive control: <code>bpscan --selftest</code> builds proofs that trip each detector
+    (a zero point, a point off the curve, 7·G, −7·G, 65536·H, R = −L, a small scalar, a = b, a point shared by two commitments, a coin
+    proven twice) and checks that honest v0 and v1 proofs trip none. All 18 cases pass, so a zero above is a detector that looked and
+    found nothing, not one that could not see.</p>
 </section>
 
 <!-- HIDING -->
 <section class="card" id="hiding">
   <div class="sec-head">
-    <div><p class="kicker">Where −X would hide</p><h2>1,434,626 suspects</h2>
+    <div><p class="kicker">Where −X would hide</p><h2>1,434,509 suspects</h2>
       <p>After HF6 a negative output can't be passed on as another negative output: that would need a forged proof, and
         forged proofs no longer verify. It can only be spent together with at least X of real coins, which burns them and
         cancels the inflation. So if a forgery happened and was not cancelled, −X is still sitting in one of these unspent
-        pre-fork outputs, or in the old shielded pool, which can't be scanned this way. From HF7 on it can't move at all.</p></div>
+        pre-fork outputs, or in the old shielded pool, which can't be scanned this way. From HF7 on it can't move at all.
+        The list holds 1,415,250 distinct commitments: 831 of them occur more than once, and one occurs 18,169 times
+        (239 per block in 76 blocks, heights 266,612–266,877, July 2019), every copy unspent.</p></div>
     <div class="seg" role="group" aria-label="Scale">
       <button type="button" data-scale="lin" aria-pressed="true">Linear</button>
       <button type="button" data-scale="log" aria-pressed="false">Log</button>
@@ -374,9 +381,10 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 
 <!-- LUSTRATION -->
 <section class="card" id="lustration">
-  <div class="sec-head"><div><p class="kicker">Lustration · BIP-5 · HF7</p><h2>The only real answer, and its blind spot</h2>
+  <div class="sec-head"><div><p class="kicker">Lustration · hard fork 7</p><h2>The only real answer, and its blind spot</h2>
     <p>Just before HF7, each node snapshots a per-asset <b>Total</b> (emission + treasury + issued CA − deposits − funds locked in contracts).
-      Every output created before HF7 must disclose its amount the first time it is spent, and disclosures add up in <b>Consumed</b>.
+      Every confidential output created before HF7, shielded ones included, must disclose its amount the first time it is spent
+      (mining rewards are public already), and disclosures add up in <b>Consumed</b>.
       A block that pushes Consumed past Total is rejected. A negative output can never disclose, because the amount must be a <code>uint64</code>.</p></div></div>
   <div class="sim">
     <div>
@@ -407,7 +415,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 <!-- LOOKUP -->
 <section class="card" id="lookup">
   <div class="sec-head"><div><p class="kicker">Look up</p><h2>Is my output among the suspects?</h2>
-    <p>Load the list of all 1,434,626 unspent pre-HF6 outputs (<a href="unspent_pre_hf6.csv.gz" download>unspent_pre_hf6.csv.gz</a>, 58 MB,
+    <p>Load the list of all 1,434,509 unspent pre-HF6 outputs (<a href="unspent_pre_hf6.csv.gz" download>unspent_pre_hf6.csv.gz</a>, 58 MB,
       113 MB unpacked), then search by commitment or by its prefix, in the same form a Beam explorer shows it. The search runs in your browser:
       the query goes nowhere.</p></div></div>
   <div class="lookup-load"><button class="btn" id="fetchBtn" type="button">Load the list (58 MB)</button>
@@ -428,8 +436,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
     <div><ol class="steps">
       <li><b>Source.</b> A fully synced explorer node (no TxoLo/TxoHi horizons). The <code>Txo</code> table holds every output with its full proof, and the kernels in <code>States.Ethernal</code> hold the shielded outputs.</li>
       <li><b>Snapshot.</b> The node kept running. We copied the live file, then re-copied changed 1 MB chunks until a pass saw no commit, and confirmed it with <code>PRAGMA quick_check</code>.</li>
-      <li><b>Coverage.</b> 39,657,830 TXO rows of 43,777,945 ids. The 4,120,115 missing ids (tip height + 1) are ids the node reserves per block and never fills. Heights 1 … 4,120,114 are contiguous.</li>
-      <li><b>Control.</b> Post-HF6 proofs (sound scheme) must score zero. They did.</li>
+      <li><b>Coverage.</b> 39,664,116 TXO rows of 43,787,016 ids. The 4,122,900 missing ids (tip height + 1) are ids the node reserves per block and never fills. Heights 1 … 4,122,899 are contiguous.</li>
+      <li><b>Control.</b> Post-HF6 proofs (sound scheme) must score zero. They did. It is a small group, 484,639 proofs against 35 million, so it rules out a noisy detector, not a rare false positive.</li>
+      <li><b>Self-test.</b> Crafted proofs must trip every detector. They do (<code>--selftest</code>).</li>
     </ol></div>
     <div>
       <h3>Reproduce</h3>
@@ -437,22 +446,24 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
   -DCMAKE_BUILD_TYPE=Release -DBEAM_IPFS_SUPPORT=OFF \
   -DBPSCAN_DIR=$PWD -DCMAKE_PROJECT_INCLUDE=$PWD/inject.cmake
 ninja -C build bpscan
+bpscan --selftest out/
 python3 resync.py live/node.db copy/node.db
 bpscan copy/node.db out/ --check
-bpscan copy/node.db out/</pre>
-      <p class="small muted" style="margin-top:10px">Code: <code>beam/research/bpscan</code>, to be published in the <a href="https://github.com/profinch/bumblebeam">BumbleBeam repository</a>.</p>
+bpscan copy/node.db out/ --all-rounds</pre>
+      <p class="small muted" style="margin-top:10px">Code: <a href="https://github.com/profinch/bumblebeam/tree/main/beam/research/bpscan">beam/research/bpscan</a> in the BumbleBeam repository.</p>
       <h3 style="margin-top:14px">Not covered</h3>
-      <p class="small">Duplicate early-round points L₁…R₅ (<code>--all-rounds</code>). 103,172 "replays", where the same commitment was recreated with the
-        same proof material; this doesn't look like forgery and was not investigated further. The contents of the shielded pool, whose spends can't be linked to outputs.</p>
+      <p class="small">A careful forgery: it looks like any honest proof. Why one commitment was created 18,169 times in July 2019; its proofs
+        share A and S only, like any re-created coin, so nothing marks them as forged, but nothing explains them either. The contents of the
+        shielded pool, whose spends can't be linked to outputs.</p>
     </div>
   </div>
 </section>
 
-<footer>Snapshot: block 4,120,114 (Nov 11, 2026). HF6: block 3,928,666. Sources: <a href="https://beam.mw/blog/news/hardfork-six">beam.mw/blog/news/hardfork-six</a> · <a href="https://github.com/BeamMW/beam/commit/37ca7d8cace49c2f0f71f3e0c6b3201ff6a6498a">BeamMW/beam commit 37ca7d8ca</a> · <a href="https://github.com/BeamMW/beam/tree/2026-lustration">branch 2026-lustration</a>.</footer>
+<footer>Snapshot: block 4,122,899 (Nov 13, 2026). HF6: block 3,928,666. Sources: <a href="https://beam.mw/blog/news/hardfork-six">beam.mw/blog/news/hardfork-six</a> · <a href="https://github.com/BeamMW/beam/commit/37ca7d8cace49c2f0f71f3e0c6b3201ff6a6498a">BeamMW/beam commit 37ca7d8ca</a> · <a href="https://github.com/BeamMW/beam/tree/2026-lustration">branch 2026-lustration</a>.</footer>
 </div>
 
 <script>
-const BINS = {"bin": 20000, "counts": [15169, 24033, 22282, 36160, 117159, 47015, 8404, 6156, 6276, 5726, 5162, 7253, 29194, 27672, 263546, 201636, 8308, 4628, 6172, 4769, 4266, 4597, 5279, 5110, 6869, 4782, 5277, 3926, 4043, 3981, 3171, 2826, 3480, 1616, 1816, 1611, 1903, 2498, 5229, 2881, 2382, 2657, 2756, 2057, 1980, 2275, 1673, 2346, 2099, 2531, 2726, 3012, 3952, 4555, 4496, 7101, 6860, 7144, 7301, 8518, 8180, 8383, 5884, 6334, 3365, 3187, 3537, 3296, 2879, 3129, 7513, 3864, 6447, 6620, 16067, 4814, 9000, 10304, 3440, 4691, 4719, 3411, 3540, 4142, 2619, 2850, 2506, 2882, 2582, 33811, 2272, 1540, 3291, 2129, 1981, 1907, 3325, 5048, 4304, 2826, 2950, 2260, 2210, 2655, 2041, 2084, 3395, 2173, 2378, 2658, 2629, 2835, 2732, 3081, 2544, 2192, 1783, 1492, 3141, 2056, 2010, 1765, 1141, 853, 1616, 820, 932, 1143, 16262, 50020, 2075, 2070, 1601, 1450, 6556, 1652, 1311, 1151, 914, 10539, 3287, 2962, 1326, 999, 859, 799, 741, 782, 825, 710, 771, 909, 735, 1202, 1248, 1105, 980, 1097, 1111, 1061, 1019, 793, 626, 854, 714, 2110, 1032, 1090, 998, 1134, 841, 805, 1020, 791, 775, 616, 738, 1245, 978, 1021, 1199, 1216, 1193, 1408, 1873, 1536, 1266, 1248, 1086, 1285, 1146, 851, 762, 1001, 4423, 1616, 717]};
+const BINS = {"bin": 20000, "counts": [15169, 24033, 22282, 36160, 117159, 47015, 8404, 6156, 6276, 5726, 5162, 7253, 29194, 27672, 263546, 201636, 8308, 4628, 6172, 4769, 4266, 4597, 5279, 5110, 6869, 4782, 5277, 3926, 4043, 3981, 3171, 2826, 3480, 1616, 1816, 1611, 1903, 2498, 5229, 2881, 2382, 2657, 2756, 2057, 1980, 2275, 1673, 2346, 2099, 2531, 2726, 3012, 3952, 4555, 4496, 7101, 6860, 7144, 7301, 8518, 8180, 8383, 5884, 6334, 3365, 3187, 3537, 3296, 2879, 3129, 7513, 3864, 6447, 6620, 16067, 4814, 9000, 10304, 3440, 4691, 4719, 3411, 3540, 4142, 2619, 2850, 2506, 2882, 2582, 33811, 2272, 1540, 3291, 2129, 1981, 1907, 3325, 5048, 4304, 2826, 2950, 2260, 2210, 2655, 2041, 2084, 3395, 2173, 2378, 2658, 2629, 2835, 2732, 3081, 2544, 2192, 1783, 1491, 3141, 2056, 2010, 1765, 1141, 853, 1616, 820, 932, 1143, 16262, 50020, 2075, 2070, 1601, 1450, 6556, 1652, 1311, 1151, 914, 10539, 3287, 2962, 1326, 997, 858, 799, 741, 781, 825, 710, 771, 909, 735, 1202, 1247, 1105, 980, 1097, 1111, 1061, 1019, 793, 626, 854, 714, 2110, 1032, 1090, 998, 1134, 841, 805, 1020, 791, 775, 616, 738, 1245, 978, 1021, 1199, 1216, 1193, 1408, 1873, 1532, 1255, 1244, 1081, 1270, 1137, 845, 750, 993, 4410, 1598, 711]};
 const HF6 = 3928666, LAUNCH = Date.UTC(2019,0,3,15,42);
 const fmt = n => Number(n).toLocaleString('en-US');
 const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month:'short',year:'numeric'});
@@ -492,10 +503,10 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     ['Jan 3, 2019','Mainnet launch','acc','Beam goes live as a Mimblewimble chain. The range proofs already use the flawed transcript order. Audits by Kudelski, Least Authority and SmartDec (now Pessimistic) before launch did not catch it.'],
     ['2019 – 2026','7 years exposed','bad','Every confidential output, MW or shielded and for every asset, was carried by a proof that could have been forged. The supply audit cannot tell, because a −X output cancels +X exactly. According to the developers, AI-assisted code reviews missed it too.'],
     ['Jun 13, 2026','Responsible disclosure','acc','MonclairTrades reports the flaw privately to the Beam developers.'],
-    ['Jun 30, 2026','The fix','good','Commit 37ca7d8ca "BP scheme upgraded": L and R now enter the transcript before each challenge (iVersion 1). Pools and exchanges are asked to upgrade.'],
+    ['Jun 30, 2026','The fix','good','Commit 37ca7d8ca "BP scheme upgraded" (dated Jun 30): L and R now enter the transcript before each challenge (iVersion 1). Beam announces the fix and the fork on Jul 1.'],
     ['Block 3,928,666','Hard Fork 6','good','From this block on, only v1 proofs are valid. New forgeries become impossible. Any −X created earlier can no longer move as a negative output; spending it would burn the same amount of real coins.'],
-    ['Jul – Nov 2026','Lustration','acc','The Lustration proposal (Jul 28) becomes BIP-5 for HF7. Branch 2026-lustration adds disclosures and per-asset Total/Consumed counters (Nov 1–2). Status: WIP, and no mainnet HF7 height is set.'],
-    ['Nov 11, 2026','This scan','good','bpscan rereads all 35,086,226 pre-fork proofs, plus 481,127 post-fork proofs as a control. Result: zero traces.'],
+    ['Jul – Nov 2026','Lustration','acc','The Lustration proposal (Jul 28) goes to a BeamX DAO vote and needs hard fork 7. Branch 2026-lustration adds disclosures and per-asset Total/Consumed counters (Nov 1–2). Status: WIP, and no mainnet HF7 height is set.'],
+    ['Nov 11–13, 2026','This scan','good','bpscan rereads all 35,086,226 pre-fork proofs, plus 484,639 post-fork proofs as a control. First pass on Nov 11; rerun on Nov 13 with every round of every proof cross-matched. Result: zero traces.'],
   ];
   const box=document.getElementById('tl'), det=document.getElementById('tlDetail');
   ev.forEach((e,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='ev k-'+e[2]; b.setAttribute('aria-pressed', i===6);
@@ -515,18 +526,18 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
       if(k){ const a=document.createElement('span'); a.className='arrow'; a.textContent='→'; box.appendChild(a); }
       const el=document.createElement('span'), on=k<step;
       if(e.t==='ch'){ el.className='tok ch'+(on?' on':''); el.innerHTML='x<sub>'+(e.i+1)+'</sub>'; }
-      else { const binder= ver===1? chAt(e.i) : chAt(e.i+1); let c='';
-        if(on && binder>=0 && binder<step) c=' bound'; else if(on && binder<0 && step>=total) c=' free';
+      else { let c='';
+        if(on) c= ver===0 ? ' free' : (chAt(e.i)<step ? ' bound' : '');
         el.className='tok lr'+(on?' on':'')+c; el.innerHTML='L<sub>'+(e.i+1)+'</sub>,R<sub>'+(e.i+1)+'</sub>'; }
       box.appendChild(el); });
     lab.textContent='step '+step+' of '+total;
     const last=s[step-1]; note.className='tx-note';
     if(step===0) note.textContent= ver===0 ? 'Old scheme: each round draws the challenge first, then publishes L and R. Press "Step →".' : 'New scheme: L and R go into the transcript first, then the challenge is drawn from it.';
     else if(step>=total){
-      if(ver===0){ note.className='tx-note bad'; note.innerHTML='<b>v0 result:</b> the pairs from rounds 1–5 are locked by the next round\'s challenge, but <b>L<sub>6</sub> and R<sub>6</sub> come after x<sub>6</sub> and nothing locks them</b>. The prover picks L<sub>6</sub> freely and solves R<sub>6</sub> from the verification equation. It balances for any amount, including a "negative" one.'; }
+      if(ver===0){ note.className='tx-note bad'; note.innerHTML='<b>v0 result:</b> every pair was published with its own challenge already known. The next challenge does hash it, but by then it has been tuned. The cheapest forgery uses the last pair, where nothing is left to keep consistent afterwards: <b>pick L<sub>6</sub> freely and solve R<sub>6</sub> from the verification equation</b>. It balances for any amount, including a "negative" one. An earlier pair works as well: the forger tunes it, then finishes the remaining rounds honestly.'; }
       else { note.className='tx-note good'; note.innerHTML='<b>v1 result:</b> every pair enters the hash before its own challenge. Change it and the challenge changes, so the equation can no longer be tuned after the fact.'; }
-    } else if(last.t==='ch') note.innerHTML='Challenge x<sub>'+(last.i+1)+'</sub> = hash of everything in the transcript so far.'+(ver===0&&last.i>0?' That includes L<sub>'+last.i+'</sub>, R<sub>'+last.i+'</sub>, so the previous pair is now locked.':'');
-    else note.innerHTML='The prover publishes L<sub>'+(last.i+1)+'</sub>, R<sub>'+(last.i+1)+'</sub>.'+(ver===0?(last.i===N-1?' <b>This is the last round: no further challenge will come.</b>':' x<sub>'+(last.i+1)+'</sub> is already drawn, so only x<sub>'+(last.i+2)+'</sub> can lock this pair.'):' The next challenge will be drawn with them in it.');
+    } else if(last.t==='ch') note.innerHTML='Challenge x<sub>'+(last.i+1)+'</sub> = hash of everything in the transcript so far.'+(ver===0&&last.i>0?' It hashes L<sub>'+last.i+'</sub>, R<sub>'+last.i+'</sub>, but those were chosen with x<sub>'+last.i+'</sub> in hand.':'');
+    else note.innerHTML='The prover publishes L<sub>'+(last.i+1)+'</sub>, R<sub>'+(last.i+1)+'</sub>.'+(ver===0?' x<sub>'+(last.i+1)+'</sub> is already drawn, so the prover can choose them to fit it.'+(last.i===N-1?' <b>This is the last round: nothing has to stay consistent after it.</b>':''):' The next challenge will be drawn with them in it.');
   }
   document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{ ver=+b.dataset.ver; step=0; document.querySelectorAll('[data-ver]').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); });
   document.getElementById('txNext').onclick=()=>{ step=Math.min(step+1,N*2); render(); };
@@ -581,11 +592,11 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
 (() => {
   const rows=[
     ['51.2 GB','node database copy'],
-    ['4,120,114','blocks'],
-    ['39,657,830','TXO rows read'],
+    ['4,122,899','blocks'],
+    ['39,664,116','TXO rows read'],
     ['35,086,226','pre-HF6 range proofs'],
-    ['~561M','lookups in a 229,888-point table'],
-    ['~284M','fingerprints cross-matched (incl. control)'],
+    ['~569M','lookups in a 229,888-point table (incl. control)'],
+    ['~640M','fingerprints cross-matched (incl. control)'],
     ['0','forgery traces'],
   ];
   document.getElementById('funnel').innerHTML = rows.map((r,i)=>(i?'<div class="parrow" aria-hidden="true">→</div>':'')+'<div class="pstep'+(i===rows.length-1?' zero':'')+'" style="animation-delay:'+(i*0.09)+'s"><div class="pv">'+r[0]+'</div><div class="pk">'+r[1]+'</div></div>').join('');
@@ -599,7 +610,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     ['small','Multiple of a generator','A point equal to k·G, k·H, k·J (k ≤ 65,536) or k·(any of 130 IPA generators) (k ≤ 256).','229,888 precomputed points. A forger who picked an "easy" L (G, 2G, H…) would show up here.'],
     ['lr_eq','Self-collision','Two L/R points of one proof share an X coordinate, e.g. L₆ = ±R₆.','In an honest proof all 12 points are independent and random. A collision means something was tuned.'],
     ['scalar','Tiny scalars','TauX, Mu, tDot, or the folded a, b below 2⁶⁴ (zero included), or a = b.','Honest scalars are uniform over ~2²⁵⁶. Landing below 2⁶⁴ by chance has a probability of about 2⁻¹⁹².'],
-    ['dup','Reuse across outputs','The same A/S/T1/T2/L₆/R₆/TauX/Mu in proofs of <b>different</b> commitments.','One forged template stamped onto many outputs. ~284M keys, sorted in 64 on-disk buckets.'],
+    ['dup','Reuse across outputs','The same A, S, T1, T2, TauX, Mu or any of the 12 L/R points in proofs of <b>different</b> commitments.','One forged template stamped onto many outputs. 18 values per proof, ~640M keys, sorted in 64 on-disk buckets.'],
   ];
   const tb=document.getElementById('checksBody');
   rows.forEach(r=>{ const tr=document.createElement('tr'); tr.className='chk'; tr.tabIndex=0;
@@ -608,7 +619,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     const t=()=>{ tr.classList.toggle('open'); d.classList.toggle('open'); }; tr.onclick=t; tr.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();t();} };
     tb.appendChild(tr); tb.appendChild(d); });
   const tr=document.createElement('tr');
-  tr.innerHTML='<td><b>Same-output replay</b><br><code class="small">replay</code></td><td>Shared values only among proofs of the <b>same</b> commitment: one output recreated with the same material. Informational.</td><td class="num"><span class="pill info">103,172</span></td><td class="num"><span class="pill info">0</span></td>';
+  tr.innerHTML='<td><b>Same-output replay</b><br><code class="small">replay</code></td><td>Shared values only among proofs of the <b>same</b> commitment, 36,306 commitments in all. 103,152 proofs share exactly A and S: what a wallet produces when it creates the same coin again (A and S come from the coin alone, the rest takes fresh randomness). The other 20 are 10 outputs copied whole, proof included, in blocks 63,904 and 65,647–65,648. Informational.</td><td class="num"><span class="pill info">103,172</span></td><td class="num"><span class="pill info">0</span></td>';
   tb.appendChild(tr);
 })();
 
@@ -686,7 +697,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
   fb.onclick=async()=>{
     if(busy) return; const name='unspent_pre_hf6.csv.gz';
     try{ const r=await fetch(name,{cache:'force-cache'}); if(!r.ok||!r.body) throw new Error('HTTP '+r.status);
-      await ingest(r.body, +r.headers.get('content-length')||61261570, name); }
+      await ingest(r.body, +r.headers.get('content-length')||61256285, name); }
     catch(e){ busy=false; fb.disabled=false; prog.style.display='none'; res.textContent='Download failed ('+e.message+'). Try the link above and drop the file here.'; }
   };
   // rows are trusted only if they are exactly <digits>,<digits>,<66 hex>: anything else in the file is dropped
