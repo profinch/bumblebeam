@@ -77,10 +77,11 @@ uint64_t CommKey(const ECC::Point& p)
 
 std::string Hex(const ECC::Point& p)
 {
+	// X then Y, the way the Beam explorer prints a commitment
 	char buf[67];
-	snprintf(buf, 3, "%02x", p.m_Y);
 	for (int i = 0; i < 32; i++)
-		snprintf(buf + 2 + i * 2, 3, "%02x", p.m_X.m_pData[i]);
+		snprintf(buf + i * 2, 3, "%02x", p.m_X.m_pData[i]);
+	snprintf(buf + 64, 3, "%02x", p.m_Y);
 	return buf;
 }
 

@@ -24,10 +24,12 @@ shielded/Lelantus outputs (`TxKernelShieldedOutput` in the kernels), for every a
 - **A careless forgery can be caught.** Examples: the identity point or a
   generator used as L, L == ±R, a zero scalar, or one point reused across
   outputs. bpscan looks for these.
-- **After HF6, a −X output cannot move.** Spending it would mean making a new
-  negative output with a sound proof, which is impossible. So it is still in the
-  pre-HF6 UTXO set or in the pre-HF6 shielded pool. `unspent_pre_hf6.csv` lists
-  the MW candidates.
+- **After HF6, a −X output cannot move as a negative output.** That would need a
+  new forged proof, which no longer verifies. It can only be spent together with
+  at least X of real coins, which burns them and cancels the inflation. So an
+  uncancelled −X is still in the pre-HF6 UTXO set or in the pre-HF6 shielded
+  pool. `unspent_pre_hf6.csv` lists the MW candidates (`txo_id,height,commitment`,
+  commitment as X then Y, the way the Beam explorer prints it).
 - **The only definitive answer is lustration** (BIP-5 / HF7, branch
   `2026-lustration`). Each pre-HF7 TXO must disclose its amount when first spent,
   and a −X output can never disclose. Spends are capped by the per-asset supply

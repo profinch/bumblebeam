@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'self'; form-action 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Beam HF6 Forgery Hunt</title>
 <style>
@@ -194,6 +194,8 @@ details.table-view .tbl-scroll{max-height:280px;overflow:auto;margin-top:8px}
 .drop{border:1.5px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--text-2);cursor:pointer;transition:border-color .15s, background .15s}
 .drop.hover{border-color:var(--accent);background:var(--accent-soft)}
 .lookup-row{display:flex;gap:8px;margin-top:12px}
+.lookup-load{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.lookup-load .drop{flex:1;min-width:220px;margin:0}
 .lookup-row input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Consolas,monospace}
 .result{margin-top:10px;font-size:14px}
 .progress{height:4px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin-top:10px;display:none}
@@ -232,10 +234,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
     <h1>For 7 years, anyone could have printed Beam.<br><em>Did anyone?</em></h1>
     <p class="lede">Until block 3,928,666, a subtle flaw in Beam's Bulletproofs let a prover "prove" that a negative
       amount was positive, and so mint coins out of thin air. Pedersen commitments hide every amount, so the usual supply
-      audit can't see it. We pulled every range proof ever written to the chain and went looking for fingerprints.</p>
+      audit can't see it. The Beam developers report that their own scan of the history found no sign of an attack. We checked
+      independently: we pulled every range proof ever written to the chain and went looking for fingerprints.</p>
     <div class="counter-row">
-      <div class="counter"><div class="n" data-count="35086226">0</div><div class="l">pre-fork proofs examined</div></div>
-      <div class="counter"><div class="n" data-count="284000000" data-suffix="+">0</div><div class="l">fingerprints cross-matched</div></div>
+      <div class="counter"><div class="n" data-count="35086226">35,086,226</div><div class="l">pre-fork proofs examined</div></div>
+      <div class="counter"><div class="n" data-count="284000000" data-suffix="+">284,000,000+</div><div class="l">fingerprints cross-matched</div></div>
       <div class="counter zero"><div class="n">0</div><div class="l">forgery traces found</div></div>
     </div>
     <div class="hero-note"><span>⚠</span><span><b>Clean is not the same as proven innocent.</b> This catches a <i>sloppy</i> forger. A careful one
@@ -348,9 +351,10 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 <section class="card" id="hiding">
   <div class="sec-head">
     <div><p class="kicker">Where −X would hide</p><h2>1,434,626 suspects</h2>
-      <p>A negative output can't be moved after HF6: spending it needs another negative output with a sound proof, which
-        no longer exists. If a forgery happened, −X is still frozen in one of these unspent pre-fork outputs, or in the old
-        shielded pool, which can't be scanned this way.</p></div>
+      <p>After HF6 a negative output can't be passed on as another negative output: that would need a forged proof, and
+        forged proofs no longer verify. It can only be spent together with at least X of real coins, which burns them and
+        cancels the inflation. So if a forgery happened and was not cancelled, −X is still sitting in one of these unspent
+        pre-fork outputs, or in the old shielded pool, which can't be scanned this way. From HF7 on it can't move at all.</p></div>
     <div class="seg" role="group" aria-label="Scale">
       <button type="button" data-scale="lin" aria-pressed="true">Linear</button>
       <button type="button" data-scale="log" aria-pressed="false">Log</button>
@@ -403,12 +407,15 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 <!-- LOOKUP -->
 <section class="card" id="lookup">
   <div class="sec-head"><div><p class="kicker">Look up</p><h2>Is my output among the suspects?</h2>
-    <p>Drop <code>unspent_pre_hf6.csv</code> from this folder (113 MB) here. The file is parsed in your browser and goes nowhere.
-      Then search by commitment or by its prefix.</p></div></div>
-  <div class="drop" id="drop" tabindex="0" role="button">Drop <b>unspent_pre_hf6.csv</b> here, or click to choose<input type="file" id="file" accept=".csv" hidden></div>
+    <p>Load the list of all 1,434,626 unspent pre-HF6 outputs (<a href="unspent_pre_hf6.csv.gz" download>unspent_pre_hf6.csv.gz</a>, 58 MB,
+      113 MB unpacked), then search by commitment or by its prefix, in the same form a Beam explorer shows it. The search runs in your browser:
+      the query goes nowhere.</p></div></div>
+  <div class="lookup-load"><button class="btn" id="fetchBtn" type="button">Load the list (58 MB)</button>
+    <span class="small muted">or</span>
+    <div class="drop" id="drop" tabindex="0" role="button">drop a downloaded <b>unspent_pre_hf6.csv</b> or <b>.csv.gz</b> here</div><input type="file" id="file" accept=".csv,.gz" hidden></div>
   <div class="progress" id="prog"><div></div></div>
   <div class="lookup-row">
-    <input id="q" placeholder="commitment (66 hex) or a prefix of 8+ characters" disabled>
+    <input id="q" placeholder="commitment as an explorer shows it (66 hex) or a prefix of 8+ characters" disabled>
     <button class="btn" id="qBtn" type="button" disabled>Search</button>
   </div>
   <div class="result" id="res"></div>
@@ -421,7 +428,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
     <div><ol class="steps">
       <li><b>Source.</b> A fully synced explorer node (no TxoLo/TxoHi horizons). The <code>Txo</code> table holds every output with its full proof, and the kernels in <code>States.Ethernal</code> hold the shielded outputs.</li>
       <li><b>Snapshot.</b> The node kept running. We copied the live file, then re-copied changed 1 MB chunks until a pass saw no commit, and confirmed it with <code>PRAGMA quick_check</code>.</li>
-      <li><b>Coverage.</b> 39,657,830 TXO rows of 43,777,945 ids. The gap of 4,120,115 is exactly one reserved id per block. Heights 1 … 4,120,114 are contiguous.</li>
+      <li><b>Coverage.</b> 39,657,830 TXO rows of 43,777,945 ids. The 4,120,115 missing ids (tip height + 1) are ids the node reserves per block and never fills. Heights 1 … 4,120,114 are contiguous.</li>
       <li><b>Control.</b> Post-HF6 proofs (sound scheme) must score zero. They did.</li>
     </ol></div>
     <div>
@@ -433,7 +440,7 @@ ninja -C build bpscan
 python3 resync.py live/node.db copy/node.db
 bpscan copy/node.db out/ --check
 bpscan copy/node.db out/</pre>
-      <p class="small muted" style="margin-top:10px">Code: <code>beam/research/bpscan</code> in the BumbleBeam repository.</p>
+      <p class="small muted" style="margin-top:10px">Code: <code>beam/research/bpscan</code>, to be published in the <a href="https://github.com/profinch/bumblebeam">BumbleBeam repository</a>.</p>
       <h3 style="margin-top:14px">Not covered</h3>
       <p class="small">Duplicate early-round points L₁…R₅ (<code>--all-rounds</code>). 103,172 "replays", where the same commitment was recreated with the
         same proof material; this doesn't look like forgery and was not investigated further. The contents of the shielded pool, whose spends can't be linked to outputs.</p>
@@ -441,7 +448,7 @@ bpscan copy/node.db out/</pre>
   </div>
 </section>
 
-<footer>Snapshot: block 4,120,114 (Nov 11, 2026). HF6: block 3,928,666. Sources: beam.mw/blog/news/hardfork-six · BeamMW/beam commit 37ca7d8ca · branch 2026-lustration.</footer>
+<footer>Snapshot: block 4,120,114 (Nov 11, 2026). HF6: block 3,928,666. Sources: <a href="https://beam.mw/blog/news/hardfork-six">beam.mw/blog/news/hardfork-six</a> · <a href="https://github.com/BeamMW/beam/commit/37ca7d8cace49c2f0f71f3e0c6b3201ff6a6498a">BeamMW/beam commit 37ca7d8ca</a> · <a href="https://github.com/BeamMW/beam/tree/2026-lustration">branch 2026-lustration</a>.</footer>
 </div>
 
 <script>
@@ -486,7 +493,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     ['2019 – 2026','7 years exposed','bad','Every confidential output, MW or shielded and for every asset, was carried by a proof that could have been forged. The supply audit cannot tell, because a −X output cancels +X exactly. According to the developers, AI-assisted code reviews missed it too.'],
     ['Jun 13, 2026','Responsible disclosure','acc','MonclairTrades reports the flaw privately to the Beam developers.'],
     ['Jun 30, 2026','The fix','good','Commit 37ca7d8ca "BP scheme upgraded": L and R now enter the transcript before each challenge (iVersion 1). Pools and exchanges are asked to upgrade.'],
-    ['Block 3,928,666','Hard Fork 6','good','From this block on, only v1 proofs are valid. New forgeries become impossible, and any −X created earlier can never move again.'],
+    ['Block 3,928,666','Hard Fork 6','good','From this block on, only v1 proofs are valid. New forgeries become impossible. Any −X created earlier can no longer move as a negative output; spending it would burn the same amount of real coins.'],
     ['Jul – Nov 2026','Lustration','acc','The Lustration proposal (Jul 28) becomes BIP-5 for HF7. Branch 2026-lustration adds disclosures and per-asset Total/Consumed counters (Nov 1–2). Status: WIP, and no mainnet HF7 height is set.'],
     ['Nov 11, 2026','This scan','good','bpscan rereads all 35,086,226 pre-fork proofs, plus 481,127 post-fork proofs as a control. Result: zero traces.'],
   ];
@@ -578,7 +585,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     ['39,657,830','TXO rows read'],
     ['35,086,226','pre-HF6 range proofs'],
     ['~561M','lookups in a 229,888-point table'],
-    ['~284M','fingerprints cross-matched'],
+    ['~284M','fingerprints cross-matched (incl. control)'],
     ['0','forgery traces'],
   ];
   document.getElementById('funnel').innerHTML = rows.map((r,i)=>(i?'<div class="parrow" aria-hidden="true">→</div>':'')+'<div class="pstep'+(i===rows.length-1?' zero':'')+'" style="animation-delay:'+(i*0.09)+'s"><div class="pv">'+r[0]+'</div><div class="pk">'+r[1]+'</div></div>').join('');
@@ -656,7 +663,7 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
     document.getElementById('stackB').innerHTML='<div class="seg2" style="width:'+w(cons*(1-fp))+';background:var(--s1)"></div>'+(X?'<div class="seg2 hatch" style="width:'+w(cons*fp)+'"></div>':'')+'<div class="cap" style="left:'+capL+'"></div>';
     document.getElementById('consV').textContent=cons.toFixed(1)+'% of 100%';
     const o=document.getElementById('outcome'), stuck=Math.max(0,pos-100);
-    if(X===0){ o.className='outcome good'; o.innerHTML='<b>No inflation.</b> At most '+honest+'% of Total can ever be disclosed, so the cap is never reached. But '+(100-cons).toFixed(1)+'% stays undisclosed for good: the '+L+'% of lost coins look exactly like a hidden −X. <b>There will never be a clean proof of innocence.</b>'; }
+    if(X===0){ o.className='outcome good'; o.innerHTML='<b>No inflation.</b> At most '+honest+'% of Total can ever be disclosed, so the cap is never reached. But the '+L+'% of lost coins stay undisclosed for good, and they look exactly like a hidden −X. <b>There will never be a clean proof of innocence.</b>'; }
     else if(pos<=100){ o.className='outcome warn'; o.innerHTML='<b>Inflation exists, but it will never surface.</b> Lost coins ('+L+'%) cover the extra coins (X = '+X+'%). All positive old coins together come to '+pos+'% ≤ Total, so the cap is never hit, even if everything moves. <b>Lustration only catches inflation larger than the share of permanently lost coins.</b>'; }
     else if(want<=100){ o.className='outcome warn'; o.innerHTML='<b>Inflation exists, but it is not visible yet.</b> '+cons.toFixed(1)+'% of Total has been disclosed. It surfaces once disclosures exceed Total, that is, after at least '+Math.ceil(100/pos*100)+'% of positive old coins have moved.'; }
     else { o.className='outcome bad'; o.innerHTML='<b>Cap reached: inflation proven.</b> Nodes reject spends past Total. The last holders to move are left with '+stuck.toFixed(1)+'% of Total stuck (X − lost = '+X+' − '+L+'). The −X itself never discloses and stays frozen forever.'; }
@@ -670,23 +677,39 @@ const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month
 (() => {
   const drop=document.getElementById('drop'), file=document.getElementById('file'), q=document.getElementById('q'), qb=document.getElementById('qBtn'), res=document.getElementById('res'), prog=document.getElementById('prog');
   let keys=null, rows=null;
+  const fb=document.getElementById('fetchBtn'); let busy=false;
   drop.onclick=()=>file.click(); drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();file.click();} };
   ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('hover');}));
   ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('hover');}));
-  drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
-  file.onchange=()=>file.files[0]&&load(file.files[0]);
+  drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) ingest(f.stream(), f.size, f.name); });
+  file.onchange=()=>{ const f=file.files[0]; if(f) ingest(f.stream(), f.size, f.name); };
+  fb.onclick=async()=>{
+    if(busy) return; const name='unspent_pre_hf6.csv.gz';
+    try{ const r=await fetch(name,{cache:'force-cache'}); if(!r.ok||!r.body) throw new Error('HTTP '+r.status);
+      await ingest(r.body, +r.headers.get('content-length')||61261570, name); }
+    catch(e){ busy=false; fb.disabled=false; prog.style.display='none'; res.textContent='Download failed ('+e.message+'). Try the link above and drop the file here.'; }
+  };
   // rows are trusted only if they are exactly <digits>,<digits>,<66 hex>: anything else in the file is dropped
   const ROW=/^\s*(\d{1,20}),(\d{1,10}),([0-9a-f]{66})\s*$/i;
-  function take(ln, arr){ const m=ROW.exec(ln); if(m) take.arr.push([m[3].toLowerCase(),m[1],m[2]]); }
-  async function load(f){
-    prog.style.display='block'; const bar=prog.firstElementChild; res.textContent='Reading '+f.name+'…';
-    const rd=f.stream().getReader(), dec=new TextDecoder(); let buf='', done=0; const arr=[]; take.arr=arr;
-    for(;;){ const {value,done:d}=await rd.read(); if(d) break; done+=value.length; bar.style.width=(done/f.size*100)+'%';
-      buf+=dec.decode(value,{stream:true}); const ls=buf.split('\n'); buf=ls.pop();
-      for(const ln of ls) take(ln); }
-    take(buf);
+  async function ingest(stream, total, name){
+    if(busy) return; busy=true; fb.disabled=true;
+    prog.style.display='block'; const bar=prog.firstElementChild; bar.style.width='0'; res.textContent='Reading '+name+'…';
+    let done=0; const raw=stream.getReader(); let first=await raw.read();
+    const gz=!first.done && first.value[0]===0x1f && first.value[1]===0x8b;   // sniff gzip, whatever the name says
+    let src=new ReadableStream({ async pull(c){ const r= first ? first : await raw.read(); first=null;
+      if(r.done){ c.close(); return; } done+=r.value.length; if(total) bar.style.width=Math.min(100,done/total*100)+'%'; c.enqueue(r.value); } });
+    if(gz) src=src.pipeThrough(new DecompressionStream('gzip'));
+    const rd=src.getReader(), dec=new TextDecoder(); let buf=''; const arr=[];
+    const take=ln=>{ const m=ROW.exec(ln); if(m) arr.push([m[3].toLowerCase(),m[1],m[2]]); };
+    try{
+      for(;;){ const {value,done:d}=await rd.read(); if(d) break;
+        buf+=dec.decode(value,{stream:true}); const ls=buf.split('\n'); buf=ls.pop();
+        for(const ln of ls) take(ln); }
+      take(buf);
+    }catch(e){ busy=false; fb.disabled=false; res.textContent='Could not read '+name+' ('+e.message+').'; return; }
     arr.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0); keys=arr.map(a=>a[0]); rows=arr;
-    res.innerHTML='Loaded <b>'+fmt(arr.length)+'</b> outputs. Ready to search.'; drop.textContent='✓ '+f.name+' · '+fmt(arr.length)+' rows';
+    res.innerHTML='Loaded <b>'+fmt(arr.length)+'</b> outputs. Ready to search.';
+    drop.textContent='✓ '+name+' · '+fmt(arr.length)+' rows'; fb.textContent='Loaded'; busy=false;
     q.disabled=qb.disabled=false; q.focus();
   }
   function find(){
