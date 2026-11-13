@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beam HF6 Forgery Hunt</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f6f6f4; --surface:#fcfcfb; --surface-2:#f0efec; --line:#e2e1dc;
+  --text:#0b0b0b; --text-2:#52514e; --muted:#7a7974;
+  --accent:#2a78d6; --accent-soft:#e3eefb;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#008300; --good-soft:#e2f2e2; --warn:#b57a00; --warn-soft:#fbf1dc; --bad:#d03b3a; --bad-soft:#fbe5e5;
+  --code:#efeeea;
+  --hero-a:#0f1b2d; --hero-b:#13314f; --hero-text:#f0efec; --hero-2:#a9b8cc;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#121211; --surface:#1a1a19; --surface-2:#232321; --line:#2f2f2c;
+    --text:#f0efec; --text-2:#c3c2b7; --muted:#8f8e86;
+    --accent:#3987e5; --accent-soft:#1d2a3b;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3fae3f; --good-soft:#18291a; --warn:#d9a12b; --warn-soft:#2e2615; --bad:#e66767; --bad-soft:#331b1b;
+    --code:#262624;
+    --hero-a:#0b1320; --hero-b:#10263e;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#232321; --line:#2f2f2c;
+  --text:#f0efec; --text-2:#c3c2b7; --muted:#8f8e86;
+  --accent:#3987e5; --accent-soft:#1d2a3b;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3fae3f; --good-soft:#18291a; --warn:#d9a12b; --warn-soft:#2e2615; --bad:#e66767; --bad-soft:#331b1b;
+  --code:#262624;
+  --hero-a:#0b1320; --hero-b:#10263e;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px 64px}
+h1{font-size:40px;line-height:1.08;margin:0 0 14px;letter-spacing:-.02em}
+h2{font-size:23px;line-height:1.25;margin:0 0 6px;letter-spacing:-.01em}
+h3{font-size:16px;margin:0 0 6px}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+code,.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:.92em}
+code{background:var(--code);padding:1px 5px;border-radius:5px}
+.kicker{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:650;margin:0 0 6px}
+
+/* hero */
+.hero{background:radial-gradient(1200px 400px at 80% -10%,#2a78d633,transparent 60%),linear-gradient(160deg,var(--hero-a),var(--hero-b));color:var(--hero-text);padding:22px 0 34px;margin-bottom:22px;position:relative;overflow:hidden}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+.hero .wrap{position:relative;padding-bottom:0}
+.hero-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:34px}
+.brand{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--hero-2)}
+.theme-btn{border:1px solid #ffffff33;background:#ffffff10;color:var(--hero-text);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.hero .lede{font-size:17px;color:var(--hero-2);max-width:720px}
+.hero h1 em{font-style:normal;color:#7fb6ff}
+.counter-row{display:flex;gap:34px;flex-wrap:wrap;margin-top:26px;align-items:flex-end}
+.counter .n{font-size:46px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
+.counter .l{font-size:13px;color:var(--hero-2);margin-top:6px}
+.counter.zero .n{color:#6fe08a}
+.hero-note{margin-top:22px;display:inline-flex;gap:10px;align-items:flex-start;background:#ffffff12;border:1px solid #ffffff22;border-radius:10px;padding:10px 14px;font-size:14px;color:var(--hero-text);max-width:760px}
+.hero-note b{color:#ffd27a}
+nav.toc{display:flex;gap:6px;flex-wrap:wrap;margin-top:22px}
+nav.toc a{color:var(--hero-text);text-decoration:none;font-size:13px;border:1px solid #ffffff2a;border-radius:999px;padding:4px 11px;background:#ffffff0c}
+nav.toc a:hover{background:#ffffff22}
+
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px;margin:0 0 18px}
+.sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.sec-head p{margin:0;color:var(--text-2);max-width:720px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface-2)}
+.seg button{border:0;background:transparent;color:var(--text-2);font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.info{background:var(--accent-soft);color:var(--accent)}
+.legend-row{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-2);margin-top:10px}
+.legend-row span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);display:inline-block}
+
+/* timeline */
+.tl{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:0;margin-top:8px}
+.tl::before{content:"";position:absolute;left:0;right:0;top:17px;height:2px;background:var(--line)}
+.ev{position:relative;padding:0 8px;text-align:left;background:none;border:0;font:inherit;color:inherit;cursor:pointer}
+.ev .dot{width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid var(--muted);margin:10px 0 10px;position:relative;z-index:1;transition:transform .15s}
+.ev.k-bad .dot{border-color:var(--bad)} .ev.k-good .dot{border-color:var(--good)} .ev.k-acc .dot{border-color:var(--accent)}
+.ev[aria-pressed="true"] .dot{transform:scale(1.35);background:currentColor}
+.ev.k-bad[aria-pressed="true"]{color:var(--bad)} .ev.k-good[aria-pressed="true"]{color:var(--good)} .ev.k-acc[aria-pressed="true"]{color:var(--accent)}
+.ev .d{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ev .t{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
+.tl-detail{margin-top:14px;border-left:3px solid var(--accent);padding:6px 12px;color:var(--text-2);min-height:52px}
+
+/* transcript */
+.tx{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 14px;min-height:40px}
+.tok{display:inline-flex;align-items:center;border-radius:8px;padding:6px 9px;font:600 13px/1 ui-monospace,Consolas,monospace;border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);opacity:.3;transition:opacity .2s}
+.tok.on{opacity:1}
+.tok.ch{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.tok.lr{background:var(--surface);color:var(--text)}
+.tok.lr.bound{border-color:color-mix(in srgb,var(--good) 60%,transparent)}
+.tok.lr.free{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.arrow{color:var(--muted);font-size:12px}
+.tx-ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tx-note{border-left:3px solid var(--line);padding:6px 12px;color:var(--text-2);margin-top:12px;min-height:50px}
+.tx-note.bad{border-color:var(--bad)} .tx-note.good{border-color:var(--good)}
+
+/* lab */
+.lab{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.lab>*{min-width:0}
+.eq{font:14px/1.9 ui-monospace,Consolas,monospace;background:var(--surface-2);border-radius:10px;padding:12px 14px;overflow-x:auto;white-space:nowrap}
+.eq .v{color:var(--accent);font-weight:650}
+.eq .f{color:var(--bad);font-weight:650}
+.verdict-box{display:flex;align-items:center;gap:12px;border-radius:12px;padding:14px 16px;margin-top:12px;font-size:15px;transition:background .2s}
+.verdict-box.ok{background:var(--good-soft)} .verdict-box.no{background:var(--bad-soft)}
+.verdict-box .big{font-size:30px;line-height:1}
+.ctl{margin-bottom:14px}
+.ctl label{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px}
+.ctl label b{font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin-top:6px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+.attempts{font-size:13px;color:var(--text-2);margin-top:8px;min-height:20px}
+
+/* pipeline */
+.funnel{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.pstep{flex:1 1 120px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface-2);animation:pop .5s ease-out both}
+.pstep .pv{font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.pstep .pk{font-size:12px;color:var(--text-2);line-height:1.35}
+.pstep.zero{background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
+.pstep.zero .pv{color:var(--good);font-size:24px}
+.parrow{align-self:center;color:var(--muted)}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.pstep{animation:none}}
+
+/* checks */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.chk{cursor:pointer}
+tr.chk:hover td{background:var(--surface-2)}
+tr.chk td:first-child::before{content:"▸";display:inline-block;width:14px;color:var(--muted);transition:transform .15s}
+tr.chk.open td:first-child::before{transform:rotate(90deg)}
+tr.detail td{background:var(--surface-2);color:var(--text-2);font-size:13.5px;display:none}
+tr.detail.open td{display:table-cell}
+.tbl-scroll{overflow-x:auto}
+
+/* chart */
+.chart-box{position:relative;margin-top:6px}
+svg.chart{display:block;width:100%;height:auto;overflow:visible}
+.axis text{fill:var(--muted);font-size:11px}
+.grid line{stroke:var(--line);stroke-width:1}
+.bar{fill:var(--s1)} .bar.dim{opacity:.35}
+.hf6 line{stroke:var(--bad);stroke-width:1.5;stroke-dasharray:4 3}
+.hf6 text{fill:var(--bad);font-size:11px;font-weight:600}
+.ann text{fill:var(--text-2);font-size:11px} .ann line{stroke:var(--muted);stroke-width:1}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.14);white-space:nowrap;opacity:0;transition:opacity .1s;z-index:5}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+.fact{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.fact .v{font-weight:650;font-size:18px;font-variant-numeric:tabular-nums}
+.fact .k{font-size:12.5px;color:var(--text-2)}
+details.table-view{margin-top:12px}
+details.table-view summary{cursor:pointer;color:var(--text-2);font-size:13px}
+details.table-view .tbl-scroll{max-height:280px;overflow:auto;margin-top:8px}
+
+/* simulator */
+.sim{display:grid;grid-template-columns:300px 1fr;gap:22px}
+.sim>*{min-width:0}
+.stack-wrap{margin-bottom:16px}
+.stack-label{font-size:12.5px;color:var(--text-2);margin-bottom:5px}
+.stack{position:relative;height:34px;border-radius:6px;background:var(--surface-2);display:flex;gap:2px}
+.stack .seg2{height:100%;transition:width .25s}
+.stack .seg2:first-child{border-radius:6px 0 0 6px}
+.cap{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--text);transition:left .25s}
+.cap.lbl::after{content:"Total";position:absolute;top:-17px;left:-14px;font-size:11px;color:var(--text);font-weight:650}
+.hatch{background-image:repeating-linear-gradient(45deg,var(--s2) 0 6px,color-mix(in srgb,var(--s2) 55%,var(--surface)) 6px 9px)}
+.outcome{border-radius:10px;padding:12px 14px;font-size:14px;margin-top:6px}
+.outcome.good{background:var(--good-soft)} .outcome.bad{background:var(--bad-soft)} .outcome.warn{background:var(--warn-soft)}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+
+/* lookup */
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--text-2);cursor:pointer;transition:border-color .15s, background .15s}
+.drop.hover{border-color:var(--accent);background:var(--accent-soft)}
+.lookup-row{display:flex;gap:8px;margin-top:12px}
+.lookup-row input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Consolas,monospace}
+.result{margin-top:10px;font-size:14px}
+.progress{height:4px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin-top:10px;display:none}
+.progress div{height:100%;width:0;background:var(--accent);transition:width .1s}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.two>*{min-width:0}
+ol.steps{padding-left:20px;margin:0} ol.steps li{margin-bottom:8px}
+pre{background:var(--code);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12.5px;line-height:1.5;margin:8px 0 0}
+footer{color:var(--muted);font-size:12.5px;margin-top:26px}
+
+@media (max-width:860px){
+  .tl{grid-template-columns:1fr;gap:0}
+  .tl::before{left:6px;right:auto;top:0;bottom:0;width:2px;height:auto}
+  .ev{display:grid;grid-template-columns:22px 1fr;column-gap:10px;padding:4px 0}
+  .ev .dot{grid-row:span 2;margin:4px 0 0}
+  .lab,.sim,.two{grid-template-columns:1fr}
+  .facts{grid-template-columns:1fr}
+  .parrow{display:none}
+  .pstep{flex:1 1 140px}
+  h1{font-size:29px}
+  .counter .n{font-size:34px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <canvas id="dots" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="hero-top">
+      <div class="brand">BumbleBeam research · bpscan · snapshot Nov 11, 2026</div>
+      <button class="theme-btn" id="themeBtn" type="button">Theme: auto</button>
+    </div>
+    <p class="kicker" style="color:#7fb6ff">Beam · Hard Fork 6 · forensic scan</p>
+    <h1>For 7 years, anyone could have printed Beam.<br><em>Did anyone?</em></h1>
+    <p class="lede">Until block 3,928,666, a subtle flaw in Beam's Bulletproofs let a prover "prove" that a negative
+      amount was positive, and so mint coins out of thin air. Pedersen commitments hide every amount, so the usual supply
+      audit can't see it. We pulled every range proof ever written to the chain and went looking for fingerprints.</p>
+    <div class="counter-row">
+      <div class="counter"><div class="n" data-count="35086226">0</div><div class="l">pre-fork proofs examined</div></div>
+      <div class="counter"><div class="n" data-count="284000000" data-suffix="+">0</div><div class="l">fingerprints cross-matched</div></div>
+      <div class="counter zero"><div class="n">0</div><div class="l">forgery traces found</div></div>
+    </div>
+    <div class="hero-note"><span>⚠</span><span><b>Clean is not the same as proven innocent.</b> This catches a <i>sloppy</i> forger. A careful one
+      leaves nothing to find. Only lustration can settle it, and even lustration has a blind spot. Play with the <a href="#lustration" style="color:#7fb6ff">simulator</a> to see why.</span></div>
+    <nav class="toc">
+      <a href="#timeline">Timeline</a><a href="#bug">The bug</a><a href="#lab">Forge one yourself</a><a href="#scan">The scan</a>
+      <a href="#checks">Checks</a><a href="#hiding">Where −X hides</a><a href="#lustration">Lustration</a><a href="#lookup">Look up</a><a href="#method">Method</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- TIMELINE -->
+<section class="card" id="timeline">
+  <div class="sec-head"><div><p class="kicker">Timeline</p><h2>From launch to lustration</h2><p>Click an event.</p></div></div>
+  <div class="tl" id="tl"></div>
+  <div class="tl-detail" id="tlDetail"></div>
+</section>
+
+<!-- BUG -->
+<section class="card" id="bug">
+  <div class="sec-head">
+    <div>
+      <p class="kicker">The bug</p>
+      <h2>One line in the wrong order</h2>
+      <p>The inner-product argument folds the proof over 6 rounds. Each round the prover publishes two points, L<sub>i</sub> and R<sub>i</sub>,
+        and the verifier derives a challenge x<sub>i</sub> by hashing the transcript. A point is locked in only if it enters
+        the hash <i>before</i> a challenge is derived from it.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Scheme">
+      <button type="button" data-ver="0" aria-pressed="true">Before HF6 (v0)</button>
+      <button type="button" data-ver="1" aria-pressed="false">After HF6 (v1)</button>
+    </div>
+  </div>
+  <div class="tx" id="tx" aria-live="polite"></div>
+  <div class="tx-ctrl">
+    <button class="btn" id="txPrev" type="button">← Step</button>
+    <button class="btn primary" id="txNext" type="button">Step →</button>
+    <button class="btn" id="txAll" type="button">Show all</button>
+    <span class="muted small" id="txStep"></span>
+  </div>
+  <div class="tx-note" id="txNote"></div>
+  <div class="legend-row">
+    <span><i class="sw" style="background:var(--accent-soft);border-color:var(--accent)"></i>challenge x<sub>i</sub> (transcript hash)</span>
+    <span><i class="sw" style="border-color:var(--good)"></i>L/R locked by a later challenge</span>
+    <span><i class="sw" style="background:var(--bad-soft);border-color:var(--bad)"></i>L/R locked by nothing</span>
+  </div>
+  <p class="small muted" style="margin-top:12px">Fix: commit <code>37ca7d8ca</code> "BP scheme upgraded" in <code>core/ecc_bulletproof.cpp</code>,
+    <code>XSet::NextChallenge(…, iVersion)</code>. Since HF6, nodes accept v1 proofs only.</p>
+</section>
+
+<!-- LAB -->
+<section class="card" id="lab">
+  <div class="sec-head">
+    <div>
+      <p class="kicker">Forge one yourself</p>
+      <h2>The forgery lab</h2>
+      <p>A toy version of the verifier's last step. Numbers mod a prime stand in for curve points (not secure, but the
+        algebra is the same). Pick any amount, negative included, and any L. The lab solves for R. Then switch the scheme.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Lab scheme">
+      <button type="button" data-lab="0" aria-pressed="true">v0 transcript</button>
+      <button type="button" data-lab="1" aria-pressed="false">v1 transcript</button>
+    </div>
+  </div>
+  <div class="lab">
+    <div>
+      <div class="ctl"><label for="amt">Amount the output claims <b id="amtV"></b></label><input type="range" id="amt" min="-1000" max="1000" step="10" value="-500"></div>
+      <div class="ctl"><label for="lsel">Forger's free choice of L₆ <b id="lV"></b></label><input type="range" id="lsel" min="1" max="999" step="1" value="137"></div>
+      <div class="tx-ctrl">
+        <button class="btn primary" id="resolve" type="button">Re-solve R₆ for the current challenge</button>
+      </div>
+      <div class="attempts" id="attempts"></div>
+      <dl class="kv" id="labKv"></dl>
+    </div>
+    <div>
+      <div class="eq" id="eq"></div>
+      <div class="verdict-box" id="labVerdict"></div>
+      <p class="small muted" style="margin-top:12px" id="labExplain"></p>
+    </div>
+  </div>
+</section>
+
+<!-- SCAN FUNNEL -->
+<section class="card" id="scan">
+  <div class="sec-head"><div><p class="kicker">The scan</p><h2>From a 51 GB database to zero</h2>
+    <p>Old block bodies are pruned, but every transaction output is kept with its full proof. That is enough to reread
+      the whole history.</p></div></div>
+  <div class="funnel" id="funnel"></div>
+  <div class="facts" style="margin-top:18px">
+    <div class="fact"><div class="v">74629 → 74629</div><div class="k">SQLite change counter during the final copy pass: no commit landed, so the snapshot is consistent</div></div>
+    <div class="fact"><div class="v">0 / 0 / 0</div><div class="k">decode errors / unreadable ranges / height gaps; integrity check: ok</div></div>
+    <div class="fact"><div class="v">~35 min</div><div class="k">full pass on a 4-vCPU VM, keys bucketed to disk to fit 7 GB of RAM</div></div>
+  </div>
+</section>
+
+<!-- CHECKS -->
+<section class="card" id="checks">
+  <div class="sec-head"><div><p class="kicker">Checks</p><h2>What a sloppy forger leaves behind</h2>
+    <p>Every proof was checked for each trace below. Post-HF6 proofs use the fixed scheme, so they act as a control group:
+      any hit there would be a false positive. Click a row for detail.</p></div></div>
+  <div class="tbl-scroll"><table>
+    <thead><tr><th>Trace</th><th>What we look for</th><th class="num">pre-HF6</th><th class="num">post-HF6</th></tr></thead>
+    <tbody id="checksBody"></tbody>
+  </table></div>
+</section>
+
+<!-- HIDING -->
+<section class="card" id="hiding">
+  <div class="sec-head">
+    <div><p class="kicker">Where −X would hide</p><h2>1,434,626 suspects</h2>
+      <p>A negative output can't be moved after HF6: spending it needs another negative output with a sound proof, which
+        no longer exists. If a forgery happened, −X is still frozen in one of these unspent pre-fork outputs, or in the old
+        shielded pool, which can't be scanned this way.</p></div>
+    <div class="seg" role="group" aria-label="Scale">
+      <button type="button" data-scale="lin" aria-pressed="true">Linear</button>
+      <button type="button" data-scale="log" aria-pressed="false">Log</button>
+    </div>
+  </div>
+  <div class="chart-box" id="chartBox">
+    <svg class="chart" id="chart" role="img" aria-label="Unspent pre-HF6 confidential outputs by creation height, 20,000-block bins"></svg>
+    <div class="tip" id="tip"></div>
+  </div>
+  <p class="small muted">Unspent confidential outputs by creation height, 20,000-block bins (~2 weeks). Dates are approximate:
+    height × 1 minute from the Jan 3, 2019 launch.</p>
+  <div class="facts" id="facts"></div>
+  <details class="table-view"><summary>Table by bin</summary>
+    <div class="tbl-scroll"><table><thead><tr><th>Heights</th><th>≈ date</th><th class="num">Outputs</th></tr></thead><tbody id="binTable"></tbody></table></div>
+  </details>
+</section>
+
+<!-- LUSTRATION -->
+<section class="card" id="lustration">
+  <div class="sec-head"><div><p class="kicker">Lustration · BIP-5 · HF7</p><h2>The only real answer, and its blind spot</h2>
+    <p>Just before HF7, each node snapshots a per-asset <b>Total</b> (emission + treasury + issued CA − deposits − funds locked in contracts).
+      Every output created before HF7 must disclose its amount the first time it is spent, and disclosures add up in <b>Consumed</b>.
+      A block that pushes Consumed past Total is rejected. A negative output can never disclose, because the amount must be a <code>uint64</code>.</p></div></div>
+  <div class="sim">
+    <div>
+      <div class="presets">
+        <button class="btn" data-preset="0,5,70" type="button">No inflation</button>
+        <button class="btn" data-preset="4,5,100" type="button">Hidden forever</button>
+        <button class="btn" data-preset="8,5,100" type="button">Caught</button>
+      </div>
+      <div class="ctl"><label for="inf">Hidden inflation X <b id="infV"></b></label><input type="range" id="inf" min="0" max="10" step="0.5" value="0"></div>
+      <div class="ctl"><label for="lost">Coins lost forever (keys gone) <b id="lostV"></b></label><input type="range" id="lost" min="0" max="20" step="1" value="5"></div>
+      <div class="ctl"><label for="moved">Share of old coins moved so far <b id="movedV"></b></label><input type="range" id="moved" min="0" max="100" step="1" value="70"></div>
+      <p class="small muted">All values are % of Total. This illustrates the mechanism; it is not a forecast.</p>
+    </div>
+    <div>
+      <div class="stack-wrap"><div class="stack-label">Positive pre-HF7 coins (what can ever be spent)</div><div class="stack" id="stackA"></div></div>
+      <div class="stack-wrap"><div class="stack-label">Disclosed so far (Consumed): <b id="consV" class="mono"></b></div><div class="stack" id="stackB"></div></div>
+      <div class="legend-row" style="margin-bottom:10px">
+        <span><i class="sw" style="background:var(--s1)"></i>honest coins</span>
+        <span><i class="sw hatch"></i>extra coins from a forgery (+X)</span>
+        <span><i class="sw" style="background:var(--s3)"></i>lost coins (never disclosed)</span>
+        <span><i class="sw" style="background:var(--text);width:3px;border:0"></i>Total cap</span>
+      </div>
+      <div class="outcome" id="outcome"></div>
+    </div>
+  </div>
+</section>
+
+<!-- LOOKUP -->
+<section class="card" id="lookup">
+  <div class="sec-head"><div><p class="kicker">Look up</p><h2>Is my output among the suspects?</h2>
+    <p>Drop <code>unspent_pre_hf6.csv</code> from this folder (113 MB) here. The file is parsed in your browser and goes nowhere.
+      Then search by commitment or by its prefix.</p></div></div>
+  <div class="drop" id="drop" tabindex="0" role="button">Drop <b>unspent_pre_hf6.csv</b> here, or click to choose<input type="file" id="file" accept=".csv" hidden></div>
+  <div class="progress" id="prog"><div></div></div>
+  <div class="lookup-row">
+    <input id="q" placeholder="commitment (66 hex) or a prefix of 8+ characters" disabled>
+    <button class="btn" id="qBtn" type="button" disabled>Search</button>
+  </div>
+  <div class="result" id="res"></div>
+</section>
+
+<!-- METHOD -->
+<section class="card" id="method">
+  <p class="kicker">Method</p><h2>How the numbers were produced</h2>
+  <div class="two" style="margin-top:12px">
+    <div><ol class="steps">
+      <li><b>Source.</b> A fully synced explorer node (no TxoLo/TxoHi horizons). The <code>Txo</code> table holds every output with its full proof, and the kernels in <code>States.Ethernal</code> hold the shielded outputs.</li>
+      <li><b>Snapshot.</b> The node kept running. We copied the live file, then re-copied changed 1 MB chunks until a pass saw no commit, and confirmed it with <code>PRAGMA quick_check</code>.</li>
+      <li><b>Coverage.</b> 39,657,830 TXO rows of 43,777,945 ids. The gap of 4,120,115 is exactly one reserved id per block. Heights 1 … 4,120,114 are contiguous.</li>
+      <li><b>Control.</b> Post-HF6 proofs (sound scheme) must score zero. They did.</li>
+    </ol></div>
+    <div>
+      <h3>Reproduce</h3>
+<pre>cmake -S &lt;beam-src&gt; -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DBEAM_IPFS_SUPPORT=OFF \
+  -DBPSCAN_DIR=$PWD -DCMAKE_PROJECT_INCLUDE=$PWD/inject.cmake
+ninja -C build bpscan
+python3 resync.py live/node.db copy/node.db
+bpscan copy/node.db out/ --check
+bpscan copy/node.db out/</pre>
+      <p class="small muted" style="margin-top:10px">Code: <code>beam/research/bpscan</code> in the BumbleBeam repository.</p>
+      <h3 style="margin-top:14px">Not covered</h3>
+      <p class="small">Duplicate early-round points L₁…R₅ (<code>--all-rounds</code>). 103,172 "replays", where the same commitment was recreated with the
+        same proof material; this doesn't look like forgery and was not investigated further. The contents of the shielded pool, whose spends can't be linked to outputs.</p>
+    </div>
+  </div>
+</section>
+
+<footer>Snapshot: block 4,120,114 (Nov 11, 2026). HF6: block 3,928,666. Sources: beam.mw/blog/news/hardfork-six · BeamMW/beam commit 37ca7d8ca · branch 2026-lustration.</footer>
+</div>
+
+<script>
+const BINS = {"bin": 20000, "counts": [15169, 24033, 22282, 36160, 117159, 47015, 8404, 6156, 6276, 5726, 5162, 7253, 29194, 27672, 263546, 201636, 8308, 4628, 6172, 4769, 4266, 4597, 5279, 5110, 6869, 4782, 5277, 3926, 4043, 3981, 3171, 2826, 3480, 1616, 1816, 1611, 1903, 2498, 5229, 2881, 2382, 2657, 2756, 2057, 1980, 2275, 1673, 2346, 2099, 2531, 2726, 3012, 3952, 4555, 4496, 7101, 6860, 7144, 7301, 8518, 8180, 8383, 5884, 6334, 3365, 3187, 3537, 3296, 2879, 3129, 7513, 3864, 6447, 6620, 16067, 4814, 9000, 10304, 3440, 4691, 4719, 3411, 3540, 4142, 2619, 2850, 2506, 2882, 2582, 33811, 2272, 1540, 3291, 2129, 1981, 1907, 3325, 5048, 4304, 2826, 2950, 2260, 2210, 2655, 2041, 2084, 3395, 2173, 2378, 2658, 2629, 2835, 2732, 3081, 2544, 2192, 1783, 1492, 3141, 2056, 2010, 1765, 1141, 853, 1616, 820, 932, 1143, 16262, 50020, 2075, 2070, 1601, 1450, 6556, 1652, 1311, 1151, 914, 10539, 3287, 2962, 1326, 999, 859, 799, 741, 782, 825, 710, 771, 909, 735, 1202, 1248, 1105, 980, 1097, 1111, 1061, 1019, 793, 626, 854, 714, 2110, 1032, 1090, 998, 1134, 841, 805, 1020, 791, 775, 616, 738, 1245, 978, 1021, 1199, 1216, 1193, 1408, 1873, 1536, 1266, 1248, 1086, 1285, 1146, 851, 762, 1001, 4423, 1616, 717]};
+const HF6 = 3928666, LAUNCH = Date.UTC(2019,0,3,15,42);
+const fmt = n => Number(n).toLocaleString('en-US');
+const dateOf = h => new Date(LAUNCH + h*60000).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+
+/* theme */
+(() => {
+  const btn = document.getElementById('themeBtn'); const modes=['auto','light','dark'];
+  let m='auto'; try{ m=localStorage.getItem('bpscan-theme')||'auto'; }catch(e){}
+  const apply=()=>{ if(m==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',m); btn.textContent='Theme: '+m; };
+  btn.onclick=()=>{ m=modes[(modes.indexOf(m)+1)%3]; try{localStorage.setItem('bpscan-theme',m);}catch(e){} apply(); };
+  apply();
+})();
+
+/* hero: counters + drifting points */
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target=+el.dataset.count, suf=el.dataset.suffix||'';
+    if (reduce){ el.textContent=fmt(target)+suf; return; }
+    const t0=performance.now(), dur=1600;
+    const tick=t=>{ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); el.textContent=fmt(Math.round(target*e))+(k===1?suf:''); if(k<1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
+  const cv=document.getElementById('dots'), ctx=cv.getContext('2d'); let W,H,pts=[];
+  function size(){ W=cv.width=cv.offsetWidth*devicePixelRatio; H=cv.height=cv.offsetHeight*devicePixelRatio;
+    pts=Array.from({length:Math.round(W*H/26000)},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,r:Math.random()*1.6+.6})); }
+  function frame(){ ctx.clearRect(0,0,W,H);
+    for(const p of pts){ if(!reduce){p.x+=p.vx;p.y+=p.vy;} if(p.x<0)p.x+=W; if(p.x>W)p.x-=W; if(p.y<0)p.y+=H; if(p.y>H)p.y-=H;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*devicePixelRatio,0,7); ctx.fillStyle='#8fbfff55'; ctx.fill(); }
+    if(!reduce) requestAnimationFrame(frame); }
+  size(); frame(); addEventListener('resize', size);
+})();
+
+/* timeline */
+(() => {
+  const ev = [
+    ['Jan 3, 2019','Mainnet launch','acc','Beam goes live as a Mimblewimble chain. The range proofs already use the flawed transcript order. Audits by Kudelski, Least Authority and SmartDec (now Pessimistic) before launch did not catch it.'],
+    ['2019 – 2026','7 years exposed','bad','Every confidential output, MW or shielded and for every asset, was carried by a proof that could have been forged. The supply audit cannot tell, because a −X output cancels +X exactly. According to the developers, AI-assisted code reviews missed it too.'],
+    ['Jun 13, 2026','Responsible disclosure','acc','MonclairTrades reports the flaw privately to the Beam developers.'],
+    ['Jun 30, 2026','The fix','good','Commit 37ca7d8ca "BP scheme upgraded": L and R now enter the transcript before each challenge (iVersion 1). Pools and exchanges are asked to upgrade.'],
+    ['Block 3,928,666','Hard Fork 6','good','From this block on, only v1 proofs are valid. New forgeries become impossible, and any −X created earlier can never move again.'],
+    ['Jul – Nov 2026','Lustration','acc','The Lustration proposal (Jul 28) becomes BIP-5 for HF7. Branch 2026-lustration adds disclosures and per-asset Total/Consumed counters (Nov 1–2). Status: WIP, and no mainnet HF7 height is set.'],
+    ['Nov 11, 2026','This scan','good','bpscan rereads all 35,086,226 pre-fork proofs, plus 481,127 post-fork proofs as a control. Result: zero traces.'],
+  ];
+  const box=document.getElementById('tl'), det=document.getElementById('tlDetail');
+  ev.forEach((e,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='ev k-'+e[2]; b.setAttribute('aria-pressed', i===6);
+    b.innerHTML='<div class="dot"></div><div class="d">'+e[0]+'</div><div class="t">'+e[1]+'</div>';
+    b.onclick=()=>{ box.querySelectorAll('.ev').forEach(x=>x.setAttribute('aria-pressed', x===b)); det.innerHTML='<b>'+e[1]+'.</b> '+e[3]; det.style.borderColor='var(--'+(e[2]==='acc'?'accent':e[2])+')'; };
+    box.appendChild(b); if(i===6) b.click(); });
+})();
+
+/* transcript stepper */
+(() => {
+  const N=6; let ver=0, step=0;
+  const box=document.getElementById('tx'), note=document.getElementById('txNote'), lab=document.getElementById('txStep');
+  const seq=()=>{ const s=[]; for(let i=0;i<N;i++){ if(ver===0){s.push({t:'ch',i});s.push({t:'lr',i});} else {s.push({t:'lr',i});s.push({t:'ch',i});} } return s; };
+  function render(){
+    const s=seq(), total=s.length, chAt=i=>s.findIndex(e=>e.t==='ch'&&e.i===i); box.innerHTML='';
+    s.forEach((e,k)=>{
+      if(k){ const a=document.createElement('span'); a.className='arrow'; a.textContent='→'; box.appendChild(a); }
+      const el=document.createElement('span'), on=k<step;
+      if(e.t==='ch'){ el.className='tok ch'+(on?' on':''); el.innerHTML='x<sub>'+(e.i+1)+'</sub>'; }
+      else { const binder= ver===1? chAt(e.i) : chAt(e.i+1); let c='';
+        if(on && binder>=0 && binder<step) c=' bound'; else if(on && binder<0 && step>=total) c=' free';
+        el.className='tok lr'+(on?' on':'')+c; el.innerHTML='L<sub>'+(e.i+1)+'</sub>,R<sub>'+(e.i+1)+'</sub>'; }
+      box.appendChild(el); });
+    lab.textContent='step '+step+' of '+total;
+    const last=s[step-1]; note.className='tx-note';
+    if(step===0) note.textContent= ver===0 ? 'Old scheme: each round draws the challenge first, then publishes L and R. Press "Step →".' : 'New scheme: L and R go into the transcript first, then the challenge is drawn from it.';
+    else if(step>=total){
+      if(ver===0){ note.className='tx-note bad'; note.innerHTML='<b>v0 result:</b> the pairs from rounds 1–5 are locked by the next round\'s challenge, but <b>L<sub>6</sub> and R<sub>6</sub> come after x<sub>6</sub> and nothing locks them</b>. The prover picks L<sub>6</sub> freely and solves R<sub>6</sub> from the verification equation. It balances for any amount, including a "negative" one.'; }
+      else { note.className='tx-note good'; note.innerHTML='<b>v1 result:</b> every pair enters the hash before its own challenge. Change it and the challenge changes, so the equation can no longer be tuned after the fact.'; }
+    } else if(last.t==='ch') note.innerHTML='Challenge x<sub>'+(last.i+1)+'</sub> = hash of everything in the transcript so far.'+(ver===0&&last.i>0?' That includes L<sub>'+last.i+'</sub>, R<sub>'+last.i+'</sub>, so the previous pair is now locked.':'');
+    else note.innerHTML='The prover publishes L<sub>'+(last.i+1)+'</sub>, R<sub>'+(last.i+1)+'</sub>.'+(ver===0?(last.i===N-1?' <b>This is the last round: no further challenge will come.</b>':' x<sub>'+(last.i+1)+'</sub> is already drawn, so only x<sub>'+(last.i+2)+'</sub> can lock this pair.'):' The next challenge will be drawn with them in it.');
+  }
+  document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{ ver=+b.dataset.ver; step=0; document.querySelectorAll('[data-ver]').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); });
+  document.getElementById('txNext').onclick=()=>{ step=Math.min(step+1,N*2); render(); };
+  document.getElementById('txPrev').onclick=()=>{ step=Math.max(step-1,0); render(); };
+  document.getElementById('txAll').onclick=()=>{ step=N*2; render(); };
+  render();
+})();
+
+/* forgery lab: toy group Z_p, points = numbers, "k·G" = k*G mod p */
+(() => {
+  const p=1000003n, G=48271n, Hh=69621n, Q=40692n;          // toy generators
+  const md=a=>((a%p)+p)%p, pw=(b,e)=>{ let r=1n; b=md(b); while(e>0n){ if(e&1n) r=r*b%p; b=b*b%p; e>>=1n; } return r; }, inv=a=>pw(a,p-2n);
+  const hash=s=>{ let h=2166136261>>>0; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619)>>>0; } return BigInt(1+h%999999); };
+  const blind=271828n, a=31337n, b=4242n;                     // prover's final scalars (fixed for the toy)
+  let ver=0, R=null, tries=0, stale=false;
+  const el=id=>document.getElementById(id);
+  function state(){
+    const v=BigInt(+el('amt').value), L=BigInt(+el('lsel').value)*997n;
+    const P=md(v*Hh + blind*G);                              // commitment to v (negative wraps around mod p)
+    const T=md(a*G + b*Hh + a*b%p*Q);                         // right-hand side from the final scalars
+    const x0=hash('P:'+P);                                    // v0: challenge before L,R
+    return {v,L,P,T,x0};
+  }
+  const xOf=(s,L,R)=> ver===0 ? s.x0 : hash('P:'+s.P+'|L:'+L+'|R:'+R);
+  function solve(){ // forger solves R for the challenge it currently sees
+    const s=state(); const x = ver===0 ? s.x0 : (R===null ? s.x0 : xOf(s,s.L,R));
+    const x2=x*x%p; R=md((s.T - s.P - x2*s.L)*x2); tries++; draw();
+  }
+  function draw(){
+    const s=state(); const x=xOf(s,s.L,R), x2=x*x%p, xi2=inv(x2);
+    const lhs=md(s.P + x2*s.L + xi2*R), ok= lhs===s.T;
+    el('amtV').textContent=(s.v>0?'+':'')+s.v+' BEAM'; el('lV').textContent=String(s.L);
+    el('eq').innerHTML='P + x²·L₆ + x⁻²·R₆ <span class="muted">≟</span> a·G + b·H + ab·Q<br>'+
+      '<span class="v">'+s.P+'</span> + <span class="v">'+x2+'</span>·<span class="f">'+s.L+'</span> + <span class="v">'+xi2+'</span>·<span class="f">'+R+'</span><br>'+
+      '<span class="muted">mod '+p+':</span> <b>'+lhs+'</b> '+(ok?'=':'≠')+' <b>'+s.T+'</b>';
+    el('labKv').innerHTML='<dt>commitment P</dt><dd>'+s.P+'</dd><dt>challenge x₆</dt><dd>'+x+(ver===1?' <span class="muted">= H(P, L₆, R₆)</span>':' <span class="muted">= H(P), fixed before L₆, R₆</span>')+'</dd><dt>forged R₆</dt><dd>'+R+'</dd>';
+    const vb=el('labVerdict'); vb.className='verdict-box '+(ok?'ok':'no');
+    vb.innerHTML= ok ? '<span class="big">✓</span><div><b>Verifier accepts.</b> A range proof for '+(s.v<0?'a <b>negative</b> amount ('+s.v+' BEAM)':'an amount of '+s.v+' BEAM')+' just passed.</div>'
+                     : '<span class="big">✗</span><div><b>Verifier rejects.</b> R₆ was solved for an old challenge, and changing R₆ changed the challenge.</div>';
+    el('attempts').textContent = ver===1 && tries>1 ? 'Attempts so far: '+tries+'. Every new R₆ produces a new x₆. You are chasing your own shadow.' : '';
+    el('labExplain').innerHTML = ver===0
+      ? 'In v0, x₆ depends only on what came before L₆ and R₆. Move L₆ anywhere and one division produces a matching R₆. That is the whole attack.'
+      : 'In v1, x₆ = H(…, L₆, R₆). Solving for R₆ needs x₆, and x₆ needs R₆. Breaking that loop means breaking the hash. Press "Re-solve" a few times.';
+  }
+  ['amt','lsel'].forEach(id=>el(id).addEventListener('input',()=>{ tries=0; if(ver===0) solve(); else draw(); }));
+  el('resolve').onclick=solve;
+  document.querySelectorAll('[data-lab]').forEach(btn=>btn.onclick=()=>{ ver=+btn.dataset.lab; document.querySelectorAll('[data-lab]').forEach(x=>x.setAttribute('aria-pressed',x===btn)); tries=0; R=null; solve(); });
+  solve();
+})();
+
+/* pipeline */
+(() => {
+  const rows=[
+    ['51.2 GB','node database copy'],
+    ['4,120,114','blocks'],
+    ['39,657,830','TXO rows read'],
+    ['35,086,226','pre-HF6 range proofs'],
+    ['~561M','lookups in a 229,888-point table'],
+    ['~284M','fingerprints cross-matched'],
+    ['0','forgery traces'],
+  ];
+  document.getElementById('funnel').innerHTML = rows.map((r,i)=>(i?'<div class="parrow" aria-hidden="true">→</div>':'')+'<div class="pstep'+(i===rows.length-1?' zero':'')+'" style="animation-delay:'+(i*0.09)+'s"><div class="pv">'+r[0]+'</div><div class="pk">'+r[1]+'</div></div>').join('');
+})();
+
+/* checks */
+(() => {
+  const rows=[
+    ['badpt','Invalid point','A point that does not decode or is not on the curve.','Consensus would have rejected it anyway. This check proves the decoder reads the data correctly.'],
+    ['zeropt','Zero point','A, S, T1, T2 or any of the 12 L/R points encoded as zero / infinity.','The laziest forgery: set L₆ = 0 and solve R₆.'],
+    ['small','Multiple of a generator','A point equal to k·G, k·H, k·J (k ≤ 65,536) or k·(any of 130 IPA generators) (k ≤ 256).','229,888 precomputed points. A forger who picked an "easy" L (G, 2G, H…) would show up here.'],
+    ['lr_eq','Self-collision','Two L/R points of one proof share an X coordinate, e.g. L₆ = ±R₆.','In an honest proof all 12 points are independent and random. A collision means something was tuned.'],
+    ['scalar','Tiny scalars','TauX, Mu, tDot, or the folded a, b below 2⁶⁴ (zero included), or a = b.','Honest scalars are uniform over ~2²⁵⁶. Landing below 2⁶⁴ by chance has a probability of about 2⁻¹⁹².'],
+    ['dup','Reuse across outputs','The same A/S/T1/T2/L₆/R₆/TauX/Mu in proofs of <b>different</b> commitments.','One forged template stamped onto many outputs. ~284M keys, sorted in 64 on-disk buckets.'],
+  ];
+  const tb=document.getElementById('checksBody');
+  rows.forEach(r=>{ const tr=document.createElement('tr'); tr.className='chk'; tr.tabIndex=0;
+    tr.innerHTML='<td><b>'+r[1]+'</b><br><code class="small">'+r[0]+'</code></td><td>'+r[2]+'</td><td class="num"><span class="pill good">0</span></td><td class="num"><span class="pill good">0</span></td>';
+    const d=document.createElement('tr'); d.className='detail'; d.innerHTML='<td colspan="4">'+r[3]+'</td>';
+    const t=()=>{ tr.classList.toggle('open'); d.classList.toggle('open'); }; tr.onclick=t; tr.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();t();} };
+    tb.appendChild(tr); tb.appendChild(d); });
+  const tr=document.createElement('tr');
+  tr.innerHTML='<td><b>Same-output replay</b><br><code class="small">replay</code></td><td>Shared values only among proofs of the <b>same</b> commitment: one output recreated with the same material. Informational.</td><td class="num"><span class="pill info">103,172</span></td><td class="num"><span class="pill info">0</span></td>';
+  tb.appendChild(tr);
+})();
+
+/* histogram */
+(() => {
+  const svg=document.getElementById('chart'), tip=document.getElementById('tip'), box=document.getElementById('chartBox');
+  const c=BINS.counts, B=BINS.bin; let scale='lin'; const total=c.reduce((a,b)=>a+b,0);
+  const peak=c.indexOf(Math.max(...c)), early=c.slice(0,Math.ceil(500000/B)).reduce((a,b)=>a+b,0);
+  document.getElementById('facts').innerHTML=
+    '<div class="fact"><div class="v">'+fmt(total)+'</div><div class="k">unspent confidential outputs created before HF6</div></div>'+
+    '<div class="fact"><div class="v">'+Math.round(early/total*100)+'%</div><div class="k">created in the first 500k blocks (≈ the first year)</div></div>'+
+    '<div class="fact"><div class="v">'+fmt(c[peak]+c[peak+1])+'</div><div class="k">in just 40k blocks around '+dateOf(peak*B)+' (heights '+fmt(peak*B)+'–'+fmt((peak+2)*B-1)+')</div></div>';
+  document.getElementById('binTable').innerHTML=c.map((v,i)=>'<tr><td class="mono">'+fmt(i*B)+'–'+fmt(Math.min((i+1)*B-1,HF6-1))+'</td><td>'+dateOf(i*B)+'</td><td class="num">'+fmt(v)+'</td></tr>').join('');
+  function draw(){
+    const W=box.clientWidth||900, H=Math.max(240,Math.min(340,W*0.36)), m={l:50,r:12,t:22,b:30}, iw=W-m.l-m.r, ih=H-m.t-m.b;
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    const maxV=Math.max(...c), y= scale==='lin'? v=>ih-v/maxV*ih : v=> v<=0? ih : ih-Math.log10(v)/Math.log10(maxV*1.2)*ih;
+    const ticks= scale==='lin'? [0,50000,100000,150000,200000,250000] : [1,10,100,1000,10000,100000];
+    const n=c.length, bw=Math.max(1,iw/n-1), xh=h=>h/(n*B)*iw;
+    let s='<g transform="translate('+m.l+','+m.t+')"><g class="grid">'+ticks.map(t=>'<line x1="0" x2="'+iw+'" y1="'+y(t)+'" y2="'+y(t)+'"/>').join('')+'</g>';
+    s+='<g class="axis">'+ticks.map(t=>'<text x="-8" y="'+(y(t)+4)+'" text-anchor="end">'+(t>=1000?(t/1000)+'k':t)+'</text>').join('');
+    for(let yr=2019;yr<=2026;yr++){ const h=(Date.UTC(yr,0,1)-LAUNCH)/60000; if(h<0||h>n*B) continue; s+='<text x="'+xh(h)+'" y="'+(ih+18)+'" text-anchor="middle">'+(W<520?"'"+String(yr).slice(2):yr)+'</text>'; }
+    s+='</g><g>';
+    c.forEach((v,i)=>{ const x=i*(iw/n), yy=y(v), hh=Math.max(0,ih-yy), r=Math.min(2,bw/2,hh);
+      s+='<path class="bar" d="M'+x+','+ih+'V'+(yy+r)+'q0,-'+r+' '+r+',-'+r+'h'+(bw-2*r)+'q'+r+',0 '+r+','+r+'V'+ih+'Z"/>'; });
+    s+='</g>';
+    const hx=xh(HF6); s+='<g class="hf6"><line x1="'+hx+'" x2="'+hx+'" y1="-10" y2="'+ih+'"/><text x="'+(hx-4)+'" y="-12" text-anchor="end">HF6</text></g>';
+    const px=peak*(iw/n)+bw/2, py=y(c[peak]);
+    s+='<g class="ann"><line x1="'+(px+4)+'" y1="'+(py+6)+'" x2="'+(px+26)+'" y2="'+(py+14)+'"/><text x="'+(px+30)+'" y="'+(py+18)+'">'+(W<640?'mid-2019: '+fmt(c[peak]+c[peak+1]):'mid-2019 burst: '+fmt(c[peak]+c[peak+1])+' outputs in 40k blocks')+'</text></g>';
+    s+='<rect x="0" y="0" width="'+iw+'" height="'+ih+'" fill="transparent" id="hit"/></g>';
+    svg.innerHTML=s;
+    const hit=svg.querySelector('#hit'), bars=svg.querySelectorAll('.bar');
+    hit.addEventListener('mousemove',e=>{ const r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)*(W/r.width)-m.l, i=Math.max(0,Math.min(n-1,Math.floor(sx/(iw/n))));
+      bars.forEach((b,k)=>b.classList.toggle('dim',k!==i));
+      tip.innerHTML='<div class="muted small">heights '+fmt(i*B)+'–'+fmt(Math.min((i+1)*B-1,HF6-1))+' · ≈ '+dateOf(i*B)+'</div><b>'+fmt(c[i])+'</b> unspent outputs'; tip.style.opacity=1;
+      const bx=box.getBoundingClientRect(); let tx=e.clientX-bx.left+14; if(tx>bx.width-220) tx=e.clientX-bx.left-220; tip.style.left=tx+'px'; tip.style.top=(e.clientY-bx.top-50)+'px'; });
+    hit.addEventListener('mouseleave',()=>{ tip.style.opacity=0; bars.forEach(b=>b.classList.remove('dim')); });
+  }
+  document.querySelectorAll('[data-scale]').forEach(b=>b.onclick=()=>{ scale=b.dataset.scale; document.querySelectorAll('[data-scale]').forEach(x=>x.setAttribute('aria-pressed',x===b)); draw(); });
+  let t; addEventListener('resize',()=>{ clearTimeout(t); t=setTimeout(draw,100); }); draw();
+})();
+
+/* lustration simulator */
+(() => {
+  const inf=document.getElementById('inf'), lost=document.getElementById('lost'), moved=document.getElementById('moved');
+  function upd(){
+    const X=+inf.value, L=+lost.value, M=+moved.value/100;
+    document.getElementById('infV').textContent=X+'%'; document.getElementById('lostV').textContent=L+'%'; document.getElementById('movedV').textContent=Math.round(M*100)+'%';
+    const honest=100-L, pos=honest+X, scaleMax=Math.max(pos+L,100)*1.02, w=v=>(v/scaleMax*100)+'%', capL=(100/scaleMax*100)+'%';
+    document.getElementById('stackA').innerHTML='<div class="seg2" style="width:'+w(honest)+';background:var(--s1)"></div>'+(X?'<div class="seg2 hatch" style="width:'+w(X)+'"></div>':'')+(L?'<div class="seg2" style="width:'+w(L)+';background:var(--s3)"></div>':'')+'<div class="cap lbl" style="left:'+capL+'"></div>';
+    const want=pos*M, cons=Math.min(want,100), fp=pos?X/pos:0;
+    document.getElementById('stackB').innerHTML='<div class="seg2" style="width:'+w(cons*(1-fp))+';background:var(--s1)"></div>'+(X?'<div class="seg2 hatch" style="width:'+w(cons*fp)+'"></div>':'')+'<div class="cap" style="left:'+capL+'"></div>';
+    document.getElementById('consV').textContent=cons.toFixed(1)+'% of 100%';
+    const o=document.getElementById('outcome'), stuck=Math.max(0,pos-100);
+    if(X===0){ o.className='outcome good'; o.innerHTML='<b>No inflation.</b> At most '+honest+'% of Total can ever be disclosed, so the cap is never reached. But '+(100-cons).toFixed(1)+'% stays undisclosed for good: the '+L+'% of lost coins look exactly like a hidden −X. <b>There will never be a clean proof of innocence.</b>'; }
+    else if(pos<=100){ o.className='outcome warn'; o.innerHTML='<b>Inflation exists, but it will never surface.</b> Lost coins ('+L+'%) cover the extra coins (X = '+X+'%). All positive old coins together come to '+pos+'% ≤ Total, so the cap is never hit, even if everything moves. <b>Lustration only catches inflation larger than the share of permanently lost coins.</b>'; }
+    else if(want<=100){ o.className='outcome warn'; o.innerHTML='<b>Inflation exists, but it is not visible yet.</b> '+cons.toFixed(1)+'% of Total has been disclosed. It surfaces once disclosures exceed Total, that is, after at least '+Math.ceil(100/pos*100)+'% of positive old coins have moved.'; }
+    else { o.className='outcome bad'; o.innerHTML='<b>Cap reached: inflation proven.</b> Nodes reject spends past Total. The last holders to move are left with '+stuck.toFixed(1)+'% of Total stuck (X − lost = '+X+' − '+L+'). The −X itself never discloses and stays frozen forever.'; }
+  }
+  [inf,lost,moved].forEach(e=>e.addEventListener('input',upd));
+  document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{ const [x,l,mv]=b.dataset.preset.split(','); inf.value=x; lost.value=l; moved.value=mv; upd(); });
+  upd();
+})();
+
+/* lookup */
+(() => {
+  const drop=document.getElementById('drop'), file=document.getElementById('file'), q=document.getElementById('q'), qb=document.getElementById('qBtn'), res=document.getElementById('res'), prog=document.getElementById('prog');
+  let keys=null, rows=null;
+  drop.onclick=()=>file.click(); drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();file.click();} };
+  ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('hover');}));
+  ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('hover');}));
+  drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  file.onchange=()=>file.files[0]&&load(file.files[0]);
+  // rows are trusted only if they are exactly <digits>,<digits>,<66 hex>: anything else in the file is dropped
+  const ROW=/^\s*(\d{1,20}),(\d{1,10}),([0-9a-f]{66})\s*$/i;
+  function take(ln, arr){ const m=ROW.exec(ln); if(m) take.arr.push([m[3].toLowerCase(),m[1],m[2]]); }
+  async function load(f){
+    prog.style.display='block'; const bar=prog.firstElementChild; res.textContent='Reading '+f.name+'…';
+    const rd=f.stream().getReader(), dec=new TextDecoder(); let buf='', done=0; const arr=[]; take.arr=arr;
+    for(;;){ const {value,done:d}=await rd.read(); if(d) break; done+=value.length; bar.style.width=(done/f.size*100)+'%';
+      buf+=dec.decode(value,{stream:true}); const ls=buf.split('\n'); buf=ls.pop();
+      for(const ln of ls) take(ln); }
+    take(buf);
+    arr.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0); keys=arr.map(a=>a[0]); rows=arr;
+    res.innerHTML='Loaded <b>'+fmt(arr.length)+'</b> outputs. Ready to search.'; drop.textContent='✓ '+f.name+' · '+fmt(arr.length)+' rows';
+    q.disabled=qb.disabled=false; q.focus();
+  }
+  function find(){
+    const s=q.value.trim().toLowerCase().replace(/^0x/,'');
+    if(!/^[0-9a-f]{8,66}$/.test(s)){ res.textContent='Enter 8–66 hex characters.'; return; }
+    let lo=0, hi=keys.length; while(lo<hi){ const m=(lo+hi)>>1; if(keys[m]<s) lo=m+1; else hi=m; }
+    const hits=[]; for(let i=lo;i<keys.length&&keys[i].startsWith(s)&&hits.length<20;i++) hits.push(rows[i]);
+    if(!hits.length){ res.innerHTML='<span class="pill info">not found</span> Not among unspent pre-HF6 outputs: it was spent, or created after the fork.'; return; }
+    res.innerHTML='<span class="pill good">found: '+hits.length+(hits.length===20?'+':'')+'</span><div class="tbl-scroll" style="margin-top:8px"><table><thead><tr><th>Commitment</th><th class="num">TXO id</th><th class="num">Height</th><th>≈ date</th></tr></thead><tbody>'+
+      hits.map(h=>'<tr><td class="mono small">'+h[0]+'</td><td class="num">'+h[1]+'</td><td class="num">'+fmt(+h[2])+'</td><td>'+dateOf(+h[2])+'</td></tr>').join('')+'</tbody></table></div>';
+  }
+  qb.onclick=find; q.onkeydown=e=>{ if(e.key==='Enter') find(); };
+})();
+</script>
+</body>
+</html>
