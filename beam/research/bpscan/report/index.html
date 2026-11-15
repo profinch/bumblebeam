@@ -94,7 +94,7 @@ section.card{background:var(--surface);border:1px solid var(--line);border-radiu
 /* timeline */
 .tl{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:0;margin-top:8px}
 .tl::before{content:"";position:absolute;left:0;right:0;top:17px;height:2px;background:var(--line)}
-.ev{position:relative;padding:0 8px;text-align:left;background:none;border:0;font:inherit;color:inherit;cursor:pointer}
+.ev{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;align-self:start;padding:0 8px;text-align:left;background:none;border:0;font:inherit;color:inherit;cursor:pointer}
 .ev .dot{width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid var(--muted);margin:10px 0 10px;position:relative;z-index:1;transition:transform .15s}
 .ev.k-bad .dot{border-color:var(--bad)} .ev.k-good .dot{border-color:var(--good)} .ev.k-acc .dot{border-color:var(--accent)}
 .ev[aria-pressed="true"] .dot{transform:scale(1.35);background:currentColor}
@@ -210,7 +210,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 @media (max-width:860px){
   .tl{grid-template-columns:1fr;gap:0}
   .tl::before{left:6px;right:auto;top:0;bottom:0;width:2px;height:auto}
-  .ev{display:grid;grid-template-columns:22px 1fr;column-gap:10px;padding:4px 0}
+  .ev{display:grid;grid-template-columns:14px 1fr;column-gap:12px;align-content:start;justify-items:start;padding:4px 0}
   .ev .dot{grid-row:span 2;margin:4px 0 0}
   .lab,.sim,.two{grid-template-columns:1fr}
   .facts{grid-template-columns:1fr}
