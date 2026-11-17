@@ -182,6 +182,10 @@ Dead or out of scope:
 - RaveOS: dashboard shut down 2026-02-01, devices run standalone; sales@raveos.com is the only contact
 - poolwatch.io: dated 2022, returns 403 to everything
 - CoinWarz: calculators only, no pool lists; Cryptunit: CryptoNote coins only
+- 2CryptoCalc (checked 2026-11-17): run by 2Miners (contact support@2miners.com, repo 2miners/2cryptocalc-hashrates);
+  every coin page (Beam, Kaspa, Ergo, Monero, Dynex) shows only 2Miners pools, so no third-party listing
+- Cryptunit closed (farewell page), investoon.com is a hosting placeholder, Kryptex has no Beam page,
+  miningpoolstats.net is a review blog with no Beam (2026-11-17)
 - awesomelistsio/awesome-crypto-mining: never merged an outside PR; the maintainer closed the last pool
   submission (NexusPool, 2026-08) for lack of "maturity, adoption, established reliability", so not worth one
 - Wikis, checked 2026-10-11: Wikipedia has no Beam article (en, ru, de), and its external-links rules
