@@ -12,7 +12,7 @@ the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 | MiningBoard | https://miningboard.com/pool-stats/beam | not recorded, probably https://miningboard.com/pools/submit | 2026-10 | **listed**, https://miningboard.com/pools/pool.bumblebeam.org. 2026-10-27: confirmed the footer mark; sent an outlined mark.svg (brand kit at /brand-kit), swapped in 607a897; replied offering /v1/network data and asking about featured placement and co-announcements |
 | MiningPoolStats | https://miningpoolstats.stream/beam | "Missing pool?" form on that page (pool URL + API URL), several times without a result; then the footer's envelope form "Quick Message to MiningPoolStats" with the owner's address for a reply (125 blocks in 24 h) | 2026-10-08, 2026-10-09, 2026-10-25 | **listed by 2026-10-28** (https://miningpoolstats.stream/beam). Footer mark live 2026-10-28 (9a739c4, own drawing of their pick-and-shovel icon, `beam/pool/web/img/miningpoolstats.svg`), order MiningBoard, MiningChamp, MiningPoolStats. They have no email: the footer's Quick Message form now has a Cloudflare Turnstile captcha, so the thank-you/badge note went by hand: sent 2026-10-28 from the owner's address (thanks, footer link, ports, API fields offer) |
 | WhatToMine | https://whattomine.com/coins/294-beam-beamhashiii | https://whattomine.com/pool_requests/new?coin_id=294 | 2026-10-08 | sent |
-| minerstat | https://minerstat.com/coin/beam#pools | https://minerstat.com/submit | 2026-10-08 | sent |
+| minerstat | https://minerstat.com/pool/bumblebeam | https://minerstat.com/submit | 2026-10-08 | **listed** (seen 2026-11-17) with hashrate and miners only; 2026-11-17 sent "Report an issue or missing data" on the pool page: fee 0.5%, PPLNS/SOLO, min. payout 1 BEAM from /api/stats, unit Sol/s not kH/s. Footer mark live 2026-11-17 (30a48a9) |
 | hashrate.no | https://hashrate.no/coins/BEAM/pools | https://hashrate.no/submit (Pool tab) | 2026-10-08 | sent |
 | Stelareum | https://www.stelareum.io/en/mining/pool.html | email to contact@stelareum.io | 2026-10-08 | sent |
 | PoolBay | https://poolbay.io (no Beam pools yet) | email to admin@poolbay.io | 2026-10-08 | sent |
@@ -22,6 +22,7 @@ the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 | BeamTerminal (source of explorer.beam.mw) | https://explorer.beam.mw/#/explorer/mining | patch https://git.maxnflaxl.dev/maxnflaxl/BeamTerminal/commit/07a22c593076efcc9a1582edea8c59554a3c5d4c, adds the pool to `backend/src/mining/pools.ts` | 2026-10-08 | sent |
 | Bitcointalk | | own thread https://bitcointalk.org/index.php?topic=5596205 and a reply in the Beam ANN thread https://bitcointalk.org/index.php?topic=5052151.msg67218589#msg67218589 | 2026-10-08 | posted |
 | NiceHash | https://www.nicehash.com (BEAMV3 algorithm) | pool created on the marketplace, see below | 2026-10-08 | **live** |
+| NiceHash Compatible Pools | https://www.nicehash.com/compatible-pools (Beam: 2Miners, Cruxpool) | email from info@bumblebeam.org to info@nicehash.com (copy in Sent): Pool Verifier screenshot, 371 blocks/24 h (~25% of Beam, #2), 3,357 matured, explorer.beam.mw + MiningPoolStats + MiningBoard + MiningChamp, ports, 0.5%, Apache-2.0 | 2026-11-03 | 2026-11-05 NiceHash: no test orders on their side, they want Order IDs of test orders from our account, then review and list. Replied the same day from info@ (SMTP mail.ultp.org) with all 10 of our completed orders, said they were regular orders with prices and limits adjusted while running, asked if enough or a dedicated test order is needed. 2026-11-06: second email the same way, new live order 489b32a1 (started 16:33 UTC, 0.00127 BTC, run by our bot, disclosed) and the cancelled 91b4651e added to the list. 2026-11-16: no answer, follow-up in the same thread: live orders f653129d and 4fa38f46 (by hand, no bot), completed 489b32a1 and 750d487d, our orders +33% (0.00772 BTC -> 132,127 BEAM since mid-October), 449 blocks/24 h (~31% of network), 6,113 matured; promised a "NiceHash compatible" mark, a link on the site and in the setup guide, and an announcement once listed. 2026-11-17 NiceHash: orders reviewed, "everything looks good", asked for a high-res logo and Name/Tagline/Algorithms/Reward system/Website. Replied the same day (brand/logo.svg, logo-1024.png, avatar-1024.png; tagline "Open-source Beam pool - 0.5% fee, automatic payouts every 2 hours", BeamHash III (BEAMV3), PPLNS and SOLO, https://pool.bumblebeam.org). Waiting for the listing; then add the promised mark, links and announcement |
 | MiningPoolsList | https://miningpoolslist.com/beam-mining-pools/ | Google form https://goo.gl/forms/J9mfZTOuYLvqn1D93 (same form for pools, coins and bugs; site unchanged since 2019) | 2026-10-08 | sent |
 | HiveOS | flight-sheet pool drop-down | https://github.com/minershive/hive-pooltemplates/pull/1859 (`pool_templates/bumblebeam.json`) | 2026-10-08 | open |
 | beam.mw mining page | https://beam.mw/mining | https://github.com/BeamMW/beam-web/pull/388: links the page to the explorer's live pool list and adds MXBM; does not name any pool | 2026-10-08 | open (closed and reopened 2026-10-11); the explorer's mining page already lists the pool, but beam.mw/mining links neither it nor MXBM, which is what this PR adds |
@@ -95,6 +96,11 @@ a long offline address; use a regular (short) address there. The proxy starts at
 goes below, so the pool keeps that as the minimum share difficulty for it (commit 2d3be4f, in
 production).
 
+2026-11-03: Pool Verifier passed again ("Tested pool is compatible!", 0.183 s, stratum.bumblebeam.org:3443,
+user `<our address>.nicehash`, difficulty provided=2048, minimum=2048). By then NiceHash orders had found
+367 blocks in 24 h and payouts were completing, so the compatible-pools request is unblocked. Open point:
+`buy/info` gives BeamV3 `min_diff_working` = 8192, above the pool's NiceHash floor of 2048.
+
 ## Not yet
 
 Beam's own channels (Telegram, Discord, mining@beam.mw, Reddit, X): announced, done by 2026-10-08.
@@ -133,6 +139,29 @@ Searched again 2026-10-14 (nothing else worth a submission):
 - Poolguard: request only from inside the app; source (dodyac/Poolguard) untouched since 2023. Still to do.
 - Not wanted: nDPI and Pi-hole/cryptojacking domain lists (blocklists), litecoinII/mining-pools (Litecoin mempool tags).
 
+Searched again 2026-11-03 (pool lists beyond trackers):
+
+- MiningRigRentals /pools "Suggested Pools & Services": requested by email, see the MRR note below.
+- MiningBoard https://miningboard.com/mining/beam: BumbleBeam is #1 of 14 Beam pools (58.6% share, 407 blocks/24 h at the time).
+- Pool Monitor (iPhone, https://github.com/shiftingeden/PoolMonitor): mostly BTC, plus Mining-Dutch and 2Miners; pool requests
+  to TechBitsMix@gmail.com, no source in the repo. Low value for Beam; not requested.
+- Mining Monitor 2 (Android, fahim_edu.mining_monitor): changelog adds pools on request (herominers, luckypool, kryptex);
+  56 pools (2Miners, HeroMiners, NiceHash...), 1K+ downloads, updated 2026-06-16, developer Toto Sugito: "If you need more
+  pool, just contact us". Requested 2026-11-03 by email from info@ to totosugito@gmail.com.
+- Nothing there: 2CryptoCalc (2Miners only), coincalculators.io/minershare (pool shares hard-coded in the page, Ethermine/MineXMR,
+  no Beam), miningpoolstats.net (EMCD affiliate site, no Beam), Kryptex (own pool only), SimpleMining (pool via support
+  ticket, BTC partners), CheckPool (Play 404), Rigly/Hashing24/Cryptoscope (BTC or not pools).
+- Mining Monitor (Android, fahim_edu.appmining, the same developer's first app): 50K+ downloads, updated 2025-01-15,
+  lists Beam on 2miners, herominers, leafpool, solopool and ethermine (Flypool). Bigger than Mining Monitor 2; the
+  2026-11-03 email to totosugito@gmail.com named only Mining Monitor 2.
+- Proof of Work (proofofwork.app, Android app.proofofwork): HeroMiners, Kryptex, 2Miners, WoolyPooly, Vipor; "subscribers
+  can priority request a new pool"; feedback form on the site only. Its Play listing returns 404 (2026-11-03): skip.
+- Cudo Miner: site behind a Vercel bot checkpoint (429 even for headless Chromium); read via web.archive.org. It is a
+  profit-switching miner that picks the coin and pool itself and pays out in a chosen coin; no public list of third-party
+  pools and no way to submit one. "Cudo Pool" (integration for pool operators) was "Currently in Closed Beta – Contact
+  us" in 2020 and is gone from the 2026 site. Beam was a supported coin in 2020. Not worth a request.
+- Unverified: Mining Pool Hub (520), Minerdude (empty), Hiveon OS presets beyond the HiveOS PR.
+
 Mining OS and smaller trackers, checked 2026-10-08:
 
 - HiveOS: done, see the table; the drop-down comes from https://github.com/minershive/hive-pooltemplates.
@@ -160,7 +189,13 @@ Dead or out of scope:
   2021-05. The lolMiner wiki has no pool lists and is not writable. No Fandom or other community wiki
   lists Beam pools.
 - forum.beam.mw no longer resolves; miningclub.info is a spam archive; mining-cryptocurrency.ru stopped in 2024;
-  MiningRigRentals has no pool list (any stratum pool works)
+  MiningRigRentals: any stratum pool works, but it does keep a list (corrected 2026-11-03, the earlier "no pool list" was wrong):
+  https://www.miningrigrentals.com/pools "Suggested Pools & Services", 21 pools (2Miners, Nanopool, mining-dutch, solofury...)
+  plus MiningChamp and Minerstat as services. No form: "Have a well known pool ... compatible with MRR? Ask us to list you!";
+  contact support@miningrigrentals.com, Discord https://discord.gg/wFMSbcK (tag @admin) or a ticket from the account.
+  Requested 2026-11-03: email from info@bumblebeam.org to support@miningrigrentals.com (copy in Sent).
+  The email only got an auto-reply (ticket 352191), not visible in the account. 2026-11-17: ticket 353611 from the MRR account
+  (https://www.miningrigrentals.com/tickets/353611, category Suggestion): same pitch with 455 blocks/24 h (~31%), NiceHash review passed. Open, waiting.
 
 ## HiveOS template
 
