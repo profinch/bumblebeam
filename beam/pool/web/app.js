@@ -976,7 +976,7 @@
           <ul class="howto" style="margin-top:8px;font-size:12px"><li>Encrypted instead: pool URL <code>${esc(host)}:${tlsPort}</code> and in <b>Extra config arguments</b> <code>--tls on</code> (lolMiner) or <code>--ssl 1</code> (GMiner).</li></ul>`;
       } else {
         const nhServer = servers[0];
-        body.innerHTML = `<p>For hashpower rented on NiceHash's marketplace, instead of (or next to) your own cards.</p>
+        body.innerHTML = `<p>For hashpower rented on NiceHash's marketplace, instead of (or next to) your own cards. BumbleBeam is on NiceHash's <a href="https://www.nicehash.com/compatible-pools" target="_blank" rel="noopener">Compatible Pools</a> list.</p>
           <ol class="howto">
             <li><b>Marketplace</b> › <b>Pools</b> › <b>Add new pool</b>, algorithm <b>BEAMV3</b>.</li>
             <li>Stratum hostname and port (TLS: NiceHash does not work on the plain port):</li>
