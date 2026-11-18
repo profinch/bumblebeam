@@ -827,6 +827,12 @@ bool ParseCommandLine(int argc, char* argv[])
 	{
 		char* argument = argv[ci];
 		ci++;
+		// bb: every option below takes one value
+		if (argument[0] == '-' && ci >= argc)
+		{
+			printf("error: missed value after %s option\r\n", argument);
+			return false;
+		}
 		if (strcmp(argument, "-gpu") == 0)
 		{
 			if (ci >= argc)
@@ -895,7 +901,7 @@ bool ParseCommandLine(int argc, char* argv[])
 		else
 		if (strcmp(argument, "-tames") == 0)
 		{
-			strcpy(gTamesFileName, argv[ci]);
+			strncpy(gTamesFileName, argv[ci], sizeof(gTamesFileName) - 1);
 			ci++;
 		}
 		else
