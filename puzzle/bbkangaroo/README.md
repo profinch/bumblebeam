@@ -44,3 +44,21 @@ make                       # ARCH=86 by default; make ARCH="86 89" for several
 ## Not changed
 
 The GPU kernels (except the loop-table fix) and the DP record format: DP files stay compatible with RCKangaroo.
+
+## Pool (pool/)
+
+`pool/pool_server.py` (aiohttp + coincurve) and `pool/pool_client.py` (standard library only) turn the journal into a
+pool: every worker runs `bbkangaroo ... -db work.db`, the client ships the new records of `work.db.journal` to the
+server, the server recomputes every record with one scalar multiplication (a record that does not verify is
+rejected; a faked record would cost more than walking), keeps one table keyed by x, checks each duplicate x for a
+collision with the candidate-key formulas, writes `FOUND.txt` when the target key is found, and counts shares per
+worker (one share = one verified DP = about 2^DP jumps). Tested: two half-work workers on a 52-bit key, the key
+came out of the cross-worker collision at the pool, no GPU work at the pool.
+
+```
+pool_server.py --job job.json --port 8800            # job.json: range, start, pubkey, dp, jumps_hash (DB header bytes 16..23)
+pool_client.py --db work.db --server http://pool:8800 --worker rig1
+GET /stats, GET /job
+```
+
+Not yet: payout rules, blinded starts (the server knowing a share of every distance), TLS and worker authentication.

@@ -51,6 +51,8 @@ int gMergeCnt = 0;
 volatile bool gStopReq = false;
 u64 gJumpsHash = 0;
 static void OnSigInt(int) { gStopReq = true; }
+static FILE* gJournal = NULL; // bb: <db>.journal, append-only stream of new 35-byte records (pool uploader reads it)
+static u64 gJournalCnt = 0;
 int gBlocksLimit = 0; // bb: -blocks N limits GPU blocks (fewer kangaroos; for K benchmarks and shared GPUs)
 int gLayout = 1;      // bb: -layout 0|1 herd start layout
 bool IsBench;
@@ -212,7 +214,10 @@ bool ProcessDP(DBRec& nrec)
 	if (gGenMode)
 		return false;
 	if (!pref)
+	{
+		if (gJournal) { fwrite(&nrec, 1, sizeof(DBRec), gJournal); gJournalCnt++; }
 		return false;
+	}
 	//in db we dont store first 3 bytes so restore them
 	DBRec tmp_pref;
 	memcpy(&tmp_pref, &nrec, 3);
@@ -345,6 +350,7 @@ static bool SaveDb(int Range, int dp)
 		return true;
 	char tmp[1100];
 	snprintf(tmp, sizeof(tmp), "%s.tmp", gDbFileName);
+	if (gJournal) fflush(gJournal);
 	FillHeader(db.Header, Range, dp);
 	if (!db.SaveToFile(tmp))
 	{
@@ -694,6 +700,11 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		*pk_res = gPrivKey;
 		return true;
 	}
+	if (gDbFileName[0] && !gGenMode)
+	{
+		char jn[1100]; snprintf(jn, sizeof(jn), "%s.journal", gDbFileName);
+		gJournal = fopen(jn, "ab");
+	}
 	signal(SIGINT, OnSigInt);
 
 //prepare GPUs
@@ -795,6 +806,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 			else
 				printf("tames saving failed\r\n");
 		}
+		if (gJournal) { fclose(gJournal); gJournal = NULL; }
 		db.Clear();
 		return false;
 	}
@@ -802,6 +814,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	double K = (double)PntTotalOps / pow(2.0, Range / 2.0);
 	printf("Point solved, K: %.3f (with DP and GPU overheads)\r\n\r\n", K);
 	SaveDb(Range, DP);
+	if (gJournal) { fclose(gJournal); gJournal = NULL; }
 	db.Clear();
 	*pk_res = gPrivKey;
 	return true;
