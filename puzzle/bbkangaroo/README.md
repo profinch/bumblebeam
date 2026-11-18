@@ -14,11 +14,16 @@ only exist for sm_89/sm_120.
   `-save <minutes>` (default 10). On start the file is loaded again: a run survives restarts. The file header holds
   range, DP, layout, a hash of the jump tables, the target key and start; wild records are loaded only for the same
   target, tame records for any target of the same range and jump tables. RCKangaroo tames files are accepted.
+- Exact resume: with `-db` the kangaroo state (point and distance of every kangaroo, 96 bytes each) is written to
+  `<db>.kangs` at every save; on restart it is restored and no in-flight work is lost (without it a restart forfeits
+  up to 2^DP steps per kangaroo).
 - `-merge <file>` (repeatable): streams another database through the collision check; the key can be found while
   merging, without any GPU work. Databases of all runs with the same range are compatible because the jump tables
   come from a fixed seed (as in RCKangaroo).
 - `-verify N`: recomputes every N-th record of a merged file with a scalar multiplication (tame = d·G,
-  wild = ±PntA + d·G) and reports bad records. This is the proof-of-work check a pool needs.
+  wild = ±PntA + d·G) and reports bad records. This is the proof-of-work check a pool needs. Measured on RC's own
+  kernels: about 1 record in 10^4 does not verify (a kangaroo whose distance lost sync with its point after a loop
+  exit); such records only cause harmless "Collision Error" lines, a pool server drops them.
 - `-blocks N`: use only N SM blocks (fewer kangaroos): K benchmarks at small ranges, shared GPUs.
 - `-layout 0|1`: herd start layout. 0 = RCKangaroo (tame in [0,N/16), wild |d| uniform in [0,N/2)).
   1 (default) = tame in [0,N/20), wild |d| 90% uniform in [0,N/2) plus 10% in [0.4N,0.5N): measured −3% operations

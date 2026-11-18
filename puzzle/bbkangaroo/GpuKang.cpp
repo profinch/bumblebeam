@@ -37,6 +37,7 @@ bool RCGpuKang::Prepare(EcPoint _PntToSolve, int _Range, int _DP, EcJMP* _EcJump
 	EcJumps3 = _EcJumps3;
 	StopFlag = false;
 	Failed = false;
+	SnapReq = false; SnapReady = false; SnapBuf = NULL; LoadBuf = NULL; // bb
 	u64 total_mem = 0;
 	memset(dbg, 0, sizeof(dbg));
 	memset(SpeedStats, 0, sizeof(SpeedStats));
@@ -404,13 +405,27 @@ bool RCGpuKang::Start()
 				memcpy(RndPnts[i].x, buf_PntB, 64);
 	}
 	//copy to gpu
-	err = cudaMemcpy(Kparams.Kangs, RndPnts, KangCnt * 96, cudaMemcpyHostToDevice);
-	if (err != cudaSuccess)
+	if (LoadBuf) // bb: exact resume: restore every kangaroo's point and distance, no generation
 	{
-		printf("GPU %d, cudaMemcpy failed: %s\n", CudaIndex, cudaGetErrorString(err));
-		return false;
+		err = cudaMemcpy(Kparams.Kangs, LoadBuf, (u64)KangCnt * 96, cudaMemcpyHostToDevice);
+		free(LoadBuf); LoadBuf = NULL;
+		if (err != cudaSuccess)
+		{
+			printf("GPU %d, cudaMemcpy (state) failed: %s\n", CudaIndex, cudaGetErrorString(err));
+			return false;
+		}
+		printf("GPU %d: kangaroo state restored\r\n", CudaIndex);
 	}
-	CallGpuKernelGen(Kparams);
+	else
+	{
+		err = cudaMemcpy(Kparams.Kangs, RndPnts, KangCnt * 96, cudaMemcpyHostToDevice);
+		if (err != cudaSuccess)
+		{
+			printf("GPU %d, cudaMemcpy failed: %s\n", CudaIndex, cudaGetErrorString(err));
+			return false;
+		}
+		CallGpuKernelGen(Kparams);
+	}
 
 	err = cudaMemset(Kparams.L1S2, 0, Kparams.BlockCnt * Kparams.BlockSize * 8);
 	if (err != cudaSuccess)
@@ -477,6 +492,12 @@ void RCGpuKang::Execute()
 	cudaError_t err;	
 	while (!StopFlag)
 	{
+		if (SnapReq) // bb: consistent copy of all kangaroos between iterations
+		{
+			if (!SnapBuf) SnapBuf = (u8*)malloc((u64)KangCnt * 96);
+			cudaMemcpy(SnapBuf, Kparams.Kangs, (u64)KangCnt * 96, cudaMemcpyDeviceToHost);
+			SnapReq = false; SnapReady = true;
+		}
 		u64 t1 = GetTickCount64();
 		cudaMemset(Kparams.DPs_out, 0, 4);
 		cudaMemset(Kparams.DPTable, 0, KangCnt * sizeof(u32));

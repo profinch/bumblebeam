@@ -65,6 +65,11 @@ public:
 	bool IsOldGpu;
 
 	int CalcKangCnt();
+	// bb: kangaroo state snapshot (x,y,d of every kangaroo = KangCnt*96 bytes) for exact resume
+	volatile bool SnapReq;
+	volatile bool SnapReady;
+	u8* SnapBuf;      // filled by the GPU thread between iterations when SnapReq is set
+	u8* LoadBuf;      // if set before Start(): uploaded instead of generating fresh kangaroos
 	bool Prepare(EcPoint _PntToSolve, int _Range, int _DP, EcJMP* _EcJumps1, EcJMP* _EcJumps2, EcJMP* _EcJumps3);
 	void Stop();
 	void Execute();

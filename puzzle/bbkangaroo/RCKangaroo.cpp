@@ -359,24 +359,105 @@ static bool SaveDb(int Range, int dp)
 	printf("DB saved: %s (%llu records, ops 2^%.3f)\r\n", gDbFileName, (unsigned long long)db.GetBlockCnt(), log2((double)PntTotalOps + 1));
 	return true;
 }
+// bb: kangaroo state file <db>.kangs: 256-byte header (same as DB, magic BBKST001) + u32 gpu count + per GPU (u32 KangCnt, KangCnt*96 bytes)
+static bool SaveKangState(int Range, int dp)
+{
+	if (!gDbFileName[0] || !ThrCnt)
+		return false;
+	for (int i = 0; i < GpuCnt; i++) { GpuKangs[i]->SnapReady = false; GpuKangs[i]->SnapReq = true; }
+	u64 t0 = GetTickCount64();
+	for (int i = 0; i < GpuCnt; i++)
+		while (!GpuKangs[i]->SnapReady)
+		{
+			Sleep(5);
+			if (GetTickCount64() - t0 > 120000 || !ThrCnt) { printf("state snapshot timeout\r\n"); return false; }
+		}
+	char fn[1100], tmp[1100];
+	snprintf(fn, sizeof(fn), "%s.kangs", gDbFileName);
+	snprintf(tmp, sizeof(tmp), "%s.kangs.tmp", gDbFileName);
+	FILE* fp = fopen(tmp, "wb");
+	if (!fp) return false;
+	u8 hdr[256]; FillHeader(hdr, Range, dp); memcpy(hdr, "BBKST001", 8);
+	bool ok = fwrite(hdr, 1, 256, fp) == 256;
+	u32 n = GpuCnt; ok = ok && fwrite(&n, 1, 4, fp) == 4;
+	for (int i = 0; ok && i < GpuCnt; i++)
+	{
+		u32 kc = GpuKangs[i]->KangCnt;
+		ok = fwrite(&kc, 1, 4, fp) == 4 && fwrite(GpuKangs[i]->SnapBuf, 1, (u64)kc * 96, fp) == (u64)kc * 96;
+	}
+	fclose(fp);
+	if (!ok || rename(tmp, fn)) { printf("state save failed\r\n"); return false; }
+	printf("kangaroo state saved: %s\r\n", fn);
+	return true;
+}
+// call after Prepare (KangCnt known) and before the GPU threads start
+static void LoadKangState(int Range)
+{
+	if (!gDbFileName[0]) return;
+	char fn[1100]; snprintf(fn, sizeof(fn), "%s.kangs", gDbFileName);
+	FILE* fp = fopen(fn, "rb");
+	if (!fp) return;
+	u8 hdr[256];
+	if (fread(hdr, 1, 256, fp) != 256 || memcmp(hdr, "BBKST001", 8)) { fclose(fp); printf("state file ignored (bad header)\r\n"); return; }
+	memcpy(hdr, BB_MAGIC, 8);
+	if (CheckHeader(hdr, Range, fn) != 1) { fclose(fp); printf("state file ignored (other target)\r\n"); return; }
+	u32 n = 0;
+	if (fread(&n, 1, 4, fp) != 4 || n != (u32)GpuCnt) { fclose(fp); printf("state file ignored (gpu count %u != %d)\r\n", n, GpuCnt); return; }
+	for (int i = 0; i < GpuCnt; i++)
+	{
+		u32 kc = 0;
+		if (fread(&kc, 1, 4, fp) != 4 || kc != (u32)GpuKangs[i]->KangCnt) { printf("state file ignored (kangaroo count mismatch on GPU %d)\r\n", i); break; }
+		u8* buf = (u8*)malloc((u64)kc * 96);
+		if (fread(buf, 1, (u64)kc * 96, fp) != (u64)kc * 96) { free(buf); printf("state file truncated\r\n"); break; }
+		GpuKangs[i]->LoadBuf = buf;
+	}
+	fclose(fp);
+}
 // bb: verify a DP record by recomputing its point: tame = d*G, wild1 = PntA + d*G, wild2 = -PntA + d*G, PntA = PntToSolve - (N/2)*G.
 // Compares the low 12 bytes of x. This is the pool's proof-of-work check (one scalar multiplication per DP).
+static bool VerifyD(EcInt d, int type, u8* x12) // d signed (two's complement in 5 limbs)
+{
+	bool neg = (d.data[4] >> 63) != 0;
+	if (neg) d.Neg();
+	EcPoint P = ec.MultiplyG(d);
+	if (neg) P.y.NegModP();
+	if (type != TAME)
+	{
+		EcPoint A = ec.AddPoints(gPntToSolve, Pnt_NegHalfRange);
+		if (type == WILD2) A.y.NegModP();
+		P = ec.AddPoints(P, A);
+	}
+	return memcmp(P.x.data, x12, 12) == 0;
+}
 static bool VerifyRecord(DBRec& rec)
 {
 	EcInt d;
 	memcpy(d.data, rec.d, 22);
-	bool neg = (rec.d[21] == 0xFF);
-	if (neg) { memset(((u8*)d.data) + 22, 0xFF, 18); d.Neg(); }
-	else memset(((u8*)d.data) + 22, 0, 18);
-	EcPoint P = ec.MultiplyG(d);
-	if (neg) P.y.NegModP();
-	if (rec.type != TAME)
+	memset(((u8*)d.data) + 22, (rec.d[21] == 0xFF) ? 0xFF : 0, 18);
+	return VerifyD(d, rec.type, rec.x);
+}
+// diagnostics for a bad record: does d +- one jump of table 1/2/3 explain the point?
+static void DiagnoseBad(DBRec& rec)
+{
+	EcInt d;
+	memcpy(d.data, rec.d, 22);
+	memset(((u8*)d.data) + 22, (rec.d[21] == 0xFF) ? 0xFF : 0, 18);
+	for (int t = 0; t < 3; t++)
 	{
-		EcPoint A = ec.AddPoints(gPntToSolve, Pnt_NegHalfRange);
-		if (rec.type == WILD2) A.y.NegModP();
-		P = ec.AddPoints(P, A);
+		EcJMP* J = (t == 0) ? EcJumps1 : (t == 1) ? EcJumps2 : EcJumps3;
+		for (int i = 0; i < JMP_CNT; i++)
+			for (int s = 0; s < 2; s++)
+			{
+				EcInt dd = d;
+				if (s) dd.Sub(J[i].dist); else dd.Add(J[i].dist);
+				if (VerifyD(dd, rec.type, rec.x))
+				{
+					printf("  diag: point = d %s J%d[%d]\r\n", s ? "-" : "+", t + 1, i);
+					return;
+				}
+			}
 	}
-	return memcmp(P.x.data, rec.x, 12) == 0;
+	printf("  diag: no single-jump explanation\r\n");
 }
 struct TVerifyCtx { u64 n, bad, every; };
 static void VerifyCb(u8* rec35, void* ctx)
@@ -392,6 +473,7 @@ static void VerifyCb(u8* rec35, void* ctx)
 		{
 			DBRec* r = (DBRec*)rec35;
 			printf("verify: BAD record #%llu type %d d[0..7]=%016llx\r\n", (unsigned long long)c->n, r->type, *(unsigned long long*)r->d);
+			DiagnoseBad(*r);
 		}
 	}
 }
@@ -621,6 +703,8 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 			GpuKangs[i]->Failed = true;
 			printf("GPU %d Prepare failed\r\n", GpuKangs[i]->CudaIndex);
 		}
+	if (!gGenMode)
+		LoadKangState(Range); // bb
 
 	u64 tm0 = GetTickCount64();
 	printf("GPUs started...\r\n");
@@ -657,6 +741,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		if (gDbFileName[0] && (gSaveMin > 0) && (GetTickCount64() - tm_save > (u64)gSaveMin * 60 * 1000))
 		{
 			SaveDb(Range, DP);
+			SaveKangState(Range, DP);
 			tm_save = GetTickCount64();
 		}
 		if (GetTickCount64() - tm_stats > 10 * 1000)
@@ -679,6 +764,8 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		}
 	}
 
+	if (!gSolved && !gGenMode)
+		SaveKangState(Range, DP); // bb: before the GPU threads stop
 	printf("Stopping work ...\r\n");
 	for (int i = 0; i < GpuCnt; i++)
 		GpuKangs[i]->Stop();
