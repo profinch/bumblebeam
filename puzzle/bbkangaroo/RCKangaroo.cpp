@@ -53,7 +53,8 @@ u64 gJumpsHash = 0;
 static void OnSigInt(int) { gStopReq = true; }
 static FILE* gJournal = NULL; // bb: <db>.journal, append-only stream of new 35-byte records (pool uploader reads it)
 static u64 gJournalCnt = 0;
-int gBlocksLimit = 0; // bb: -blocks N limits GPU blocks (fewer kangaroos; for K benchmarks and shared GPUs)
+int gBlocksLimit = 0;
+int gSmallEscape = 0; // bb: -smallesc 1: escape jumps (tables 2 and 3) of the same size as table 1 instead of ~N/1024 // bb: -blocks N limits GPU blocks (fewer kangaroos; for K benchmarks and shared GPUs)
 int gLayout = 1;      // bb: -layout 0|1 herd start layout
 bool IsBench;
 
@@ -639,7 +640,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	}
 
 	minjump.Set(1);
-	minjump.ShiftLeft(Range - 10); //large jumps for L1S2 loops. Must be almost RANGE_BITS
+	minjump.ShiftLeft(gSmallEscape ? (Range / 2 + 3) : (Range - 10)); //large jumps for L1S2 loops. Must be almost RANGE_BITS (RC); bb: -smallesc keeps them small, see README
 	for (int i = 0; i < JMP_CNT; i++)
 	{
 		EcJumps2[i].dist = minjump;
@@ -650,7 +651,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	}
 
 	minjump.Set(1);
-	minjump.ShiftLeft(Range - 10 - 2); //large jumps for loops >2
+	minjump.ShiftLeft(gSmallEscape ? (Range / 2 + 4) : (Range - 10 - 2)); //large jumps for loops >2
 	for (int i = 0; i < JMP_CNT; i++)
 	{
 		EcJumps3[i].dist = minjump;
@@ -932,6 +933,12 @@ bool ParseCommandLine(int argc, char* argv[])
 		{
 			if (gMergeCnt < 16)
 				strncpy(gMergeFiles[gMergeCnt++], argv[ci], 1023);
+			ci++;
+		}
+		else
+		if (strcmp(argument, "-smallesc") == 0)
+		{
+			gSmallEscape = atoi(argv[ci]);
 			ci++;
 		}
 		else

@@ -67,3 +67,15 @@ GET /stats, GET /job
 ```
 
 Not yet: payout rules, blinded starts (the server knowing a share of every distance), TLS and worker authentication.
+
+## Escape jumps and very long walks (`-smallesc 1`)
+
+RCKangaroo escapes a detected 2-cycle with a jump of about N/1024 (table 2) and longer loops with about N/4096
+(table 3), with the sign given by the point's parity. Every kangaroo therefore performs a random walk of ±N/1024
+steps once per ~1024 jumps, so after W jumps it has drifted about √(W/1024)·N/1024 from its start. In RC's
+benchmarks W is small and this is invisible; on a target like #140 with 2^30 kangaroos each walking 2^37 jumps the
+drift is about 10 N, the herds leave the interval and K must rise (both code audits raised this; it is not measured
+yet because no simulation can reach such walk lengths). `-smallesc 1` makes the escape tables the size of table 1;
+the generic-group simulator shows the same K with small escape jumps (1.228 against 1.245 at 128 kangaroos). The
+jump tables are part of the pool job: all workers must use the same setting, and `-smallesc 1` databases are not
+compatible with RCKangaroo's.
