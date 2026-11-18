@@ -675,6 +675,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	Int_TameOffset.Sub(tt);
 	gPntToSolve = PntToSolve;
 	// bb: load own DB (resume) and merge other DP files
+	gSolved = false; // bench mode solves many points in a row
 	if (gDbFileName[0] && IsFileExist(gDbFileName))
 	{
 		u8 hdr[256];
