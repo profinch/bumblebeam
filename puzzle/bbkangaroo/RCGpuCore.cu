@@ -495,10 +495,13 @@ __device__ __forceinline__ void BuildDP(const TKparams& Kparams, int kang_ind, u
 	*(int4*)&DPs[0] = rx;
 	*(int4*)&DPs[4] = ((int4*)d)[0];
 	*(u64*)&DPs[8] = d[2];
-	DPs[10] = 3 * kang_ind / Kparams.KangCnt; //kang type
+	// bb: herd type exactly as the host assigns it (integer thirds); RC's 3*kang_ind/KangCnt mislabelled the
+	// kangaroos at the two herd boundaries, whose DPs then carried the wrong type (about 1e-4 of all records)
+	DPs[10] = (kang_ind < Kparams.KangCnt / 3) ? 0 : ((kang_ind < 2 * Kparams.KangCnt / 3) ? 1 : 2);
+	DPs[11] = kang_ind; // bb: for diagnostics
 }
 
-__device__ __forceinline__ bool ProcessJumpDistance(u32 step_ind, u32 d_cur, u64* d, u32 kang_ind, u64* jmp1_d, u64* jmp2_d, const TKparams& Kparams, u64* table, u32* cur_ind, u8 iter)
+__device__ __forceinline__ bool ProcessJumpDistance(u32 step_ind, u32 d_cur, u64* d, u32 kang_ind, u64* jmp1_d, u64* jmp2_d, const TKparams& Kparams, u64* table, u32* cur_ind, u8 iter, bool already_looped)
 {
 	u64* jmp_d = (d_cur & JMP2_FLAG) ? jmp2_d : jmp1_d;
 
@@ -532,22 +535,23 @@ __device__ __forceinline__ bool ProcessJumpDistance(u32 step_ind, u32 d_cur, u64
 	table[iter] = d[0];
 	*cur_ind = (iter + 1) % MD_LEN;
 
+	// bb: the distance is always integrated and DPs are always built, so point and distance stay consistent
+	// whatever the loop detector says (RC froze the distance here and rewound the point in KernelC from LastPnts,
+	// which left a kangaroo desynchronised after a false or mis-sized detection). KernelC escapes from the current point.
+	if (d_cur & DP_FLAG)
+		BuildDP(Kparams, kang_ind, d);
 	if (found_ind < 0)
-	{		
-		if (d_cur & DP_FLAG)
-			BuildDP(Kparams, kang_ind, d);
 		return false;
-	}
+	if (already_looped)
+		return true;
 
 	u32 LoopSize = (iter + MD_LEN - found_ind) % MD_LEN;
 	if (!LoopSize)
 		LoopSize = MD_LEN;
 	atomicAdd(Kparams.dbg_buf + LoopSize, 1); //dbg
 
-	//calc index in LastPnts
-	u32 ind_LastPnts = MD_LEN - 1 - ((STEP_CNT - 1 - step_ind) % LoopSize);
 	u32 ind = atomicAdd(Kparams.LoopedKangs, 1);
-	Kparams.LoopedKangs[2 + ind] = kang_ind | (ind_LastPnts << 28);
+	Kparams.LoopedKangs[2 + ind] = kang_ind;
 	return true;
 }
 
@@ -555,10 +559,8 @@ __device__ __forceinline__ bool ProcessJumpDistance(u32 step_ind, u32 d_cur, u64
 	u32 cur_dAB = jlist[THREAD_X]; \
 	u16 cur_dA = cur_dAB & 0xFFFF; \
 	u16 cur_dB = cur_dAB >> 16; \
-	if (!LoopedA) \
-		LoopedA = ProcessJumpDistance(step_ind, cur_dA, dA, kang_ind, jmp1_d, jmp2_d, Kparams, RegsA, &cur_indA, iter); \
-	if (!LoopedB) \
-		LoopedB = ProcessJumpDistance(step_ind, cur_dB, dB, kang_ind + 1, jmp1_d, jmp2_d, Kparams, RegsB, &cur_indB, iter); \
+	LoopedA = ProcessJumpDistance(step_ind, cur_dA, dA, kang_ind, jmp1_d, jmp2_d, Kparams, RegsA, &cur_indA, iter, LoopedA) || LoopedA; \
+	LoopedB = ProcessJumpDistance(step_ind, cur_dB, dB, kang_ind + 1, jmp1_d, jmp2_d, Kparams, RegsB, &cur_indB, iter, LoopedB) || LoopedB; \
 	jlist += BLOCK_SIZE * PNT_GROUP_CNT / 2; \
 	step_ind++; \
 }
@@ -690,7 +692,6 @@ __global__ void KernelC(const TKparams Kparams)
 		if (ind >= Kparams.LoopedKangs[0])
 			break;
 		u32 kang_ind = Kparams.LoopedKangs[2 + ind] & 0x0FFFFFFF;
-		u32 last_ind = Kparams.LoopedKangs[2 + ind] >> 28;
 
 		__align__(16) u64 x0[4], x[4];
 		__align__(16) u64 y0[4], y[4];
@@ -699,19 +700,19 @@ __global__ void KernelC(const TKparams Kparams)
 		__align__(16) u64 inverse[5];
 		u64 tmp[4], tmp2[4];
 
-		u64* x_last0 = Kparams.LastPnts;
-		u64* y_last0 = x_last0 + 4 * PNT_GROUP_CNT * BLOCK_CNT * BLOCK_SIZE;
-
 		u32 block_ind = kang_ind / (BLOCK_SIZE * PNT_GROUP_CNT);
 		u32 thr_ind = (kang_ind - block_ind * (BLOCK_SIZE * PNT_GROUP_CNT)) / PNT_GROUP_CNT;
 		u32 gr_ind = (kang_ind - block_ind * (BLOCK_SIZE * PNT_GROUP_CNT) - thr_ind * PNT_GROUP_CNT);
 
-		y_last0 += 2 * thr_ind + 4 * BLOCK_SIZE * block_ind;
-		x_last0 += 2 * thr_ind + 4 * BLOCK_SIZE * block_ind;
-		u64* x_last = x_last0 + last_ind * 2 * (4 * PNT_GROUP_CNT * BLOCK_CNT * BLOCK_SIZE);
-		u64* y_last = y_last0 + last_ind * 2 * (4 * PNT_GROUP_CNT * BLOCK_CNT * BLOCK_SIZE);
-		LOAD_VAL_256(x0, x_last, gr_ind);
-		LOAD_VAL_256(y0, y_last, gr_ind);
+		// bb: current point of the kangaroo (written by KernelA at the end of the iteration)
+		x0[0] = Kparams.Kangs[kang_ind * 12 + 0];
+		x0[1] = Kparams.Kangs[kang_ind * 12 + 1];
+		x0[2] = Kparams.Kangs[kang_ind * 12 + 2];
+		x0[3] = Kparams.Kangs[kang_ind * 12 + 3];
+		y0[0] = Kparams.Kangs[kang_ind * 12 + 4];
+		y0[1] = Kparams.Kangs[kang_ind * 12 + 5];
+		y0[2] = Kparams.Kangs[kang_ind * 12 + 6];
+		y0[3] = Kparams.Kangs[kang_ind * 12 + 7];
 
 		u32 jmp_ind = x0[0] % JMP_CNT;
 		Copy_int4_x2(jmp_x, jmp3_table + 12 * jmp_ind);

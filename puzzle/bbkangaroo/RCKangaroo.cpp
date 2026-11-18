@@ -76,6 +76,10 @@ struct DBRec
 	u8 type; //0 - tame, 1 - wild1, 2 - wild2
 };
 #pragma pack(pop)
+// bb: forward declarations (defined further down)
+static bool VerifyRecord(DBRec& rec);
+static void DiagnoseBad(DBRec& rec);
+extern int gVerifyEvery;
 
 void InitGpus()
 {
@@ -290,6 +294,12 @@ void CheckNewPoints()
 		memcpy(nrec.x, p, 12);
 		memcpy(nrec.d, p + 16, 22);
 		nrec.type = gGenMode ? TAME : p[40];
+		if (gVerifyEvery > 0 && !gGenMode && !VerifyRecord(nrec)) // bb: on-the-fly diagnostics
+		{
+			u32 kang = *(u32*)(p + 44);
+			printf("BAD DP from kang %u (type %d, group %u) d[0]=%016llx ops=2^%.2f\r\n", kang, nrec.type, kang % 64, *(unsigned long long*)nrec.d, log2((double)PntTotalOps + 1));
+			DiagnoseBad(nrec);
+		}
 		if (ProcessDP(nrec))
 		{
 			gSolved = true;

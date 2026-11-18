@@ -8,7 +8,7 @@ only exist for sm_89/sm_120.
 ## What is changed against v3.1
 
 - Build: Linux `Makefile` (host compiler g++-12 for nvcc 12.0, native SASS for `ARCH`, default 86).
-- Fixes: KernelB loop-table indexing (ported from v4.0); operations are counted every iteration, not only when DPs
+- Fixes: KernelB loop-table indexing (ported from v4.0); herd type of boundary kangaroos (see -verify); operations are counted every iteration, not only when DPs
   arrived (v3.1 undercounted at high DP); the main loop stops when all GPU threads died instead of spinning.
 - `-db <file>`: the whole DP database (tame and wild) is saved on exit (ops limit, Ctrl-C, solved) and every
   `-save <minutes>` (default 10). On start the file is loaded again: a run survives restarts. The file header holds
@@ -21,9 +21,14 @@ only exist for sm_89/sm_120.
   merging, without any GPU work. Databases of all runs with the same range are compatible because the jump tables
   come from a fixed seed (as in RCKangaroo).
 - `-verify N`: recomputes every N-th record of a merged file with a scalar multiplication (tame = d·G,
-  wild = ±PntA + d·G) and reports bad records. This is the proof-of-work check a pool needs. Measured on RC's own
-  kernels: about 1 record in 10^4 does not verify (a kangaroo whose distance lost sync with its point after a loop
-  exit); such records only cause harmless "Collision Error" lines, a pool server drops them.
+  wild = ±PntA + d·G) and reports bad records; with a running search it also checks every incoming DP and names the
+  kangaroo. This is the proof-of-work check a pool needs. It found an RCKangaroo bug: the GPU labelled the herd type
+  of a DP as `3*kang_ind/KangCnt` while the host assigns herds by integer thirds, so the two kangaroos at the herd
+  boundaries produced records of the wrong type (about 1 record in 10^4, visible as "Collision Error"). Fixed; a
+  full database now verifies with 0 bad records.
+- Loop exit: after KernelB detects a cycle, the distance keeps being integrated and KernelC escapes from the
+  kangaroo's current point, so point and distance can never drift apart (RC froze the distance and rewound the
+  point from a saved slot).
 - `-blocks N`: use only N SM blocks (fewer kangaroos): K benchmarks at small ranges, shared GPUs.
 - `-layout 0|1`: herd start layout. 0 = RCKangaroo (tame in [0,N/16), wild |d| uniform in [0,N/2)).
   1 (default) = tame in [0,N/20), wild |d| 90% uniform in [0,N/2) plus 10% in [0.4N,0.5N): measured −3% operations
