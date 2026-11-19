@@ -208,7 +208,9 @@ Dead or out of scope:
   (https://www.miningrigrentals.com/images/mrr-logo2.png, linking to https://www.miningrigrentals.com/ or our MRR referral link)
   somewhere about as visible as their Pools page shows pools, then reply in the ticket with our banner or logo, the destination
   URL and the page with their banner. They then review: the pool must be active with "at least a handful of miners".
-  To do: banner (footer marks row is the candidate), reply in the ticket once the miner count is up.
+  2026-11-19: their banner is live in the footer marks row (223dfad, links to their home page, grey until hover like
+  the others). To do: reply in the ticket (our logo, https://pool.bumblebeam.org, the page with their banner) once the
+  miner count is up.
 
 ## HiveOS template
 
