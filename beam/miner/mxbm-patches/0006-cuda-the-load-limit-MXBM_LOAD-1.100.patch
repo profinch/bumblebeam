@@ -1,5 +1,5 @@
 From 5665930fea0ce33c412a9f23e00f9385f4c33fa0 Mon Sep 17 00:00:00 2001
-From: profinch <info@bumblebeam.org>
+From: profinch <profinch@gmail.com>
 Date: Tue, 13 Oct 2026 00:44:56 +0100
 Subject: [PATCH] cuda: the load limit, MXBM_LOAD=1..100
 

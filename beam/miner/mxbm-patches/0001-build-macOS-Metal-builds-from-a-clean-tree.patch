@@ -1,5 +1,5 @@
 From 575d7411c8dc0de83c0816ade0a3afd508430555 Mon Sep 17 00:00:00 2001
-From: profinch <info@bumblebeam.org>
+From: profinch <profinch@gmail.com>
 Date: Sat, 10 Oct 2026 23:32:54 +0100
 Subject: [PATCH 1/5] build: macOS Metal builds from a clean tree
 
