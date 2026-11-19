@@ -211,7 +211,8 @@ Dead or out of scope:
   2026-11-19: their banner is live in the footer marks row (223dfad, links to their home page, grey until hover like
   the others; d54d9ba sizes its logo like the others). 2026-11-19: replied in the ticket by email (banner on every page's
   footer, our logo-1024.png and logo.svg, destination https://pool.bumblebeam.org, the new MRR tab of /connect,
-  477 blocks in 24 h; the miner count, 4, not mentioned). Waiting for their review
+  477 blocks in 24 h; the miner count, 4, not mentioned). Gmail turned every link in it into a google.com redirect, so
+  the same text went into the ticket page directly at 16:40 with a note why. Waiting for their review
 
 ## HiveOS template
 
