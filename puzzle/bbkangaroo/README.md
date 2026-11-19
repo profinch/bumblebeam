@@ -34,7 +34,12 @@ only exist for sm_89/sm_120.
   full database now verifies with 0 bad records.
 - Loop exit: after KernelB detects a cycle, the distance keeps being integrated and KernelC escapes from the
   kangaroo's current point, so point and distance can never drift apart (RC froze the distance and rewound the
-  point from a saved slot).
+  point from a saved slot). DPs are not built after the detection: the first version of this fork kept building
+  them, a looping kangaroo then reported its DPs on every pass, overflowed the 16 DP slots a kangaroo has per
+  iteration and paired the x of a late pass with the distance of an early one (about 1 bad record per 150 keys at
+  range 60, "Collision Error: types 1/1", kangaroo state itself consistent; RC v3.1: 0 in 620 keys). Fixed.
+- Collision diagnostics: a "Collision Error" now says which of the two records fails verification, the kangaroo
+  index, and (benchmark mode) the key, and checks the kangaroo's GPU state (point against distance) on the spot.
 - `-blocks N`: use only N SM blocks (fewer kangaroos): K benchmarks at small ranges, shared GPUs.
 - `-layout 0|1`: herd start layout. 0 = RCKangaroo (tame in [0,N/16), wild |d| uniform in [0,N/2)).
   1 (default) = tame in [0,N/20), wild |d| 90% uniform in [0,N/2) plus 10% in [0.4N,0.5N): −3% operations in a

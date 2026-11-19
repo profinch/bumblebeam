@@ -59,6 +59,7 @@ int gLayout = 1;      // bb: -layout 0|1 herd start layout
 bool IsBench;
 static EcInt gBenchKey; // bb: the random key of the current benchmark point (diagnostics)
 static u32 gCurKang = 0xFFFFFFFF; // bb: kangaroo index of the record being processed (GPU path only)
+static volatile int gDiagKang = -1; // bb: kangaroo whose GPU state should be checked at the next main-loop pass
 
 u32 gDP;
 u32 gRange;
@@ -116,6 +117,7 @@ static bool RecFromFile(DBRec& r, const u8* rec, bool oldfmt)
 }
 // bb: forward declarations (defined further down)
 static bool VerifyRecord(DBRec& rec, u8* fullx = NULL);
+static bool VerifyD(EcInt d, int type, const u8* x8, u8* fullx = NULL);
 static void DiagnoseBad(DBRec& rec);
 extern int gVerifyEvery;
 
@@ -304,6 +306,7 @@ bool ProcessDP(DBRec& nrec)
 			if (!v_old) DiagnoseBad(prev);
 			if (!v_new) DiagnoseBad(nrec);
 			if (IsBench) { char s3[80]; gBenchKey.GetHexStr(s3); printf("  bench key=%s\r\n", s3); }
+			if (!v_new && gCurKang != 0xFFFFFFFF && gDiagKang < 0) gDiagKang = (int)gCurKang;
 		}
 		return false;
 	}
@@ -428,6 +431,38 @@ static bool SaveDb(int Range, int dp)
 	return true;
 }
 // bb: kangaroo state file <db>.kangs: 256-byte header (same as DB, magic BBKST001) + u32 gpu count + per GPU (u32 KangCnt, KangCnt*96 bytes)
+// bb: diagnostics. Snapshot the kangaroos of GPU 0 and check whether kangaroo `kang` is self-consistent:
+// its point must equal (base of its herd) + d*G. Prints the verdict and, for a broken one, a single-jump explanation.
+static void DiagKangState(int kang)
+{
+	if (GpuCnt < 1 || kang < 0 || kang >= GpuKangs[0]->KangCnt) return;
+	GpuKangs[0]->SnapReady = false; GpuKangs[0]->SnapReq = true;
+	for (int w = 0; w < 2000 && !GpuKangs[0]->SnapReady; w++) Sleep(1);
+	if (!GpuKangs[0]->SnapReady) { printf("  kang %d: no snapshot\r\n", kang); return; }
+	u64* k = (u64*)(GpuKangs[0]->SnapBuf + (u64)kang * 96);
+	EcInt d; memcpy(d.data, k + 8, 24); memset(((u8*)d.data) + 24, (((u8*)k)[64 + 23] & 0x80) ? 0xFF : 0, 16);
+	int KangCnt = GpuKangs[0]->KangCnt;
+	int type = (kang < KangCnt / 3) ? 0 : ((kang < 2 * KangCnt / 3) ? 1 : 2);
+	u8 fx[32];
+	bool ok = VerifyD(d, type, (u8*)k, fx);
+	char sd[80]; d.GetHexStr(sd);
+	printf("  kang %d state: x=%016llx%016llx d=%s type %d: %s\r\n", kang, (unsigned long long)k[1], (unsigned long long)k[0], sd, type, ok ? "CONSISTENT" : "DESYNC");
+	if (!ok)
+	{
+		for (int t = 0; t < 3; t++)
+		{
+			EcJMP* J = (t == 0) ? EcJumps1 : (t == 1) ? EcJumps2 : EcJumps3;
+			for (int i = 0; i < JMP_CNT; i++)
+				for (int sg = 0; sg < 2; sg++)
+				{
+					EcInt dd = d;
+					if (sg) dd.Sub(J[i].dist); else dd.Add(J[i].dist);
+					if (VerifyD(dd, type, (u8*)k)) { printf("  kang %d: point = d %s J%d[%d]\r\n", kang, sg ? "-" : "+", t + 1, i); return; }
+				}
+		}
+		printf("  kang %d: no single-jump explanation\r\n", kang);
+	}
+}
 static bool SaveKangState(int Range, int dp)
 {
 	if (!gDbFileName[0] || !ThrCnt)
@@ -483,7 +518,7 @@ static void LoadKangState(int Range)
 }
 // bb: verify a DP record by recomputing its point: tame = d*G, wild1 = PntA + d*G, wild2 = -PntA + d*G, PntA = PntToSolve - (N/2)*G.
 // Compares the low 12 bytes of x. This is the pool's proof-of-work check (one scalar multiplication per DP).
-static bool VerifyD(EcInt d, int type, const u8* x8, u8* fullx = NULL) // d signed (two's complement in 5 limbs)
+static bool VerifyD(EcInt d, int type, const u8* x8, u8* fullx) // d signed (two's complement in 5 limbs)
 {
 	bool neg = (d.data[4] >> 63) != 0;
 	if (neg) d.Neg();
@@ -806,6 +841,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 			printf("Stop requested\r\n");
 			break;
 		}
+		if (gDiagKang >= 0) { int kg = gDiagKang; DiagKangState(kg); gDiagKang = -1; }
 		if (gDbFileName[0] && (gSaveMin > 0) && (GetTickCount64() - tm_save > (u64)gSaveMin * 60 * 1000))
 		{
 			SaveDb(Range, DP);

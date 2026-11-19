@@ -535,12 +535,15 @@ __device__ __forceinline__ bool ProcessJumpDistance(u32 step_ind, u32 d_cur, u64
 	table[iter] = d[0];
 	*cur_ind = (iter + 1) % MD_LEN;
 
-	// bb: the distance is always integrated and DPs are always built, so point and distance stay consistent
-	// whatever the loop detector says (RC froze the distance here and rewound the point in KernelC from LastPnts,
-	// which left a kangaroo desynchronised after a false or mis-sized detection). KernelC escapes from the current point.
-	if (d_cur & DP_FLAG)
+	// bb: the distance is always integrated, so point and distance stay consistent whatever the loop detector says
+	// (RC froze the distance here and rewound the point in KernelC from LastPnts). KernelC escapes from the current
+	// point at the end of the iteration. DPs are built only until the loop is detected: a looping kangaroo would
+	// otherwise report the same DPs on every pass, overflow its DPTABLE_MAX_CNT slots and pair the x of a later pass
+	// with the distance of an earlier one (measured: 1 bad record per ~150 keys at range 60, none in RC v3.1).
+	bool looped_now = found_ind >= 0;
+	if ((d_cur & DP_FLAG) && !looped_now && !already_looped)
 		BuildDP(Kparams, kang_ind, d);
-	if (found_ind < 0)
+	if (!looped_now)
 		return false;
 	if (already_looped)
 		return true;
