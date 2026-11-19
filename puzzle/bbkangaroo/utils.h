@@ -75,10 +75,12 @@ class MemPool
 private:
 	std::vector <void*> pages;
 	u32 pnt;
+	u32 rec_len, recs_in_page, max_pages;
 public:
 	MemPool();
 	~MemPool();
 	void Clear();
+	void SetRecLen(u32 len);
 	inline void* AllocRec(u32* cmp_ptr);
 	inline void* GetRecPtr(u32 cmp_ptr);
 };
@@ -91,16 +93,20 @@ private:
 	int lower_bound(TListRec* list, int mps_ind, u8* data);
 public:
 	u8 Header[256];
+	// bb: record layout is set at run time. A full record is 3 bucket bytes (x[0..2]) + RecLen stored bytes:
+	// x[3..7] (DB_FIND_LEN = 5, the lookup key) then the distance with the herd type in its top two bits.
+	u32 RecLen;
 
 	TFastBase();
 	~TFastBase();
 	void Clear();
+	void SetRecLen(u32 stored_len); // call before any add/load; clears the DB
 	u8* AddDataBlock(u8* data, int pos = -1);
 	u8* FindDataBlock(u8* data);
 	u8* FindOrAddDataBlock(u8* data);
 	u64 GetBlockCnt();
-	bool LoadFromFile(char* fn, int keepType = -1); // bb: keepType >= 0 keeps only records whose type byte (last byte) equals it
-	bool StreamFile(char* fn, u8* hdr_out, void (*cb)(u8* rec35, void* ctx), void* ctx); // bb: calls cb with a full 35-byte record for every record in the file
+	bool LoadFromFile(char* fn, int keepType = -1); // bb: keepType >= 0 keeps only records whose type (top 2 bits of the last byte) equals it; file records must be RecLen long
+	bool StreamFile(char* fn, u8* hdr_out, u32 file_rec_len, void (*cb)(u8* rec, void* ctx), void* ctx); // bb: calls cb with a full (3 + file_rec_len)-byte record for every record in the file
 	bool SaveToFile(char* fn);
 };
 

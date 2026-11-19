@@ -9,7 +9,9 @@ costs nothing but transport.
 
 ## What the MVP does (pool_server.py / pool_client.py)
 - Worker: `bbkangaroo -db work.db`; the client ships the journal of new records.
-- Server: verifies each record with one scalar multiplication, stores it by x, solves on duplicate x, counts shares.
+- Server: verifies each record with one scalar multiplication, stores it by x (8 bytes), solves on duplicate x,
+  counts shares. Records are 8 + ceil((range + 8) / 8) bytes (27 at range 140); the client reads the length from
+  the DB header.
 - A record is a proof of about 2^DP jumps: producing one without walking costs 2^DP scalar multiplications, about
   500 times more than walking.
 
@@ -36,7 +38,8 @@ done only when a real target is being worked on.
 
 ### 4. Server robustness
 - Store: the server appends every accepted record to `pool_records.bin` and reloads it on start. For a real target
-  the table grows to 2^30+ records; the Python dict must then give way to an on-disk sorted store (LMDB, or the
+  the table grows to 2^30+ records (27 bytes each at range 140, 2^38 records = 7 TB at DP 32); the Python dict must
+  then give way to an on-disk sorted store (LMDB, or the
   bbkangaroo DB file plus periodic `-merge` on a machine with the GPU client code).
 - TLS and worker tokens (a stolen token can only submit work, not read anything useful).
 - DP > 32: bbkangaroo's GPU DP test uses 32 bits of x; a pool that needs fewer records can filter on the host.

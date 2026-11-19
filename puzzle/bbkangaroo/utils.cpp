@@ -56,20 +56,25 @@ u64 GetTickCount64()
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define DB_REC_LEN			32
-#define DB_FIND_LEN			9
+#define DB_FIND_LEN			5
 #define DB_MIN_GROW_CNT		2
 
 //we need advanced memory management to reduce memory fragmentation
 //everything will be stable up to about 8TB RAM
 
 #define MEM_PAGE_SIZE		(128 * 1024)
-#define RECS_IN_PAGE		(MEM_PAGE_SIZE / DB_REC_LEN)
-#define MAX_PAGES_CNT		(0xFFFFFFFF / RECS_IN_PAGE)
 
 MemPool::MemPool()
 {
 	pnt = 0;
+	SetRecLen(32);
+}
+
+void MemPool::SetRecLen(u32 len)
+{
+	rec_len = len;
+	recs_in_page = MEM_PAGE_SIZE / rec_len;
+	max_pages = 0xFFFFFFFF / recs_in_page;
 }
 
 MemPool::~MemPool()
@@ -89,31 +94,40 @@ void MemPool::Clear()
 void* MemPool::AllocRec(u32* cmp_ptr)
 {
 	void* mem;
-	if (pages.empty() || (pnt + DB_REC_LEN > MEM_PAGE_SIZE))
+	if (pages.empty() || (pnt + rec_len > MEM_PAGE_SIZE))
 	{
-		if (pages.size() >= MAX_PAGES_CNT)
+		if (pages.size() >= max_pages)
 			return NULL; //overflow
 		pages.push_back(malloc(MEM_PAGE_SIZE));
 		pnt = 0;
 	}
 	u32 page_ind = (u32)pages.size() - 1;
 	mem = (u8*)pages[page_ind] + pnt;
-	*cmp_ptr = (page_ind * RECS_IN_PAGE) | (pnt / DB_REC_LEN);
-	pnt += DB_REC_LEN;
+	*cmp_ptr = (page_ind * recs_in_page) | (pnt / rec_len);
+	pnt += rec_len;
 	return mem;
 }
 
 void* MemPool::GetRecPtr(u32 cmp_ptr)
 {
-	u32 page_ind = cmp_ptr / RECS_IN_PAGE;
-	u32 rec_ind = cmp_ptr % RECS_IN_PAGE;
-	return (u8*)pages[page_ind] + DB_REC_LEN * rec_ind;
+	u32 page_ind = cmp_ptr / recs_in_page;
+	u32 rec_ind = cmp_ptr % recs_in_page;
+	return (u8*)pages[page_ind] + rec_len * rec_ind;
 }
 
 TFastBase::TFastBase()
 {
 	memset(lists, 0, sizeof(lists));
 	memset(Header, 0, sizeof(Header));
+	RecLen = 32;
+}
+
+void TFastBase::SetRecLen(u32 stored_len)
+{
+	Clear();
+	RecLen = stored_len;
+	for (int i = 0; i < 256; i++)
+		mps[i].SetRecLen(stored_len);
 }
 
 TFastBase::~TFastBase()
@@ -192,7 +206,7 @@ u8* TFastBase::AddDataBlock(u8* data, int pos)
 	u32 cmp_ptr;
 	void* ptr = mps[data[0]].AllocRec(&cmp_ptr);
 	list->data[first] = cmp_ptr;
-	memcpy(ptr, data + 3, DB_REC_LEN);
+	memcpy(ptr, data + 3, RecLen);
 	list->cnt++;
 	return (u8*)ptr;
 }
@@ -227,8 +241,10 @@ label_not_found:
 }
 
 //slow but I hope you are not going to create huge DB with this proof-of-concept software
-bool TFastBase::StreamFile(char* fn, u8* hdr_out, void (*cb)(u8* rec35, void* ctx), void* ctx)
+bool TFastBase::StreamFile(char* fn, u8* hdr_out, u32 file_rec_len, void (*cb)(u8* rec, void* ctx), void* ctx)
 {
+	if (file_rec_len > 64)
+		return false;
 	FILE* fp = fopen(fn, "rb");
 	if (!fp)
 		return false;
@@ -240,7 +256,7 @@ bool TFastBase::StreamFile(char* fn, u8* hdr_out, void (*cb)(u8* rec35, void* ct
 	}
 	if (hdr_out)
 		memcpy(hdr_out, hdr, 256);
-	u8 rec[3 + DB_REC_LEN];
+	u8 rec[3 + 64];
 	for (int i = 0; i < 256; i++)
 		for (int j = 0; j < 256; j++)
 			for (int k = 0; k < 256; k++)
@@ -254,7 +270,7 @@ bool TFastBase::StreamFile(char* fn, u8* hdr_out, void (*cb)(u8* rec35, void* ct
 				rec[0] = (u8)i; rec[1] = (u8)j; rec[2] = (u8)k;
 				for (int m = 0; m < cnt; m++)
 				{
-					if (fread(rec + 3, 1, DB_REC_LEN, fp) != DB_REC_LEN)
+					if (fread(rec + 3, 1, file_rec_len, fp) != file_rec_len)
 					{
 						fclose(fp);
 						return false;
@@ -300,16 +316,16 @@ bool TFastBase::LoadFromFile(char* fn, int keepType)
 					list->data = (u32*)realloc(list->data, newcap * sizeof(u32));
 					list->capacity = newcap;
 					list->cnt = 0;
-					u8 tmp[DB_REC_LEN];
+					u8 tmp[64];
 					for (int m = 0; m < fcnt; m++)
 					{
-						if (fread(tmp, 1, DB_REC_LEN, fp) != DB_REC_LEN)
+						if (fread(tmp, 1, RecLen, fp) != RecLen)
 						{
 							fclose(fp);
 							Clear();
 							return false;
 						}
-						if ((keepType >= 0) && (tmp[DB_REC_LEN - 1] != (u8)keepType))
+						if ((keepType >= 0) && ((tmp[RecLen - 1] >> 6) != (u8)keepType))
 							continue;
 						u32 cmp_ptr;
 						void* ptr = mps[i].AllocRec(&cmp_ptr);
@@ -319,7 +335,7 @@ bool TFastBase::LoadFromFile(char* fn, int keepType)
 							Clear();
 							return false;
 						}
-						memcpy(ptr, tmp, DB_REC_LEN);
+						memcpy(ptr, tmp, RecLen);
 						list->data[list->cnt++] = cmp_ptr;
 					}
 				}
@@ -347,7 +363,7 @@ bool TFastBase::SaveToFile(char* fn)
 				for (int m = 0; m < list->cnt; m++)
 				{
 					void* ptr = mps[i].GetRecPtr(list->data[m]);
-					if (fwrite(ptr, 1, DB_REC_LEN, fp) != DB_REC_LEN)
+					if (fwrite(ptr, 1, RecLen, fp) != RecLen)
 					{
 						fclose(fp);
 						return false;

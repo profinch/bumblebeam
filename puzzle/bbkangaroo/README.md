@@ -13,7 +13,12 @@ only exist for sm_89/sm_120.
 - `-db <file>`: the whole DP database (tame and wild) is saved on exit (ops limit, Ctrl-C, solved) and every
   `-save <minutes>` (default 10). On start the file is loaded again: a run survives restarts. The file header holds
   range, DP, layout, a hash of the jump tables, the target key and start; wild records are loaded only for the same
-  target, tame records for any target of the same range and jump tables. RCKangaroo tames files are accepted.
+  target, tame records for any target of the same range and jump tables. RCKangaroo tames files are accepted
+  (`-tames` or `-merge`, converted on the fly).
+- Compact records (file header `BBKDB002`): 8 bytes of x (the low 8 bytes; the first 3 index the bucket) and
+  ceil((range + 8) / 8) bytes of distance with the herd type in its top two bits: 17 bytes at range 60, 26 at 135,
+  27 at 140, against 35 in RCKangaroo's format (in RAM 14/23/24 against 32). Two different points with the same
+  64 bits of x (about records² / 2^65 per run) are told apart by recomputing both points and are not errors.
 - Exact resume: with `-db` the kangaroo state (point and distance of every kangaroo, 96 bytes each) is written to
   `<db>.kangs` at every save; on restart it is restored and no in-flight work is lost (without it a restart forfeits
   up to 2^DP steps per kangaroo).
@@ -22,7 +27,8 @@ only exist for sm_89/sm_120.
   come from a fixed seed (as in RCKangaroo).
 - `-verify N`: recomputes every N-th record of a merged file with a scalar multiplication (tame = d·G,
   wild = ±PntA + d·G) and reports bad records; with a running search it also checks every incoming DP and names the
-  kangaroo. This is the proof-of-work check a pool needs. It found an RCKangaroo bug: the GPU labelled the herd type
+  kangaroo (a diagnostic: at a high DP rate the host falls behind and DPs are lost, so use it on merges or at a
+  high DP value). This is the proof-of-work check a pool needs. It found an RCKangaroo bug: the GPU labelled the herd type
   of a DP as `3*kang_ind/KangCnt` while the host assigns herds by integer thirds, so the two kangaroos at the herd
   boundaries produced records of the wrong type (about 1 record in 10^4, visible as "Collision Error"). Fixed; a
   full database now verifies with 0 bad records.
@@ -50,7 +56,7 @@ make                       # ARCH=86 by default; make ARCH="86 89" for several
 
 ## Not changed
 
-The GPU kernels (except the loop-table fix) and the DP record format: DP files stay compatible with RCKangaroo.
+The GPU kernels (except the loop-table fix). The jump tables, so RCKangaroo DP files stay usable through `-merge`.
 
 ## Pool (pool/)
 

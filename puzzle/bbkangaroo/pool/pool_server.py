@@ -3,9 +3,13 @@
 
 Workers run bbkangaroo with -db and send the new records of <db>.journal here (pool_client.py). Every record is
 verified by one scalar multiplication (tame: x(d*G), wild: x(+-PntA + d*G)), so a record is a proof of about 2^DP
-jumps of work and cannot be faked cheaper than by walking. Verified records go into one table keyed by the low 12
+jumps of work and cannot be faked cheaper than by walking. Verified records go into one table keyed by the low 8
 bytes of x; a second record with the same x and a different (type, d) is a collision, and the key candidates are
 tried against the target public key. Shares are counted per worker by verified records.
+
+Record format (bbkangaroo BBKDB002): x[8] little-endian low bytes of x, then DLEN = ceil((range + 8) / 8) bytes of
+distance, two's complement little-endian, with the herd type (0 tame, 1 wild1, 2 wild2) in the top two bits of the
+last byte. The record length is 8 + DLEN.
 
 Run: pool_server.py --job job.json --port 8800 [--store pool_records.bin]
 job.json: {"range": 52, "start": "8000000000000", "pubkey": "02..", "dp": 10, "jumps_hash": "hex16"}
@@ -15,8 +19,11 @@ from aiohttp import web
 from coincurve import PrivateKey, PublicKey
 
 N_ORDER = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-REC = 35  # x[12] d[22] type[1]
 TAME, WILD1, WILD2 = 0, 1, 2
+
+
+def dlen_for_range(r: int) -> int:
+    return min((r + 15) // 8, 22)
 
 
 def neg(pk: PublicKey) -> PublicKey:
@@ -41,19 +48,25 @@ def add(a: PublicKey | None, b: PublicKey | None) -> PublicKey | None:
         return None  # a + (-a) = infinity
 
 
-def x_low12(pk: PublicKey) -> bytes:
+def x_low8(pk: PublicKey) -> bytes:
     x = pk.format(compressed=False)[1:33]  # big-endian x
-    return x[::-1][:12]  # little-endian low 12 bytes, as bbkangaroo stores them
+    return x[::-1][:8]  # little-endian low 8 bytes, as bbkangaroo stores them
 
 
-def decode_d(d22: bytes) -> int:
-    d = int.from_bytes(d22, "little", signed=True)
-    return d
+def decode_rec(rec: bytes) -> tuple[bytes, int, int]:
+    """-> (x8, type, d); the type sits in the top two bits of the last byte, the sign bit just below it."""
+    x8, db = rec[:8], bytearray(rec[8:])
+    typ = db[-1] >> 6
+    db[-1] &= 0x3F
+    if db[-1] & 0x20:
+        db[-1] |= 0xC0
+    return x8, typ, int.from_bytes(bytes(db), "little", signed=True)
 
 
 class Pool:
     def __init__(self, job: dict, store: str):
         self.range = int(job["range"])
+        self.rec = 8 + dlen_for_range(self.range)
         self.dp = int(job["dp"])
         self.start = int(job["start"], 16)
         self.jumps_hash = job["jumps_hash"].lower()
@@ -65,9 +78,10 @@ class Pool:
         self.PntA = add(self.PntToSolve, neg(point_of_scalar(n >> 1)))
         self.PntB = neg(self.PntA)
         self.lock = threading.Lock()
-        self.table: dict[bytes, tuple[int, int, str]] = {}  # x12 -> (type, d, worker)
+        self.table: dict[bytes, tuple[int, int, str]] = {}  # x8 -> (type, d, worker)
         self.shares: dict[str, int] = {}
         self.bad: dict[str, int] = {}
+        self.mirror = 0
         self.solved: dict | None = None
         self.store = store
         self.t0 = time.time()
@@ -78,20 +92,26 @@ class Pool:
     def _load_store(self):
         with open(self.store, "rb") as f:
             data = f.read()
-        for i in range(0, len(data) - len(data) % (REC + 16), REC + 16):
-            rec = data[i:i + REC]
-            w = data[i + REC:i + REC + 16].rstrip(b"\0").decode(errors="replace")
-            self.table[rec[:12]] = (rec[34], decode_d(rec[12:34]), w)
+        rl = self.rec + 16
+        for i in range(0, len(data) - len(data) % rl, rl):
+            rec = data[i:i + self.rec]
+            w = data[i + self.rec:i + rl].rstrip(b"\0").decode(errors="replace")
+            x8, typ, d = decode_rec(rec)
+            self.table[x8] = (typ, d, w)
             self.shares[w] = self.shares.get(w, 0) + 1
         print(f"store: {len(self.table)} records loaded")
 
-    def verify(self, x12: bytes, typ: int, d: int) -> bool:
+    def point(self, typ: int, d: int) -> PublicKey | None:
         P = point_of_scalar(d)  # d may be negative: reduced mod n, so the point is already -(|d|*G)
         if typ == WILD1:
             P = add(self.PntA, P)
         elif typ == WILD2:
             P = add(self.PntB, P)
-        return P is not None and x_low12(P) == x12
+        return P
+
+    def verify(self, x8: bytes, typ: int, d: int) -> bool:
+        P = self.point(typ, d)
+        return P is not None and x_low8(P) == x8
 
     def candidates(self, t1: int, d1: int, t2: int, d2: int) -> list[int]:
         c = []
@@ -128,16 +148,17 @@ class Pool:
     def submit(self, worker: str, blob: bytes) -> dict:
         good = bad = dup = 0
         found = None
-        for i in range(0, len(blob) - len(blob) % REC, REC):
-            rec = blob[i:i + REC]
-            x12, typ, d = rec[:12], rec[34], decode_d(rec[12:34])
-            if typ > 2 or not self.verify(x12, typ, d):
+        R = self.rec
+        for i in range(0, len(blob) - len(blob) % R, R):
+            rec = blob[i:i + R]
+            x8, typ, d = decode_rec(rec)
+            if typ > 2 or not self.verify(x8, typ, d):
                 bad += 1
                 continue
             with self.lock:
-                old = self.table.get(x12)
+                old = self.table.get(x8)
                 if old is None:
-                    self.table[x12] = (typ, d, worker)
+                    self.table[x8] = (typ, d, worker)
                     self.shares[worker] = self.shares.get(worker, 0) + 1
                     good += 1
                     if self.store_fp:
@@ -154,7 +175,11 @@ class Pool:
                         f.write(json.dumps(self.solved) + "\n")
                     good += 1
                     break
-                # same x, no key: same-sign wild pair or a bad record that verified (very rare); keep the old one
+                # same 64 bits of x, no key: two different points (about records^2 / 2^65 per run), a mirror pair
+                # of wild1/wild2, or a bad record that verified (very rare); keep the old one
+                P1, P2 = self.point(old[0], old[1]), self.point(typ, d)
+                if P1 is not None and P2 is not None and P1.format()[1:] == P2.format()[1:]:
+                    self.mirror += 1
                 dup += 1
         if bad:
             self.bad[worker] = self.bad.get(worker, 0) + bad
@@ -166,7 +191,8 @@ class Pool:
         per_share = float(1 << self.dp)
         return {
             "range": self.range, "dp": self.dp, "pubkey": self.pubkey_hex, "jumps_hash": self.jumps_hash,
-            "records": len(self.table), "uptime_s": int(time.time() - self.t0),
+            "records": len(self.table), "record_bytes": self.rec, "mirror_pairs": self.mirror,
+            "uptime_s": int(time.time() - self.t0),
             "expected_records": int(1.15 * 2 ** (self.range / 2) / per_share),
             "progress": len(self.table) / (1.15 * 2 ** (self.range / 2) / per_share),
             "workers": {w: {"shares": s, "work_log2": int(s * per_share).bit_length() - 1 if s else 0,

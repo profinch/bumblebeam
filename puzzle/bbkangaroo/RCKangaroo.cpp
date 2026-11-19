@@ -51,12 +51,14 @@ int gMergeCnt = 0;
 volatile bool gStopReq = false;
 u64 gJumpsHash = 0;
 static void OnSigInt(int) { gStopReq = true; }
-static FILE* gJournal = NULL; // bb: <db>.journal, append-only stream of new 35-byte records (pool uploader reads it)
+static FILE* gJournal = NULL; // bb: <db>.journal, append-only stream of new records (8 + distance bytes each) (pool uploader reads it)
 static u64 gJournalCnt = 0;
 int gBlocksLimit = 0;
 int gSmallEscape = 0; // bb: -smallesc 1: escape jumps (tables 2 and 3) of the same size as table 1 instead of ~N/1024 // bb: -blocks N limits GPU blocks (fewer kangaroos; for K benchmarks and shared GPUs)
 int gLayout = 1;      // bb: -layout 0|1 herd start layout
 bool IsBench;
+static EcInt gBenchKey; // bb: the random key of the current benchmark point (diagnostics)
+static u32 gCurKang = 0xFFFFFFFF; // bb: kangaroo index of the record being processed (GPU path only)
 
 u32 gDP;
 u32 gRange;
@@ -69,16 +71,51 @@ double gMax;
 bool gGenMode; //tames generation mode
 bool gIsOpsLimit;
 
-#pragma pack(push, 1)
+// bb: compact DP record. x[8] (low 8 bytes of x; the first 3 are the DB bucket) then the distance, gDLen bytes,
+// two's complement little-endian, with the herd type (0 tame, 1 wild1, 2 wild2) in the top two bits of the last byte.
+// gDLen = ceil((Range + 8) / 8): Range + 1 bits of magnitude, 3 bits of drift margin, sign, type. 8 + gDLen bytes
+// per record: 26..27 for the #135..#140 ranges against 35 in the original format.
+#define REC_MAX 32
 struct DBRec
 {
-	u8 x[12];
-	u8 d[22];
-	u8 type; //0 - tame, 1 - wild1, 2 - wild2
+	u8 b[REC_MAX];
 };
-#pragma pack(pop)
+static int gDLen = 22, gRecLen = 30; // distance bytes, full record bytes (8 + gDLen); set per range in SolvePoint
+static u64 gDOverflow = 0, gFalseMatches = 0;
+static int DLenForRange(int Range) { int n = (Range + 8 + 7) / 8; return n > 22 ? 22 : n; }
+// pack a GPU record (x12 little-endian, d22 two's complement, type) into r; false when d does not fit
+static bool PackRec(DBRec& r, const u8* x12, const u8* d22, int type)
+{
+	memcpy(r.b, x12, 8);
+	int s = (d22[gDLen - 1] >> 5) & 1; // sign bit: bit 5 of the last distance byte, type goes in bits 6..7
+	if (((d22[gDLen - 1] >> 6) & 3) != (s ? 3 : 0))
+		return false;
+	for (int i = gDLen; i < 22; i++)
+		if (d22[i] != (s ? 0xFF : 0))
+			return false;
+	memcpy(r.b + 8, d22, gDLen);
+	r.b[8 + gDLen - 1] = (r.b[8 + gDLen - 1] & 0x3F) | (u8)(type << 6);
+	return true;
+}
+static inline int RecType(const DBRec& r) { return r.b[8 + gDLen - 1] >> 6; }
+static void UnpackD(const DBRec& r, EcInt& d) // 5-limb two's complement
+{
+	u8 tmp[40];
+	memcpy(tmp, r.b + 8, gDLen);
+	u8 last = r.b[8 + gDLen - 1];
+	int s = (last >> 5) & 1;
+	tmp[gDLen - 1] = (last & 0x3F) | (s ? 0xC0 : 0);
+	memset(tmp + gDLen, s ? 0xFF : 0, 40 - gDLen);
+	memcpy(d.data, tmp, 40);
+}
+// a record read from a file: our format (3 + gRecLen - 3 bytes) or the original RCKangaroo tames format (x12 d22 type)
+static bool RecFromFile(DBRec& r, const u8* rec, bool oldfmt)
+{
+	if (!oldfmt) { memcpy(r.b, rec, gRecLen); return true; }
+	return PackRec(r, rec, rec + 12, rec[34]);
+}
 // bb: forward declarations (defined further down)
-static bool VerifyRecord(DBRec& rec);
+static bool VerifyRecord(DBRec& rec, u8* fullx = NULL);
 static void DiagnoseBad(DBRec& rec);
 extern int gVerifyEvery;
 
@@ -215,59 +252,58 @@ bool Collision_SOTA(EcPoint& pnt, EcInt t, int TameType, EcInt w, int WildType, 
 // bb: one DP record through the DB + collision check. Returns true when the key was found (gPrivKey set).
 bool ProcessDP(DBRec& nrec)
 {
-	DBRec* pref = (DBRec*)db.FindOrAddDataBlock((u8*)&nrec);
+	u8* pstored = db.FindOrAddDataBlock(nrec.b);
 	if (gGenMode)
 		return false;
-	if (!pref)
+	if (!pstored)
 	{
-		if (gJournal) { fwrite(&nrec, 1, sizeof(DBRec), gJournal); gJournalCnt++; }
+		if (gJournal) { fwrite(nrec.b, 1, gRecLen, gJournal); gJournalCnt++; }
 		return false;
 	}
 	//in db we dont store first 3 bytes so restore them
-	DBRec tmp_pref;
-	memcpy(&tmp_pref, &nrec, 3);
-	memcpy(((u8*)&tmp_pref) + 3, pref, sizeof(DBRec) - 3);
-	pref = &tmp_pref;
-
-	if (pref->type == nrec.type)
+	DBRec prev;
+	memcpy(prev.b, nrec.b, 3);
+	memcpy(prev.b + 3, pstored, gRecLen - 3);
+	int tp = RecType(prev), tn = RecType(nrec);
+	if (tp == tn)
 	{
-		if (pref->type == TAME)
+		if (tp == TAME)
 			return false;
 		//if it's wild, we can find the key from the same type if distances are different
-		if (*(u64*)pref->d == *(u64*)nrec.d)
+		if (!memcmp(prev.b + 8, nrec.b + 8, gDLen))
 			return false;
 	}
 
-	EcInt w, t;
+	EcInt w, t, dprev, dnew;
+	UnpackD(prev, dprev); UnpackD(nrec, dnew);
 	int TameType, WildType;
-	if (pref->type != TAME)
-	{
-		memcpy(w.data, pref->d, sizeof(pref->d));
-		if (pref->d[21] == 0xFF) memset(((u8*)w.data) + 22, 0xFF, 18);
-		memcpy(t.data, nrec.d, sizeof(nrec.d));
-		if (nrec.d[21] == 0xFF) memset(((u8*)t.data) + 22, 0xFF, 18);
-		TameType = nrec.type;
-		WildType = pref->type;
-	}
-	else
-	{
-		memcpy(w.data, nrec.d, sizeof(nrec.d));
-		if (nrec.d[21] == 0xFF) memset(((u8*)w.data) + 22, 0xFF, 18);
-		memcpy(t.data, pref->d, sizeof(pref->d));
-		if (pref->d[21] == 0xFF) memset(((u8*)t.data) + 22, 0xFF, 18);
-		TameType = TAME;
-		WildType = nrec.type;
-	}
+	if (tp != TAME) { w = dprev; t = dnew; TameType = tn; WildType = tp; }
+	else { w = dnew; t = dprev; TameType = TAME; WildType = tn; }
 
 	bool res = Collision_SOTA(gPntToSolve, t, TameType, w, WildType, false) || Collision_SOTA(gPntToSolve, t, TameType, w, WildType, true);
 	if (!res)
 	{
-		bool w12 = ((pref->type == WILD1) && (nrec.type == WILD2)) || ((pref->type == WILD2) && (nrec.type == WILD1));
+		bool w12 = ((tp == WILD1) && (tn == WILD2)) || ((tp == WILD2) && (tn == WILD1));
 		if (!w12) //in rare cases WILD and WILD2 can collide in mirror, in this case there is no way to find K
 		{
+			// bb: two different points with the same 64 bits of x (about records^2 / 2^65 per run) are not an error
+			u8 xp[32], xn[32];
+			bool v_old = VerifyRecord(prev, xp), v_new = VerifyRecord(nrec, xn);
+			if (v_old && v_new && memcmp(xp, xn, 32))
+			{
+				gFalseMatches++;
+				return false;
+			}
 			char s1[80], s2[80]; t.GetHexStr(s1); w.GetHexStr(s2);
-			printf("Collision Error: types %d/%d, same_d=%d\r\n  t=%s\r\n  w=%s\r\n", pref->type, nrec.type, (*(u64*)pref->d == *(u64*)nrec.d), s1, s2);
+			printf("Collision Error: types %d/%d\r\n  t=%s\r\n  w=%s\r\n", tp, tn, s1, s2);
 			gTotalErrors++;
+			// bb: diagnostics. Which of the two records does not match its point? (one scalar multiplication each)
+			printf("  x=%02x%02x%02x%02x%02x%02x%02x%02x stored=%s new=%s new_kang=%u ops=2^%.2f\r\n",
+				nrec.b[0], nrec.b[1], nrec.b[2], nrec.b[3], nrec.b[4], nrec.b[5], nrec.b[6], nrec.b[7],
+				v_old ? "ok" : "BAD", v_new ? "ok" : "BAD", gCurKang, log2((double)PntTotalOps + 1));
+			if (!v_old) DiagnoseBad(prev);
+			if (!v_new) DiagnoseBad(nrec);
+			if (IsBench) { char s3[80]; gBenchKey.GetHexStr(s3); printf("  bench key=%s\r\n", s3); }
 		}
 		return false;
 	}
@@ -292,16 +328,27 @@ void CheckNewPoints()
 	{
 		DBRec nrec;
 		u8* p = pPntList2 + i * GPU_DP_SIZE;
-		memcpy(nrec.x, p, 12);
-		memcpy(nrec.d, p + 16, 22);
-		nrec.type = gGenMode ? TAME : p[40];
+		if (!PackRec(nrec, p, p + 16, gGenMode ? TAME : p[40]))
+		{
+			if (gDOverflow < 3)
+			{
+				printf("DP record skipped: distance does not fit in %d bytes (kang %u type %d) d=", gDLen, *(u32*)(p + 44), p[40]);
+				for (int k = 23; k >= 0; k--) printf("%02x", p[16 + k]);
+				printf("\r\n");
+			}
+			gDOverflow++;
+			continue;
+		}
 		if (gVerifyEvery > 0 && !gGenMode && !VerifyRecord(nrec)) // bb: on-the-fly diagnostics
 		{
 			u32 kang = *(u32*)(p + 44);
-			printf("BAD DP from kang %u (type %d, group %u) d[0]=%016llx ops=2^%.2f\r\n", kang, nrec.type, kang % 64, *(unsigned long long*)nrec.d, log2((double)PntTotalOps + 1));
+			printf("BAD DP from kang %u (type %d, group %u) d[0]=%016llx ops=2^%.2f\r\n", kang, RecType(nrec), kang % 64, *(unsigned long long*)(p + 16), log2((double)PntTotalOps + 1));
 			DiagnoseBad(nrec);
 		}
-		if (ProcessDP(nrec))
+		gCurKang = *(u32*)(p + 44);
+		bool found = ProcessDP(nrec);
+		gCurKang = 0xFFFFFFFF;
+		if (found)
 		{
 			gSolved = true;
 			break;
@@ -310,8 +357,9 @@ void CheckNewPoints()
 }
 
 // ---- bb: DB file header (256 bytes). RC tames files (no magic, Header[0]=range) are still accepted as tames-only. ----
-// 0..7 magic "BBKDB001" | 8 range | 9 dp | 10 layout | 11 flags | 16 jumps hash u64 | 24 ops u64 | 32..63 pubkey x | 64..95 pubkey y | 96..127 start
-static const char BB_MAGIC[8] = { 'B','B','K','D','B','0','0','1' };
+// 0..7 magic "BBKDB002" | 8 range | 9 dp | 10 layout | 11 flags | 12 distance bytes | 13 x bytes (8) | 16 jumps hash u64 | 24 ops u64 | 32..63 pubkey x | 64..95 pubkey y | 96..127 start
+// Records: 2-byte count per bucket (x[0..2]), then x[3..7] + distance (BBKDB001 had x[3..11] + 22-byte distance + type byte).
+static const char BB_MAGIC[8] = { 'B','B','K','D','B','0','0','2' };
 static u64 HashJumps()
 {
 	u64 h = 1469598103934665603ULL;
@@ -332,6 +380,7 @@ static void FillHeader(u8* hdr, int Range, int dp)
 	memset(hdr, 0, 256);
 	memcpy(hdr, BB_MAGIC, 8);
 	hdr[8] = (u8)Range; hdr[9] = (u8)dp; hdr[10] = (u8)gLayout; hdr[11] = gPubKey.x.IsZero() ? 0 : 1;
+	hdr[12] = (u8)gDLen; hdr[13] = 8;
 	memcpy(hdr + 16, &gJumpsHash, 8);
 	memcpy(hdr + 24, &PntTotalOps, 8);
 	memcpy(hdr + 32, gPubKey.x.data, 32);
@@ -343,11 +392,13 @@ static int CheckHeader(u8* hdr, int Range, const char* what)
 {
 	if (memcmp(hdr, BB_MAGIC, 8))
 	{
+		if (!memcmp(hdr, "BBKDB001", 8)) { printf("%s: old bbkangaroo format (BBKDB001), skipped\r\n", what); return -1; }
 		if (hdr[0] != (u8)Range) { printf("%s: RC tames file with different range, skipped\r\n", what); return -1; }
 		printf("%s: RC tames file, tames only\r\n", what);
 		return 0;
 	}
 	if (hdr[8] != (u8)Range) { printf("%s: different range (%d), skipped\r\n", what, hdr[8]); return -1; }
+	if (hdr[12] != (u8)gDLen || hdr[13] != 8) { printf("%s: different record layout (%d/%d), skipped\r\n", what, hdr[12], hdr[13]); return -1; }
 	u64 jh; memcpy(&jh, hdr + 16, 8);
 	if (jh != gJumpsHash) { printf("%s: different jump tables, skipped\r\n", what); return -1; }
 	bool samekey = (hdr[11] == 1) && !memcmp(hdr + 32, gPubKey.x.data, 32) && !memcmp(hdr + 64, gPubKey.y.data, 32) && !memcmp(hdr + 96, gStart.data, 32);
@@ -432,7 +483,7 @@ static void LoadKangState(int Range)
 }
 // bb: verify a DP record by recomputing its point: tame = d*G, wild1 = PntA + d*G, wild2 = -PntA + d*G, PntA = PntToSolve - (N/2)*G.
 // Compares the low 12 bytes of x. This is the pool's proof-of-work check (one scalar multiplication per DP).
-static bool VerifyD(EcInt d, int type, u8* x12) // d signed (two's complement in 5 limbs)
+static bool VerifyD(EcInt d, int type, const u8* x8, u8* fullx = NULL) // d signed (two's complement in 5 limbs)
 {
 	bool neg = (d.data[4] >> 63) != 0;
 	if (neg) d.Neg();
@@ -444,21 +495,21 @@ static bool VerifyD(EcInt d, int type, u8* x12) // d signed (two's complement in
 		if (type == WILD2) A.y.NegModP();
 		P = ec.AddPoints(P, A);
 	}
-	return memcmp(P.x.data, x12, 12) == 0;
+	if (fullx) memcpy(fullx, P.x.data, 32);
+	return memcmp(P.x.data, x8, 8) == 0;
 }
-static bool VerifyRecord(DBRec& rec)
+static bool VerifyRecord(DBRec& rec, u8* fullx)
 {
 	EcInt d;
-	memcpy(d.data, rec.d, 22);
-	memset(((u8*)d.data) + 22, (rec.d[21] == 0xFF) ? 0xFF : 0, 18);
-	return VerifyD(d, rec.type, rec.x);
+	UnpackD(rec, d);
+	return VerifyD(d, RecType(rec), rec.b, fullx);
 }
 // diagnostics for a bad record: does d +- one jump of table 1/2/3 explain the point?
 static void DiagnoseBad(DBRec& rec)
 {
 	EcInt d;
-	memcpy(d.data, rec.d, 22);
-	memset(((u8*)d.data) + 22, (rec.d[21] == 0xFF) ? 0xFF : 0, 18);
+	UnpackD(rec, d);
+	int type = RecType(rec);
 	for (int t = 0; t < 3; t++)
 	{
 		EcJMP* J = (t == 0) ? EcJumps1 : (t == 1) ? EcJumps2 : EcJumps3;
@@ -467,7 +518,7 @@ static void DiagnoseBad(DBRec& rec)
 			{
 				EcInt dd = d;
 				if (s) dd.Sub(J[i].dist); else dd.Add(J[i].dist);
-				if (VerifyD(dd, rec.type, rec.x))
+				if (VerifyD(dd, type, rec.b))
 				{
 					printf("  diag: point = d %s J%d[%d]\r\n", s ? "-" : "+", t + 1, i);
 					return;
@@ -476,36 +527,38 @@ static void DiagnoseBad(DBRec& rec)
 	}
 	printf("  diag: no single-jump explanation\r\n");
 }
-struct TVerifyCtx { u64 n, bad, every; };
-static void VerifyCb(u8* rec35, void* ctx)
+struct TVerifyCtx { u64 n, bad, every; bool oldfmt; };
+static void VerifyCb(u8* rec, void* ctx)
 {
 	TVerifyCtx* c = (TVerifyCtx*)ctx;
 	c->n++;
 	if (c->n % c->every)
 		return;
-	if (!VerifyRecord(*(DBRec*)rec35))
+	DBRec r;
+	if (!RecFromFile(r, rec, c->oldfmt) || !VerifyRecord(r))
 	{
 		c->bad++;
 		if (c->bad <= 5)
 		{
-			DBRec* r = (DBRec*)rec35;
-			printf("verify: BAD record #%llu type %d d[0..7]=%016llx\r\n", (unsigned long long)c->n, r->type, *(unsigned long long*)r->d);
-			DiagnoseBad(*r);
+			printf("verify: BAD record #%llu type %d d[0..7]=%016llx\r\n", (unsigned long long)c->n, RecType(r), *(unsigned long long*)(r.b + 8));
+			DiagnoseBad(r);
 		}
 	}
 }
 int gVerifyEvery = 0; // -verify N: check every N-th record of loaded/merged files
-struct TMergeCtx { int keepType; u64 n, added; bool solved; };
-static void MergeCb(u8* rec35, void* ctx)
+struct TMergeCtx { int keepType; u64 n, added; bool solved; bool oldfmt; };
+static void MergeCb(u8* rec, void* ctx)
 {
 	TMergeCtx* c = (TMergeCtx*)ctx;
 	if (c->solved)
 		return;
-	DBRec* nrec = (DBRec*)rec35;
-	if ((c->keepType >= 0) && (nrec->type != c->keepType))
+	DBRec nrec;
+	if (!RecFromFile(nrec, rec, c->oldfmt))
+		return;
+	if ((c->keepType >= 0) && (RecType(nrec) != c->keepType))
 		return;
 	c->n++;
-	if (ProcessDP(*nrec))
+	if (ProcessDP(nrec))
 		c->solved = true;
 }
 static bool MergeFile(char* fn, int Range)
@@ -519,14 +572,16 @@ static bool MergeFile(char* fn, int Range)
 	int c = CheckHeader(hdr, Range, fn);
 	if (c < 0)
 		return false;
-	TMergeCtx ctx = { c == 1 ? -1 : TAME, 0, 0, false };
+	bool oldfmt = memcmp(hdr, BB_MAGIC, 8) != 0; // RCKangaroo tames file: 32 stored bytes (x[3..11] d22 type)
+	u32 frec = oldfmt ? 32 : (u32)gRecLen - 3;
+	TMergeCtx ctx = { c == 1 ? -1 : TAME, 0, 0, false, oldfmt };
 	u64 before = db.GetBlockCnt();
-	if (!db.StreamFile(fn, NULL, MergeCb, &ctx)) { printf("merge: read error in %s\r\n", fn); }
+	if (!db.StreamFile(fn, NULL, frec, MergeCb, &ctx)) { printf("merge: read error in %s\r\n", fn); }
 	printf("merge: %s: %llu records read, DB %llu -> %llu%s\r\n", fn, (unsigned long long)ctx.n, (unsigned long long)before, (unsigned long long)db.GetBlockCnt(), ctx.solved ? ", KEY FOUND" : "");
 	if (gVerifyEvery > 0)
 	{
-		TVerifyCtx vc = { 0, 0, (u64)gVerifyEvery };
-		db.StreamFile(fn, NULL, VerifyCb, &vc);
+		TVerifyCtx vc = { 0, 0, (u64)gVerifyEvery, oldfmt };
+		db.StreamFile(fn, NULL, frec, VerifyCb, &vc);
 		printf("verify: %s: checked %llu of %llu records, bad %llu\r\n", fn, (unsigned long long)(vc.n / vc.every), (unsigned long long)vc.n, (unsigned long long)vc.bad);
 	}
 	if (ctx.solved)
@@ -581,6 +636,9 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		printf("Unsupported DP value (%d)!\r\n", DP);
 		return false;
 	}
+	gDLen = DLenForRange(Range); gRecLen = 8 + gDLen; // bb: compact records sized for this range
+	db.SetRecLen(gRecLen - 3);
+	gDOverflow = 0; gFalseMatches = 0;
 
 	printf("\r\nSolving point: Range %d bits, DP %d, start...\r\n", Range, DP);
 	double ops = 1.15 * pow(2.0, Range / 2.0);
@@ -607,21 +665,6 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	double DPs_per_kang = path_single_kang / dp_val;
 	printf("Estimated DPs per kangaroo: %.3f.%s\r\n", DPs_per_kang, (DPs_per_kang < 5) ? " DP overhead is big, use less DP value if possible!" : "");
 
-	if (!gGenMode && gTamesFileName[0])
-	{
-		printf("load tames...\r\n");
-		if (db.LoadFromFile(gTamesFileName))
-		{
-			printf("tames loaded\r\n");
-			if (db.Header[0] != gRange)
-			{
-				printf("loaded tames have different range, they cannot be used, clear\r\n");
-				db.Clear();
-			}
-		}
-		else
-			printf("tames loading failed\r\n");
-	}
 
 	SetRndSeed(0); //use same seed to make tames from file compatible
 	PntTotalOps = 0;
@@ -700,6 +743,8 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		else if (fp)
 			fclose(fp);
 	}
+	if (!gGenMode && gTamesFileName[0])
+		MergeFile(gTamesFileName, Range); // bb: RCKangaroo tames files and our DB files alike
 	for (int i = 0; i < gMergeCnt; i++)
 		MergeFile(gMergeFiles[i], Range);
 	if (gSolved)
@@ -812,7 +857,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 		if (gGenMode)
 		{
 			printf("saving tames...\r\n");
-			db.Header[0] = gRange; 
+			FillHeader(db.Header, Range, DP);
 			if (db.SaveToFile(gTamesFileName))
 				printf("tames saved\r\n");
 			else
@@ -824,6 +869,7 @@ bool SolvePoint(EcPoint PntToSolve, int Range, int DP, EcInt* pk_res)
 	}
 
 	double K = (double)PntTotalOps / pow(2.0, Range / 2.0);
+	if (gFalseMatches || gDOverflow) printf("x64 false matches: %llu, distance overflows: %llu\r\n", (unsigned long long)gFalseMatches, (unsigned long long)gDOverflow);
 	printf("Point solved, K: %.3f (with DP and GPU overheads)\r\n\r\n", K);
 	SaveDb(Range, DP);
 	if (gJournal) { fclose(gJournal); gJournal = NULL; }
@@ -1116,6 +1162,7 @@ int main(int argc, char* argv[])
 
 			//generate random pk
 			pk.RndBits(gRange);
+			gBenchKey = pk;
 			PntToSolve = ec.MultiplyG(pk);
 
 			if (!SolvePoint(PntToSolve, gRange, gDP, &pk_found))

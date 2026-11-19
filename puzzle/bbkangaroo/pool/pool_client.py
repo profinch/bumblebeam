@@ -2,14 +2,13 @@
 """bbkangaroo pool client: ships new records of <db>.journal to the pool server.
 
 Run next to a worker:  pool_client.py --db puzzle.db --server http://pool:8800 --worker rig1 [--every 60]
-Reads range / dp / jumps hash from the DB file header (written by bbkangaroo), remembers the journal offset in
-<db>.journal.sent, sends batches of up to 100k records, stops when the server reports the key as found.
+Reads range / dp / record length / jumps hash from the DB file header (written by bbkangaroo), remembers the journal
+offset in <db>.journal.sent, sends batches of up to 100k records, stops when the server reports the key as found.
 Only the Python standard library is needed on the worker.
 """
 import argparse, json, os, struct, sys, time, urllib.request
 
-REC = 35
-MAGIC = b"BBKDB001"
+MAGIC = b"BBKDB002"
 
 
 def read_header(db: str) -> dict | None:
@@ -19,7 +18,7 @@ def read_header(db: str) -> dict | None:
         h = f.read(256)
     if len(h) < 256 or h[:8] != MAGIC:
         return None
-    return {"range": h[8], "dp": h[9], "jumps_hash": "%016x" % struct.unpack_from("<Q", h, 16)[0]}
+    return {"range": h[8], "dp": h[9], "rec": 8 + h[12], "jumps_hash": "%016x" % struct.unpack_from("<Q", h, 16)[0]}
 
 
 def post(url: str, data: bytes, headers: dict) -> dict:
@@ -42,6 +41,7 @@ def main():
     while True:
         hdr = read_header(a.db)
         size = os.path.getsize(journal) if os.path.exists(journal) else 0
+        REC = hdr["rec"] if hdr else 0
         if hdr and size - sent >= REC:
             n = min((size - sent) // REC, a.batch)
             with open(journal, "rb") as f:
