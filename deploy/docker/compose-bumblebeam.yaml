@@ -202,8 +202,8 @@ services:
     ports:
       - "3333-3334:3333-3334"             # stratum PPLNS / solo
       - "3443-3444:3443-3444"             # stratum TLS PPLNS / solo
-      - "1130-1131:3443"                  # HeroMiners' Beam ports (both TLS; 1131 was their NiceHash port) for their
-                                          # miners after they delisted Beam on 2026-11-20: PPLNS, same address.worker login
+      - "1130:3443"                       # HeroMiners' Beam ports (both TLS; 1131 was their NiceHash port) for their
+      - "1131:3443"                       # miners after they delisted Beam on 2026-11-20: PPLNS, same address.worker login
     volumes:
       - /data/bumblebeam/pool:/etc/bumblebeam:ro
     ulimits:
