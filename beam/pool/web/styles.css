@@ -42,8 +42,9 @@ tr.you > td { background: rgba(var(--accent-rgb), 0.05); }
 .foot .tracked-by a { display: block; line-height: 0; padding: 4px; border-radius: 8px; }
 .foot .tracked-by img { width: auto; height: 30px; filter: grayscale(1) brightness(1.5); opacity: .45; transition: filter .25s, opacity .25s, transform .25s; }
 .foot .tracked-by a:hover img, .foot .tracked-by a:focus-visible img { filter: none; opacity: 1; transform: scale(1.12); }
-/* MiningRigRentals' own banner (225x90 PNG, the wordmark in its middle half): drawn larger, the empty margin taken back */
-.foot .tracked-by img.mrr { height: 45px; margin: -7.5px 0; }
+/* MiningRigRentals' own banner (225x90 PNG, its logo 48 px of the 90 in the middle): drawn at 56 px so the logo
+   itself is 30 px like the other marks, the empty margin taken back */
+.foot .tracked-by img.mrr { height: 56px; margin: -13px 0; }
 @media (prefers-reduced-motion: reduce) {
   .foot .tracked-by img { transition: none; }
 }

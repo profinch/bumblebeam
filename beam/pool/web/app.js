@@ -781,7 +781,9 @@
     { id: 'ru', name: 'Russia', where: 'Novosibirsk, a relay to the same pool', host: 'ru.bumblebeam.org', of: 'stratum.bumblebeam.org' },
   ];
   // How to mine, as the guide's tabs: the app first, it needs no commands
-  const HOW = [['app', 'App'], ['cli', 'Command line'], ['hive', 'HiveOS'], ['nicehash', 'NiceHash']];
+  const HOW = [['app', 'App'], ['cli', 'Command line'], ['hive', 'HiveOS'], ['nicehash', 'NiceHash'], ['mrr', 'MRR'], ['hero', 'HeroMiners']];
+  // HeroMiners' Beam ports, kept on this pool for its miners after it delisted Beam on 2026-11-20 (TLS, PPLNS)
+  const HERO_PORTS = [1130, 1131];
   const tip = (text, title) => `<span class="tipped" title="${esc(title)}">${text}</span>`;
   const copyLine = (text, label) => `<div class="code"><pre>${esc(text)}</pre><button class="btn small" data-copy="${esc(text)}"${label ? ` aria-label="copy ${esc(label)}"` : ''}>copy</button></div>`;
 
@@ -868,7 +870,7 @@
           </section>
         </div>
       </div>
-      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}"
+      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}" data-pay="${esc(payEvery)}"
         data-servers="${esc(JSON.stringify(servers.map((s) => ({ id: s.id, name: s.name, where: s.where, host: s.host || host }))))}"
         data-ports="${[ports.pplns, ports.solo, ports.pplnsTls, ports.soloTls].map((p) => Number(p) || 0).join(',')}"></template>`;
   };
@@ -974,6 +976,39 @@
             <li>Create the flight sheet and apply it to your rig. HiveOS uses the rig's own name as the rig name.</li>
           </ol>
           <ul class="howto" style="margin-top:8px;font-size:12px"><li>Encrypted instead: pool URL <code>${esc(host)}:${tlsPort}</code> and in <b>Extra config arguments</b> <code>--tls on</code> (lolMiner) or <code>--ssl 1</code> (GMiner).</li></ul>`;
+      } else if (state.how === 'mrr') {
+        const mrrUser = `${addr || '<your address>'}.${worker}+8192`;
+        body.innerHTML = `<p>For rigs rented by the hour on <a href="https://www.miningrigrentals.com/" target="_blank" rel="noopener">MiningRigRentals</a>. Its Beam market is called <b>Equihash 150,5 (BEAM)</b>: those rigs mine BeamHash III and have mined on this pool through MRR's proxy.</p>
+          <div class="row how-opts">${modeSeg}</div>
+          <ol class="howto">
+            <li>Log in to MRR and open <b>Pool Profiles</b>. Add a profile for <b>Equihash 150,5 (BEAM)</b> and a pool in it with this host and port:</li>
+          </ol>
+          <div class="row" style="margin-top:0">${copyLine(servers[0].host, 'host')}${copyLine(String(tlsPort), 'port')}</div>
+          <ol class="howto" start="2">
+            <li>Username: your address, a worker name and <code>+8192</code>, the starting difficulty rented rigs expect (the pool will not go below it). Password <code>x</code>.</li>
+          </ol>
+          ${copyLine(mrrUser, 'username')}
+          <ol class="howto" start="3" style="margin-top:10px">
+            <li>Rent rigs from the <b>Equihash 150,5 (BEAM)</b> market with that profile. Their shares show up under your address here within a minute or two.</li>
+            <li>If a rig will not connect on TLS, use the plain port <code>${solo ? pSolo : pPplns}</code> in the profile instead.</li>
+          </ol>`;
+      } else if (state.how === 'hero') {
+        const hp = HERO_PORTS[0], heroHost = servers[0].host;
+        body.innerHTML = `<p>HeroMiners stopped mining Beam on November 20, 2026. If your rigs mined Beam there, they can keep going here with one change: the pool host. The port and the login stay as they are.</p>
+          <ol class="howto">
+            <li>In your miner (or HiveOS flight sheet), replace HeroMiners' host with ours and keep the port. Every regional host of theirs (<code>de.beam.herominers.com</code>, <code>fi.</code>, <code>us.</code>…) becomes the same one:</li>
+          </ol>
+          <div class="dim mono how-label">de.beam.herominers.com:${hp} → </div>
+          ${copyLine(`${heroHost}:${hp}`, 'pool')}
+          <ol class="howto" start="2" style="margin-top:10px">
+            <li>Keep TLS on (<code>--tls on</code> in lolMiner, <code>--ssl 1</code> in GMiner): ports ${HERO_PORTS.join(' and ')} are TLS here as they were there, and ${HERO_PORTS[1]}, HeroMiners' NiceHash port, works too.</li>
+            <li>Keep your username: your Beam address with <code>.worker</code>; a fixed difficulty like <code>=4096</code> still works. For example:</li>
+          </ol>
+          ${copyLine(`${addr || '<your address>'}.${worker}`, 'username')}
+          <ol class="howto" start="4" style="margin-top:10px">
+            <li>Restart the miner. Your rig appears under your address on this site within a minute; payouts go to the same address every ${esc(ctx.dataset.pay || 'two hours')}.</li>
+          </ol>
+          <ul class="howto" style="margin-top:8px;font-size:12px"><li>Ports ${HERO_PORTS.join(' and ')} pay PPLNS. For solo, or a new setup, use the regular ports in the other tabs. A balance left on HeroMiners is theirs to pay out: ask them about it.</li></ul>`;
       } else {
         const nhServer = servers[0];
         body.innerHTML = `<p>For hashpower rented on NiceHash's marketplace, instead of (or next to) your own cards. BumbleBeam is on NiceHash's <a href="https://www.nicehash.com/compatible-pools" target="_blank" rel="noopener">Compatible Pools</a> list.</p>

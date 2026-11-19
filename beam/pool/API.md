@@ -485,7 +485,9 @@ the old one stays. Share difficulty is per worker (vardiff), aimed at about one 
 seconds, starting at 64. A rig that will not work below its own minimum (rented ones on
 MiningRigRentals) asks for it after the worker name, `<wallet address>.<worker name>+8192`: the
 difficulty starts there and vardiff does not go below it; the worker keeps its name without the
-suffix. The pool assigns each connection a nonce prefix so no two rigs search the
+suffix. `=8192` works the same (HeroMiners' form, also `<wallet address>=8192` without a worker).
+Ports 1130 and 1131 (HeroMiners' Beam ports, kept for its miners after it delisted Beam on
+2026-11-20) are TLS PPLNS ports like 3443. The pool assigns each connection a nonce prefix so no two rigs search the
 same nonces. A connection that has not logged in after 30 s is closed, and a logged-in one after
 15 minutes without a line from the miner. The server is `beam/pool/server` (Rust).
 
