@@ -2,7 +2,7 @@
 
 Every place that lists Beam pools or where a pool can be announced, what was sent and when.
 Pool: https://pool.bumblebeam.org, stratum `stratum.bumblebeam.org` ports 3333/3443 PPLNS and 3334/3444 solo
-(plain/TLS), 0.5% fee on each, stats API at https://pool.bumblebeam.org/api/. The server is in Finland;
+(plain/TLS), plus 1130/1131 TLS PPLNS for HeroMiners' miners (since 2026-11-19), 0.5% fee on each, stats API at https://pool.bumblebeam.org/api/. The server is in Finland;
 the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 
 ## Submitted
@@ -30,6 +30,9 @@ the public address is an AWS us-east-1 front, so IP geolocation says Virginia.
 | Beam docs (docs-gitbook) | https://beam.mw/docs/mining/pool-mining-beam | https://github.com/BeamMW/docs-gitbook/pull/28: links the explorer's pool list next to MiningPoolStats in `mining/pool-mining-beam.md`; names no pool, discloses that we run one | 2026-10-14 | open |
 | coinguides.org | https://coinguides.org/mine-beam-beamhash-mining/ (2022 guide: 2Miners, Flypool, HeroMiners, Leafpool) | comment as "profinch (BumbleBeam)": Flypool's eu1-beam.flypool.org no longer resolves, our config line in their format, asks to add the pool | 2026-10-14 | sent, comment 390892 in moderation |
 | MiningChamp | https://miningchamp.com/coin/beam (only AethelBlock; network hashrate/difficulty "No data") | email to admin@miningchamp.com with API/stratum/fee, offers `nodes[0].networkhashps`/`difficulty`; reply to samurai619 in the Beam ANN thread (msg67248847). Site form "List Your Pool / Coin" has a Cloudflare captcha: submit by hand | 2026-10-27 | **listed 2026-10-27**: hashrate, workers, 0.5% PPLNS/SOLO, min payout 1, our blocks; network hashrate/difficulty now from our API. Bitcointalk reply not posted. 2026-10-27 they asked for a badge and offered featured placement and co-announcements; replied in their thread: missing stratum ports, SOLO missing in specs, offered /api/network/blocks, asked whether featured placement is paid; promised a self-hosted badge. Footer marks live 2026-10-27 (b242ced); emailed MiningChamp and MiningBoard about it |
+| miningpoolstats.net (not MiningPoolStats) | https://miningpoolstats.net/coins/ (24 coins, no Beam; pool pages /pools/<pool>, 46 pools) | no email; the site's form is a lead form for miners (name, email, messenger, hashrate, no message field); the only contact is Telegram @miningtraf (a channel with 7 subscribers); WordPress in Russian, EMCD affiliate | 2026-11-17 | a Russian message and two mockups (a /coins/beam/ page made from their Alephium page: 2Miners, HeroMiners, BumbleBeam, Sunpool; a /pools/bumblebeam/ card made from their HeroMiners card with our 24 h hashrate chart) given to the owner to send by Telegram; not confirmed as sent |
+| HeroMiners (delisting Beam on 2026-11-20) | https://beam.herominers.com (12 miners, 25 workers, 9.57 KSol/s on 11-19; their banner sends miners to Pearl) | Discord #beam on their server (436395579149516801), 2026-11-19, from profinch | 2026-11-19 | asked for (1) a "Staying on Beam? BumbleBeam" line in the delisting banner and (2) a fallback: their *.beam.herominers.com stratum hosts pointed at our server after the 20th. Ready on our side the same day: ports 1130 and 1131 (their ports, both TLS) open as extra TLS PPLNS ports labelled "HeroMiners" on /admin (pool.toml `extra_tls_ports`, 7092987), logins with `=diff` accepted (8b2328c). Waiting for their answer |
+| Beam community Telegram (t.me/BeamPrivacy) | — | post by the owner | 2026-11-19 | sent: HeroMiners leaves Beam on the 20th; change only the host, de.beam.herominers.com:1130 -> stratum.bumblebeam.org:1130, same port and login |
 | MinerCompare | https://minercompare.com/crypto-mining-pools (Beam: 2Miners, HeroMiners, AcePool, LeafPool, SunPool); pool pages /crypto-mining-pools/<pool>; coin page /coin/beam | email from info@ to info@minercompare.com (copy in Sent), no form on the site | 2026-11-17 | sent with attachments: a mockup of a BumbleBeam pool page in their layout, ready-to-paste pool data, a text for the empty "BeamHashIII - About This Algorithm" block on /coin/beam (with a mockup) and fixes for that page (Sol/s vs kSol/s, Best Hardware GPU, pool fees 0-1%). Waiting |
 | BeamMW/BeamExplorer | | https://github.com/BeamMW/BeamExplorer/pull/1 | 2026-10-08 | closed by us: that repo is a fork of BeamTerminal, the patch went there instead |
 
@@ -185,7 +188,7 @@ Dead or out of scope:
 - 2CryptoCalc (checked 2026-11-17): run by 2Miners (contact support@2miners.com, repo 2miners/2cryptocalc-hashrates);
   every coin page (Beam, Kaspa, Ergo, Monero, Dynex) shows only 2Miners pools, so no third-party listing
 - Cryptunit closed (farewell page), investoon.com is a hosting placeholder, Kryptex has no Beam page,
-  miningpoolstats.net is a review blog with no Beam (2026-11-17)
+  miningpoolstats.net: see the table (it does have coin and pool pages, an EMCD affiliate site)
 - awesomelistsio/awesome-crypto-mining: never merged an outside PR; the maintainer closed the last pool
   submission (NexusPool, 2026-08) for lack of "maturity, adoption, established reliability", so not worth one
 - Wikis, checked 2026-10-11: Wikipedia has no Beam article (en, ru, de), and its external-links rules
@@ -201,6 +204,11 @@ Dead or out of scope:
   Requested 2026-11-03: email from info@bumblebeam.org to support@miningrigrentals.com (copy in Sent).
   The email only got an auto-reply (ticket 352191), not visible in the account. 2026-11-17: ticket 353611 from the MRR account
   (https://www.miningrigrentals.com/tickets/353611, category Suggestion): same pitch with 455 blocks/24 h (~31%), NiceHash review passed. Open, waiting.
+  2026-11-19 answer (Randy): listing is for a reciprocal banner. Put their banner
+  (https://www.miningrigrentals.com/images/mrr-logo2.png, linking to https://www.miningrigrentals.com/ or our MRR referral link)
+  somewhere about as visible as their Pools page shows pools, then reply in the ticket with our banner or logo, the destination
+  URL and the page with their banner. They then review: the pool must be active with "at least a handful of miners".
+  To do: banner (footer marks row is the candidate), reply in the ticket once the miner count is up.
 
 ## HiveOS template
 
