@@ -13,7 +13,7 @@ https://pool.bumblebeam.org/api/stats. The server is in Finland.
 | MiningChamp | https://miningchamp.com/coin/beam | 2026-10-27 | network hashrate/difficulty also from our API; they offered featured placement and co-announcements; footer mark |
 | MiningPoolStats | https://miningpoolstats.stream/beam | 2026-10-28 | after several "Missing pool?" forms and a Quick Message; reads the report fields of /api/stats; footer mark (own drawing of their icon) |
 | minerstat | https://minerstat.com/pool/bumblebeam | 2026-11-17 | hashrate and miners only; fee, PPLNS/SOLO, min. payout and Sol/s reported as missing data 2026-11-17; footer mark |
-| WhatToMine | https://whattomine.com/coins/294-beam-beamhashiii | 2026-11-19 | after three pool request forms and a Discord #pools message; Finland, 0.50%, hashrate and miners from our API; footer mark |
+| WhatToMine | https://whattomine.com/coins/294-beam-beamhashiii | 2026-11-19 | after three pool request forms and a Discord #pools message; Finland, 0.50%, hashrate and miners from our API; footer mark (f1df3ce); thanks posted in their Discord #pools |
 | NiceHash marketplace | https://www.nicehash.com (BEAMV3) | 2026-10-08 | see "NiceHash" below |
 | NiceHash Compatible Pools | https://www.nicehash.com/compatible-pools | 2026-11-17 | after their review of our orders; footer mark, link in the /connect NiceHash tab, announced to the Beam community |
 | Beam explorer (BeamTerminal) | https://explorer.beam.mw/#/explorer/mining | 2026-10-08 | patch to `backend/src/mining/pools.ts`, merged |
