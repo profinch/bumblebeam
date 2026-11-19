@@ -32,9 +32,9 @@ only exist for sm_89/sm_120.
 - `-blocks N`: use only N SM blocks (fewer kangaroos): K benchmarks at small ranges, shared GPUs.
 - `-layout 0|1`: herd start layout. 0 = RCKangaroo (tame in [0,N/16), wild |d| uniform in [0,N/2)).
   1 (default) = tame in [0,N/20), wild |d| 90% uniform in [0,N/2) plus 10% in [0.4N,0.5N): −3% operations in a
-  generic-group simulator. On the GPU (RTX 3090, `-dp 10 -range 60 -blocks 4`, ~2500 random keys per layout, K with DP
-  and GPU overheads): layout 1 K=1.399±0.012, layout 0 K=1.429±0.012, a 2.1% gain at about 1.8σ; the medians are
-  equal, the gain sits in the long-walk tail.
+  generic-group simulator. On the GPU (RTX 3090, `-dp 10 -range 60 -blocks 4`, ~4600 random keys per layout in three
+  alternating rounds, K with DP and GPU overheads): layout 1 K=1.403±0.009, layout 0 K=1.426±0.009, a 1.6% gain at
+  about 1.8σ; the medians are equal, the gain sits in the long-walk tail. Treat it as 1–2%, not proven at 3σ.
 - `-dp` accepts values from 8 (for small-range benchmarks).
 
 ## Build and run
