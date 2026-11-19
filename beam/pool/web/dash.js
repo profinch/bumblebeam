@@ -420,7 +420,7 @@
   }
 
   const connRow = (c, withMiner = true) => `<tr>
-    <td>${esc(c.peer)}<span class="sub">${int(c.port)} · ${esc(c.mode)}${c.tls ? ' · TLS' : ''}</span></td>
+    <td>${esc(c.peer)}<span class="sub">${int(c.port)} · ${esc(c.mode)}${c.tls ? ' · TLS' : ''}${c.via ? ` · <b>${esc(c.via)}</b>` : ''}</span></td>
     ${withMiner ? `<td>${c.miner ? `<a href="#miner/${Number(c.minerId)}">${esc(short(c.miner))}</a>` : '<span class="dim">not logged in</span>'}<span class="sub">${esc(c.worker)}</span></td>` : `<td>${esc(c.worker)}</td>`}
     <td>${esc(c.agent) || '<span class="dim">—</span>'}</td><td>${ago(c.started).replace(' ago', '')}</td>
     <td class="num">${int(c.diff)}</td><td class="num">${int(c.accepted)}<span class="sub">${int(c.stale)} stale · ${int(c.rejected)} rej</span></td>
@@ -433,13 +433,18 @@
 
   async function connections() {
     const c = await api('connections');
+    // miners that came in on another pool's ports ([stratum] extra_tls_ports), counted per label
+    const via = {};
+    c.live.forEach((x) => { if (x.via) via[x.via] = (via[x.via] || 0) + 1; });
+    const viaNote = Object.keys(via).length
+      ? `<p class="hint">Through other pools' ports: ${Object.entries(via).map(([k, n]) => `${esc(k)} ${int(n)}`).join(', ')}.</p>` : '';
     const live = c.live.length
-      ? `<div class="table-wrap"><table>${connHead()}<tbody>${c.live.map((x) => connRow(x)).join('')}</tbody></table></div>`
+      ? `${viaNote}<div class="table-wrap"><table>${connHead()}<tbody>${c.live.map((x) => connRow(x)).join('')}</tbody></table></div>`
       : '<p class="hint">Nobody is connected.</p>';
     const recent = c.recent.length
       ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Peer</th><th>Lasted</th><th>Sent first</th><th>Ended because</th></tr></thead><tbody>
         ${c.recent.map((r) => `<tr><td>${ago(r.ts)}<span class="sub">${time(r.ts)}</span></td>
-          <td>${esc(r.peer)}<span class="sub">${int(r.port)} · ${esc(r.mode)}${r.tls ? ' · TLS' : ''}</span></td>
+          <td>${esc(r.peer)}<span class="sub">${int(r.port)} · ${esc(r.mode)}${r.tls ? ' · TLS' : ''}${r.via ? ` · <b>${esc(r.via)}</b>` : ''}</span></td>
           <td>${int(r.ts - r.started)} s</td><td class="wrap">${esc(r.first)}</td><td class="wrap">${esc(r.reason)}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">None since the pool started.</p>';

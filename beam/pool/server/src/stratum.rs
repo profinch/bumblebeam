@@ -86,7 +86,7 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
             // releases the counters whatever happens to this task, a panic included
             let mut guard = ConnGuard { shared: shared.clone(), ip: peer.ip(), id: None };
             let id = shared.next_conn();
-            let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some());
+            let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some(), shared.cfg.stratum.port_label(port));
             guard.id = Some(id);
             let mut s = Session { id, peer, tls: tls.is_some(), started: Instant::now(), first: String::new(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0, last_share: 0, miner_id: 0, stats: WorkerStats::default() };
             let r = match tls {

@@ -155,6 +155,24 @@ pub struct Stratum {
     /// protocol v1 header carrying the miner's real address. Only these addresses may send one.
     #[serde(default)]
     pub proxy_protocol_from: Vec<std::net::IpAddr>,
+    /// More TLS PPLNS ports, each with a label the dashboard shows on its connections: another
+    /// pool's ports kept for its miners (HeroMiners' 1130 and 1131 after it delisted Beam).
+    #[serde(default)]
+    pub extra_tls_ports: Vec<ExtraPort>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtraPort {
+    pub port: u16,
+    #[serde(default)]
+    pub label: String,
+}
+
+impl Stratum {
+    /// The dashboard label of a listening port: empty for the pool's own ports.
+    pub fn port_label(&self, port: u16) -> &str {
+        self.extra_tls_ports.iter().find(|e| e.port == port).map_or("", |e| e.label.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
