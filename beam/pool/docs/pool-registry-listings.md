@@ -209,8 +209,9 @@ Dead or out of scope:
   somewhere about as visible as their Pools page shows pools, then reply in the ticket with our banner or logo, the destination
   URL and the page with their banner. They then review: the pool must be active with "at least a handful of miners".
   2026-11-19: their banner is live in the footer marks row (223dfad, links to their home page, grey until hover like
-  the others). To do: reply in the ticket (our logo, https://pool.bumblebeam.org, the page with their banner) once the
-  miner count is up.
+  the others; d54d9ba sizes its logo like the others). 2026-11-19: replied in the ticket by email (banner on every page's
+  footer, our logo-1024.png and logo.svg, destination https://pool.bumblebeam.org, the new MRR tab of /connect,
+  477 blocks in 24 h; the miner count, 4, not mentioned). Waiting for their review
 
 ## HiveOS template
 
