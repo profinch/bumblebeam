@@ -708,7 +708,7 @@ mod tests {
 
     #[tokio::test]
     async fn proxy_v1_header() {
-        let mut rd: &[u8] = b"PROXY TCP4 198.51.100.2 65.109.125.69 51234 3443\r\n\x16\x03\x01";
+        let mut rd: &[u8] = b"PROXY TCP4 198.51.100.2 203.0.113.10 51234 3443\r\n\x16\x03\x01";
         let peer = proxy_header(&mut rd).await.unwrap().unwrap();
         assert_eq!(peer.to_string(), "198.51.100.2:51234");
         assert_eq!(rd, b"\x16\x03\x01"); // the TLS hello stays unread

@@ -1,5 +1,5 @@
 From 386ba368c3c66b546ffe2441ef1f88b0d1261377 Mon Sep 17 00:00:00 2001
-From: profinch <profinch@gmail.com>
+From: profinch <info@bumblebeam.org>
 Date: Sun, 18 Oct 2026 12:04:15 +0100
 Subject: [PATCH] cuda: MXBM_TRY_PACKED=1 tries (16,1) packed + dense caps
  before quad

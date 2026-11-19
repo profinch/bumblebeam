@@ -1,5 +1,5 @@
 From 25150ca289d411d3668c017568981b63bab2e7a2 Mon Sep 17 00:00:00 2001
-From: profinch <profinch@gmail.com>
+From: profinch <info@bumblebeam.org>
 Date: Sat, 10 Oct 2026 23:32:54 +0100
 Subject: [PATCH 2/5] report: --report measures the Metal GPU
 

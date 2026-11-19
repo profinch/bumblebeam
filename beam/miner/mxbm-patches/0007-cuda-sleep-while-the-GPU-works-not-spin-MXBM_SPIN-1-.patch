@@ -1,5 +1,5 @@
 From 6c32d2037bc9ff3e0632d8e76b4399b8dcc4fbbb Mon Sep 17 00:00:00 2001
-From: profinch <profinch@gmail.com>
+From: profinch <info@bumblebeam.org>
 Date: Fri, 16 Oct 2026 23:02:07 +0100
 Subject: [PATCH] cuda: sleep while the GPU works, not spin (MXBM_SPIN=1 to
  spin)
