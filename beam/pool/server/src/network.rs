@@ -32,7 +32,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{info, warn};
 
 const TERMINAL: &str = "https://beamterminal.0xmx.net/api/mining/pools";
 const TERMINAL_BLOCKS: &str = "https://beamterminal.0xmx.net/api/mining/blocks?limit=200";
@@ -121,21 +121,28 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
     for round in 0u64.. {
         if round % 10 == 0 {
             match first(urls, |u| fetch_price(&shared.http, u)).await {
-                Ok(p) => price = Some(p),
-                Err(e) => debug!("price: {e:#}"),
+                Ok(p) => {
+                    answered("price");
+                    price = Some(p);
+                }
+                Err(e) => failing("price", &e),
             }
         }
         match first(urls, |u| fetch_chain(&shared.http, u)).await {
             Ok((c, h)) => {
+                answered("chain");
                 chain = Some(c);
                 hdrs = h;
             }
-            Err(e) => debug!("chain: {e:#}"),
+            Err(e) => failing("chain", &e),
         }
         find_blocks(&shared, &hdrs, &mut finds).await;
         match fetch_pools(&shared.http).await {
-            Ok(p) => pools = Some(p),
-            Err(e) => debug!("pools: {e:#}"),
+            Ok(p) => {
+                answered("terminal pools");
+                pools = Some(p);
+            }
+            Err(e) => failing("terminal pools", &e),
         }
         let mut direct = fetch_direct(&shared.http).await;
         if let Some(ours) = ours(&shared).await {
@@ -210,6 +217,12 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
                     let _ = shared.db.meta_set("net_height", &h.to_string()).await;
                 }
             }
+            // the network's history, every 10th round (5 min), kept as long as the charts' (31 days)
+            if round % 10 == 0 {
+                if let Err(e) = shared.db.record_network(now as i64, &history(&v)).await {
+                    warn!("network history: {e:#}");
+                }
+            }
             *cache.data.write().await = v;
         }
         if !hdrs.is_empty() {
@@ -221,6 +234,24 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
         }
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
+}
+
+/// What the network's history keeps of one answer: scope `net` the network, `net:blocks` the last 120
+/// blocks' figure, `net:chain24h` the day's, `net:others` the unclaimed, `net:<pool>` each pool's hour
+/// and `net:<pool>:now` its latest figure (rows at zero left out).
+fn history(v: &Value) -> Vec<(String, f64)> {
+    let mut out: Vec<(String, f64)> = [("net", "hashrate"), ("net:blocks", "blockHashrate"), ("net:chain24h", "chainHashrate"), ("net:others", "othersHashrate")]
+        .iter().filter_map(|(scope, k)| Some((scope.to_string(), num(&v[*k])?))).collect();
+    for p in v["pools"].as_array().into_iter().flatten() {
+        let Some(id) = p["id"].as_str() else { continue };
+        if let Some(h) = num(&p["hashrate1h"]).filter(|h| *h > 0.0) {
+            out.push((format!("net:{id}"), h));
+        }
+        if let Some(h) = num(&p["hashrate"]).filter(|h| *h > 0.0) {
+            out.push((format!("net:{id}:now"), h));
+        }
+    }
+    out
 }
 
 /// A pool's mean over the hour: `cur` joins its polls, those older than the hour leave. Until the polls
@@ -291,7 +322,40 @@ async fn ours(shared: &Shared) -> Option<Value> {
             "blocks24h": db.blocks_24h(t).await?.0, "lastTs": db.last_block_ts(None, None).await?,
         }))
     }.await;
-    r.map_err(|e| debug!("ours: {e:#}")).ok()
+    match r {
+        Ok(v) => {
+            answered("our row");
+            Some(v)
+        }
+        Err(e) => {
+            failing("our row", &e);
+            None
+        }
+    }
+}
+
+/// The network's sources failing now: (since, failures, last warned). A source that starts failing is
+/// warned at once, then every `WARN_EVERY` while it fails; its recovery is logged with the count.
+static FAILING: std::sync::Mutex<Option<HashMap<String, (std::time::Instant, u64, std::time::Instant)>>> = std::sync::Mutex::new(None);
+const WARN_EVERY: Duration = Duration::from_secs(1800);
+
+fn failing(source: &str, e: &anyhow::Error) {
+    let now = std::time::Instant::now();
+    let mut g = FAILING.lock().unwrap();
+    let m = g.get_or_insert_with(HashMap::new);
+    let f = m.entry(source.to_string()).or_insert((now, 0, now - WARN_EVERY));
+    f.1 += 1;
+    if now.duration_since(f.2) >= WARN_EVERY {
+        f.2 = now;
+        warn!(source, failures = f.1, for_secs = now.duration_since(f.0).as_secs(), "network source fails: {e:#}");
+    }
+}
+
+fn answered(source: &str) {
+    let mut g = FAILING.lock().unwrap();
+    if let Some((since, n, _)) = g.as_mut().and_then(|m| m.remove(source)) {
+        info!(source, failures = n, after_secs = since.elapsed().as_secs(), "network source answers again");
+    }
 }
 
 /// The first of `urls` that answers, or the last error.
@@ -369,21 +433,26 @@ async fn find_blocks(shared: &Shared, hdrs: &[Hdr], finds: &mut Finds) {
     .await;
     for (id, name, r) in lists {
         match r {
-            Ok(list) => finds.add(id, name, &list, &hashes),
-            Err(e) => debug!("{id} blocks: {e:#}"),
+            Ok(list) => {
+                answered(&format!("{id} blocks"));
+                finds.add(id, name, &list, &hashes)
+            }
+            Err(e) => failing(&format!("{id} blocks"), &e),
         }
     }
     match shared.db.block_heights().await {
         // all of ours that the chain kept, so the day is always known
         Ok(list) => {
+            answered("our blocks");
             let floor = hdrs.last().map_or(0, |h| h.height);
             let list: Vec<(u64, Option<String>)> = list.iter().filter_map(|(h, ..)| u64::try_from(*h).ok()).filter(|h| *h >= floor).map(|h| (h, None)).collect();
             finds.add("bumblebeam", "BumbleBeam", &list, &hashes);
         }
-        Err(e) => debug!("our blocks: {e:#}"),
+        Err(e) => failing("our blocks", &e),
     }
     match get(http, TERMINAL_BLOCKS).await {
         Ok(v) => {
+            answered("terminal blocks");
             for b in v["blocks"].as_array().into_iter().flatten() {
                 let (Some(h), Some(name)) = (b["height"].as_u64(), b["mined_by"].as_str()) else { continue };
                 if !finds.by_height.contains_key(&h) && !name.is_empty() {
@@ -392,7 +461,7 @@ async fn find_blocks(shared: &Shared, hdrs: &[Hdr], finds: &mut Finds) {
                 }
             }
         }
-        Err(e) => debug!("terminal blocks: {e:#}"),
+        Err(e) => failing("terminal blocks", &e),
     }
     if let Some(newest) = hdrs.first() {
         finds.prune(newest.height.saturating_sub(DAY_HEADERS as u64 * 2));
@@ -443,6 +512,7 @@ async fn fetch_direct(http: &reqwest::Client) -> Vec<Value> {
         };
         match r {
             Ok(mut v) => {
+                answered(id);
                 for (k, x) in [("id", json!(id)), ("name", json!(name)), ("website", json!(site)), ("scheme", json!(scheme))] {
                     v[k] = x;
                 }
@@ -452,7 +522,7 @@ async fn fetch_direct(http: &reqwest::Client) -> Vec<Value> {
                 Some(v)
             }
             Err(e) => {
-                debug!("{id}: {e:#}");
+                failing(id, &e);
                 None
             }
         }
@@ -629,5 +699,15 @@ mod tests {
         // a hashrate of D/60 finds a block a minute: 1440 a day
         assert_eq!(reward_day(Some(30_000.0), Some(1_800_000.0), Some(100.0), 1.0), Some(1440.0 * 99.0));
         assert_eq!(reward_day(Some(1.0), Some(0.0), Some(1.0), 0.0), None);
+    }
+
+    #[test]
+    fn history_keeps_the_network_and_each_live_pool() {
+        let v = json!({ "hashrate": 30000.0, "blockHashrate": 28000.0, "chainHashrate": null, "othersHashrate": 200.0,
+            "pools": [{ "id": "2miners", "hashrate": 31000.0, "hashrate1h": 18000.0 }, { "id": "veinpool", "hashrate": 0, "hashrate1h": 0.0 }] });
+        let h = history(&v);
+        let scopes: Vec<&str> = h.iter().map(|x| x.0.as_str()).collect();
+        assert_eq!(scopes, vec!["net", "net:blocks", "net:others", "net:2miners", "net:2miners:now"]);
+        assert_eq!(h[3].1, 18000.0);
     }
 }

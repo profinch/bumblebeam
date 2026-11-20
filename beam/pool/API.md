@@ -324,6 +324,11 @@ difficulty follows the network over several hours. A row's `hashrate` stays its 
 BumbleBeam the last 10 minutes, as on `/api/stats`). The UI falls back to the explorer directly when
 this endpoint is absent.
 
+The pool server keeps this every 5 minutes for 31 days in `hashrate_samples` (not served): scope
+`net` the network, `net:blocks`, `net:chain24h`, `net:others`, `net:<pool>` each row's `hashrate1h`
+and `net:<pool>:now` its `hashrate`. Its sources failing are warned in the log (at once, then every
+30 minutes while they fail) and their recovery logged.
+
 ```json
 { "hashrate": 31920.4, "hashrateSource": "pools", "hashrateWindow": 3600, "blockHashrate": 29480.1,
   "chainHashrate": 43480.1, "othersHashrate": 390.2, "othersBlocks24h": 12, "othersShare": 0.012,
