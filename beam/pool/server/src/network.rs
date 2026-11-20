@@ -179,8 +179,12 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
                 p["hashrate1h"] = json!(hourly(q, now, num(&p["hashrate"]), terminal));
             }
             polls.retain(|_, q| q.back().is_some_and(|(t, _)| *t > now - HOUR));
+            // the unclaimed blocks only where every active pool with its own block lists is followed (from a
+            // restart, their lists reach back a few hours only): else theirs would count as nobody's
+            let active = DIRECT.iter().map(|d| d.0).filter(|id| list.iter().any(|p| p["id"] == *id && num(&p["hashrate1h"]).unwrap_or(0.0) > 0.0));
+            let followed = active.map(|id| finds.from.get(id).copied()).collect::<Option<Vec<u64>>>().map(|v| v.into_iter().max().unwrap_or(0));
             let ids: HashSet<&str> = list.iter().filter_map(|p| p["id"].as_str()).collect();
-            let others = unclaimed(&hdrs, |h| finds.by_height.get(&h).is_some_and(|(id, _)| ids.contains(id.as_str())));
+            let others = followed.and_then(|from| unclaimed(&hdrs, from, |h| finds.by_height.get(&h).is_some_and(|(id, _)| ids.contains(id.as_str()))));
             let parts: f64 = list.iter().filter_map(|p| num(&p["hashrate1h"])).sum();
             let blk = work_rate(&hdrs, GUARD_HEADERS);
             let (hashrate, source) = headline(parts, others.map(|o| o.0), blk);
@@ -241,17 +245,18 @@ fn work_rate(hdrs: &[Hdr], n: usize) -> Option<f64> {
     (span > 0.0).then(|| hdrs[..n].iter().map(|h| h.difficulty).sum::<f64>() / span)
 }
 
-/// What no listed pool claims of the last 24 h of blocks: (hashrate from their work, blocks).
-fn unclaimed(hdrs: &[Hdr], claimed: impl Fn(u64) -> bool) -> Option<(f64, f64)> {
+/// What no listed pool claims of the last 24 h of blocks from height `from` up: (hashrate from their work,
+/// blocks a day). Under an hour of them, None; under a day, the blocks scaled to one.
+fn unclaimed(hdrs: &[Hdr], from: u64, claimed: impl Fn(u64) -> bool) -> Option<(f64, f64)> {
     let newest = hdrs.first()?.ts;
-    let day: Vec<&Hdr> = hdrs.iter().filter(|h| h.ts > newest - 86400.0).collect();
+    let day: Vec<&Hdr> = hdrs.iter().filter(|h| h.ts > newest - 86400.0 && h.height >= from).collect();
     // the oldest block's own time is that of the one before it: its work is not in the span
     let span = newest - day.last()?.ts;
-    if span <= 0.0 {
+    if span < HOUR {
         return None;
     }
     let rest: Vec<&&Hdr> = day[..day.len() - 1].iter().filter(|h| !claimed(h.height)).collect();
-    Some((rest.iter().map(|h| h.difficulty).sum::<f64>() / span, rest.len() as f64))
+    Some((rest.iter().map(|h| h.difficulty).sum::<f64>() / span, (rest.len() as f64 * 86400.0 / span).round()))
 }
 
 /// The network's hashrate and where it is from: the parts' sum, or the blocks' figure when the sum
@@ -605,13 +610,18 @@ mod tests {
     #[test]
     fn unclaimed_and_work_rate() {
         // newest first, a block a minute, difficulty 60 each: 1 Sol/s
-        let hdrs: Vec<Hdr> = (0..10).map(|i| hdr(100 - i, 6000.0 - i as f64 * 60.0, 60.0)).collect();
+        let hdrs: Vec<Hdr> = (0..1500).map(|i| hdr(10_000 - i, 200_000.0 - i as f64 * 60.0, 60.0)).collect();
         assert_eq!(work_rate(&hdrs, 4), Some(1.0));
-        assert_eq!(work_rate(&hdrs, 10), None);
-        // 98 and 96 nobody claims; the oldest (91) is outside the span
-        let (h, n) = unclaimed(&hdrs, |h| h != 98 && h != 96 && h != 91).unwrap();
+        assert_eq!(work_rate(&hdrs, 1500), None);
+        // 9998 and 9996 nobody claims, over the day (1440 blocks, the oldest's work outside the span)
+        let (h, n) = unclaimed(&hdrs, 0, |h| h != 9998 && h != 9996).unwrap();
         assert_eq!(n, 2.0);
-        assert!((h - 120.0 / 540.0).abs() < 1e-9);
+        assert!((h - 120.0 / (1439.0 * 60.0)).abs() < 1e-9);
+        // followed for two hours only: the same two blocks are 24 a day
+        let (_, n) = unclaimed(&hdrs, 10_000 - 120, |h| h != 9998 && h != 9996).unwrap();
+        assert_eq!(n, 24.0);
+        // under an hour followed: unknown
+        assert_eq!(unclaimed(&hdrs, 10_000 - 30, |_| true), None);
     }
 
     #[test]
