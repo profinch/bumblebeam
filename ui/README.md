@@ -76,6 +76,7 @@ Each acts only through its own class, so pages that do not use it do not change.
 | `.howto` | an `<ol>`/`<ul>` of instructions in running text; its `<code>` is a small chip | pool connect page |
 | `.faq` | questions that open in place: `<div class="faq"><details><summary>Q</summary><div>A</div></details>…</div>` | pool connect page |
 | `.msg` (`.msg.bad`) | a short message in running text, a result or an error: mono, yellow (red), no frame; empty = hidden | wallet (3BMiner's style) |
+| `<bb-socials>` / `.socials` | the social accounts as a row of icons (list and icons in `bb.js`), grey until hover, then each network's colour (`--c`) | pool and explorer footers |
 
 ## Status (2026-11-02)
 
