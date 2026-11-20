@@ -515,7 +515,8 @@
   }
   // Miners that are most likely one person: the same wallet (exact, from the addresses); the same IP + worker
   // with one address taking over within an hour of the other (from the pool's miner_sessions, operator only); and
-  // connected from the same IP right now (the live connections). The IP ones are hints: people share NATs.
+  // connected from the same IP at the same time, now or earlier (the live connections, the sessions). The IP ones are
+  // hints: people share NATs.
   function linksOf(list, live) {
     const out = new Map(list.map((m) => [m.id, { wallet: [], rig: [], now: [] }]));
     const keys = new Map(list.map((m) => [m.id, walletKey(m.address)]));
@@ -533,17 +534,20 @@
         if (keys.get(a.id) && keys.get(a.id) === keys.get(b.id)) l.wallet.push(b.id);
         if ((a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && x.worker === y.worker
           && Math.max(x.first, y.first) - Math.min(x.last, y.last) <= 3600))) l.rig.push(b.id);
+        // the same IP at the same time: now (live) or earlier (sessions that overlapped), so the link stays after
+        // one of them disconnects
         const ia = ips.get(a.id), ib = ips.get(b.id);
-        if (ia && ib && [...ia].some((x) => ib.has(x))) l.now.push(b.id);
+        if ((ia && ib && [...ia].some((x) => ib.has(x)))
+          || (a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && Math.max(x.first, y.first) <= Math.min(x.last, y.last)))) l.now.push(b.id);
       }
     }
     return out;
   }
   const linkBadges = (l) => [
-    // the text is in the tooltips: 🔗 the same wallet, ⛏ the same rig, 🌐 the same IP right now
+    // the text is in the tooltips: 🔗 the same wallet, ⛏ the same rig, 🌐 the same IP at the same time
     l && l.wallet.length ? `<span class="badge ok" title="the same wallet as ${l.wallet.map((i) => '#' + i).join(', ')}: its address carries the same wallet id">🔗 ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
     l && l.rig.length ? `<span class="badge pending" title="the same rig as ${l.rig.map((i) => '#' + i).join(', ')}: the same IP and worker, one address taking over within an hour of the other - probably one person (a hint, not a proof)">⛏ ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.now.length ? `<span class="badge pending" title="the same IP as ${l.now.map((i) => '#' + i).join(', ')} right now: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.now.length ? `<span class="badge pending" title="connected from the same IP as ${l.now.map((i) => '#' + i).join(', ')} at the same time, now or earlier: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
   ].join(' ');
 
   // the address type as the wallet named it (a trailing ? = guessed from the address's shape, the wallet has not
