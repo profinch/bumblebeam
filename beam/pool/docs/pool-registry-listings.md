@@ -16,13 +16,13 @@ https://pool.bumblebeam.org/api/stats. The server is in Finland.
 | WhatToMine | https://whattomine.com/coins/294-beam-beamhashiii | 2026-11-19 | after three pool request forms and a Discord #pools message; Finland, 0.50%, hashrate and miners from our API; footer mark (f1df3ce); thanks posted in their Discord #pools |
 | NiceHash marketplace | https://www.nicehash.com (BEAMV3) | 2026-10-08 | see "NiceHash" below |
 | NiceHash Compatible Pools | https://www.nicehash.com/compatible-pools | 2026-11-17 | after their review of our orders; footer mark, link in the /connect NiceHash tab, announced to the Beam community |
+| MiningRigRentals | https://www.miningrigrentals.com/pools | 2026-11-20 | first under "Suggested Pools", for a reciprocal banner: theirs is in our footer (223dfad) and the /connect MRR tab explains renting; they asked for a banner with the pool name instead of the square logo: `brand/banner-pool-700x300.png`, served as /img/bumblebeam-banner-700x300.png, sent in ticket 353611 2026-11-20 |
 | Beam explorer (BeamTerminal) | https://explorer.beam.mw/#/explorer/mining | 2026-10-08 | patch to `backend/src/mining/pools.ts`, merged |
 
 ## Waiting
 
 | Where | Page | How | Last sent | Status |
 |---|---|---|---|---|
-| MiningRigRentals | https://www.miningrigrentals.com/pools | ticket 353611 from the account | 2026-11-19 | listing is for a reciprocal banner: theirs is in our footer (223dfad) and the /connect MRR tab explains renting; logo and URLs sent in the ticket. They review "at least a handful of miners" |
 | HeroMiners (left Beam 2026-11-20) | https://beam.herominers.com | Discord #beam on their server | 2026-11-19 | asked for a "Staying on Beam?" line in their banner and for their stratum hosts to point at us; our side is ready (ports 1130/1131, `=diff` logins, /connect HeroMiners tab). Beam community Telegram post by the owner the same day |
 | hashrate.no | https://hashrate.no/coins/BEAM/pools | submit form, Pool tab | 2026-10-25 | no answer; their list still has the dead Leafpool. Next: info@hashrate.no or their Discord |
 | MinerCompare | https://minercompare.com/crypto-mining-pools | email from info@ | 2026-11-17 | with mockups of a pool page and of their /coin/beam algorithm block, ready-to-paste data and fixes for that page |
