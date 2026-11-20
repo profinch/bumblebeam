@@ -1,7 +1,8 @@
 """The static banner at another size: the same honeycomb, wave (frame 25), logo and text as frames.py's banner,
 with the logo+text block centred and every element scaled by k (1.0 = the 1500x500 header's sizes).
-python3 banner_size.py <W> <H> <k> <out.html> [u] [notext] [flat]   ->   then render.sh / headless Chrome at <W>,<H>
+python3 banner_size.py <W> <H> <k> <out.html> [u] [notext] [flat] [pool]   ->   then render.sh / headless Chrome at <W>,<H>
 u = where the yellow wave sits, 0..1 along the slanted diagonal (frame 25 of the loop = 0.227; a very wide banner wants it nearer the centred block)
+pool = the pool's lines under the name (Beam mining pool, pool.bumblebeam.org): e.g. 700x300 k=0.8 for MRR's pool list
 notext = the honeycomb and wave only: no logo, no text, nothing dimmed (a background)
 flat = no twinkle: the cells outside the wave all the same (the twinkle reads as faint diagonal stripes on a large plain honeycomb)
   1024x576  k=1.0 (16:9)      1920x640  k=1.28 (3:1)     2560x1440  k=1.5 (YouTube: block inside the 1546x423 safe area)
@@ -16,7 +17,9 @@ SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
 MONO = "ui-monospace, 'SF Mono', Menlo, monospace"
 
 
-def banner(t, T, W, H, k=1.0, text=True, flat=False):
+def banner(t, T, W, H, k=1.0, text=True, flat=False, pool=False):
+    sub, url = ("Beam mining pool · PPLNS &amp; SOLO", "https://pool.bumblebeam.org") if pool else \
+        ("BEAM Community Ecosystem", "https://bumblebeam.org")
     R = 30.0 * k
     hw, vs = math.sqrt(3) * R, 1.5 * R
     s = 5.6 * k                              # the logo: 32 units -> ~180 px at k=1
@@ -45,8 +48,8 @@ def banner(t, T, W, H, k=1.0, text=True, flat=False):
     ly = cy0 - 16 * s
     block = "" if not text else f'''<g transform="translate({lx:.1f} {ly:.1f}) scale({s})">{F.bee(t, T)}</g>
 <text x="{tx:.1f}" y="{cy0 + 10 * k:.1f}" font-family="{SANS}" font-weight="700" font-size="{96 * k:.1f}" fill="#fff">Bumble<tspan fill="url(#beam)">Beam</tspan></text>
-<text x="{tx + 4 * k:.1f}" y="{cy0 + 62 * k:.1f}" font-family="{SANS}" font-size="{30 * k:.1f}" fill="rgba(255,255,255,.72)">BEAM Community Ecosystem</text>
-<text x="{tx + 5 * k:.1f}" y="{cy0 + 108 * k:.1f}" font-family="{MONO}" font-weight="700" font-size="{24 * k:.1f}" fill="#00f6d2">https://bumblebeam.org</text>
+<text x="{tx + 4 * k:.1f}" y="{cy0 + 62 * k:.1f}" font-family="{SANS}" font-size="{30 * k:.1f}" fill="rgba(255,255,255,.72)">{sub}</text>
+<text x="{tx + 5 * k:.1f}" y="{cy0 + 108 * k:.1f}" font-family="{MONO}" font-weight="700" font-size="{24 * k:.1f}" fill="#00f6d2">{url}</text>
 '''
     return F.page(f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b5a85"/><stop offset=".55" stop-color="#042548"/><stop offset="1" stop-color="#031c38"/></linearGradient>
@@ -61,5 +64,5 @@ def banner(t, T, W, H, k=1.0, text=True, flat=False):
 if __name__ == "__main__":
     W, H, k, out = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
     u = float(sys.argv[5]) if len(sys.argv) > 5 else 25 / F.BF
-    open(out, "w").write(banner(u * F.BT, F.BT, W, H, k, text="notext" not in sys.argv[6:], flat="flat" in sys.argv[6:]))
+    open(out, "w").write(banner(u * F.BT, F.BT, W, H, k, text="notext" not in sys.argv[6:], flat="flat" in sys.argv[6:], pool="pool" in sys.argv[6:]))
     print(out)
