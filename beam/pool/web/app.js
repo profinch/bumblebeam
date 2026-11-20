@@ -272,11 +272,13 @@
   }
 
   // what the network's hashrate is, wherever it is shown
-  const NET_HR_TIP = 'Now: what pools report from their shares over the past few minutes, scaled up to account for the share of blocks found in the last 24 hours by pools that aren’t listed (solo nodes and pools without an API). Blocks alone are too sparse for a current estimate: over an hour, luck varies by about ±13%.';
+  const NET_HR_TIP = 'The last hour: BumbleBeam from its own shares, every other pool the average of what it reported this hour, and the miners no pool claims (solo nodes, pools without an API) from their blocks of the last 24 hours. One window for all, because rented hashpower moves between pools within minutes. Checked against the work in the last 120 blocks: when the two differ by over 2x, the blocks’ figure is shown.';
+  // the network's hashrate as a figure: ≈, as it is an estimate; marked when the blocks' figure stands
+  const netHr = (net) => `≈${hr(net && net.hashrate)}${net && net.hashrateSource === 'blocks' ? ' <span class="dim">(blocks)</span>' : ''}`;
   function netMeta(net, extra = '') {
     if (!net || !net.ok) return '<span class="err">network data unavailable</span>';
     // the rest in a group of its own, which phones put on a line under the network's hashrate
-    return `<span class="tipped net-hr" title="${NET_HR_TIP}">Network: <b>${hr(net.hashrate)}</b></span><span class="net-more"><span>Block: <b>${int(net.height)}</b></span>
+    return `<span class="tipped net-hr" title="${NET_HR_TIP}">Network: <b>${netHr(net)}</b></span><span class="net-more"><span>Block: <b>${int(net.height)}</b></span>
       <span>Diff: <b>${net.difficulty ? fix(net.difficulty / 1e6, 2) + 'M' : '—'}</b></span>
       <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}</span>`;
   }
@@ -312,47 +314,43 @@
       for (const m of ['pplns', 'solo']) for (const [t, v] of stats.modes[m].series || []) sum.set(t, (sum.get(t) || 0) + v);
       series = [...sum].sort((x, y) => x[0] - y[0]);
     }
+    // the hour, the share and the reward a day from the server's row for us, the same window as the others'
+    const srv = net.pools.find((p) => p.id === 'bumblebeam') || {};
     rows.push({ id: 'bumblebeam', name: 'BumbleBeam', fee: sameFee ? stats.fee : null,
       scheme: sameFee ? `${stats.scheme} / SOLO` : `${pctFee(stats.fee)} ${stats.scheme} · ${pctFee(stats.soloFee)} SOLO`,
-      hashrate: stats.hashrate, miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
-    rows.sort((a, b) => b.hashrate - a.hashrate);
-    let total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
-    // what a pool's miners together can expect a day: its share of the network's 1440 blocks of a
-    // day at the current reward, less its fee; in USD at the on-chain oracle's price
+      hashrate: stats.hashrate, hashrate1h: srv.hashrate1h, share: srv.share, rewardDay: srv.rewardDay,
+      miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
+    // the row's figure: the hour (as the network's is), or its latest without the server's hour
+    const hOf = (p) => (p.hashrate1h != null ? p.hashrate1h : p.hashrate || 0);
+    rows.sort((a, b) => hOf(b) - hOf(a));
+    const total = net.hashrate || rows.reduce((s, r) => s + hOf(r), 0);
+    const shareOf = (p) => (p.share != null ? p.share : total ? hOf(p) / total : null);
+    // what a pool's miners together can expect a day while the difficulty stays: its blocks a day at the
+    // current difficulty (expected solutions per block) times the reward, less its fee; in USD at the
+    // on-chain oracle's price
     const price = net.priceUsd;
-    const perDay = (p) => (total && stats.blockReward ? (p.hashrate / total) * 1440 * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
+    const perDay = (p) => (p.rewardDay != null ? p.rewardDay
+      : net.difficulty && stats.blockReward ? (hOf(p) * 86400 / net.difficulty) * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
     const usd = (g) => {
       if (!price || g == null) return '';
       const v = (g / BB.GROTH) * price, d = v && v < 10 ? 2 : 0; // cents under $10: $2.90, not $2.9
       return `$${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
     };
-    // the rest of the network, which no listed pool claims: solo miners on their own nodes, pools
-    // that publish no API; always last. Its part of the network is its part of the day's blocks: the
-    // network's hashrate, from an hour of blocks, swings with luck far more than the pools' own
-    // figures, so the network less the pools went below zero on a lucky hour. The pools then are
-    // the rest, and every share is of their sum and the Others row, adding up to 100%.
-    const pools = rows.reduce((s, r) => s + (r.hashrate || 0), 0);
-    // only with every active pool's blocks of the day known: else the pools without a figure would
-    // count as the others; the server's figures then (the chain's estimate less the pools)
-    const allKnown = rows.every((r) => !r.hashrate || r.blocks24h != null);
-    const othersBlocks = net.blocks24h && allKnown ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null;
-    const f = othersBlocks != null ? othersBlocks / net.blocks24h : null;
-    if (f != null && f < 1 && pools > 0) total = pools / (1 - f);
-    const others = net.hashrate ? {
-      hashrate: f != null ? total * f : net.othersHashrate != null && !allKnown ? net.othersHashrate : Math.max(0, net.hashrate - pools),
-      blocks24h: othersBlocks,
-    } : null;
+    // the rest of the network, which no listed pool claims (solo miners on their own nodes, pools that
+    // publish no API), from its blocks of the day; always last. Only from the pool server: the explorer
+    // fallback cannot tell whose the blocks are.
+    const others = net.othersHashrate != null ? { hashrate: net.othersHashrate, blocks24h: net.othersBlocks24h, share: net.othersShare, rewardDay: net.othersRewardDay } : null;
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
       <div class="panel-head"><h2 class="panel-title">Beam mining pools</h2><div class="panel-meta">${head}</div></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="mid"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th><span class="tipped" title="Over the last hour, as the network's hashrate is: what the pool reported on average this hour (for BumbleBeam, its own shares). Below it, the latest figure.">Hashrate</span></th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="mid"><span class="tipped" title="What a pool's miners together can expect a day at the current difficulty: its hashrate over the last hour times 86,400 s over the difficulty (the expected solutions per block) gives its blocks a day, times the block reward, less the pool's fee. The difficulty follows the network's hashrate over several hours, so the figure moves with it. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
       ${rows.map((p, i) => `<tr class="${p.ours ? 'ours' : ''}">
         <td class="dim">${i + 1}</td>
         <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}</span></td>
-        <td><div class="hashcell"><span>${hr(p.hashrate)}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
-            <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
-        <td class="num">${pct(p.hashrate / total, 1)}</td>
+        <td><div class="hashcell"><span>${hr(hOf(p))}${p.hashrate1h != null ? `<span class="sub">now ${hr(p.hashrate)}</span>` : ''}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
+            <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (shareOf(p) || 0) * 100).toFixed(1)}%"></i></div></td>
+        <td class="num">${pct(shareOf(p), 1)}</td>
         <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${p.blocks24hHours ? `<span class="tipped" title="Estimated: the pool's blocks over the last ${fix(p.blocks24hHours, 1)} h, from its own API, scaled to a day. Counted exactly once a whole day of its blocks is known.">≈${int(p.blocks24h)}</span>` : int(p.blocks24h)}</td>
         <td class="mid">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
@@ -360,10 +358,10 @@
         <td></td>
         <td><span class="name">Others</span><span class="sub">Unknown miners</span></td>
         <td><div class="hashcell"><span>${hr(others.hashrate)}</span></div>
-            <div class="bar"><i style="width:${Math.min(100, (others.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
-        <td class="num">${pct(others.hashrate / total, 1)}</td>
+            <div class="bar"><i style="width:${Math.min(100, (others.share || 0) * 100).toFixed(1)}%"></i></div></td>
+        <td class="num">${pct(others.share, 1)}</td>
         <td class="num dim">—</td><td class="num dim">—</td><td class="num">${others.blocks24h != null ? int(others.blocks24h) : '—'}</td>
-        <td class="mid">${beamAmt(perDay(others), 0)}${price ? `<span class="sub">${usd(perDay(others))}</span>` : ''}</td>
+        <td class="mid">${others.rewardDay != null ? `${beamAmt(others.rewardDay, 0)}${price ? `<span class="sub">${usd(others.rewardDay)}</span>` : ''}` : '—'}</td>
         <td class="num dim">—</td><td></td></tr>` : ''}
       </tbody></table></div></section>`;
   }
@@ -412,14 +410,18 @@
   views.dashboard = async () => {
     const range = chartRange(), cmode = chartMode();
     const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}${cmode === 'all' ? '' : `&mode=${cmode}`}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
-    const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
-    const expectedPerDay = share != null ? share * 1440 : null;
+    // our part of the network over the hour, from the server's row for us (the same window as the network's)
+    const ours = net && net.ok ? net.pools.find((p) => p.id === 'bumblebeam') : null;
+    const share = ours && ours.share != null ? ours.share : null;
+    // the blocks the day's shares should have found: each block's effort is its shares over the
+    // difficulty, so their sum is the expected count (a share × 1440 mixes this hour with the day)
+    const expectedPerDay = stats.blocks24h != null && stats.effort24h != null ? stats.blocks24h * stats.effort24h : null;
     // the newest block the pool found, as the list has it (its height and the worker that found it)
     const last = blocks && blocks[0];
     return `
       <div class="page-head"><h1 class="page-title">Beam Mining Pool</h1></div>
       <div class="tiles">
-        ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '')}
+        ${tile('Pool hashrate', hr(stats.hashrate), lines('last 10 minutes', share != null ? `${pct(share, 1)} of the network over the hour` : ''))}
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
         ${tile('Blocks 24h', int(stats.blocks24h), lines(expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)} blocks` : '', stats.effort24h != null ? `${pct(stats.effort24h, 0)} average effort` : ''))}
         ${tile('Last block', ago(stats.lastBlockFound), last ? lines(`block height ${int(last.height)}`, last.finder ? `worker ${esc(last.finder)}` : '') : '')}
@@ -460,7 +462,7 @@
     const next = BB.nextRewardChange(net && net.height);
     return `<div class="page-head"><h1 class="page-title">Network</h1></div>
       <div class="tiles">
-        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${hr(net && net.hashrate)}</span>`)}
+        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${netHr(net)}</span>`, net && net.blockHashrate ? `last hour · ${hr(net.blockHashrate)} by the last 120 blocks` : 'last hour')}
         ${tile('Difficulty', net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M` : '—', 'solutions per block, expected')}
         ${tile('Block reward', beam(BB.blockReward(net && net.height), 1), `${beam(next.reward, 1)} from height ${int(next.height)}`)}
         ${tile('Blocks 24h', int(net && net.blocks24h), net && net.avgBlock ? `avg block ${fix(net.avgBlock, 1)}s` : '')}
@@ -791,7 +793,7 @@
     const [stats, net] = await Promise.all([BB.pool('stats'), BB.network().catch(() => null)]);
     const host = BB.stratumHost(stats);
     const ports = stats.ports || { pplns: 3333, solo: 3334, pplnsTls: 3443, soloTls: 3444 };
-    const top = net && net.ok && net.pools.length ? net.pools.reduce((a, b) => (b.hashrate > a.hashrate ? b : a)) : null;
+    const top = net && net.ok && net.pools.length ? net.pools.reduce((a, b) => ((b.share || 0) > (a.share || 0) ? b : a)) : null;
     const hours = (s) => { const h = s / 3600; return `${Number.isInteger(h) ? h : h.toFixed(1)} hour${h === 1 ? '' : 's'}`; };
     const payEvery = stats.payoutInterval ? hours(stats.payoutInterval) : 'two hours';
     const minPay = beam(stats.minPayout, 2), matureH = hours((stats.maturity || 240) * 60);
@@ -841,7 +843,7 @@
               <div class="field">Card<div class="dd" id="card" data-value="52"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Card">RTX 3090 · 52</button><ul class="dd-list" role="listbox" tabindex="-1" hidden><li class="dd-group" role="presentation">NVIDIA</li><li role="option" data-v="85">RTX 4090 · 85</li><li role="option" data-v="78">RTX 5080 (MXBM) · 78</li><li role="option" data-v="57">RTX 4070 Ti Super · 57</li><li role="option" data-v="54">RTX 3080 Ti · 54</li><li role="option" data-v="52" aria-selected="true">RTX 3090 · 52</li><li role="option" data-v="47">RTX 4070 Super · 47</li><li role="option" data-v="47">RTX 4070 · 47</li><li role="option" data-v="46.5">RTX 3080 · 46.5</li><li role="option" data-v="35">RTX 3070 Ti · 35</li><li role="option" data-v="34">RTX 3070 · 34</li><li role="option" data-v="32.5">RTX 3060 Ti · 32.5</li><li role="option" data-v="26">RTX 5060 Ti · 26</li><li role="option" data-v="22">RTX 3060 · 22</li><li class="dd-group" role="presentation">AMD</li><li role="option" data-v="36">RX 6800 XT · 36</li><li role="option" data-v="33">RX 6900 XT · 33</li><li class="dd-group" role="presentation">Processor</li><li role="option" data-v="1">16-core CPU · 1</li><li role="option" data-v="">custom</li></ul></div></div>
             </div>
             <div class="calc-out" id="calc-out"></div>
-            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement; the CPU: BumbleBeam Miner's), in Sol/s; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
+            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement; the CPU: BumbleBeam Miner's), in Sol/s; measure your own. Uses the current difficulty (${net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M, as ${hr(net.difficulty / 60)} at a block a minute` : '—'}),
               ${beam(stats.blockReward, 1)} per block plus fees, ${pctFee(stats.fee)} pool fee. Electricity is not counted.</p>
           </section>
           <section class="panel" id="downloads"><div class="panel-head"><h2 class="panel-title">Downloads, from the official pages only</h2></div>
@@ -861,7 +863,7 @@
               ${stats.finderBonus ? `<div><b>Finder bonus.</b> Find a block in PPLNS and ${pctFee(stats.finderBonus)} of it is yours on top of your share.</div>` : ''}
               <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no registration. Payouts carry only Beam's own network fee.</div>
               ${stats.coinbase ? '<div><b>Non-custodial.</b> Be paid in the blocks, with coinbase outputs only your wallet can spend: the pool never holds your coins.</div>' : ''}
-              <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
+              <div><b>Decentralises Beam.</b> ${top && top.share != null ? `${esc(top.name)} holds ${pct(top.share, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
           </section>
           <section class="panel"><div class="panel-head"><h2 class="panel-title">Help</h2></div>
@@ -870,7 +872,7 @@
           </section>
         </div>
       </div>
-      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}" data-pay="${esc(payEvery)}"
+      <template id="ctx" data-host="${esc(host)}" data-net="${net && net.difficulty ? net.difficulty / 60 : Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}" data-pay="${esc(payEvery)}"
         data-servers="${esc(JSON.stringify(servers.map((s) => ({ id: s.id, name: s.name, where: s.where, host: s.host || host }))))}"
         data-ports="${[ports.pplns, ports.solo, ports.pplnsTls, ports.soloTls].map((p) => Number(p) || 0).join(',')}"></template>`;
   };

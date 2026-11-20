@@ -12,15 +12,22 @@
 //! Kept across rounds, so once a pool has been followed for a whole day without a gap its blocks of
 //! the day are counted here instead of taken from the terminal. `/api/network/blocks` serves them.
 //!
-//! The network's hashrate is the pools' current figures, which they measure from thousands of
-//! shares, over the part of the network they cover: what the rest (solo nodes, pools with no API)
-//! mines can only be seen in its blocks, so its part is its share of the day's blocks. The chain's
-//! own estimate, from 24 h of blocks, is `chainHashrate`; an hour of blocks is ±13% on luck alone.
+//! The network's hashrate is the sum of its parts over one window, the last hour (`HOUR`): ours from
+//! our shares, each other pool the mean of what its API said this hour (polled every round), and the
+//! rest (solo nodes, pools with no API) from its blocks of the day. One window for every part: rented
+//! power moves between pools within minutes, and parts over different windows count it twice (on
+//! 2026-11-20 our 10-min figure and 2Miners' few-minute one together showed 81k for a ~32k hour). A
+//! guard against the chain: when the sum is off the last `GUARD_HEADERS` blocks' work by over 2x, or
+//! there are no parts, the blocks' figure stands (`hashrateSource`). Each row's `share` is of that sum,
+//! so they add up to 100% with the others, and `rewardDay` is from the current difficulty, not the
+//! network's hashrate: what the hashrate earns while the difficulty stays. The chain's estimate from
+//! 24 h of blocks, `chainHashrate`, lags the difficulty's swings and is for reference only.
 
 use crate::config::ORACLE2;
 use crate::state::Shared;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use crate::emission::miner_reward_groth;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,6 +42,13 @@ pub const RECENT_BLOCKS: usize = 500;
 const DAY_HEADERS: usize = 3000;
 /// Headers the block time and the hashrate average over: an hour at the 60 s target.
 const AVG_HEADERS: usize = 60;
+/// The window every part of the network's hashrate is over.
+const HOUR: f64 = 3600.0;
+/// A pool's polls must cover this much of the hour before their mean stands; else its hourly figure
+/// from the terminal, or its latest one.
+const MIN_SPAN: f64 = 900.0;
+/// Blocks the guard's figure is over: ±9% on luck, about two hours.
+const GUARD_HEADERS: usize = 120;
 
 #[derive(Default)]
 pub struct NetCache {
@@ -101,6 +115,8 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
     // the last of each that came, kept through a failed fetch: stale beats none
     let (mut price, mut chain, mut pools): (Option<f64>, Option<Value>, Option<Value>) = (None, None, None);
     let (mut hdrs, mut finds): (Vec<Hdr>, Finds) = (Vec::new(), Finds::default());
+    // every other pool's figures this hour, (time, hashrate), oldest first
+    let mut polls: HashMap<String, VecDeque<(f64, f64)>> = HashMap::new();
     let urls = &shared.cfg.pool.explorer_urls;
     for round in 0u64.. {
         if round % 10 == 0 {
@@ -155,11 +171,33 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
                 }
             }
             let (blocks24h, chain_hr) = (pick("blocks24h"), pick("hashrate24h"));
-            let (hashrate, others) = network(&list, blocks24h.as_f64(), chain_hr.as_f64().or(pick("hashrate").as_f64()));
+            let now = chrono::Utc::now().timestamp() as f64;
+            for p in list.iter_mut().filter(|p| p["id"] != "bumblebeam") {
+                let Some(id) = p["id"].as_str().map(str::to_string) else { continue };
+                let q = polls.entry(id).or_default();
+                let terminal = p["series"].as_array().and_then(|a| a.last()).and_then(|x| num(&x[1]));
+                p["hashrate1h"] = json!(hourly(q, now, num(&p["hashrate"]), terminal));
+            }
+            polls.retain(|_, q| q.back().is_some_and(|(t, _)| *t > now - HOUR));
+            let ids: HashSet<&str> = list.iter().filter_map(|p| p["id"].as_str()).collect();
+            let others = unclaimed(&hdrs, |h| finds.by_height.get(&h).is_some_and(|(id, _)| ids.contains(id.as_str())));
+            let parts: f64 = list.iter().filter_map(|p| num(&p["hashrate1h"])).sum();
+            let blk = work_rate(&hdrs, GUARD_HEADERS);
+            let (hashrate, source) = headline(parts, others.map(|o| o.0), blk);
+            let difficulty = c["difficulty"].as_f64();
+            let reward = c["height"].as_u64().map(|h| miner_reward_groth(h + 1) as f64);
+            for p in list.iter_mut() {
+                let h = num(&p["hashrate1h"]);
+                p["share"] = json!(h.zip(hashrate).filter(|(_, n)| *n > 0.0).map(|(h, n)| h / n));
+                p["rewardDay"] = json!(reward_day(h, difficulty, reward, num(&p["fee"]).unwrap_or(0.0)));
+            }
             let v = json!({
-                "hashrate": hashrate, "chainHashrate": chain_hr, "height": pick("height"), "blocks24h": blocks24h,
+                "hashrate": hashrate, "hashrateSource": source, "hashrateWindow": HOUR as u64, "blockHashrate": blk,
+                "chainHashrate": chain_hr, "height": pick("height"), "blocks24h": blocks24h,
                 "difficulty": c["difficulty"], "avgBlock": c["avgBlock"], "priceUsd": price,
                 "othersHashrate": others.map(|o| o.0), "othersBlocks24h": others.map(|o| o.1),
+                "othersShare": others.zip(hashrate).filter(|(_, n)| *n > 0.0).map(|(o, n)| o.0 / n),
+                "othersRewardDay": reward_day(others.map(|o| o.0), difficulty, reward, 0.0),
                 "pools": list,
             });
             if let Some(h) = v["height"].as_u64() {
@@ -181,28 +219,61 @@ pub async fn run(cache: Arc<NetCache>, shared: Arc<Shared>) {
     }
 }
 
-/// The network's current hashrate and the part no listed pool claims, (hashrate, blocks of the day):
-/// the pools' sum over 1 - the others' share of the day's blocks. Without every active pool's blocks
-/// the chain's estimate stands and the others are what the pools leave of it.
-fn network(pools: &[Value], blocks24h: Option<f64>, chain: Option<f64>) -> (Option<f64>, Option<(f64, f64)>) {
-    let sum: f64 = pools.iter().filter_map(|p| num(&p["hashrate"])).sum();
-    let known = pools.iter().all(|p| num(&p["hashrate"]).unwrap_or(0.0) == 0.0 || num(&p["blocks24h"]).is_some());
-    let claimed: f64 = pools.iter().filter_map(|p| num(&p["blocks24h"])).sum();
-    match blocks24h.filter(|b| *b > 0.0 && known && sum > 0.0) {
-        Some(b) => {
-            let rest = (b - claimed).max(0.0);
-            let f = rest / b;
-            if f < 0.9 {
-                let total = sum / (1.0 - f);
-                return (Some(total), Some((total * f, rest)));
-            }
-            (chain, chain.map(|c| ((c - sum).max(0.0), rest)))
-        }
-        None => (chain, chain.map(|c| ((c - sum).max(0.0), blocks24h.map_or(0.0, |b| (b - claimed).max(0.0))))),
+/// A pool's mean over the hour: `cur` joins its polls, those older than the hour leave. Until the polls
+/// cover `MIN_SPAN`, the terminal's hourly figure for it, else `cur`.
+fn hourly(q: &mut VecDeque<(f64, f64)>, now: f64, cur: Option<f64>, terminal: Option<f64>) -> Option<f64> {
+    if let Some(h) = cur.filter(|h| h.is_finite() && *h >= 0.0) {
+        q.push_back((now, h));
+    }
+    while q.front().is_some_and(|(t, _)| *t <= now - HOUR) {
+        q.pop_front();
+    }
+    match q.front() {
+        Some((t, _)) if now - t >= MIN_SPAN => Some(q.iter().map(|x| x.1).sum::<f64>() / q.len() as f64),
+        _ => terminal.or(cur),
     }
 }
 
-/// BumbleBeam's own row from its own shares and blocks, the last 10 min as on /api/stats.
+/// The work of the newest `n` blocks over their time, Sol/s.
+fn work_rate(hdrs: &[Hdr], n: usize) -> Option<f64> {
+    let (newest, oldest) = (hdrs.first()?, hdrs.get(n)?);
+    let span = newest.ts - oldest.ts;
+    (span > 0.0).then(|| hdrs[..n].iter().map(|h| h.difficulty).sum::<f64>() / span)
+}
+
+/// What no listed pool claims of the last 24 h of blocks: (hashrate from their work, blocks).
+fn unclaimed(hdrs: &[Hdr], claimed: impl Fn(u64) -> bool) -> Option<(f64, f64)> {
+    let newest = hdrs.first()?.ts;
+    let day: Vec<&Hdr> = hdrs.iter().filter(|h| h.ts > newest - 86400.0).collect();
+    // the oldest block's own time is that of the one before it: its work is not in the span
+    let span = newest - day.last()?.ts;
+    if span <= 0.0 {
+        return None;
+    }
+    let rest: Vec<&&Hdr> = day[..day.len() - 1].iter().filter(|h| !claimed(h.height)).collect();
+    Some((rest.iter().map(|h| h.difficulty).sum::<f64>() / span, rest.len() as f64))
+}
+
+/// The network's hashrate and where it is from: the parts' sum, or the blocks' figure when the sum
+/// is off it by over 2x (a pool's API gone wrong) or there are no parts.
+fn headline(parts: f64, others: Option<f64>, blk: Option<f64>) -> (Option<f64>, &'static str) {
+    let sum = parts + others.unwrap_or(0.0);
+    match blk {
+        Some(b) if parts <= 0.0 || !(0.5..=2.0).contains(&(sum / b)) => (Some(b), "blocks"),
+        _ if parts > 0.0 => (Some(sum), "pools"),
+        _ => (None, "none"),
+    }
+}
+
+/// What a hashrate earns a day at the current difficulty (expected solutions per block): its blocks a
+/// day times the miner's reward, less the fee, in groth.
+fn reward_day(hashrate: Option<f64>, difficulty: Option<f64>, reward: Option<f64>, fee_percent: f64) -> Option<f64> {
+    let (h, d, r) = (hashrate?, difficulty.filter(|d| *d > 0.0)?, reward?);
+    Some(h * 86400.0 / d * r * (1.0 - fee_percent / 100.0))
+}
+
+/// BumbleBeam's own row from its own shares and blocks: `hashrate` the last 10 min as on /api/stats,
+/// `hashrate1h` the hour every row is over.
 async fn ours(shared: &Shared) -> Option<Value> {
     let t = chrono::Utc::now().timestamp();
     let db = &shared.db;
@@ -210,7 +281,8 @@ async fn ours(shared: &Shared) -> Option<Value> {
         let (hashrate, miners, workers) = db.pool_now(t).await?;
         anyhow::Ok(json!({
             "id": "bumblebeam", "name": "BumbleBeam", "website": "https://pool.bumblebeam.org", "scheme": "PPLNS / SOLO",
-            "fee": shared.cfg.pool.fee_percent, "hashrate": hashrate, "miners": miners, "workers": workers,
+            "fee": shared.cfg.pool.fee_percent, "hashrate": hashrate, "hashrate1h": db.pool_hashrate(t, HOUR as i64).await?,
+            "miners": miners, "workers": workers,
             "blocks24h": db.blocks_24h(t).await?.0, "lastTs": db.last_block_ts(None, None).await?,
         }))
     }.await;
@@ -479,5 +551,73 @@ mod tests {
         assert_eq!(f.count_from("p", 30), Some(1));
         f.prune(20);
         assert_eq!(f.by_height.keys().copied().collect::<Vec<_>>(), vec![20, 30]);
+    }
+
+    fn hdr(height: u64, ts: f64, difficulty: f64) -> Hdr {
+        Hdr { height, hash: String::new(), ts, difficulty }
+    }
+
+    #[test]
+    fn hourly_mean_needs_a_quarter_hour_and_drops_the_old() {
+        let mut q = VecDeque::new();
+        // a new pool: the terminal's hourly figure until the polls cover MIN_SPAN
+        assert_eq!(hourly(&mut q, 0.0, Some(100.0), Some(40.0)), Some(40.0));
+        assert_eq!(hourly(&mut q, 600.0, Some(200.0), None), Some(200.0));
+        assert_eq!(hourly(&mut q, 900.0, Some(300.0), Some(40.0)), Some(200.0));
+        // an hour on, the first poll has left: (200 + 300 + 400) / 3
+        assert_eq!(hourly(&mut q, 3600.0, Some(400.0), None), Some(300.0));
+        // a round without a figure keeps the mean of what is there
+        assert_eq!(hourly(&mut q, 3610.0, None, None), Some(300.0));
+    }
+
+    #[test]
+    fn the_guard_takes_the_blocks_when_the_sum_is_off_by_over_2x() {
+        assert_eq!(headline(30_000.0, Some(400.0), Some(28_000.0)), (Some(30_400.0), "pools"));
+        assert_eq!(headline(81_000.0, None, Some(27_500.0)), (Some(27_500.0), "blocks"));
+        assert_eq!(headline(10_000.0, None, Some(27_500.0)), (Some(27_500.0), "blocks"));
+        assert_eq!(headline(0.0, Some(400.0), Some(27_500.0)), (Some(27_500.0), "blocks"));
+        assert_eq!(headline(30_000.0, None, None), (Some(30_000.0), "pools"));
+        assert_eq!(headline(0.0, None, None), (None, "none"));
+    }
+
+    #[test]
+    fn the_2026_11_20_incident_reads_about_the_hour() {
+        // 17:02 UTC: rented power had mined for us 16:52-16:55 and moved to 2Miners at 16:54; the old sum
+        // (our 10 min ~24.6k + 2Miners' few minutes 55.7k + the rest) showed ~81k for a ~32k hour.
+        let now = 3600.0;
+        let mut q = VecDeque::new();
+        // 2Miners polled every 30 s: ~12k for 52 min, then 55.7k for the last 8
+        let mut two = None;
+        for i in 0..120 {
+            let t = i as f64 * 30.0 + 30.0;
+            two = hourly(&mut q, t, Some(if t < now - 480.0 { 12_000.0 } else { 55_700.0 }), None);
+        }
+        let ours_1h = 11_500.0; // our shares over the hour, the burst included
+        let parts = ours_1h + two.unwrap() + 1_500.0;
+        let (n, src) = headline(parts, Some(400.0), Some(27_500.0));
+        assert_eq!(src, "pools");
+        let n = n.unwrap();
+        assert!((28_000.0..36_000.0).contains(&n), "{n}");
+        // our share of it is ours over the same hour: never over 100%
+        assert!(ours_1h / n < 0.45);
+    }
+
+    #[test]
+    fn unclaimed_and_work_rate() {
+        // newest first, a block a minute, difficulty 60 each: 1 Sol/s
+        let hdrs: Vec<Hdr> = (0..10).map(|i| hdr(100 - i, 6000.0 - i as f64 * 60.0, 60.0)).collect();
+        assert_eq!(work_rate(&hdrs, 4), Some(1.0));
+        assert_eq!(work_rate(&hdrs, 10), None);
+        // 98 and 96 nobody claims; the oldest (91) is outside the span
+        let (h, n) = unclaimed(&hdrs, |h| h != 98 && h != 96 && h != 91).unwrap();
+        assert_eq!(n, 2.0);
+        assert!((h - 120.0 / 540.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reward_a_day_is_from_the_difficulty() {
+        // a hashrate of D/60 finds a block a minute: 1440 a day
+        assert_eq!(reward_day(Some(30_000.0), Some(1_800_000.0), Some(100.0), 1.0), Some(1440.0 * 99.0));
+        assert_eq!(reward_day(Some(1.0), Some(0.0), Some(1.0), 0.0), None);
     }
 }

@@ -553,6 +553,14 @@ impl Db {
         Ok((row.get::<_, f64>(0) / 600.0, row.get(1), row.get(2)))
     }
 
+    /// The pool's hashrate over the last `secs` of shares (the network page's hour, so every pool's row
+    /// is over the same window).
+    pub async fn pool_hashrate(&self, now: i64, secs: i64) -> Result<f64> {
+        let c = self.client().await?;
+        let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE ts > $1", &[&(now - secs)]).await?.get(0);
+        Ok(sum / secs as f64)
+    }
+
     pub async fn mode_hashrate(&self, mode: &str, now: i64) -> Result<f64> {
         let c = self.client().await?;
         let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE mode=$1 AND ts > $2", &[&mode, &(now - 600)]).await?.get(0);

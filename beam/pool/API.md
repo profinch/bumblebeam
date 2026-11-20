@@ -305,21 +305,34 @@ day, with those hours in `blocks24hHours` (absent on a counted figure). HeroMine
 ours does. Each part keeps its last good value while its source is down; a pool whose API does not
 answer shows the terminal's numbers.
 
-`hashrate` is the network now, in Sol/s: the pools' current figures, which they measure from
-thousands of shares, over the part of the network they cover. The rest, `othersHashrate` and
-`othersBlocks24h` (solo nodes, pools with no API), can only be seen in its blocks, so its part is
-its share of the 24 h of blocks: `hashrate` = sum of `pools` / (1 - `othersBlocks24h` / `blocks24h`).
-`chainHashrate` is the chain's own estimate, the difficulty of the last 24 h of blocks over their
-time; `hashrate` falls back to it while an active pool's blocks are unknown. An hour of blocks is
-±13% on luck alone, too few for a current figure. The UI falls back to the explorer directly when
+`hashrate` is the network over the last hour (`hashrateWindow`, 3600 s), in Sol/s: the sum of its
+parts over that one window. Each row's `hashrate1h` is the mean of the pool's own figures polled this
+hour (BumbleBeam: its shares over the hour; a pool followed for under 15 minutes: the terminal's
+latest hourly figure), and `othersHashrate` / `othersBlocks24h` are the blocks of the last 24 h no
+listed pool claims (solo nodes, pools with no API), their work over the day's time. One window for
+all because rented hashpower moves between pools within minutes: parts over different windows count
+it twice. `blockHashrate` is the work of the last 120 blocks over their time (±9% on luck); when the
+sum differs from it by over 2x, or there are no parts, `hashrate` is `blockHashrate` and
+`hashrateSource` is `blocks` (else `pools`). `chainHashrate` is the same over 24 h of blocks, for
+reference: it lags the network's swings.
+
+Each row's `share` is `hashrate1h` / `hashrate` (with `othersShare` they add up to 1), and
+`rewardDay` (groth, `othersRewardDay` for the rest) is what its hashrate earns a day at the current
+difficulty: `hashrate1h` × 86400 / `difficulty` × the block's miner reward × (1 − `fee` / 100). The
+difficulty is the expected solutions per block, so this needs no network hashrate; it moves as the
+difficulty follows the network over several hours. A row's `hashrate` stays its latest figure (for
+BumbleBeam the last 10 minutes, as on `/api/stats`). The UI falls back to the explorer directly when
 this endpoint is absent.
 
 ```json
-{ "hashrate": 61920.4, "chainHashrate": 53480.1, "othersHashrate": 10860.2, "othersBlocks24h": 243,
-  "height": 4077447, "difficulty": 3210000.0, "avgBlock": 74.8, "blocks24h": 1382, "priceUsd": 0.0098,
+{ "hashrate": 31920.4, "hashrateSource": "pools", "hashrateWindow": 3600, "blockHashrate": 29480.1,
+  "chainHashrate": 43480.1, "othersHashrate": 390.2, "othersBlocks24h": 12, "othersShare": 0.012,
+  "othersRewardDay": 44800000000, "height": 4077447, "difficulty": 1880000.0, "avgBlock": 58.8,
+  "blocks24h": 1382, "priceUsd": 0.0049,
   "pools": [{ "id": "2miners", "name": "2Miners", "website": "https://beam.2miners.com", "scheme": "PPLNS",
-              "fee": 1, "hashrate": 31460.0, "miners": 88, "workers": 282, "blocks24h": 838,
-              "lastTs": 1791845143, "series": [[1791840000, 31500.5]] }] }
+              "fee": 1, "hashrate": 31460.0, "hashrate1h": 18200.0, "share": 0.57, "rewardDay": 2070000000000,
+              "miners": 88, "workers": 282, "blocks24h": 838, "lastTs": 1791845143,
+              "series": [[1791840000, 31500.5]] }] }
 ```
 
 ## `GET /api/network/blocks`
