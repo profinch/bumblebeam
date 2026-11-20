@@ -38,8 +38,10 @@ const TERMINAL: &str = "https://beamterminal.0xmx.net/api/mining/pools";
 const TERMINAL_BLOCKS: &str = "https://beamterminal.0xmx.net/api/mining/blocks?limit=200";
 /// The latest blocks `/api/network/blocks` lists.
 pub const RECENT_BLOCKS: usize = 500;
-/// Headers read for a day's block count: more than a day of blocks even at 30 s a block.
+/// Headers read for a day's block count at most: a day of blocks even at 30 s a block. The node gives
+/// `PAGE_HEADERS` a request, so they come in pages until the day is covered.
 const DAY_HEADERS: usize = 3000;
+const PAGE_HEADERS: usize = 2048;
 /// Headers the block time and the hashrate average over: an hour at the 60 s target.
 const AVG_HEADERS: usize = 60;
 /// The window every part of the network's hashrate is over.
@@ -395,11 +397,32 @@ async fn fetch_price(http: &reqwest::Client, base: String) -> anyhow::Result<f64
 /// Height, difficulty, block time and hashrate over the last hour of headers, and the blocks of the
 /// last 24 h. Hashrate is difficulty over block time, Beam's Sol/s.
 async fn fetch_chain(http: &reqwest::Client, base: String) -> anyhow::Result<(Value, Vec<Hdr>)> {
-    let v = get(http, &format!("{base}/hdrs?nMax={DAY_HEADERS}&cols=HTd")).await?;
-    // rows after the header row, newest first: [height, {hash}, {time}, "difficulty"]
-    let hdrs: Vec<Hdr> = v["value"].as_array().map(|a| a.iter().skip(1).filter_map(|r| {
-        Some(Hdr { height: num(&r[0]["value"])? as u64, hash: r[1]["value"].as_str()?.to_lowercase(), ts: num(&r[2]["value"])?, difficulty: num(&r[3])? })
-    }).collect()).unwrap_or_default();
+    // pages newest first, each from the height the last one's `more.hMax` names, until the day is covered
+    let mut hdrs: Vec<Hdr> = Vec::new();
+    let mut h_max: Option<u64> = None;
+    while hdrs.len() < DAY_HEADERS {
+        let n = PAGE_HEADERS.min(DAY_HEADERS - hdrs.len());
+        let from = h_max.map_or(String::new(), |h| format!("hMax={h}&"));
+        let v = get(http, &format!("{base}/hdrs?{from}nMax={n}&cols=HTd")).await?;
+        // rows after the header row, newest first: [height, {hash}, {time}, "difficulty"]
+        let page: Vec<Hdr> = v["value"].as_array().map(|a| a.iter().skip(1).filter_map(|r| {
+            Some(Hdr { height: num(&r[0]["value"])? as u64, hash: r[1]["value"].as_str()?.to_lowercase(), ts: num(&r[2]["value"])?, difficulty: num(&r[3])? })
+        }).collect()).unwrap_or_default();
+        let last = page.last().map(|h| (h.height, h.ts));
+        // a page that does not go below the last one's oldest: the node ignored hMax, stop
+        if page.is_empty() || hdrs.last().is_some_and(|o| page[0].height >= o.height) {
+            break;
+        }
+        hdrs.extend(page);
+        let day_done = match (hdrs.first(), last) {
+            (Some(newest), Some((_, ts))) => ts <= newest.ts - 86400.0,
+            _ => true,
+        };
+        match v["more"]["hMax"].as_u64() {
+            Some(h) if !day_done && last.is_some_and(|(lh, _)| h < lh) => h_max = Some(h),
+            _ => break,
+        }
+    }
     let rows: Vec<(f64, f64, f64)> = hdrs.iter().map(|h| (h.height as f64, h.ts, h.difficulty)).collect();
     anyhow::ensure!(rows.len() > AVG_HEADERS, "{} headers from {base}", rows.len());
     let (height, newest, difficulty) = rows[0];
