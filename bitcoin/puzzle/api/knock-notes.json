@@ -1,0 +1,13 @@
+{
+ "_about": "Knock notes shown on the site: the OP_RETURN text of a knock appears only when its txid is listed here. The server finds every note by itself and logs new ones; adding a txid here (a reviewed commit) is the approval. Kept out on purpose: threats, insults, links and advertising.",
+ "approved": [
+  "0a6a0b5caaaba7f868d393c6e19e6ce5f5c62c4dbb1e457f0ea362e3a50aac5b",
+  "297d8f415591e4cd8353d70a3e6a471b261b4f096954ab330eb0181b669ec750",
+  "644e73476fe7ebfe3ac95dfb7a50180943997558ec952a9849c4acfbee6def41",
+  "6aa21285b68b42210e97b44009429261245af4fb6054e7ffe6857d5951153699",
+  "7384a29ca2d82b8c6117963afa83885a5f43186b496affeb014fda1ac7779ba8",
+  "8d99b7667ac8f865b33da5cdda4683aadb8728c36fcb33a96cec34630ddc405c",
+  "dc895ad8b1eb570560326bd0f9c8504304cf03f51c0ce2a753fc4cf29108d24b",
+  "e06d7c2aaec6a758fb5d9d36c3037c595670bbe3d2e176d6ae4af0e052313375"
+ ]
+}
