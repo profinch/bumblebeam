@@ -1,5 +1,6 @@
 /* BumbleBeam puzzle engine, CPU side: a Web Worker running one of three searches on the BigInt reference.
-     { mode: 'brute', from, to, target }          keys from..to against a hash160 (needs only the address)
+     { mode: 'brute', from, to, targets }         keys from..to against hash160s (needs only the address); the
+                                                  first is the main one, others post { type: 'hit', key, index }
      { mode: 'bsgs', from, to, pub: [x, y] }      baby-step giant-step: ~2·√range operations, √range memory
      { mode: 'kangaroo', from, to, pub: [x, y] }  Pollard's kangaroo: ~2·√range jumps, almost no memory
    Numbers travel as hex strings. Posts { type: 'progress', ops, ... }, then { type: 'done', key } (key null if
@@ -13,25 +14,29 @@ self.onmessage = function (e) {
   if ('pause' in m) { paused = m.pause; return; }
   var from = BigInt('0x' + m.from), to = BigInt('0x' + m.to);
   var pub = m.pub ? [BigInt('0x' + m.pub[0]), BigInt('0x' + m.pub[1])] : null;
-  job = m.mode === 'bsgs' ? bsgs(from, to, pub) : m.mode === 'kangaroo' ? kangaroo(from, to, pub, m.seed || 1) : brute(from, to, m.target);
+  job = m.mode === 'bsgs' ? bsgs(from, to, pub) : m.mode === 'kangaroo' ? kangaroo(from, to, pub, m.seed || 1) : brute(from, to, m.targets || m.target);
   tick();
 };
 
 // a job is an iterator of small pieces of work, so pause messages get through between them
 function tick() {
   if (paused) { setTimeout(tick, 200); return; }
-  var t = Date.now(), r;
-  do { r = job.next(); } while (!r.done && Date.now() - t < 120);
+  // the pieces of one slice go out as one progress message: the last one's counts, with every piece's marks; and a
+  // last progress before done, so a search that ends inside its first slice still reports its work
+  var t = Date.now(), r, last = null, marks = [];
+  do { r = job.next(); if (!r.done) { last = r.value; if (last.marks) marks = marks.concat(last.marks); } } while (!r.done && Date.now() - t < 120);
+  if (last) self.postMessage(Object.assign({ type: 'progress' }, last, last.marks ? { marks: marks } : {}));
   if (r.done) { self.postMessage({ type: 'done', key: r.value == null ? null : r.value.toString(16) }); return; }
-  self.postMessage(Object.assign({ type: 'progress' }, r.value));
   setTimeout(tick, 0);
 }
 
-function* brute(from, to, target) {
-  var s = new S.Searcher(from, to, target, 256), ops = 0;
+// targets: a hash160 hex or an array (the first is the main one); other hits are posted as they come
+function* brute(from, to, targets) {
+  var s = new S.Searcher(from, to, targets, 256), ops = 0;
   for (;;) {
     var r = s.next(2048);
     ops += r.checked;
+    r.hits.forEach(function (h) { if (h.index > 0) self.postMessage({ type: 'hit', key: h.key.toString(16), index: h.index }); });
     if (r.found != null) return r.found;
     if (r.done) return null;
     yield { ops: ops, pos: Number(BigInt(ops) * 10000n / (to - from + 1n)) / 10000 };

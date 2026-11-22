@@ -16,7 +16,14 @@
     while (e > 0n) { if (e & 1n) r = r * b % P; b = b * b % P; e >>= 1n; }
     return r;
   }
-  function inv(a) { return pow(a, P - 2n); }
+  // 1/a mod P by the extended Euclidean algorithm: a quarter of the time of a^(P-2), with the same answer
+  function inv(a) {
+    a = mod(a);
+    if (a === 0n) return 0n; // as pow(0, P - 2) was
+    var r0 = P, r1 = a, x0 = 0n, x1 = 1n, q, t;
+    while (r1 !== 0n) { q = r0 / r1; t = r0 - q * r1; r0 = r1; r1 = t; t = x0 - q * x1; x0 = x1; x1 = t; }
+    return x0 < 0n ? x0 + P : x0;
+  }
 
   // Jacobian (a = 0): double and mixed add, for scalar multiplication
   function jdbl(p) {
@@ -44,13 +51,36 @@
     var zi = inv(p[2]), zi2 = zi * zi % P;
     return [p[0] * zi2 % P, p[1] * zi2 % P * zi % P];
   }
-  // k·G for 1 <= k < n
+  // k·G for 1 <= k < n (k is taken mod n; 0 gives null, the point at infinity). Fixed-base windows: the table
+  // holds d·16^j·G for d = 1..15 (affine), so k·G is one mixed addition per nonzero hex digit of k and one
+  // inversion, no doublings: a 70-bit key costs 18 additions instead of 70 doublings and ~35 additions. Window j
+  // of the table is made the first time a key needs it (a 70-bit key needs 18 of the 64, 270 points).
+  var WIN = [];
+  function winTable(j) {
+    while (WIN.length <= j) {
+      var b = WIN.length ? WIN[WIN.length - 1][16] : [GX, GY], js = [], q = [b[0], b[1], 1n], d;
+      for (d = 1; d <= 16; d++) { js.push(q); q = jadd(q, b[0], b[1]); } // d·b in Jacobian, d = 1..16
+      // to affine with one inversion for all 16 (none is infinity: d·16^j < n)
+      var pref = [], acc = 1n, out = new Array(16), iv;
+      for (d = 0; d < 16; d++) { pref.push(acc); acc = acc * js[d][2] % P; }
+      iv = inv(acc);
+      for (d = 15; d >= 0; d--) {
+        var zi = iv * pref[d] % P, zi2 = zi * zi % P;
+        iv = iv * js[d][2] % P;
+        out[d] = [js[d][0] * zi2 % P, js[d][1] * zi2 % P * zi % P];
+      }
+      // out[d] = (d + 1)·b: entry 0 unused so that WIN[j][d] = d·16^j·G, and entry 16 = 16^(j+1)·G seeds the next
+      WIN.push([null].concat(out));
+    }
+    return WIN[j];
+  }
   function mulG(k) {
-    k = BigInt(k);
+    k = BigInt(k) % N;
+    if (k < 0n) k += N;
     var q = [0n, 1n, 0n];
-    for (var i = BigInt(k.toString(2).length - 1); i >= 0n; i--) {
-      q = jdbl(q);
-      if ((k >> i) & 1n) q = jadd(q, GX, GY);
+    for (var j = 0; k > 0n; j++, k >>= 4n) {
+      var d = Number(k & 15n);
+      if (d) { var w = winTable(j)[d]; q = jadd(q, w[0], w[1]); }
     }
     return toAffine(q);
   }
@@ -187,23 +217,30 @@
 
   // ---------- brute force over [from, to] ----------
   // Searcher: B points P_i = (from + i)·G, stepped together by B·G with one shared inversion per step.
-  // next(maxKeys) checks up to maxKeys keys in order and returns { checked, found (BigInt key or null), done }.
-  function Searcher(from, to, targetHex, batch) {
-    var B = batch || 256, tw = hexToWords(targetHex);
+  // targets: one hash160 hex or an array (the first is the main one). next(maxKeys) checks up to maxKeys keys in
+  // order and returns { checked, found (the main key or null), hits: [{ key, index }], done }.
+  function Searcher(from, to, targets, batch) {
+    var B = batch || 256, list = (Array.isArray(targets) ? targets : [targets]).map(hexToWords);
     from = BigInt(from); to = BigInt(to);
     var pts = [], p = mulG(from), i;
     for (i = 0; i < B; i++) { pts.push(p); p = addAffine(p, [GX, GY]); }
     var step = mulG(BigInt(B)), sx = step[0], sy = step[1];
     var base = from, pref = new Array(B);
     this.next = function (maxKeys) {
-      var checked = 0;
+      var checked = 0, hits = [];
       while (checked < maxKeys) {
-        if (base > to) return { checked: checked, found: null, done: true };
+        if (base > to) return { checked: checked, found: null, hits: hits, done: true };
         var j;
         for (j = 0; j < B; j++) {
           if (base + BigInt(j) > to) break;
           var h = hash160Words(pts[j][0], pts[j][1]);
-          if (h[0] === tw[0] && h[1] === tw[1] && h[2] === tw[2] && h[3] === tw[3] && h[4] === tw[4]) return { checked: checked + j + 1, found: base + BigInt(j), done: true };
+          for (var t = 0; t < list.length; t++) {
+            var tw = list[t];
+            if (h[0] === tw[0] && h[1] === tw[1] && h[2] === tw[2] && h[3] === tw[3] && h[4] === tw[4]) {
+              hits.push({ key: base + BigInt(j), index: t });
+              if (t === 0) return { checked: checked + j + 1, found: base + BigInt(j), hits: hits, done: true };
+            }
+          }
         }
         checked += j;
         // step every point by B·G: batch inversion of (sx - x_i)
@@ -218,7 +255,7 @@
         }
         base += BigInt(B);
       }
-      return { checked: checked, found: null, done: base > to };
+      return { checked: checked, found: null, hits: hits, done: base > to };
     };
   }
 
