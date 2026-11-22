@@ -365,6 +365,14 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .pill-status.off { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); background: rgba(var(--red-rgb), 0.1); }
 .pill-status.off i { background: var(--color-red); box-shadow: 0 0 6px var(--color-red); }
 
+/* the project's social accounts (<bb-socials>, bb.js): a row of small icons, grey until hover, then the network's own
+   colour (--c on the link) */
+.socials { display: inline-flex; align-items: center; gap: 4px; }
+.socials a { display: block; line-height: 0; padding: 5px; border-radius: 8px; color: var(--muted); transition: color .2s, transform .2s; }
+.socials a:hover, .socials a:focus-visible { color: var(--c, var(--text)); transform: scale(1.15); }
+.socials svg { width: 17px; height: 17px; fill: currentColor; }
+@media (prefers-reduced-motion: reduce) { .socials a { transition: none; } }
+
 /* the last line: the copyright, what the pool is, its licence and source */
 .foot .foot-copy { flex-basis: 100%; margin: 4px 0 0; text-align: center; font: 400 11px var(--font-mono); letter-spacing: 0.02em; text-transform: none; color: var(--muted2); }
 /* the copyright line in parts (3BMiner's way): <span class="fp">…</span><span class="fd d1"> · </span><span class="fp">…</span>
@@ -711,10 +719,5 @@ code.mark { white-space: nowrap; } /* a short name never splits across lines ("A
 @keyframes checks-wait { 50% { opacity: 0.3; } }
 @media (max-width: 560px) { .checks li { grid-template-columns: 18px minmax(0, 1fr); } .checks li > span { grid-column: 2; } }
 
-/* <bb-social> (bb.js): BumbleBeam's accounts as a row of small icon links, grey, lit as the text on hover */
-bb-social { display: inline-flex; vertical-align: middle; min-height: 16px; }
-bb-social:not([only]) { min-width: 128px; } /* its five icons' room before bb.js draws them: nothing moves */
-.bb-social { display: inline-flex; align-items: center; gap: 12px; }
-.bb-social a { display: inline-flex; color: var(--muted); line-height: 0; }
-.bb-social a:hover { color: var(--text); text-decoration: none; }
-.bb-social svg { width: 16px; height: 16px; fill: currentColor; }
+/* <bb-socials> (bb.js) before bb.js draws it: its row's height kept, so nothing moves when the icons come */
+bb-socials { display: inline-flex; vertical-align: middle; min-height: 27px; }

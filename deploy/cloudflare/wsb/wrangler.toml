@@ -1,0 +1,7 @@
+# wsb.bumblebeam.org: see worker.js. Deploy: npx wrangler deploy (CLOUDFLARE_API_TOKEN with Workers Scripts,
+# Workers Routes and DNS edit on the bumblebeam.org zone).
+name = "wsb"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "wsb.bumblebeam.org", custom_domain = true }]

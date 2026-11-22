@@ -288,10 +288,11 @@ async function v1Network() {
   const n = await pool('network');
   return {
     height: num(n.height), difficulty: num(n.difficulty), avg_block_seconds: num(n.avgBlock), blocks_24h: num(n.blocks24h),
-    hashrate: num(n.hashrate), chain_hashrate_24h: num(n.chainHashrate), price_usd: num(n.priceUsd),
-    others: { hashrate: num(n.othersHashrate), blocks_24h: num(n.othersBlocks24h) },
+    hashrate: num(n.hashrate), hashrate_source: n.hashrateSource || null, block_hashrate: num(n.blockHashrate),
+    chain_hashrate_24h: num(n.chainHashrate), price_usd: num(n.priceUsd),
+    others: { hashrate: num(n.othersHashrate), blocks_24h: num(n.othersBlocks24h), share: num(n.othersShare), reward_day_groth: num(n.othersRewardDay) },
     pools: (n.pools || []).map((x) => ({ id: x.id, name: x.name, website: x.website || null, scheme: x.scheme || null, fee_percent: num(x.fee),
-      hashrate: num(x.hashrate), miners: num(x.miners), workers: num(x.workers), blocks_24h: num(x.blocks24h),
+      hashrate: num(x.hashrate), hashrate_1h: num(x.hashrate1h), share: num(x.share), reward_day_groth: num(x.rewardDay), miners: num(x.miners), workers: num(x.workers), blocks_24h: num(x.blocks24h),
       last_block_time: iso(num(x.lastTs)), last_block_timestamp: num(x.lastTs) })),
   };
 }

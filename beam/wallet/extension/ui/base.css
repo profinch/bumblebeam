@@ -1,0 +1,54 @@
+/* BumbleBeam UI base: the page, type, links, focus. Needs tokens.css first.
+   From the pool's styles.css (the reference look), with the colours as tokens. */
+
+* { box-sizing: border-box; }
+
+/* The page gradient on its own fixed layer, as tall as the viewport with the browser bars
+   hidden (lvh). A "background-attachment: fixed" body is sized to the viewport with the bars
+   shown, so on phones a band of restarted gradient showed at the bottom while scrolling. */
+body::before {
+  content: ''; position: fixed; left: 0; top: 0; z-index: -1; pointer-events: none;
+  width: 100%; height: 100vh; height: 100lvh;
+  background: var(--page-gradient);
+}
+html, body { margin: 0; padding: 0; }
+
+/* the colour past the page's ends (overscroll) is the gradient's last one. The page's scrollbar shows
+   only when the page is longer than the window (no bar on a 404 or a loading view); no room is kept
+   for it, because the browser paints that room in one flat colour that does not match the gradient. */
+html { background: var(--page-end); overflow-y: auto; }
+/* the page's own scrollbar: the chain's accent on a track that is the page's own gradient, so the bar sits
+   on the page instead of in a flat strip. Chrome and Safari draw it from the ::-webkit-scrollbar parts (the
+   standard scrollbar-* properties would switch those off in Chrome, so they are set for Firefox only, which
+   has no gradient track: a thin bar in the accent there). Boxes inside (tables, code, lists) have theirs in
+   components.css. */
+html::-webkit-scrollbar { width: 8px; height: 8px; }
+html::-webkit-scrollbar-track { background: var(--page-gradient); }
+html::-webkit-scrollbar-corner { background: var(--page-end); }
+html::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.45); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+html::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.7); background-clip: padding-box; }
+html::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports not selector(::-webkit-scrollbar) {
+  html { scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) var(--bg); }
+}
+body {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  background: transparent;
+  overflow-x: hidden;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus { outline: none; }
+
+
+/* ---- page ---- */
+main { flex: 1 0 auto; width: 100%; max-width: var(--page-width); margin: 0 auto; padding: 8px var(--page-padding-x) 40px; }
+
+/* utilities every site uses */
+.accent { color: var(--accent); }
+.caps { font: 700 var(--fs-xs) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; color: var(--muted); }

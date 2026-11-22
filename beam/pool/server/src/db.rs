@@ -553,6 +553,23 @@ impl Db {
         Ok((row.get::<_, f64>(0) / 600.0, row.get(1), row.get(2)))
     }
 
+    /// The pool's hashrate over the last `secs` of shares (the network page's hour, so every pool's row
+    /// is over the same window).
+    pub async fn pool_hashrate(&self, now: i64, secs: i64) -> Result<f64> {
+        let c = self.client().await?;
+        let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE ts > $1", &[&(now - secs)]).await?.get(0);
+        Ok(sum / secs as f64)
+    }
+
+    /// The network's history at `ts` (network.rs `history`): its scopes are `net` and `net:*`, pruned with
+    /// the charts' samples.
+    pub async fn record_network(&self, ts: i64, rows: &[(String, f64)]) -> Result<()> {
+        let (scopes, values): (Vec<&str>, Vec<f64>) = rows.iter().map(|(s, v)| (s.as_str(), *v)).unzip();
+        let c = self.client().await?;
+        c.execute("INSERT INTO hashrate_samples (ts, scope, hashrate) SELECT $1, s, h FROM unnest($2::TEXT[], $3::FLOAT8[]) AS r(s, h)", &[&ts, &scopes, &values]).await?;
+        Ok(())
+    }
+
     pub async fn mode_hashrate(&self, mode: &str, now: i64) -> Result<f64> {
         let c = self.client().await?;
         let sum: f64 = c.query_one("SELECT COALESCE(SUM(difficulty),0)::FLOAT8 FROM shares WHERE mode=$1 AND ts > $2", &[&mode, &(now - 600)]).await?.get(0);

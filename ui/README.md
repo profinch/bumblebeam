@@ -104,6 +104,7 @@ Each acts only through its own class, so pages that do not use it do not change.
 | `.btn.swap` | A button whose word changes (`<span>Copy</span><span>Copied</span>`, `.done` shows the second) keeps one width for both |
 | `.msg` (`.msg.bad`) | a short message in running text, a result or an error: mono, yellow (red), no frame; empty = hidden | wallet (3BMiner's style) |
 | `.checks` | a list of checks or steps (`<ul class="checks"><li class="ok"><b>Name</b><span>what happened</span></li>…`), each line marked by its class: `ok` ✓, `bad` ✗, `warn` !, `wait` … (breathing), `off` –; the words go under the name on a phone | puzzle (a find's steps, /proof's Verify) |
+| `<bb-socials>` / `.socials` | the social accounts as a row of icons (list and icons in `bb.js`; `only="x telegram"` picks some), grey until hover, then each network's colour (`--c`) | pool and explorer footers, puzzle |
 
 ## Status (2026-11-02)
 

@@ -23,6 +23,8 @@ tls_cert = "/etc/bumblebeam/tls/pool.crt"   # the wildcard, copied daily by pool
 tls_key = "/etc/bumblebeam/tls/pool.key"    # change (checked every 10 min, no restart); a key that does not match is refused
 nonce_prefix_bytes = 3
 proxy_protocol_from = []                  # relays that send a PROXY v1 header with the miner's address, e.g. ["185.133.42.180"]
+extra_tls_ports = []                      # more TLS PPLNS ports with a label for the dashboard, another pool's kept for its
+                                          # miners, e.g. [{ port = 1130, label = "HeroMiners" }, { port = 1131, label = "HeroMiners" }]
 
 [pool]
 name = "BumbleBeam"

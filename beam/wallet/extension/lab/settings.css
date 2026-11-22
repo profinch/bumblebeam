@@ -1,0 +1,137 @@
+/* The Settings lab (lab/settings.html): the screen split into quiet tabs in the header (Wallets, General, Networks,
+   Storage, About) instead of one long page; each wallet a row that opens to its card; nodes with whether they answer. */
+
+/* the lab header as the wallet's inside (as the other labs): no brand, the wallet picker its usual width */
+#brand { display: none !important; }
+#walletDd { flex: 0 1 200px; margin-right: auto; }
+/* none of the main tabs is lit: Settings is the gear's */
+#tabs a.active { border-bottom-color: transparent; color: var(--muted); }
+
+.sp-sec[hidden] { display: none; }
+.sp-sec > .panel:first-child { margin-top: 0; }
+html.popup main { scrollbar-gutter: stable; }
+
+/* a wallet: its dot(s), its name, the open one marked; a click opens its card */
+#wList .li.wr { grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; padding: 11px 8px; cursor: pointer; }
+#wList .li.wr:hover, #wList .li.wr.open { background: rgba(255, 255, 255, 0.03); }
+.wr .what { font-size: var(--fs-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr .what .nets { display: inline-flex; gap: 5px; margin-right: 9px; vertical-align: 1px; }
+.wr .what .nets .chain { width: 7px; height: 7px; }
+.wr .sub { font: 11px var(--font-mono); margin-top: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr .sub .sp { display: inline-block; width: 12px; }
+.wr .sub .warn { color: var(--color-yellow); }
+.wr .end { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+
+/* a wallet's card: groups of actions under a quiet caption each; remove last, apart */
+.wcard2 { margin: 0 8px 4px; padding: 6px 0 12px; border-bottom: 1px solid var(--border-dim); }
+.wcard2 .grp { margin-top: 10px; }
+.wcard2 .cap { font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.wcard2 .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.wcard2 .acts .sbtn.warn { color: var(--color-red); border-color: rgba(var(--red-rgb), 0.5); }
+.wcard2 .acct { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 11px var(--font-mono); color: var(--muted); }
+.wcard2 .acct .dd { flex: 1 1 auto; min-width: 0; }
+.wcard2 .note { font: 11px var(--font-mono); color: var(--color-yellow); margin-top: 6px; }
+#wList .li.wr:has(+ .wcard2), #wList .li:last-child, #wList .wcard2:last-child { border-bottom: 0; }
+
+/* General: the two display choices side by side */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.two .field { min-width: 0; }
+
+/* Networks: each node a row as Beam's addresses (ui .li.addr): whether it answers, its host, how fast, the list's cross;
+   the one in use lit as the address shown; dragged, a line where it goes */
+.nodes { margin: 4px 0 6px; }
+.node { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto 16px; align-items: center; gap: 0 10px; padding: 6px 8px; font: var(--fs-s) var(--font-mono); cursor: grab; }
+.node:hover, .node.use { background: rgba(255, 255, 255, 0.03); }
+.node.use .h { color: var(--accent); }
+.node .st { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.node .st.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.node .st.slow { background: var(--color-yellow); }
+.node .st.bad { background: var(--color-red); }
+.node .h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.node .meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.node .a-x { justify-self: end; }
+.node .a-x svg { width: 14px; height: 14px; }
+.node.solo { cursor: default; }
+.node.dragging { opacity: 0.4; }
+.node.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.node.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+.panel-title .chain { margin-right: 8px; }
+
+/* Storage and About: their figures as a confirmation's */
+.kv.keep { margin: 4px 0 10px; }
+.kv.about dd .ics, .kv.keep dd .ics { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: -1px; }
+.two .dd { min-width: 0; width: 100%; }
+.two .dd .dd-btn { min-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv.about dd { white-space: pre-line; }      /* a line each: the engine and its fork, the bridge's two sides */
+
+/* the sections as the header's quiet tabs, from edge to edge */
+#setNav { justify-content: space-between; gap: 0; }
+/* the wallet's small buttons everywhere here (ui .seg.mini, as All) */
+.sbtn { font: 700 10px var(--font-mono); letter-spacing: 0.02em; padding: 4px 8px; cursor: pointer; color: var(--text-dim); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; white-space: nowrap; }
+.sbtn:hover { border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
+/* a figure in a hint white (a date, a size); a panel's meta as the wallet tab's (block: grey, the figure white) */
+.sp-sec .hint b { color: var(--text); font-weight: 400; }
+.sp-sec .panel-meta b { color: var(--text); font-weight: 700; }
+/* a hint under a field 8 px apart from it, as everywhere else */
+.sp-sec .field + .hint, .sp-sec .nodes + .hint, .sp-sec .kv + .field { margin-top: 8px; }
+.sp-sec .inline { align-items: center; }
+.sp-sec .inline .dd.compact { flex: none; width: auto; }
+.sp-sec .two + .hint { margin-top: 8px; }
+
+/* Storage's picker the card's width, its button after it */
+.sp-sec .inline.wide { display: flex; gap: 8px; }
+.sp-sec .inline.wide .dd { flex: 1 1 auto; min-width: 0; }
+.sp-sec .field + .kv.keep { margin-top: 10px; }
+/* an explanation that folds open under a quiet head with its arrow */
+.fold { margin-top: 8px; }
+.fold-h { font-size: 12px; }      /* a quiet link, as dApps' disconnect */
+.fold-arrow { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 4px; vertical-align: -4px; color: var(--muted); cursor: pointer; transition: transform 0.2s; }
+.fold-arrow svg { width: 14px; height: 14px; }
+.fold.open .fold-arrow { transform: rotate(180deg); }
+.fold-b { display: none; margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.fold.open .fold-b { display: block; }
+.fold-b p { margin: 0 0 6px; }
+.fold-b b { color: var(--text-dim); font-weight: 400; font-family: var(--font-mono); font-size: 11px; }
+/* the sections end where the wallet tab's Ethereum card does (the last card's margin off) */
+.sp-sec > :last-child { margin-bottom: 0; }
+html.popup main { padding-bottom: 3px; }      /* scrolled to the end, the last card 3 px above the footer as the wallet tab's Ethereum card */
+
+/* a node's or the RPCs' card under its row: what is behind it (as a transaction's in Activity) */
+.node { cursor: pointer; }
+.node.open { background: rgba(255, 255, 255, 0.03); }
+.nd-more { margin: 0 8px 6px 25px; padding: 6px 0 8px; }
+.nd-more .kv { gap: 4px 12px; }
+.nd-more .kv dd { white-space: pre-line; font-size: 11px; }
+/* the public RPCs' count at the row's right end, where the others' cross is */
+.node.solo .meta.end { grid-column: 3 / span 2; justify-self: end; }
+.kv.about .sp { display: inline-block; width: 12px; }
+.sp-sec .kv.keep + .hint { margin-top: 16px; }      /* the explanation apart from the figures, at the card's end */
+.two .ex { display: block; margin-top: 6px; padding-left: 4px; font: 12px var(--font-mono); color: var(--text); white-space: nowrap; }      /* how it shows, under its picker */
+.two .ex .u { color: var(--muted); }
+.sp-sec .check { margin: 4px 0 2px; font-size: 12px; }
+.sp-sec .check b { color: var(--text); font-weight: 400; }
+.sp-sec .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sp-sec .check + .field { margin-top: 10px; }
+.sp-sec .row + .hint { margin-top: 8px; }
+.sp-sec .hint .nw { white-space: nowrap; }
+.sp-sec .check { align-items: flex-start; }
+.sp-sec .check input { margin-top: 3px; }
+.sp-sec .two + .hint { margin-top: 12px; }
+.sp-sec .hint:empty { display: none; }
+/* the checkbox in the wallet's colours: a turquoise frame, filled turquoise with a dark tick when on */
+.sp-sec .check input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 3px 0 0; border: 1px solid rgba(var(--accent-rgb), 0.6); border-radius: 3px; background: rgba(var(--accent-rgb), 0.06); cursor: pointer; display: grid; place-items: center; }
+.sp-sec .check input:hover { border-color: var(--accent); }
+.sp-sec .check input:checked { background: var(--accent); border-color: var(--accent); }
+.sp-sec .check input:checked::after { content: ''; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg, #071a26); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.sp-sec .check input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
+
+/* a card's account picker as the wallet tab's one, row for row (wallet.css :is(#acctDd, #bxAcct)) */
+.wcard2 .acct .dd.key-acct { flex: 1 1 auto; min-width: 0; margin-left: 0; }
+.key-acct .dd-list [role="option"] { display: flex; align-items: center; gap: 8px; padding: 5px 8px; line-height: 16px; margin: 0 10px; border-radius: 4px; }
+.key-acct .dd-list .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.key-acct .dd-list .ad { flex: none; margin-left: auto; color: var(--muted); }
+.key-acct .dd-list [aria-selected="true"] .ad { color: inherit; }
+.wcard2 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.wcard2 .cols .acts { flex-wrap: nowrap; }
+.wcard2 .acct-row { margin-top: 8px; }
+.wcard2 .acct-row .acct { margin: 0; }

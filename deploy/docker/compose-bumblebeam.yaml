@@ -14,7 +14,7 @@ services:
     container_name: beam-node
     hostname: beam-node
     restart: unless-stopped
-    command: ["/data/bin/beam-node", "--config_file=/data/beam-node.cfg"]   # patched build: 7.5.14548 + BeamMW/beam#2171 (websocket_port segfault, #2170); back to "beam-node" once released
+    command: ["/data/bin/beam-node", "--config_file=/data/beam-node.cfg"]   # patched build 7.5.14551: 7.5.14548 + BeamMW/beam#2171 (websocket_port segfault and plain sessions closed after 30 s, #2170); back to "beam-node" once released
     working_dir: /data
     ports:
       - "10000:10000"                     # p2p, the node is a full peer
@@ -209,6 +209,8 @@ services:
     ports:
       - "3333-3334:3333-3334"             # stratum PPLNS / solo
       - "3443-3444:3443-3444"             # stratum TLS PPLNS / solo
+      - "1130-1131:1130-1131"             # HeroMiners' Beam ports (TLS, PPLNS) for their miners after they delisted Beam
+                                          # on 2026-11-20: pool.toml [stratum] extra_tls_ports labels them on the dashboard
     volumes:
       - /data/bumblebeam/pool:/etc/bumblebeam:ro
     ulimits:
@@ -275,6 +277,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     volumes:
       - ./containers/nginx/conf:/etc/nginx/conf.d:ro
+      - /data/bumblebeam/www:/srv/www:ro   # static pages of bumblebeam.org (/research/...)
       - /data/bumblebeam/letsencrypt:/etc/letsencrypt
       - /data/bumblebeam/logs/nginx:/var/log/nginx
       - /etc/localtime:/etc/localtime:ro

@@ -420,7 +420,7 @@
   }
 
   const connRow = (c, withMiner = true) => `<tr>
-    <td>${esc(c.peer)}<span class="sub">${int(c.port)} · ${esc(c.mode)}${c.tls ? ' · TLS' : ''}</span></td>
+    <td>${esc(c.peer)}<span class="sub">${int(c.port)} · ${esc(c.mode)}${c.tls ? ' · TLS' : ''}${c.via ? ` · <b>${esc(c.via)}</b>` : ''}</span></td>
     ${withMiner ? `<td>${c.miner ? `<a href="#miner/${Number(c.minerId)}">${esc(short(c.miner))}</a>` : '<span class="dim">not logged in</span>'}<span class="sub">${esc(c.worker)}</span></td>` : `<td>${esc(c.worker)}</td>`}
     <td>${esc(c.agent) || '<span class="dim">—</span>'}</td><td>${ago(c.started).replace(' ago', '')}</td>
     <td class="num">${int(c.diff)}</td><td class="num">${int(c.accepted)}<span class="sub">${int(c.stale)} stale · ${int(c.rejected)} rej</span></td>
@@ -433,13 +433,18 @@
 
   async function connections() {
     const c = await api('connections');
+    // miners that came in on another pool's ports ([stratum] extra_tls_ports), counted per label
+    const via = {};
+    c.live.forEach((x) => { if (x.via) via[x.via] = (via[x.via] || 0) + 1; });
+    const viaNote = Object.keys(via).length
+      ? `<p class="hint">Through other pools' ports: ${Object.entries(via).map(([k, n]) => `${esc(k)} ${int(n)}`).join(', ')}.</p>` : '';
     const live = c.live.length
-      ? `<div class="table-wrap"><table>${connHead()}<tbody>${c.live.map((x) => connRow(x)).join('')}</tbody></table></div>`
+      ? `${viaNote}<div class="table-wrap"><table>${connHead()}<tbody>${c.live.map((x) => connRow(x)).join('')}</tbody></table></div>`
       : '<p class="hint">Nobody is connected.</p>';
     const recent = c.recent.length
       ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Peer</th><th>Lasted</th><th>Sent first</th><th>Ended because</th></tr></thead><tbody>
         ${c.recent.map((r) => `<tr><td>${ago(r.ts)}<span class="sub">${time(r.ts)}</span></td>
-          <td>${esc(r.peer)}<span class="sub">${int(r.port)} · ${esc(r.mode)}${r.tls ? ' · TLS' : ''}</span></td>
+          <td>${esc(r.peer)}<span class="sub">${int(r.port)} · ${esc(r.mode)}${r.tls ? ' · TLS' : ''}${r.via ? ` · <b>${esc(r.via)}</b>` : ''}</span></td>
           <td>${int(r.ts - r.started)} s</td><td class="wrap">${esc(r.first)}</td><td class="wrap">${esc(r.reason)}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="hint">None since the pool started.</p>';
@@ -510,7 +515,8 @@
   }
   // Miners that are most likely one person: the same wallet (exact, from the addresses); the same IP + worker
   // with one address taking over within an hour of the other (from the pool's miner_sessions, operator only); and
-  // connected from the same IP right now (the live connections). The IP ones are hints: people share NATs.
+  // connected from the same IP at the same time, now or earlier (the live connections, the sessions). The IP ones are
+  // hints: people share NATs.
   function linksOf(list, live) {
     const out = new Map(list.map((m) => [m.id, { wallet: [], rig: [], now: [] }]));
     const keys = new Map(list.map((m) => [m.id, walletKey(m.address)]));
@@ -528,17 +534,20 @@
         if (keys.get(a.id) && keys.get(a.id) === keys.get(b.id)) l.wallet.push(b.id);
         if ((a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && x.worker === y.worker
           && Math.max(x.first, y.first) - Math.min(x.last, y.last) <= 3600))) l.rig.push(b.id);
+        // the same IP at the same time: now (live) or earlier (sessions that overlapped), so the link stays after
+        // one of them disconnects
         const ia = ips.get(a.id), ib = ips.get(b.id);
-        if (ia && ib && [...ia].some((x) => ib.has(x))) l.now.push(b.id);
+        if ((ia && ib && [...ia].some((x) => ib.has(x)))
+          || (a.sessions || []).some((x) => (b.sessions || []).some((y) => x.ip === y.ip && Math.max(x.first, y.first) <= Math.min(x.last, y.last)))) l.now.push(b.id);
       }
     }
     return out;
   }
   const linkBadges = (l) => [
-    // the text is in the tooltips: 🔗 the same wallet, ⛏ the same rig, 🌐 the same IP right now
+    // the text is in the tooltips: 🔗 the same wallet, ⛏ the same rig, 🌐 the same IP at the same time
     l && l.wallet.length ? `<span class="badge ok" title="the same wallet as ${l.wallet.map((i) => '#' + i).join(', ')}: its address carries the same wallet id">🔗 ${l.wallet.map((i) => '#' + i).join(' ')}</span>` : '',
     l && l.rig.length ? `<span class="badge pending" title="the same rig as ${l.rig.map((i) => '#' + i).join(', ')}: the same IP and worker, one address taking over within an hour of the other - probably one person (a hint, not a proof)">⛏ ${l.rig.map((i) => '#' + i).join(' ')}</span>` : '',
-    l && l.now.length ? `<span class="badge pending" title="the same IP as ${l.now.map((i) => '#' + i).join(', ')} right now: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
+    l && l.now.length ? `<span class="badge pending" title="connected from the same IP as ${l.now.map((i) => '#' + i).join(', ')} at the same time, now or earlier: maybe one person (a hint - people share NATs)">🌐 ${l.now.map((i) => '#' + i).join(' ')}</span>` : '',
   ].join(' ');
 
   // the address type as the wallet named it (a trailing ? = guessed from the address's shape, the wallet has not

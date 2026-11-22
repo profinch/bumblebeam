@@ -138,17 +138,18 @@ async fn main() -> Result<()> {
     if role.stratum() {
         tokio::spawn(upstream::run(shared.clone(), submit_rx));
         tokio::spawn(accounting::credit_loop(shared.clone()));
-        let acceptor = if cfg.stratum.pplns_tls_port > 0 || cfg.stratum.solo_tls_port > 0 {
+        let acceptor = if cfg.stratum.pplns_tls_port > 0 || cfg.stratum.solo_tls_port > 0 || !cfg.stratum.extra_tls_ports.is_empty() {
             Some(stratum::tls_acceptor(&cfg.stratum.tls_cert, &cfg.stratum.tls_key).context("stratum tls_cert/tls_key")?)
         } else {
             None
         };
-        let ports = [
+        let mut ports = vec![
             (cfg.stratum.pplns_port, Mode::Pplns, None),
             (cfg.stratum.solo_port, Mode::Solo, None),
             (cfg.stratum.pplns_tls_port, Mode::Pplns, acceptor.clone()),
             (cfg.stratum.solo_tls_port, Mode::Solo, acceptor.clone()),
         ];
+        ports.extend(cfg.stratum.extra_tls_ports.iter().map(|e| (e.port, Mode::Pplns, acceptor.clone())));
         for (port, mode, tls) in ports {
             if port == 0 {
                 continue;

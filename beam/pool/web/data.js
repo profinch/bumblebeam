@@ -82,6 +82,9 @@ const BB = (() => {
     return {
       id: str(x.id, 40), name: str(x.name, 40) || 'unknown', website: str(x.website, 200), scheme: str(x.payout_scheme ?? x.scheme, 12),
       fee: num(x.fee), hashrate: num(x.hashrate) || 0, miners: num(x.miners), workers: num(x.workers),
+      // over the hour every row is over, its part of the network and its reward a day at the current
+      // difficulty (the pool server's /api/network; absent from the explorer fallback)
+      hashrate1h: num(x.hashrate1h), share: num(x.share), rewardDay: num(x.rewardDay),
       blocks24h: num(x.blocks_past_24h ?? x.blocks_24h ?? x.blocks24h), blocks24hHours: num(x.blocks24hHours), lastTs: tsOf(x.last_block_ts ?? x.lastTs),
       series: series(x.hashrate_series ?? x.series),
     };
@@ -90,7 +93,8 @@ const BB = (() => {
   let netAt = 0, proxyFailedAt = 0;
   async function network() {
     if (netCache && Date.now() - netAt < 25000) return netCache;
-    const out = { ok: false, pools: [], hashrate: null, height: null, difficulty: null, avgBlock: null, blocks24h: null, priceUsd: null, othersHashrate: null, source: null };
+    const out = { ok: false, pools: [], hashrate: null, height: null, difficulty: null, avgBlock: null, blocks24h: null, priceUsd: null,
+      othersHashrate: null, othersBlocks24h: null, othersShare: null, othersRewardDay: null, hashrateSource: null, blockHashrate: null, source: null };
 
     // The pool server caches the explorer for all visitors; use it when it answers.
     if (POOL_API && Date.now() - proxyFailedAt > 60000) {
@@ -105,6 +109,11 @@ const BB = (() => {
         out.blocks24h = num(p.blocks24h);
         out.priceUsd = num(p.priceUsd);
         out.othersHashrate = num(p.othersHashrate);
+        out.othersBlocks24h = num(p.othersBlocks24h);
+        out.othersShare = num(p.othersShare);
+        out.othersRewardDay = num(p.othersRewardDay);
+        out.hashrateSource = typeof p.hashrateSource === 'string' ? p.hashrateSource : null;
+        out.blockHashrate = num(p.blockHashrate);
         out.pools = (Array.isArray(p.pools) ? p.pools : []).map(normPool);
         netCache = out; netAt = Date.now();
         return out;

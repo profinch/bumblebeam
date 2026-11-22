@@ -272,11 +272,13 @@
   }
 
   // what the network's hashrate is, wherever it is shown
-  const NET_HR_TIP = 'Now: what pools report from their shares over the past few minutes, scaled up to account for the share of blocks found in the last 24 hours by pools that aren’t listed (solo nodes and pools without an API). Blocks alone are too sparse for a current estimate: over an hour, luck varies by about ±13%.';
+  const NET_HR_TIP = 'The last hour: BumbleBeam from its own shares, every other pool the average of what it reported this hour, and the miners no pool claims (solo nodes, pools without an API) from their blocks of the last 24 hours. One window for all, because rented hashpower moves between pools within minutes. Checked against the work in the last 120 blocks: when the two differ by over 2x, the blocks’ figure is shown.';
+  // the network's hashrate as a figure: ≈, as it is an estimate; marked when the blocks' figure stands
+  const netHr = (net) => `≈${hr(net && net.hashrate)}${net && net.hashrateSource === 'blocks' ? ' <span class="dim">(blocks)</span>' : ''}`;
   function netMeta(net, extra = '') {
     if (!net || !net.ok) return '<span class="err">network data unavailable</span>';
     // the rest in a group of its own, which phones put on a line under the network's hashrate
-    return `<span class="tipped net-hr" title="${NET_HR_TIP}">Network: <b>${hr(net.hashrate)}</b></span><span class="net-more"><span>Block: <b>${int(net.height)}</b></span>
+    return `<span class="tipped net-hr" title="${NET_HR_TIP}">Network: <b>${netHr(net)}</b></span><span class="net-more"><span>Block: <b>${int(net.height)}</b></span>
       <span>Diff: <b>${net.difficulty ? fix(net.difficulty / 1e6, 2) + 'M' : '—'}</b></span>
       <span>Avg block: <b>${net.avgBlock ? fix(net.avgBlock, 1) + 's' : '—'}</b></span>${extra}</span>`;
   }
@@ -312,47 +314,43 @@
       for (const m of ['pplns', 'solo']) for (const [t, v] of stats.modes[m].series || []) sum.set(t, (sum.get(t) || 0) + v);
       series = [...sum].sort((x, y) => x[0] - y[0]);
     }
+    // the hour, the share and the reward a day from the server's row for us, the same window as the others'
+    const srv = net.pools.find((p) => p.id === 'bumblebeam') || {};
     rows.push({ id: 'bumblebeam', name: 'BumbleBeam', fee: sameFee ? stats.fee : null,
       scheme: sameFee ? `${stats.scheme} / SOLO` : `${pctFee(stats.fee)} ${stats.scheme} · ${pctFee(stats.soloFee)} SOLO`,
-      hashrate: stats.hashrate, miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
-    rows.sort((a, b) => b.hashrate - a.hashrate);
-    let total = net.hashrate || rows.reduce((s, r) => s + r.hashrate, 0);
-    // what a pool's miners together can expect a day: its share of the network's 1440 blocks of a
-    // day at the current reward, less its fee; in USD at the on-chain oracle's price
+      hashrate: stats.hashrate, hashrate1h: srv.hashrate1h, share: srv.share, rewardDay: srv.rewardDay,
+      miners: stats.minersTotal, workers: stats.workersTotal, blocks24h: stats.blocks24h, lastTs: stats.lastBlockFound, series, ours: true });
+    // the row's figure: the hour (as the network's is), or its latest without the server's hour
+    const hOf = (p) => (p.hashrate1h != null ? p.hashrate1h : p.hashrate || 0);
+    rows.sort((a, b) => hOf(b) - hOf(a));
+    const total = net.hashrate || rows.reduce((s, r) => s + hOf(r), 0);
+    const shareOf = (p) => (p.share != null ? p.share : total ? hOf(p) / total : null);
+    // what a pool's miners together can expect a day while the difficulty stays: its blocks a day at the
+    // current difficulty (expected solutions per block) times the reward, less its fee; in USD at the
+    // on-chain oracle's price
     const price = net.priceUsd;
-    const perDay = (p) => (total && stats.blockReward ? (p.hashrate / total) * 1440 * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
+    const perDay = (p) => (p.rewardDay != null ? p.rewardDay
+      : net.difficulty && stats.blockReward ? (hOf(p) * 86400 / net.difficulty) * stats.blockReward * (1 - (p.fee || 0) / 100) : null);
     const usd = (g) => {
       if (!price || g == null) return '';
       const v = (g / BB.GROTH) * price, d = v && v < 10 ? 2 : 0; // cents under $10: $2.90, not $2.9
       return `$${v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
     };
-    // the rest of the network, which no listed pool claims: solo miners on their own nodes, pools
-    // that publish no API; always last. Its part of the network is its part of the day's blocks: the
-    // network's hashrate, from an hour of blocks, swings with luck far more than the pools' own
-    // figures, so the network less the pools went below zero on a lucky hour. The pools then are
-    // the rest, and every share is of their sum and the Others row, adding up to 100%.
-    const pools = rows.reduce((s, r) => s + (r.hashrate || 0), 0);
-    // only with every active pool's blocks of the day known: else the pools without a figure would
-    // count as the others; the server's figures then (the chain's estimate less the pools)
-    const allKnown = rows.every((r) => !r.hashrate || r.blocks24h != null);
-    const othersBlocks = net.blocks24h && allKnown ? Math.max(0, net.blocks24h - rows.reduce((s, r) => s + (r.blocks24h || 0), 0)) : null;
-    const f = othersBlocks != null ? othersBlocks / net.blocks24h : null;
-    if (f != null && f < 1 && pools > 0) total = pools / (1 - f);
-    const others = net.hashrate ? {
-      hashrate: f != null ? total * f : net.othersHashrate != null && !allKnown ? net.othersHashrate : Math.max(0, net.hashrate - pools),
-      blocks24h: othersBlocks,
-    } : null;
+    // the rest of the network, which no listed pool claims (solo miners on their own nodes, pools that
+    // publish no API), from its blocks of the day; always last. Only from the pool server: the explorer
+    // fallback cannot tell whose the blocks are.
+    const others = net.othersHashrate != null ? { hashrate: net.othersHashrate, blocks24h: net.othersBlocks24h, share: net.othersShare, rewardDay: net.othersRewardDay } : null;
     const priceMeta = price ? `<span>BEAM: <b>$${price.toFixed(4)}</b></span>` : '';
     const head = meta ? netMeta(net, `<span>Blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`) : `<span>${rows.length} pools · network blocks 24h: <b>${int(net.blocks24h)}</b></span>${priceMeta}`;
     return `<section class="panel" id="pools">
       <div class="panel-head"><h2 class="panel-title">Beam mining pools</h2><div class="panel-meta">${head}</div></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th>Hashrate</th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="mid"><span class="tipped" title="What a pool's miners together can expect a day: its share of the network hashrate times 1440 blocks times the block reward, less the pool's fee. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Pool</th><th><span class="tipped" title="Over the last hour, as the network's hashrate is: what the pool reported on average this hour (for BumbleBeam, its own shares). Below it, the latest figure.">Hashrate</span></th><th class="num">Share</th><th class="num">Miners</th><th class="num">Workers</th><th class="num">Blocks 24h</th><th class="mid"><span class="tipped" title="What a pool's miners together can expect a day at the current difficulty: its hashrate over the last hour times 86,400 s over the difficulty (the expected solutions per block) gives its blocks a day, times the block reward, less the pool's fee. The difficulty follows the network's hashrate over several hours, so the figure moves with it. In USD at the median of Beam's on-chain price oracle.">Est. reward / day</span></th><th class="num"><span class="tipped" title="When each pool found its latest block, as the pool itself records it: for BumbleBeam, the moment the block went out to the network. It can read up to a minute later than Age in Recent network blocks, which is the block's timestamp on the chain.">Last found</span></th><th></th></tr></thead><tbody>
       ${rows.map((p, i) => `<tr class="${p.ours ? 'ours' : ''}">
         <td class="dim">${i + 1}</td>
         <td><span class="name">${esc(p.name)}</span><span class="sub">${p.fee != null ? pctFee(p.fee) : ''} ${esc(p.scheme)}</span></td>
-        <td><div class="hashcell"><span>${hr(p.hashrate)}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
-            <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (p.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
-        <td class="num">${pct(p.hashrate / total, 1)}</td>
+        <td><div class="hashcell"><span>${hr(hOf(p))}${p.hashrate1h != null ? `<span class="sub">now ${hr(p.hashrate)}</span>` : ''}</span>${sparkline(p.series, p.ours ? '#00f6d2' : '#f25f5b')}</div>
+            <div class="bar ${p.ours ? 'accent' : ''}"><i style="width:${Math.min(100, (shareOf(p) || 0) * 100).toFixed(1)}%"></i></div></td>
+        <td class="num">${pct(shareOf(p), 1)}</td>
         <td class="num">${int(p.miners)}</td><td class="num">${int(p.workers)}</td><td class="num">${p.blocks24hHours ? `<span class="tipped" title="Estimated: the pool's blocks over the last ${fix(p.blocks24hHours, 1)} h, from its own API, scaled to a day. Counted exactly once a whole day of its blocks is known.">≈${int(p.blocks24h)}</span>` : int(p.blocks24h)}</td>
         <td class="mid">${perDay(p) != null ? `${beamAmt(perDay(p), 0)}${price ? `<span class="sub">${usd(perDay(p))}</span>` : ''}` : '—'}</td>
         <td class="num dim">${ago(p.lastTs)}</td><td><span class="dot ${p.hashrate ? '' : 'off'}"></span></td></tr>`).join('')}
@@ -360,10 +358,10 @@
         <td></td>
         <td><span class="name">Others</span><span class="sub">Unknown miners</span></td>
         <td><div class="hashcell"><span>${hr(others.hashrate)}</span></div>
-            <div class="bar"><i style="width:${Math.min(100, (others.hashrate / total) * 100).toFixed(1)}%"></i></div></td>
-        <td class="num">${pct(others.hashrate / total, 1)}</td>
+            <div class="bar"><i style="width:${Math.min(100, (others.share || 0) * 100).toFixed(1)}%"></i></div></td>
+        <td class="num">${pct(others.share, 1)}</td>
         <td class="num dim">—</td><td class="num dim">—</td><td class="num">${others.blocks24h != null ? int(others.blocks24h) : '—'}</td>
-        <td class="mid">${beamAmt(perDay(others), 0)}${price ? `<span class="sub">${usd(perDay(others))}</span>` : ''}</td>
+        <td class="mid">${others.rewardDay != null ? `${beamAmt(others.rewardDay, 0)}${price ? `<span class="sub">${usd(others.rewardDay)}</span>` : ''}` : '—'}</td>
         <td class="num dim">—</td><td></td></tr>` : ''}
       </tbody></table></div></section>`;
   }
@@ -412,14 +410,18 @@
   views.dashboard = async () => {
     const range = chartRange(), cmode = chartMode();
     const [stats, { blocks }, net] = await Promise.all([BB.pool(`stats?range=${range}${cmode === 'all' ? '' : `&mode=${cmode}`}`), BB.pool('blocks?limit=8'), BB.network().catch(() => null)]);
-    const share = net && net.hashrate ? stats.hashrate / net.hashrate : null;
-    const expectedPerDay = share != null ? share * 1440 : null;
+    // our part of the network over the hour, from the server's row for us (the same window as the network's)
+    const ours = net && net.ok ? net.pools.find((p) => p.id === 'bumblebeam') : null;
+    const share = ours && ours.share != null ? ours.share : null;
+    // the blocks the day's shares should have found: each block's effort is its shares over the
+    // difficulty, so their sum is the expected count (a share × 1440 mixes this hour with the day)
+    const expectedPerDay = stats.blocks24h != null && stats.effort24h != null ? stats.blocks24h * stats.effort24h : null;
     // the newest block the pool found, as the list has it (its height and the worker that found it)
     const last = blocks && blocks[0];
     return `
       <div class="page-head"><h1 class="page-title">Beam Mining Pool</h1></div>
       <div class="tiles">
-        ${tile('Pool hashrate', hr(stats.hashrate), share != null ? `${pct(share, 2)} of the network` : '')}
+        ${tile('Pool hashrate', hr(stats.hashrate), lines('last 10 minutes', share != null ? `${pct(share, 1)} of the network over the hour` : ''))}
         ${tile('Miners / workers', `${int(stats.minersTotal)} / ${int(stats.workersTotal)}`)}
         ${tile('Blocks 24h', int(stats.blocks24h), lines(expectedPerDay != null ? `expected ${fix(expectedPerDay, 1)} blocks` : '', stats.effort24h != null ? `${pct(stats.effort24h, 0)} average effort` : ''))}
         ${tile('Last block', ago(stats.lastBlockFound), last ? lines(`block height ${int(last.height)}`, last.finder ? `worker ${esc(last.finder)}` : '') : '')}
@@ -460,7 +462,7 @@
     const next = BB.nextRewardChange(net && net.height);
     return `<div class="page-head"><h1 class="page-title">Network</h1></div>
       <div class="tiles">
-        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${hr(net && net.hashrate)}</span>`)}
+        ${tile('Network hashrate', `<span class="tipped" title="${NET_HR_TIP}">${netHr(net)}</span>`, net && net.blockHashrate ? `last hour · ${hr(net.blockHashrate)} by the last 120 blocks` : 'last hour')}
         ${tile('Difficulty', net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M` : '—', 'solutions per block, expected')}
         ${tile('Block reward', beam(BB.blockReward(net && net.height), 1), `${beam(next.reward, 1)} from height ${int(next.height)}`)}
         ${tile('Blocks 24h', int(net && net.blocks24h), net && net.avgBlock ? `avg block ${fix(net.avgBlock, 1)}s` : '')}
@@ -766,53 +768,93 @@
   });
 
   // Official download pages of the miners on the connect page; nothing is mirrored here.
+  const RELEASES = 'https://github.com/profinch/bumblebeam/releases';
   const MINERS = [
-    { name: 'MXBM', url: 'https://git.maxnflaxl.dev/maxnflaxl/MXBM', what: 'open source (Apache-2.0), NVIDIA, AMD, Apple; built from source' },
+    { name: 'BumbleBeam Miner', url: `${RELEASES}/latest`, what: 'open source; an app with a Start button for Windows, Linux and Mac (GPU via MXBM, or the CPU), and a console CPU miner' },
     { name: 'lolMiner', url: 'https://github.com/Lolliedieb/lolMiner-releases/releases', what: 'NVIDIA, AMD; Windows, Linux' },
     { name: 'GMiner', url: 'https://github.com/develsoftware/GMinerRelease/releases', what: 'NVIDIA, AMD; Windows, Linux' },
-    { name: 'BumbleBeam Miner', url: 'https://github.com/profinch/bumblebeam/releases/latest', what: 'open source; tray apps for Windows, Linux and Mac (GPU via MXBM, or CPU) and a console CPU miner' },
+    { name: 'MXBM', url: 'https://git.maxnflaxl.dev/maxnflaxl/MXBM', what: 'open source (Apache-2.0), NVIDIA, AMD, Apple; built from source' },
   ];
+  const WALLET_URL = 'https://beam.mw/downloads';
+  // Where miners connect: the pool itself, and relays that pass the connection on to it
+  // (docs/deploy.md, "Relays"). A relay is offered only for the pool it belongs to.
+  const SERVERS = [
+    { id: 'eu', name: 'World', where: 'For everyone: the pool itself, in Finland' },
+    { id: 'ru', name: 'Russia', where: 'Novosibirsk, a relay to the same pool', host: 'ru.bumblebeam.org', of: 'stratum.bumblebeam.org' },
+  ];
+  // How to mine, as the guide's tabs: the app first, it needs no commands
+  const HOW = [['app', 'App'], ['cli', 'Command line'], ['hive', 'HiveOS'], ['nicehash', 'NiceHash'], ['mrr', 'MRR'], ['hero', 'HeroMiners']];
+  // HeroMiners' Beam ports, kept on this pool for its miners after it delisted Beam on 2026-11-20 (TLS, PPLNS)
+  const HERO_PORTS = [1130, 1131];
+  const tip = (text, title) => `<span class="tipped" title="${esc(title)}">${text}</span>`;
+  const copyLine = (text, label) => `<div class="code"><pre>${esc(text)}</pre><button class="btn small" data-copy="${esc(text)}"${label ? ` aria-label="copy ${esc(label)}"` : ''}>copy</button></div>`;
 
   views.connect = async () => {
     const [stats, net] = await Promise.all([BB.pool('stats'), BB.network().catch(() => null)]);
     const host = BB.stratumHost(stats);
     const ports = stats.ports || { pplns: 3333, solo: 3334, pplnsTls: 3443, soloTls: 3444 };
-    const top = net && net.ok && net.pools.length ? net.pools.reduce((a, b) => (b.hashrate > a.hashrate ? b : a)) : null;
+    const top = net && net.ok && net.pools.length ? net.pools.reduce((a, b) => ((b.share || 0) > (a.share || 0) ? b : a)) : null;
+    const hours = (s) => { const h = s / 3600; return `${Number.isInteger(h) ? h : h.toFixed(1)} hour${h === 1 ? '' : 's'}`; };
+    const payEvery = stats.payoutInterval ? hours(stats.payoutInterval) : 'two hours';
+    const minPay = beam(stats.minPayout, 2), matureH = hours((stats.maturity || 240) * 60);
+    const servers = SERVERS.filter((s) => !s.of || s.of === host);
+    const faq = [
+      ['How much will I earn?', `The calculator above gives the average for your card at today's network speed. Luck makes single days go up and down; over weeks it evens out. Remember the electricity: a big card draws 200-300 W.`],
+      ['Is my computer good enough?', 'An NVIDIA or AMD graphics card with 3 GB of memory or more mines Beam well. Without one, BumbleBeam Miner mines on the processor, but that is about a hundred times slower: fine for trying it out, not for earning.'],
+      ['PPLNS or Solo?', `Take <b>PPLNS</b> if unsure. The pool finds blocks all day and you get a share of each one, so small payouts come every few hours. <b>Solo</b> pays you a whole block (${beam(stats.blockReward, 0)}), but only when your own rig finds it, which for one card can take weeks. Both have the same ${pctFee(stats.fee)} fee.`],
+      ['When and how am I paid?', `Every ${payEvery}, once you have earned ${minPay} or more, straight to your wallet. A block counts after ${int(stats.maturity || 240)} confirmations (about ${matureH}), so the first payout comes a few hours after you start. Your balance stays yours if you stop: it is paid as soon as it reaches ${minPay}.`],
+      ['My antivirus deletes the miner', 'Antivirus programs often flag every miner, because malware hides miners on other people\'s computers. If you downloaded it from one of the official pages above, add an exception for the miner\'s folder. Never take a miner from a chat or a file-sharing site.'],
+      ['The miner does not connect', `Check the address and port for typos (copy them from this page). If TLS fails, try the plain port (${int(ports.pplns)}). Some networks block unusual ports; try another network or ${servers.length > 1 ? 'the Russia server' : 'a VPN'}. A rejected share comes back with the reason, which tells a bad setting from a bad connection.`],
+      ['Several computers?', 'Use the same wallet address on all of them and give each a different rig name. Your stats page shows them one by one, and all of them add up to one balance.'],
+      ...(stats.nodeAddr ? [['Does my wallet need its own node?', `No. A Beam wallet can use our node: <code>${esc(stats.nodeAddr)}</code>.`]] : []),
+    ];
     return `<div class="page-head"><h1 class="page-title">Start mining</h1></div>
+      <p class="page-lead">Mine Beam with your graphics card in about ten minutes. There is no sign-up: your wallet address is your account,
+        and the pool pays into your own wallet. You need a computer with an NVIDIA or AMD card (or any processor, much slower) and a free Beam wallet.</p>
       <div class="grid2">
-        <section class="panel" id="guide"><div class="panel-head"><h2 class="panel-title">Connect in three steps</h2></div>
+        <section class="panel" id="guide"><div class="panel-head"><h2 class="panel-title">Connect in four steps</h2></div>
           <div class="steps">
-            <div class="step"><h3>Get an offline Beam address</h3>
-              <p>In any Beam wallet open <b>Receive</b> and choose an <b>offline</b> (permanent) address. A regular address expires and
-                needs your wallet online to receive, so payouts to it fail while the wallet is closed.${stats.coinbase ? ` Or skip the address: with <a href="https://github.com/profinch/bumblebeam/tree/main/beam/research/coinbase" target="_blank" rel="noopener">bb-coinbase</a> you are <b>paid in the blocks themselves</b>, to outputs you made, and log in with your <code>cb:…</code> account.` : ''}${stats.nodeAddr ? ` Your wallet can use our node: <code>${esc(stats.nodeAddr)}</code>.` : ''}</p>
-              <div class="row"><label class="field" style="flex:1;min-width:240px">Wallet address<input id="addr" placeholder="paste your offline address" spellcheck="false" autocomplete="off"></label>
-              <label class="field">Worker<input id="worker" value="rig1" maxlength="32" style="width:110px"></label></div>
+            <div class="step"><h3>Get a Beam wallet</h3>
+              <p>Download the official wallet for your computer or phone from <a href="${WALLET_URL}" target="_blank" rel="noopener">beam.mw/downloads</a> and create a new wallet. The pool never holds your coins: it sends them to this wallet.</p>
+              <div class="note warn">The wallet shows you a <b>seed phrase</b> of 12 words. Write it on paper and keep it safe: it is the only way back to your coins if the computer breaks. Nobody, us included, will ever ask you for it.</div></div>
+            <div class="step"><h3>Copy your payout address</h3>
+              <p>In the wallet open <b>Receive</b>, choose an <b>offline</b> address (some wallets call it <i>permanent</i> or <i>public offline</i>) and copy it.
+                It is long, over a hundred characters: that is right. A regular short address expires and receives only while your wallet is open, so payouts to it can fail.${stats.coinbase ? ` Or skip the address: with <a href="https://github.com/profinch/bumblebeam/tree/main/beam/research/coinbase" target="_blank" rel="noopener">bb-coinbase</a> you are <b>paid in the blocks themselves</b>, to outputs you made, and log in with your <code>cb:…</code> account.` : ''}</p>
+              <div class="row"><label class="field" style="flex:1;min-width:240px">Wallet address<input id="addr" placeholder="paste your offline address here" spellcheck="false" autocomplete="off"></label>
+              <label class="field"><span>${tip('Rig name', 'Any short name for this computer (letters, digits, - and _), so you can tell your rigs apart on your stats page')}</span><input id="worker" value="rig1" maxlength="32" style="width:110px"></label></div>
               <div class="note" id="addr-note" hidden></div></div>
-            <div class="step"><h3>Pick a mode</h3><p>PPLNS shares every block the pool finds, in proportion to your shares. Solo pays you the whole block, only when your rig finds it. Both ${pctFee(stats.fee)} fee.${stats.finderBonus ? ` In PPLNS the rig whose share finds a block also gets a <b>${pctFee(stats.finderBonus)} finder bonus</b> on top of its share.` : ''}</p>
-              <div class="row" style="align-items:center">
-                <div class="seg" id="mode"><button class="on" data-v="pplns">PPLNS</button><button data-v="solo">Solo</button></div>
-                <div class="seg" id="tls"><button data-v="0">TCP</button><button class="on" data-v="1">TLS</button></div>
-                <span class="dim mono" id="portline"></span>
-              </div></div>
-            <div class="step"><h3>Run your miner</h3><p>Any BeamHash III miner, NVIDIA or AMD with 3 GB or more. <a href="https://git.maxnflaxl.dev/maxnflaxl/MXBM" target="_blank" rel="noopener">MXBM</a> is the open-source GPU miner (CUDA, OpenCL, Metal), <a href="https://github.com/profinch/bumblebeam/releases/latest" target="_blank" rel="noopener">BumbleBeam Miner</a> is a tray app for Windows, Linux and Mac that mines on the GPU or CPU, and a console miner for any CPU with 8 GB of memory; lolMiner and GMiner work too. Rejected shares come back with the reason, so you can tell a bad kernel from a bad connection.</p>
-              <div class="stack" id="cmds" style="gap:8px"></div></div>
+            <div class="step"><h3>Run a miner</h3>
+              <p>Pick how you want to mine. Not sure? Take the <b>App</b>: a window with a Start button, nothing to type.</p>
+              <div class="seg" id="how" role="tablist" aria-label="How to mine">${HOW.map(([v, n]) => `<button role="tab" data-v="${v}">${n}</button>`).join('')}</div>
+              <div id="how-body" class="how-body"></div></div>
+            <div class="step"><h3>Check that it works</h3>
+              <ul class="howto">
+                <li>In the miner's window, <b>accepted</b> shares mean it works. A rejected share comes with the reason.</li>
+                <li>Open your stats a few minutes after the start. The hashrate there is the average of the last 10 minutes, so it climbs to your real speed over the first ten.</li>
+                <li>Payouts go out every ${payEvery}, once you have ${minPay} or more. A block counts after about ${matureH}, so the first payout comes a few hours after you start.</li>
+              </ul>
+              <div class="row"><a class="btn" id="my-stats" href="/miners" aria-disabled="true">Open my stats</a><span class="dim" id="my-stats-hint" style="font-size:12px;align-self:center">paste your address above first</span></div></div>
           </div>
         </section>
         <div class="stack">
           <section class="panel" id="calc"><div class="panel-head"><h2 class="panel-title">Calculator</h2><div class="panel-meta"><span>live network</span></div></div>
             <div class="row">
-              <label class="field" style="flex:1">Your hashrate, Sol/s<input id="sols" type="number" min="0" step="1" value="52"></label>
-              <div class="field">Card<div class="dd" id="card" data-value="52"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Card">RTX 3090 · 52</button><ul class="dd-list" role="listbox" tabindex="-1" hidden><li class="dd-group" role="presentation">NVIDIA</li><li role="option" data-v="85">RTX 4090 · 85</li><li role="option" data-v="78">RTX 5080 (MXBM) · 78</li><li role="option" data-v="57">RTX 4070 Ti Super · 57</li><li role="option" data-v="54">RTX 3080 Ti · 54</li><li role="option" data-v="52" aria-selected="true">RTX 3090 · 52</li><li role="option" data-v="47">RTX 4070 Super · 47</li><li role="option" data-v="47">RTX 4070 · 47</li><li role="option" data-v="46.5">RTX 3080 · 46.5</li><li role="option" data-v="35">RTX 3070 Ti · 35</li><li role="option" data-v="34">RTX 3070 · 34</li><li role="option" data-v="32.5">RTX 3060 Ti · 32.5</li><li role="option" data-v="26">RTX 5060 Ti · 26</li><li role="option" data-v="22">RTX 3060 · 22</li><li class="dd-group" role="presentation">AMD</li><li role="option" data-v="36">RX 6800 XT · 36</li><li role="option" data-v="33">RX 6900 XT · 33</li><li role="option" data-v="">custom</li></ul></div></div>
+              <label class="field" style="flex:1"><span>Your hashrate, ${tip('Sol/s', 'Solutions per second: the speed unit of Beam mining (BeamHash III). Pick your card to fill it in, or type what your miner shows.')}</span><input id="sols" type="number" min="0" step="1" value="52"></label>
+              <div class="field">Card<div class="dd" id="card" data-value="52"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Card">RTX 3090 · 52</button><ul class="dd-list" role="listbox" tabindex="-1" hidden><li class="dd-group" role="presentation">NVIDIA</li><li role="option" data-v="85">RTX 4090 · 85</li><li role="option" data-v="78">RTX 5080 (MXBM) · 78</li><li role="option" data-v="57">RTX 4070 Ti Super · 57</li><li role="option" data-v="54">RTX 3080 Ti · 54</li><li role="option" data-v="52" aria-selected="true">RTX 3090 · 52</li><li role="option" data-v="47">RTX 4070 Super · 47</li><li role="option" data-v="47">RTX 4070 · 47</li><li role="option" data-v="46.5">RTX 3080 · 46.5</li><li role="option" data-v="35">RTX 3070 Ti · 35</li><li role="option" data-v="34">RTX 3070 · 34</li><li role="option" data-v="32.5">RTX 3060 Ti · 32.5</li><li role="option" data-v="26">RTX 5060 Ti · 26</li><li role="option" data-v="22">RTX 3060 · 22</li><li class="dd-group" role="presentation">AMD</li><li role="option" data-v="36">RX 6800 XT · 36</li><li role="option" data-v="33">RX 6900 XT · 33</li><li class="dd-group" role="presentation">Processor</li><li role="option" data-v="1">16-core CPU · 1</li><li role="option" data-v="">custom</li></ul></div></div>
             </div>
             <div class="calc-out" id="calc-out"></div>
-            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement), in Sol/s; measure your own. Uses network hashrate ${hr(net && net.hashrate)},
-              ${beam(stats.blockReward, 1)} per block plus fees, ${pctFee(stats.fee)} pool fee.</p>
+            <p class="dim" style="font-size:11px;margin:14px 0 0;line-height:1.5">Card figures are lolMiner rates published by WhatToMine (the RTX 5080: MXBM's own measurement; the CPU: BumbleBeam Miner's), in Sol/s; measure your own. Uses the current difficulty (${net && net.difficulty ? `${fix(net.difficulty / 1e6, 2)}M, as ${hr(net.difficulty / 60)} at a block a minute` : '—'}),
+              ${beam(stats.blockReward, 1)} per block plus fees, ${pctFee(stats.fee)} pool fee. Electricity is not counted.</p>
           </section>
-          <section class="panel" id="downloads"><div class="panel-head"><h2 class="panel-title">Get a miner from its official source</h2></div>
+          <section class="panel" id="downloads"><div class="panel-head"><h2 class="panel-title">Downloads, from the official pages only</h2></div>
             <div class="stack why">
+              <div><a href="${WALLET_URL}" target="_blank" rel="noopener"><b>Beam Wallet</b></a> <span class="dim">· the official wallet: Windows, Mac, Linux, iOS, Android</span></div>
               ${MINERS.map((m) => `<div><a href="${m.url}" target="_blank" rel="noopener"><b>${m.name}</b></a> <span class="dim">· ${m.what}</span></div>`).join('')}
-              <div class="dim" style="font-size:12px">Only download miners from these pages. Copies on other sites and in chats are a common way to spread malware.</div>
+              <div class="dim" style="font-size:12px">Copies of miners on other sites and in chats are a common way to spread malware.</div>
             </div>
+          </section>
+          <section class="panel" id="faq"><div class="panel-head"><h2 class="panel-title">Questions</h2></div>
+            <div class="faq">${faq.map(([q, a]) => `<details><summary>${q}</summary><div>${a}</div></details>`).join('')}</div>
           </section>
           <section class="panel"><div class="panel-head"><h2 class="panel-title">Why BumbleBeam</h2></div>
             <div class="stack why">
@@ -821,27 +863,40 @@
               ${stats.finderBonus ? `<div><b>Finder bonus.</b> Find a block in PPLNS and ${pctFee(stats.finderBonus)} of it is yours on top of your share.</div>` : ''}
               <div><b>${pctFee(stats.fee)} fee</b>, PPLNS or solo on the same server, no registration. Payouts carry only Beam's own network fee.</div>
               ${stats.coinbase ? '<div><b>Non-custodial.</b> Be paid in the blocks, with coinbase outputs only your wallet can spend: the pool never holds your coins.</div>' : ''}
-              <div><b>Decentralises Beam.</b> ${top && net.hashrate ? `${esc(top.name)} holds ${pct(top.hashrate / net.hashrate, 0)}` : 'One pool holds most'} of the network today.</div>
+              <div><b>Decentralises Beam.</b> ${top && top.share != null ? `${esc(top.name)} holds ${pct(top.share, 0)}` : 'One pool holds most'} of the network today.</div>
             </div>
           </section>
           <section class="panel"><div class="panel-head"><h2 class="panel-title">Help</h2></div>
-            <div class="why">A rig mined to a wrong address, a payout is late, or a miner will not connect?
-              Write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> with your address and what you see.</div>
+            <div class="why">Stuck, a rig mined to a wrong address, or a payout is late?
+              Write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> with your address and what you see (a screenshot of the miner's window helps).</div>
           </section>
         </div>
       </div>
-      <template id="ctx" data-host="${esc(host)}" data-net="${Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}"
+      <template id="ctx" data-host="${esc(host)}" data-net="${net && net.difficulty ? net.difficulty / 60 : Number(net && net.hashrate) || 0}" data-fee="${Number(stats.fee) || 0}" data-reward="${Number(stats.blockReward) || 0}" data-pay="${esc(payEvery)}"
+        data-servers="${esc(JSON.stringify(servers.map((s) => ({ id: s.id, name: s.name, where: s.where, host: s.host || host }))))}"
         data-ports="${[ports.pplns, ports.solo, ports.pplnsTls, ports.soloTls].map((p) => Number(p) || 0).join(',')}"></template>`;
   };
 
   // Beam address shapes, for a hint only; the server validates. Regular SBBS addresses are
   // 64–66 hex chars; offline, max-privacy and public-offline addresses are much longer.
-  function addressHint(a) {
+  function addressKind(a) {
     if (!a) return null;
-    if (/^cb:[0-9a-f]{64}0[01]$/i.test(a)) return { cls: 'ok', text: 'Coinbase account: you are paid in the blocks themselves, to your own outputs. Keep the pair stock topped up.' };
-    if (/^[0-9a-f]{64,70}$/i.test(a)) return { cls: 'warn', text: 'This looks like a regular address. It expires and needs your wallet online; use an offline address from Receive.' };
-    if (a.length >= 100 && /^[0-9a-z]+$/i.test(a)) return { cls: 'ok', text: 'Offline address: payouts arrive while your wallet is closed.' };
-    return { cls: 'warn', text: 'This does not look like a Beam address.' };
+    if (/^cb:[0-9a-f]{64}0[01]$/i.test(a)) return 'coinbase';
+    if (/^[0-9a-f]{64,70}$/i.test(a)) return 'regular';
+    if (a.length >= 100 && /^[0-9a-z]+$/i.test(a)) return 'offline';
+    return 'bad';
+  }
+  function addressHint(a, how) {
+    const kind = addressKind(a);
+    if (!kind) return null;
+    if (how === 'nicehash') {
+      if (kind === 'regular') return { cls: 'ok', text: 'Regular address: right for NiceHash. Payouts to it arrive while your wallet is open, so open it every day or so.' };
+      if (kind === 'offline') return { cls: 'warn', text: 'NiceHash\'s pool check fails on long offline addresses: use a regular (short) address from Receive for NiceHash.' };
+    }
+    if (kind === 'coinbase') return { cls: 'ok', text: 'Coinbase account: you are paid in the blocks themselves, to your own outputs. Keep the pair stock topped up.' };
+    if (kind === 'regular') return { cls: 'warn', text: 'This looks like a regular address. It expires and needs your wallet open to receive; take an offline address from Receive.' };
+    if (kind === 'offline') return { cls: 'ok', text: 'Offline address: good. Payouts arrive even while your wallet is closed.' };
+    return { cls: 'warn', text: 'This does not look like a Beam address. Copy it again from Receive in your wallet.' };
   }
 
   // the card list (.dd) in place of a native <select>: the shared one in ui/components/dd.js
@@ -850,41 +905,139 @@
   function bindConnect() {
     const ctx = $('#ctx');
     if (!ctx) return;
-    const host = ctx.dataset.host, netHash = Number(ctx.dataset.net), fee = Number(ctx.dataset.fee) / 100, reward = Number(ctx.dataset.reward) / BB.GROTH;
+    const netHash = Number(ctx.dataset.net), fee = Number(ctx.dataset.fee) / 100, reward = Number(ctx.dataset.reward) / BB.GROTH;
     const [pPplns, pSolo, pPplnsTls, pSoloTls] = (ctx.dataset.ports || '3333,3334,3443,3444').split(',').map(Number);
-    // the form is remembered: mode, TLS, address, worker, card and hashrate
-    const state = { mode: prefs.get('bb.mode') === 'solo' ? 'solo' : 'pplns', tls: prefs.get('bb.tls') === '0' ? '0' : '1' };
-    const seg = (id, key) => {
-      const mark = () => [...$(id).children].forEach((x) => x.classList.toggle('on', x.dataset.v === state[key]));
-      mark();
-      $(id).addEventListener('click', (e) => {
-        const b = e.target.closest('button');
-        if (!b) return;
-        state[key] = b.dataset.v;
-        prefs.set(`bb.${key}`, state[key]);
-        mark();
-        render();
-      });
+    let servers = [];
+    try { servers = JSON.parse(ctx.dataset.servers || '[]'); } catch (e) { /* one server below */ }
+    if (!servers.length) servers = [{ id: 'eu', name: 'World', host: ctx.dataset.host }];
+    // the form is remembered: how, mode, TLS, server, address, worker, card and hashrate
+    const pick = (key, ok, dflt) => (ok.includes(prefs.get(`bb.${key}`)) ? prefs.get(`bb.${key}`) : dflt);
+    const state = {
+      how: pick('how', HOW.map(([v]) => v), 'app'), mode: pick('mode', ['pplns', 'solo'], 'pplns'),
+      tls: pick('tls', ['0', '1'], '1'), server: pick('server', servers.map((s) => s.id), servers[0].id),
     };
+    const markSeg = (el, key) => [...el.children].forEach((x) => { const on = x.dataset.v === state[key]; x.classList.toggle('on', on); if (x.getAttribute('role') === 'tab') x.setAttribute('aria-selected', on); });
+    // every .seg[data-key] in the guide, also those the tab bodies draw: one delegated listener
+    $('#guide').addEventListener('click', (e) => {
+      const b = e.target.closest('.seg > button');
+      const seg = b && b.parentElement, key = seg && (seg.id === 'how' ? 'how' : seg.dataset.key);
+      if (!key) return;
+      state[key] = b.dataset.v;
+      prefs.set(`bb.${key}`, state[key]);
+      render();
+    });
     if (prefs.get('bb.addr')) $('#addr').value = prefs.get('bb.addr');
     if (prefs.get('bb.worker')) $('#worker').value = prefs.get('bb.worker');
     if (prefs.get('bb.sols')) $('#sols').value = prefs.get('bb.sols');
+
+    const segHtml = (key, label, opts) => `<div class="field"><span>${label}</span><div class="seg" data-key="${key}">${opts.map(([v, n, t]) => `<button data-v="${v}"${t ? ` title="${esc(t)}"` : ''}>${n}</button>`).join('')}</div></div>`;
     function render() {
-      const port = state.mode === 'solo' ? (state.tls === '1' ? pSoloTls : pSolo) : (state.tls === '1' ? pPplnsTls : pPplns);
+      markSeg($('#how'), 'how');
+      const server = servers.find((s) => s.id === state.server) || servers[0], host = server.host;
+      const solo = state.mode === 'solo', tls = state.tls === '1';
+      const plainPort = solo ? pSolo : pPplns, tlsPort = solo ? pSoloTls : pPplnsTls, port = tls ? tlsPort : plainPort;
       const addr = cleanAddress($('#addr').value), worker = $('#worker').value.trim().replace(/[^\w-]/g, '') || 'rig1';
-      const user = `${addr || '<address>'}.${worker}`;
-      const tlsFlag = state.tls === '1';
-      $('#portline').textContent = `${host}:${port} · ${state.mode === 'solo' ? 'solo' : 'PPLNS'}${tlsFlag ? ' · TLS' : ''}`;
-      const cmds = [
-        ['BumbleBeam Miner, console (CPU, open source)', `bumblebeam-miner mine --pool ${host}:${port} --user ${user} --tls ${tlsFlag ? 1 : 0}`],
-        ['MXBM (GPU, open source, Apache-2.0)', `mxbm --algo BEAM-III --pool ${host}:${port} --user ${user} --tls ${tlsFlag ? 1 : 0}`],
-        ['lolMiner', `lolMiner --algo BEAM-III --pool ${host}:${port} --user ${user}${tlsFlag ? ' --tls on' : ''}`],
-        ['GMiner', `miner --algo beamhashIII --server ${host}:${port} --user ${user}${tlsFlag ? ' --ssl 1' : ''}`],
-      ];
-      $('#cmds').innerHTML = cmds.map(([n, c]) => `<div><div class="dim mono" style="font-size:10px;margin-bottom:4px">${n}</div><div class="code"><pre>${c.split(/ (?=--)/).map((a) => `<span class="arg">${esc(a)}</span>`).join(' ')}</pre><button class="btn small" data-copy="${esc(c)}">copy</button></div></div>`).join('');
-      const hint = addressHint(addr), note = $('#addr-note');
+      const user = `${addr || '<your address>'}.${worker}`;
+      const modeSeg = segHtml('mode', 'Payout mode', [['pplns', 'PPLNS', 'Recommended: a share of every block the pool finds'], ['solo', 'Solo', 'The whole block, only when your own rig finds it']]);
+      const serverSeg = servers.length > 1 ? segHtml('server', 'Server', servers.map((s) => [s.id, s.name, s.where])) : '';
+      const body = $('#how-body');
+      if (state.how === 'app') {
+        body.innerHTML = `<ol class="howto">
+          <li>Download BumbleBeam Miner from <a href="${RELEASES}/latest" target="_blank" rel="noopener">its release page</a>: for Windows the file ending in <code>Windows-x64-setup.exe</code>, for Linux the <code>.deb</code> or the <code>.AppImage</code>; for a Mac, the <code>.dmg</code> from <a href="${RELEASES}/tag/miner-v0.4.0" target="_blank" rel="noopener">version 0.4.0</a>.</li>
+          <li>Install and open it. Windows may say "Windows protected your PC" because the app is not code-signed yet: click <b>More info</b>, then <b>Run anyway</b>. Your graphics card needs its normal driver.</li>
+          <li>Open <b>Settings</b>, paste your wallet address, type the rig name, choose PPLNS and press <b>Save</b>.</li>
+          <li>Choose <b>GPU</b> (your graphics card) or <b>CPU</b> and press <b>Start mining</b>. The app lives in the tray, next to the clock.</li>
+        </ol>
+        ${addr ? `<div class="dim mono how-label">your address, for the app's Settings</div>${copyLine(addr, 'address')}` : ''}`;
+      } else if (state.how === 'cli') {
+        const cmds = [
+          ['lolMiner', 'lolMiner', `lolMiner --algo BEAM-III --pool ${host}:${port} --user ${user}${tls ? ' --tls on' : ''}`],
+          ['GMiner', 'miner', `miner --algo beamhashIII --server ${host}:${port} --user ${user}${tls ? ' --ssl 1' : ''}`],
+          ['MXBM (GPU, open source)', 'mxbm', `mxbm --algo BEAM-III --pool ${host}:${port} --user ${user} --tls ${tls ? 1 : 0}`],
+          ['BumbleBeam Miner, console (CPU, open source)', 'bumblebeam-miner', `bumblebeam-miner mine --pool ${host}:${port} --user ${user} --tls ${tls ? 1 : 0}`],
+        ];
+        body.innerHTML = `<div class="row how-opts">${modeSeg}${segHtml('tls', 'Connection', [['1', 'TLS', 'Encrypted: keep it unless your miner cannot do TLS'], ['0', 'Plain', 'Unencrypted, for old miners and networks that break TLS']])}${serverSeg}</div>
+          <div class="dim mono how-label" id="portline">${esc(host)}:${port} · ${solo ? 'solo' : 'PPLNS'}${tls ? ' · TLS' : ''}</div>
+          <div class="stack" style="gap:8px">${cmds.map(([n, , c]) => `<div><div class="dim mono how-label">${n}</div><div class="code"><pre>${c.split(/ (?=--)/).map((a) => `<span class="arg">${esc(a)}</span>`).join(' ')}</pre><button class="btn small" data-copy="${esc(c)}">copy</button></div></div>`).join('')}</div>
+          <ol class="howto" style="margin-top:12px">
+            <li>Download the miner and unpack it into a folder of its own.</li>
+            <li><b>Windows:</b> in that folder make a text file <code>start.bat</code>, paste the miner's line into it, add <code>pause</code> on a second line, save, and double-click the file.
+              <b>Linux:</b> open a terminal in the folder and run the line with <code>./</code> in front (<code>./lolMiner …</code>).</li>
+            <li>A window with the miner's speed and <b>accepted</b> shares means it works. Close it to stop.</li>
+          </ol>`;
+      } else if (state.how === 'hive') {
+        body.innerHTML = `<div class="row how-opts">${modeSeg}${serverSeg}</div>
+          <p>BumbleBeam is not in HiveOS's pool list yet, so the pool is set in the miner's settings.</p>
+          <ol class="howto">
+            <li><b>Wallets</b> › <b>Add Wallet</b>: coin <code>BEAM</code>, paste your address, name it.</li>
+            <li><b>Flight Sheets</b>: coin <code>BEAM</code>, your wallet, pool <b>Configure in miner</b>, miner <b>lolMiner</b> (or GMiner).</li>
+            <li><b>Setup Miner Config</b>: algorithm <code>BEAM-III</code> (GMiner: <code>beamhashIII</code>), wallet and worker template <code>%WAL%.%WORKER_NAME%</code>, pool URL:</li>
+          </ol>
+          ${copyLine(`${host}:${plainPort}`, 'pool URL')}
+          <ol class="howto" start="4" style="margin-top:10px">
+            <li>Create the flight sheet and apply it to your rig. HiveOS uses the rig's own name as the rig name.</li>
+          </ol>
+          <ul class="howto" style="margin-top:8px;font-size:12px"><li>Encrypted instead: pool URL <code>${esc(host)}:${tlsPort}</code> and in <b>Extra config arguments</b> <code>--tls on</code> (lolMiner) or <code>--ssl 1</code> (GMiner).</li></ul>`;
+      } else if (state.how === 'mrr') {
+        const mrrUser = `${addr || '<your address>'}.${worker}+8192`;
+        body.innerHTML = `<p>For rigs rented by the hour on <a href="https://www.miningrigrentals.com/" target="_blank" rel="noopener">MiningRigRentals</a>. Its Beam market is called <b>Equihash 150,5 (BEAM)</b>: those rigs mine BeamHash III and have mined on this pool through MRR's proxy.</p>
+          <div class="row how-opts">${modeSeg}</div>
+          <ol class="howto">
+            <li>Log in to MRR and open <b>Pool Profiles</b>. Add a profile for <b>Equihash 150,5 (BEAM)</b> and a pool in it with this host and port:</li>
+          </ol>
+          <div class="row" style="margin-top:0">${copyLine(servers[0].host, 'host')}${copyLine(String(tlsPort), 'port')}</div>
+          <ol class="howto" start="2">
+            <li>Username: your address, a worker name and <code>+8192</code>, the starting difficulty rented rigs expect (the pool will not go below it). Password <code>x</code>.</li>
+          </ol>
+          ${copyLine(mrrUser, 'username')}
+          <ol class="howto" start="3" style="margin-top:10px">
+            <li>Rent rigs from the <b>Equihash 150,5 (BEAM)</b> market with that profile. Their shares show up under your address here within a minute or two.</li>
+            <li>If a rig will not connect on TLS, use the plain port <code>${solo ? pSolo : pPplns}</code> in the profile instead.</li>
+          </ol>`;
+      } else if (state.how === 'hero') {
+        const hp = HERO_PORTS[0], heroHost = servers[0].host;
+        body.innerHTML = `<p>HeroMiners stopped mining Beam on November 20, 2026. If your rigs mined Beam there, they can keep going here with one change: the pool host. The port and the login stay as they are.</p>
+          <ol class="howto">
+            <li>In your miner (or HiveOS flight sheet), replace HeroMiners' host with ours and keep the port. Every regional host of theirs (<code>de.beam.herominers.com</code>, <code>fi.</code>, <code>us.</code>…) becomes the same one:</li>
+          </ol>
+          <div class="dim mono how-label">de.beam.herominers.com:${hp} → </div>
+          ${copyLine(`${heroHost}:${hp}`, 'pool')}
+          <ol class="howto" start="2" style="margin-top:10px">
+            <li>Keep TLS on (<code>--tls on</code> in lolMiner, <code>--ssl 1</code> in GMiner): ports ${HERO_PORTS.join(' and ')} are TLS here as they were there, and ${HERO_PORTS[1]}, HeroMiners' NiceHash port, works too.</li>
+            <li>Keep your username: your Beam address with <code>.worker</code>; a fixed difficulty like <code>=4096</code> still works. For example:</li>
+          </ol>
+          ${copyLine(`${addr || '<your address>'}.${worker}`, 'username')}
+          <ol class="howto" start="4" style="margin-top:10px">
+            <li>Restart the miner. Your rig appears under your address on this site within a minute; payouts go to the same address every ${esc(ctx.dataset.pay || 'two hours')}.</li>
+          </ol>
+          <ul class="howto" style="margin-top:8px;font-size:12px"><li>Ports ${HERO_PORTS.join(' and ')} pay PPLNS. For solo, or a new setup, use the regular ports in the other tabs. A balance left on HeroMiners is theirs to pay out: ask them about it.</li></ul>`;
+      } else {
+        const nhServer = servers[0];
+        body.innerHTML = `<p>For hashpower rented on NiceHash's marketplace, instead of (or next to) your own cards. BumbleBeam is on NiceHash's <a href="https://www.nicehash.com/compatible-pools" target="_blank" rel="noopener">Compatible Pools</a> list.</p>
+          <ol class="howto">
+            <li><b>Marketplace</b> › <b>Pools</b> › <b>Add new pool</b>, algorithm <b>BEAMV3</b>.</li>
+            <li>Stratum hostname and port (TLS: NiceHash does not work on the plain port):</li>
+          </ol>
+          <div class="row" style="margin-top:0">${copyLine(nhServer.host, 'hostname')}${copyLine(String(tlsPort), 'port')}</div>
+          <div class="row how-opts">${modeSeg}</div>
+          <ol class="howto" start="3">
+            <li>Username, with a <b>regular</b> (short) address from Receive: NiceHash's pool check fails on long offline ones. Password <code>x</code>.</li>
+          </ol>
+          ${copyLine(user, 'username')}
+          <ol class="howto" start="4" style="margin-top:10px">
+            <li>Place an order on that pool. Rented rigs arrive within a minute and start at difficulty 2048.</li>
+            <li>A regular address receives only while your wallet is open: open the wallet every day or so. Your balance waits for you meanwhile.</li>
+          </ol>`;
+      }
+      body.querySelectorAll('.seg[data-key]').forEach((el) => markSeg(el, el.dataset.key));
+      const hint = addressHint(addr, state.how), note = $('#addr-note');
       note.hidden = !hint;
       if (hint) { note.textContent = hint.text; note.className = `note ${hint.cls}`; }
+      const my = $('#my-stats'), ok = addressKind(addr) && addressKind(addr) !== 'bad';
+      my.href = ok ? minerHref(addr) : '/miners';
+      my.setAttribute('aria-disabled', ok ? 'false' : 'true');
+      my.classList.toggle('ghost', !ok);
+      $('#my-stats-hint').hidden = !!ok;
     }
     function calc() {
       const sols = Number($('#sols').value) || 0;
@@ -896,8 +1049,8 @@
       out.innerHTML = tile('Per day', `${perDay.toFixed(2)} BEAM`, 'PPLNS, average, after fee', 'accent') + tile('Per month', `${(perDay * 30).toFixed(0)} BEAM`)
         + tile('Network share', pct(share, 3)) + tile('Solo: one block every', isFinite(soloHours) ? (soloHours < 48 ? `${soloHours.toFixed(1)} h` : `${(soloHours / 24).toFixed(1)} d`) : '—', 'on average; luck varies a lot');
     }
-    seg('#mode', 'mode');
-    seg('#tls', 'tls');
+    // "Open my stats" waits for an address
+    $('#my-stats').addEventListener('click', (e) => { if (e.currentTarget.getAttribute('aria-disabled') === 'true') { e.preventDefault(); $('#addr').focus(); } });
     $('#addr').addEventListener('input', () => { prefs.set('bb.addr', cleanAddress($('#addr').value)); render(); });
     $('#worker').addEventListener('input', () => { prefs.set('bb.worker', $('#worker').value.trim()); render(); });
     const keepCalc = () => { prefs.set('bb.card', $('#card').dataset.value || ''); prefs.set('bb.sols', $('#sols').value); };
@@ -1057,7 +1210,7 @@
     miners: ['Miners | BumbleBeam Pool', 'Miners on the BumbleBeam pool for Beam (BEAM).'],
     payments: ['Payments | BumbleBeam Pool', 'Payouts sent by the BumbleBeam pool for Beam (BEAM).'],
     connect: ['How to Mine Beam (BeamHash III): lolMiner, GMiner, HiveOS | BumbleBeam',
-      'Mine Beam (BEAM) on BumbleBeam: wallet address, miner command lines for lolMiner, GMiner and MXBM, HiveOS and NiceHash setup, stratum ports with TLS, and a profit calculator.'],
+      'Mine Beam (BEAM) step by step, for beginners: a wallet and an offline address, the BumbleBeam Miner app, command lines for lolMiner, GMiner and MXBM, HiveOS and NiceHash setup, stratum ports with TLS, and a profit calculator.'],
     api: ['BumbleBeam Pool API & MCP Server for Beam Mining Data',
       'The BumbleBeam pool API (JSON, open-ethereum-pool compatible) and MCP server: pool and network hashrate, blocks, miners and payouts for Beam (BEAM).'],
     notfound: ['Page not found | BumbleBeam Pool', 'There is no such page on the BumbleBeam pool.'],

@@ -49,7 +49,7 @@ DEX, BANS names, and BEAM's supply.
 | `GET /v1/contracts?q=&kind=` | contracts: `kind` (when Beam's parser knows it, else `null`), `shader`, `deployed_height`, `locked_funds`, `owned_assets` |
 | `GET /v1/contracts/{id}?calls=20` | one contract: decoded `state`, `locked_funds`, `owned_assets`, `versions`, recent `calls` (a call with sub-calls is `{"calls": […]}`), `calls_next_before` |
 | `GET /v1/peers` | the node's peers as `ip` and `port` |
-| `GET /v1/network` | the network and every Beam mining pool: `height`, `difficulty`, `avg_block_seconds`, `blocks_24h`, `hashrate` (Sol/s, now), `chain_hashrate_24h`, `price_usd` (on-chain oracle), `others` (what no listed pool claims), and `pools` with `hashrate`, `miners`, `workers`, `blocks_24h`, `fee_percent`, `scheme`, `last_block_time` |
+| `GET /v1/network` | the network and every Beam mining pool: `height`, `difficulty`, `avg_block_seconds`, `blocks_24h`, `hashrate` (Sol/s, the last hour: every pool's hour plus what no listed pool claims; `hashrate_source` `blocks` when the last 120 blocks' `block_hashrate` stood in), `chain_hashrate_24h`, `price_usd` (on-chain oracle), `others` (what no listed pool claims, with `share` and `reward_day_groth`), and `pools` with `hashrate` (latest), `hashrate_1h`, `share` (of `hashrate`), `reward_day_groth` (at the current difficulty, after fee), `miners`, `workers`, `blocks_24h`, `fee_percent`, `scheme`, `last_block_time` |
 | `GET /v1/network/blocks?limit=50&before=&pool=` | the latest blocks (up to 500) with `mined_by`: each pool's own API checked against our node's hash at that height (orphans never credited), BumbleBeam's from its own database; `null` when no listed pool claims a block |
 
 ```sh

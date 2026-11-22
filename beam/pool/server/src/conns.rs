@@ -17,6 +17,8 @@ pub struct Conn {
     pub port: u16,
     pub mode: &'static str,
     pub tls: bool,
+    /// the label of the port it came in on (`[[stratum.extra_tls_ports]]`), empty for the pool's own
+    pub via: String,
     pub started: i64,
     pub miner_id: i64,
     pub miner: String,
@@ -37,10 +39,10 @@ pub struct Conns {
 }
 
 impl Conns {
-    pub fn open(&self, id: u64, peer: SocketAddr, port: u16, mode: &'static str, tls: bool) -> Arc<Notify> {
+    pub fn open(&self, id: u64, peer: SocketAddr, port: u16, mode: &'static str, tls: bool, via: &str) -> Arc<Notify> {
         let kick = Arc::new(Notify::new());
         let c = Conn {
-            peer, port, mode, tls, started: crate::state::now(), miner_id: 0, miner: String::new(), worker: String::new(), agent: String::new(),
+            peer, port, mode, tls, via: via.to_string(), started: crate::state::now(), miner_id: 0, miner: String::new(), worker: String::new(), agent: String::new(),
             diff: 0.0, accepted: 0, stale: 0, rejected: 0, last_share: 0, kick: kick.clone(),
         };
         self.live.lock().unwrap().insert(id, c);
@@ -60,7 +62,7 @@ impl Conns {
         if c.miner.is_empty() {
             let mut r = self.recent.lock().unwrap();
             r.push_front(json!({
-                "ts": crate::state::now(), "started": c.started, "peer": c.peer.to_string(), "port": c.port, "mode": c.mode, "tls": c.tls,
+                "ts": crate::state::now(), "started": c.started, "peer": c.peer.to_string(), "port": c.port, "mode": c.mode, "tls": c.tls, "via": c.via,
                 "first": if first.is_empty() { "nothing" } else { first }, "reason": reason,
             }));
             r.truncate(RECENT_MAX);
@@ -101,7 +103,7 @@ impl Conns {
         v.into_iter()
             .map(|(id, c)| {
                 json!({
-                    "id": id, "peer": c.peer.to_string(), "port": c.port, "mode": c.mode, "tls": c.tls, "started": c.started,
+                    "id": id, "peer": c.peer.to_string(), "port": c.port, "mode": c.mode, "tls": c.tls, "via": c.via, "started": c.started,
                     "minerId": c.miner_id, "miner": c.miner, "worker": c.worker, "agent": c.agent, "diff": c.diff,
                     "accepted": c.accepted, "stale": c.stale, "rejected": c.rejected, "lastShare": c.last_share,
                 })

@@ -86,7 +86,7 @@ pub async fn serve(shared: Arc<Shared>, port: u16, mode: Mode, tls: Option<TlsAc
             // releases the counters whatever happens to this task, a panic included
             let mut guard = ConnGuard { shared: shared.clone(), ip: peer.ip(), id: None };
             let id = shared.next_conn();
-            let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some());
+            let kick = shared.conns.open(id, peer, port, mode.as_str(), tls.is_some(), shared.cfg.stratum.port_label(port));
             guard.id = Some(id);
             let mut s = Session { id, peer, tls: tls.is_some(), started: Instant::now(), first: String::new(), miner: String::new(), worker: String::new(), accepted: 0, stale: 0, rejected: 0, last_share: 0, miner_id: 0, stats: WorkerStats::default() };
             let r = match tls {
@@ -437,6 +437,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                 match msg["method"].as_str().unwrap_or("") {
                     "login" => {
                         let key = msg["api_key"].as_str().unwrap_or("").trim();
+                        // `+<N>` or `=<N>` at the end asks for a starting and lowest difficulty N: a rented rig
+                        // (MiningRigRentals) that will not work below its own minimum, or a HeroMiners-style login
+                        // (`address=4096`, `address.rig=4096`)
+                        let (key, fixed) = worker_diff(key);
                         let (addr, wk) = match key.split_once('.') { Some((a, w)) => (a, w), None => (key, "default") };
                         let Some(kind) = address_type(addr) else {
                             send(&mut wr, result(&id, -32003, "Login failed: use <beam address>.<worker>; an offline address is recommended")).await?;
@@ -453,9 +457,6 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
                             send(&mut wr, result(&id, -32003, "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port")).await?;
                             anyhow::bail!("login refused: {}", "Login failed: solo mining is not available while this pool pays in the coinbase, use the PPLNS port");
                         }
-                        // `<worker>+<N>` asks for a starting and lowest difficulty N: a rented rig
-                        // (MiningRigRentals) that will not work below its own minimum
-                        let (wk, fixed) = worker_diff(wk);
                         if let Some(n) = fixed {
                             vd.floor = n.clamp(vd_cfg.min, vd_cfg.max);
                             vd.diff = vd.floor;
@@ -642,10 +643,10 @@ async fn connection<S: AsyncRead + AsyncWrite + Unpin + Send>(shared: Arc<Shared
     }
 }
 
-/// Splits `rig1+8192` into the worker name and the difficulty it asks for; no `+`, or what follows
-/// it not a positive number, leaves the name as it was and asks for nothing.
+/// Splits `addr.rig1+8192` (or `addr=8192`) into the login and the difficulty it asks for; no `+` or `=`,
+/// or what follows it not a positive number, leaves the login as it was and asks for nothing.
 fn worker_diff(wk: &str) -> (&str, Option<f64>) {
-    match wk.rsplit_once('+') {
+    match wk.rsplit_once(['+', '=']) {
         Some((name, n)) => match n.trim().parse::<f64>() {
             Ok(d) if d.is_finite() && d > 0.0 => (name, Some(d)),
             _ => (wk, None),
@@ -700,11 +701,14 @@ mod tests {
         assert_eq!(worker_diff("rig+x"), ("rig+x", None));
         assert_eq!(worker_diff("rig+0"), ("rig+0", None));
         assert_eq!(worker_diff("rig+inf"), ("rig+inf", None));
+        assert_eq!(worker_diff("addr=4096"), ("addr", Some(4096.0)));
+        assert_eq!(worker_diff("addr.rig=4096"), ("addr.rig", Some(4096.0)));
+        assert_eq!(worker_diff("addr.rig=x"), ("addr.rig=x", None));
     }
 
     #[tokio::test]
     async fn proxy_v1_header() {
-        let mut rd: &[u8] = b"PROXY TCP4 198.51.100.2 65.109.125.69 51234 3443\r\n\x16\x03\x01";
+        let mut rd: &[u8] = b"PROXY TCP4 198.51.100.2 203.0.113.10 51234 3443\r\n\x16\x03\x01";
         let peer = proxy_header(&mut rd).await.unwrap().unwrap();
         assert_eq!(peer.to_string(), "198.51.100.2:51234");
         assert_eq!(rd, b"\x16\x03\x01"); // the TLS hello stays unread

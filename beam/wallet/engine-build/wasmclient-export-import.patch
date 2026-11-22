@@ -1,0 +1,240 @@
+diff --git a/keykeeper/local_private_key_keeper.cpp b/keykeeper/local_private_key_keeper.cpp
+index 36ef5fd8e..f7ae62ebe 100644
+--- a/keykeeper/local_private_key_keeper.cpp
++++ b/keykeeper/local_private_key_keeper.cpp
+@@ -671,6 +671,10 @@ namespace beam::wallet
+ 
+             if (!get_SelfEndpoint(x, kKrn, x.m_User.m_Sender))
+                 return Status::Unspecified;
++
++            // BumbleBeam: an anonymous payment tells the receiver nothing of the sender (kKrn is chosen anew below)
++            if (x.m_Anonymous)
++                x.m_User.m_Sender = Zero;
+         }
+ 
+         ShieldedTxo::Data::Params pars;
+diff --git a/wallet/api/v6_0/v6_api_defs.h b/wallet/api/v6_0/v6_api_defs.h
+index dd783946e..b85eccee5 100644
+--- a/wallet/api/v6_0/v6_api_defs.h
++++ b/wallet/api/v6_0/v6_api_defs.h
+@@ -159,6 +159,7 @@ namespace beam::wallet
+         boost::optional<CoinIDList>  coins;
+         boost::optional<TxID>        txId;
+         boost::optional<Asset::ID>   assetId;
++        bool anonymous = false;      // BumbleBeam: an offline payment that does not tell the receiver who sent it
+ 
+         struct Response
+         {
+diff --git a/wallet/api/v6_0/v6_api_handle.cpp b/wallet/api/v6_0/v6_api_handle.cpp
+index a8a5ca7e7..a275b71a3 100644
+--- a/wallet/api/v6_0/v6_api_handle.cpp
++++ b/wallet/api/v6_0/v6_api_handle.cpp
+@@ -288,6 +288,8 @@ namespace beam::wallet
+                 .SetParameter(TxParameterID::PreselectedCoins, coins)
+                 .SetParameter(TxParameterID::Message, message)
+                 .SetParameter(beam::wallet::TxParameterID::OriginalToken, data.tokenTo);
++            if (data.anonymous)
++                params.SetParameter(TxParameterID::AnonymousSender, true);
+ 
+ 
+             if (data.tokenFrom)
+diff --git a/wallet/api/v6_0/v6_api_parse.cpp b/wallet/api/v6_0/v6_api_parse.cpp
+index 1b249322b..ede0a3a77 100644
+--- a/wallet/api/v6_0/v6_api_parse.cpp
++++ b/wallet/api/v6_0/v6_api_parse.cpp
+@@ -579,6 +579,13 @@ namespace beam::wallet
+             info.spendOffline = true;
+         }
+ 
++        // BumbleBeam: an offline payment that does not tell the receiver who sent it (offline kinds only: a regular
++        // transfer is a conversation between the two wallets, it cannot be anonymous)
++        if (auto anon = getOptionalParam<bool>(params, "anonymous"); anon && *anon && info.spendOffline)
++        {
++            send.anonymous = true;
++        }
++
+         send.value = getMandatoryParam<PositiveAmount>(params, "value");
+         send.assetId = readOptionalAssetID(*this, params);
+         info.appendSpend(send.assetId ? *send.assetId : beam::Asset::s_BeamID, send.value);
+diff --git a/wallet/core/common.h b/wallet/core/common.h
+index 037cc8b8f..e83440751 100644
+--- a/wallet/core/common.h
++++ b/wallet/core/common.h
+@@ -396,6 +396,10 @@ namespace beam::wallet
+         // Last armored negotiation message produced for this tx, kept so the user can
+         // re-copy/re-save it after dismissing the produce dialog.
+         SlatepackOutgoing = 145,
++        // BumbleBeam: an offline (shielded) payment that does not tell the receiver who sent it (the output's User.Sender
++        // left zero; the receiver's wallet already takes that: "Sender may prefer to send anonymously"). Private: never
++        // on the wire, set by the sender's own tx_send.
++        AnonymousSender = 146,
+ 
+         Status = 151,
+         KernelID = 152,
+diff --git a/wallet/core/private_key_keeper.h b/wallet/core/private_key_keeper.h
+index 7d88f42ae..189fb92c1 100644
+--- a/wallet/core/private_key_keeper.h
++++ b/wallet/core/private_key_keeper.h
+@@ -192,6 +192,7 @@ namespace beam::wallet
+ 
+                 // sent value and asset are derived from the tx balance (ins - outs)
+                 ShieldedTxo::User m_User; // the Sender will automatically be set to the one corresponding to the iEndpoint, iff the tx is conventional
++                bool m_Anonymous = false; // BumbleBeam: the Sender left zero (the receiver is not told who sent it)
+                 Asset::ID m_AidMax = 1u;
+             };
+ 
+diff --git a/wallet/transactions/lelantus/push_tx_builder.cpp b/wallet/transactions/lelantus/push_tx_builder.cpp
+index f5eba03e7..23e64e23f 100644
+--- a/wallet/transactions/lelantus/push_tx_builder.cpp
++++ b/wallet/transactions/lelantus/push_tx_builder.cpp
+@@ -68,6 +68,11 @@ namespace beam::wallet::lelantus
+         // sender info, both for send and split
+         m.m_iEndpoint = m_Tx.EnsureOwnID();
+         m_Tx.GetMyEndpointAlways(m.m_User.m_Sender); // just to make sure tx history contains our endpoint (not only own ID)
++        {
++            bool anonymous = false;
++            if (GetParameter(TxParameterID::AnonymousSender, anonymous) && anonymous)
++                m.m_Anonymous = true;      // BumbleBeam: the receiver is not told who sent it
++        }
+ 
+         if (GetParameter(TxParameterID::PeerEndpoint, m.m_Peer))
+         {
+diff --git a/wasmclient/wasmclient.cpp b/wasmclient/wasmclient.cpp
+index 2d2c359ca..8f2855a1d 100644
+--- a/wasmclient/wasmclient.cpp
++++ b/wasmclient/wasmclient.cpp
+@@ -31,6 +31,8 @@
+ #include "mnemonic/mnemonic.h"
+ #include "utility/string_helpers.h"
+ #include "wasm_beamapi.h"
++#include "core/shielded.h"
++#include "nlohmann/json.hpp"
+ 
+ namespace fs = std::filesystem;
+ using namespace beam;
+@@ -507,6 +509,115 @@ public:
+         });
+     }
+ 
++    // BumbleBeam: the wallet's data in Beam's own exchange format (storage::ExportDataToJson, as the CLI's export_data
++    // and the mobile wallets): its own addresses (with their key numbers), contacts and transactions; no keys.
++    // The callback gets the JSON string, or null when the wallet is not running or the export failed.
++    void ExportData(val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val::null());
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this]() -> boost::any
++        {
++            return std::string(storage::ExportDataToJson(*m_Client->GetWalletDB()));
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            try { (*cb)(val(boost::any_cast<std::string>(res))); }
++            catch (...) { (*cb)(val::null()); }
++        });
++    }
++
++    // BumbleBeam: the other way (storage::ImportDataFromJson): addresses, contacts and transactions added to this
++    // wallet's database. The callback gets true when all of it went in.
++    void ImportData(const std::string& data, val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val(false));
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this, data]() -> boost::any
++        {
++            return storage::ImportDataFromJson(*m_Client->GetWalletDB(), data.data(), data.size());
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            bool ok = false;
++            try { ok = boost::any_cast<bool>(res); } catch (...) {}
++            (*cb)(val(ok));
++        });
++    }
++
++    // BumbleBeam: each shielded coin this wallet received, with the ticket (SerialPub) it came with. The ticket is the
++    // one inside the voucher of the offline address it was paid to (the sender puts the voucher's ticket into the
++    // output as it is), so the wallet can tell which of its offline addresses a payment came to: Beam itself records
++    // a received offline payment without the address. Worked out here from the coin's own key (kSerG and the viewer's
++    // index), nothing asked of the node. The callback gets a JSON array of
++    // { tx: the receipt's transaction id (hex) or "", serial: SerialPub X|Y (hex, 33 bytes), txo, value, asset, height },
++    // or null when the wallet is not running.
++    void ShieldedTickets(val callback)
++    {
++        AssertMainThread();
++        auto cb = std::make_shared<val>(std::move(callback));
++        if (!m_Client)
++        {
++            if (!cb->isNull()) (*cb)(val::null());
++            return;
++        }
++        m_Client->getAsync()->makeIWTCall([this]() -> boost::any
++        {
++            auto db = m_Client->GetWalletDB();
++            auto owner = db->get_OwnerKdf();
++            std::map<Key::Index, ShieldedTxo::Viewer> viewers;
++            auto hex = [](const uint8_t* p, size_t n) { static const char d[] = "0123456789abcdef"; std::string s; s.reserve(n * 2); for (size_t i = 0; i < n; i++) { s += d[p[i] >> 4]; s += d[p[i] & 15]; } return s; };
++            nlohmann::json out = nlohmann::json::array();
++            db->visitShieldedCoins([&](const ShieldedCoin& c) -> bool
++            {
++                const auto& key = c.m_CoinID.m_Key;
++                auto it = viewers.find(key.m_nIdx);
++                if (it == viewers.end())
++                {
++                    it = viewers.emplace(key.m_nIdx, ShieldedTxo::Viewer()).first;
++                    it->second.FromOwner(*owner, key.m_nIdx);
++                }
++                ShieldedTxo::Data::TicketParams tp;
++                tp.m_pK[0] = key.m_kSerG;
++                tp.m_IsCreatedByViewer = key.m_IsCreatedByViewer;
++                tp.Restore(it->second);
++                ECC::Point::Native pt;
++                pt = ECC::Context::get().G * tp.m_pK[0];      // SerialPub = kG·G + kJ·J (TicketParams' double-blinded commitment)
++                pt += ECC::Context::get().J * tp.m_pK[1];
++                ECC::Point serial = pt;
++                std::string ser = hex(serial.m_X.m_pData, serial.m_X.nBytes) + hex(&serial.m_Y, 1);
++                out.push_back(nlohmann::json{
++                    { "tx", c.m_createTxId ? hex(c.m_createTxId->data(), c.m_createTxId->size()) : std::string() },
++                    { "serial", ser },
++                    { "txo", c.m_TxoID },
++                    { "value", c.m_CoinID.m_Value },
++                    { "asset", c.m_CoinID.m_AssetID },
++                    { "height", c.m_confirmHeight }
++                });
++                return true;
++            });
++            return out.dump();
++        },
++            [cb](const boost::any& res)
++        {
++            if (cb->isNull()) return;
++            try { (*cb)(val(boost::any_cast<std::string>(res))); }
++            catch (...) { (*cb)(val::null()); }
++        });
++    }
++
+     void StartWallet()
+     {
+         AssertMainThread();
+@@ -1060,6 +1171,9 @@ EMSCRIPTEN_BINDINGS()
+         .function("createAppAPI", &WasmWalletClient::CreateAppAPI3)
+         .function("importRecovery", &WasmWalletClient::ImportRecovery)
+         .function("importRecoveryFromFile", &WasmWalletClient::ImportRecoveryFromFile)
++        .function("exportData", &WasmWalletClient::ExportData)
++        .function("importData", &WasmWalletClient::ImportData)
++        .function("shieldedTickets", &WasmWalletClient::ShieldedTickets)
+         .class_function("IsAppSupported", &WasmWalletClient::IsAppSupported)
+         .class_function("GenerateAppID", &WasmWalletClient::GenerateAppID)
+         .class_function("GeneratePhrase", &WasmWalletClient::GeneratePhrase)
