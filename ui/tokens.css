@@ -23,6 +23,9 @@
   --accent: #00f6d2;
   --accent-rgb: 0, 246, 210;
   --accent-dim: rgba(var(--accent-rgb), 0.18);
+  /* a technical name set off in text (code.mark): never the links' colour, so yellow beside Beam's turquoise */
+  --mark: #f4ce4a;
+  --mark-rgb: 244, 206, 74;
   --gradient-accent: linear-gradient(135deg, #0b76ff 0%, #39fff2 100%);
   --gradient-beam: linear-gradient(135deg, #0b76ff 0%, #39fff2 100%);
   --gradient-bitcoin: linear-gradient(135deg, #f7931a 0%, #ffc46b 100%);
@@ -96,9 +99,12 @@
   --chart-label-text: #ffffff;
 }
 
-:root[data-chain="bitcoin"] {
+/* on <html> for a page, or on a block: a page can show both chains (the QR showcase does) */
+:root[data-chain="bitcoin"], [data-chain="bitcoin"] {
   --accent: #f7931a;
   --accent-rgb: 247, 147, 26;
+  --mark: #00f6d2; /* beside Bitcoin's orange links: the winning cells' soft green */
+  --mark-rgb: 0, 246, 210;
   --gradient-accent: linear-gradient(135deg, #f7931a 0%, #ffc46b 100%);
   --logo-from: #f7931a;
   --logo-to: #ffc46b;

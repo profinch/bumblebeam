@@ -13,13 +13,21 @@
    Script:
      var d = BB.dropdown(document.getElementById('x'), function (v) { ... });  // onPick(value)
      d.set('a');  d.value();  d.options([{ v: 'a', label: 'First' }, { group: 'Group' }, ...], 'a');
+   Opt-in: an option's html (trusted markup, e.g. a name and an address on one line) shows in the list while its
+   label goes on the button; { sep: true } is a thin line between groups; { disabled: true } an option shown but
+   not picked (greyed, skipped by the keys and the pointer; a title gives it a tip).
    A classic script; works in Chromium 83 and the MV3 extension like the rest of ui/. */
 (function () {
   'use strict';
+  // the open ones: one click listener on the page for them all (one per dropdown before, kept by those drawn again)
+  var openOnes = [];
+  document.addEventListener('click', function (e) {
+    openOnes.slice().forEach(function (o) { if (!o.root.isConnected || !o.root.contains(e.target)) o.close(false); });
+  });
   function dropdown(root, onPick) {
     var btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list');
     var active = -1;
-    function items() { return Array.prototype.slice.call(list.querySelectorAll('[role="option"]')); }
+    function items() { return Array.prototype.slice.call(list.querySelectorAll('[role="option"]:not([aria-disabled="true"])')); }
     function isOpen() { return !list.hidden; }
     function mark(i) {
       var its = items();
@@ -32,9 +40,13 @@
       var li = its.filter(function (x) { return x.getAttribute('data-v') === String(v); })[0] || its.filter(function (x) { return x.getAttribute('data-v') === ''; })[0] || its[0];
       its.forEach(function (x) { x.setAttribute('aria-selected', String(x === li)); });
       root.setAttribute('data-value', li ? li.getAttribute('data-v') : '');
-      btn.textContent = li ? li.textContent : '';
+      // an option with its own look on the button (opt-in: { btn: '<html>' }); otherwise its label as text
+      if (li && li.hasAttribute('data-btn')) btn.innerHTML = li.getAttribute('data-btn');
+      else btn.textContent = li ? (li.getAttribute('data-label') || li.textContent) : '';
     }
+    var me = { root: root, close: function (f) { close(f); } };
     function open() {
+      if (openOnes.indexOf(me) < 0) openOnes.push(me);
       list.hidden = false;
       root.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
@@ -42,6 +54,7 @@
       mark(Math.max(0, its.findIndex(function (x) { return x.getAttribute('aria-selected') === 'true'; })));
     }
     function close(focus) {
+      var k = openOnes.indexOf(me); if (k >= 0) openOnes.splice(k, 1);
       list.hidden = true;
       root.classList.remove('open');
       btn.setAttribute('aria-expanded', 'false');
@@ -72,14 +85,21 @@
       else if (k === 'Escape') { e.preventDefault(); close(); }
       else if (k === 'Tab') close(false);
     });
-    document.addEventListener('click', function (e) { if (isOpen() && !root.contains(e.target)) close(false); });
-    // rebuild the options: [{ v, label }] or { group: 'Name' } for a heading
+    // a click elsewhere closes it (the page's one listener above)
+    // rebuild the options: [{ v, label, html?, btn? }] or { group: 'Name' } for a heading
     function options(opts, value) {
       list.innerHTML = '';
       opts.forEach(function (o) {
         var li = document.createElement('li');
-        if (o.group) { li.className = 'dd-group'; li.setAttribute('role', 'presentation'); li.textContent = o.group; }
-        else { li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v)); li.textContent = o.label; }
+        if (o.sep) { li.className = 'dd-sep'; li.setAttribute('role', 'separator'); }
+        else if (o.group) { li.className = 'dd-group'; li.setAttribute('role', 'presentation'); li.textContent = o.group; }
+        else {
+          li.setAttribute('role', 'option'); li.setAttribute('data-v', String(o.v));
+          if (o.html != null) { li.innerHTML = o.html; li.setAttribute('data-label', o.label); } else li.textContent = o.label;
+          if (o.btn != null) li.setAttribute('data-btn', o.btn);
+          if (o.disabled) li.setAttribute('aria-disabled', 'true');
+          if (o.title) li.title = o.title;
+        }
         list.appendChild(li);
       });
       set(value !== undefined ? value : root.getAttribute('data-value') || '');

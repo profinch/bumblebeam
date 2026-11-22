@@ -77,6 +77,19 @@
       '" fill="none" style="stroke:' + (opts.color || 'var(--chart-main)') + '" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>';
   }
 
+  // ---------------------------------------------------------------- frame
+  // an empty line() of the same size before its data comes: the sides, the grid, a word in the middle (labelChars
+  // as given to line(), so the plot does not move when the line replaces it)
+  function frame(text, opts) {
+    opts = opts || {};
+    var narrow = opts.narrow != null ? opts.narrow : (window.matchMedia && matchMedia('(max-width: 700px)').matches);
+    var W = narrow ? 380 : 1000, H = opts.height || (narrow ? 210 : 260), L = narrow ? 8 : 14, T = 16, B = 30;
+    var R = Math.ceil(4 + (opts.labelChars || 5) * CHAR_W + 8 + 6), xt = narrow ? 3 : 6, g = '', i;
+    for (i = 0; i < 5; i++) { var y = f1(T + i * (H - T - B) / 4); g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/>'; }
+    for (i = 0; i <= xt; i++) { var x = f1(L + i * (W - L - R) / xt); g += '<line class="grid" x1="' + x + '" x2="' + x + '" y1="' + T + '" y2="' + (H - B) + '"/>'; }
+    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' + g + (text ? '<text x="' + f1((W - R + L) / 2) + '" y="' + f1((H - B + T) / 2 + 3) + '" text-anchor="middle">' + esc(text) + '</text>' : '') + '</svg>';
+  }
+
   // ---------------------------------------------------------------- line
   var CHARTS = {};
   var seq = 0;
@@ -86,7 +99,10 @@
    * opts:   label(v) -> axis/pill text (default compact), title (aria), now (default true: the first
    *         series' last value as a dotted guide + pill), peak (mark the highest point), zero (y from 0;
    *         default when every value >= 0), narrow (phone layout; default from the viewport),
-   *         height (px of the viewBox), empty (text when there is nothing to draw)
+   *         height (px of the viewBox), empty (text when there is nothing to draw), xLabel (t -> the time
+   *         axis' and the crosshair's text, for a t that is not a unix time, such as seconds into a run), marks
+   *         ([[t, label], ...]: dotted vertical lines with a label at the top), labelChars (the right column at least this
+   *         many characters wide, so a chart redrawn live keeps its plot in place)
    */
   function line(series, opts) {
     opts = opts || {};
@@ -114,7 +130,7 @@
     var main = series[0], last = main.points[main.points.length - 1][1];
     var showNow = opts.now !== false;
     var pillText = label(last), pw = pillText.length * CHAR_W + 8;
-    var widest = [yMin, yMax, last].map(function (v) { return label(v).length; }).reduce(function (a, b) { return Math.max(a, b); }, 5);
+    var widest = [yMin, yMax, last].map(function (v) { return label(v).length; }).reduce(function (a, b) { return Math.max(a, b); }, opts.labelChars || 5);  // labelChars: a fixed right column, so a live chart does not shift as its labels change
     var R = Math.ceil(4 + Math.max(pw, widest * CHAR_W + 8) + 6);
     var x = function (t) { return L + ((t - t0) / (t1 - t0 || 1)) * (W - L - R); };
     var y = function (v) { return T + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - T - B); };
@@ -129,7 +145,7 @@
     for (var i = 0; i <= xTicks; i++) {
       var t = t0 + (span / xTicks) * i, xx = f1(x(t));
       if (i > 0 && i < xTicks) g += '<line class="grid" x1="' + xx + '" x2="' + xx + '" y1="' + T + '" y2="' + (H - B) + '"/>';
-      g += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 ? 'start' : i === xTicks ? 'end' : 'middle') + '">' + esc(timeLabel(t, span, span / xTicks)) + '</text>';
+      g += '<text x="' + xx + '" y="' + (H - 8) + '" text-anchor="' + (i === 0 ? 'start' : i === xTicks ? 'end' : 'middle') + '">' + esc(opts.xLabel ? opts.xLabel(t) : timeLabel(t, span, span / xTicks)) + '</text>';
     }
     g += '<line class="grid" x1="' + L + '" x2="' + L + '" y1="' + T + '" y2="' + (H - B) + '"/><line class="grid" x1="' + (W - R) + '" x2="' + (W - R) + '" y1="' + T + '" y2="' + (H - B) + '"/>';
 
@@ -147,6 +163,13 @@
         body += '<path d="M' + d + ' L' + f1(x(s.points[s.points.length - 1][0])) + ',' + base + ' L' + f1(x(s.points[0][0])) + ',' + base + ' Z" fill="url(#' + id + 'a' + si + ')"/>';
       }
       body += '<path d="M' + d + '" fill="none" style="stroke:' + s.color + '" stroke-width="1.5" vector-effect="non-scaling-stroke"/>';
+    });
+    // marks: [[t, label], ...] a dotted vertical line at each t, its label at the top (a run's parts, an event)
+    (opts.marks || []).forEach(function (m) {
+      if (!(m[0] >= t0 && m[0] < t1)) return;
+      var mx = f1(x(m[0]));
+      body += '<line class="now" x1="' + mx + '" x2="' + mx + '" y1="' + T + '" y2="' + (H - B) + '" vector-effect="non-scaling-stroke"/>' +
+        (m[1] ? '<text class="peak-text" x="' + f1(+mx + 5) + '" y="' + (T + 10) + '">' + esc(m[1]) + '</text>' : '');
     });
     if (opts.peak) {
       var top = -Infinity; main.points.forEach(function (p) { top = Math.max(top, p[1]); });
@@ -167,7 +190,7 @@
 
     // drop the records of charts no longer in the page, then keep this one's points for the crosshair
     Object.keys(CHARTS).forEach(function (k) { if (!document.querySelector('svg[data-bbc="' + k + '"]')) delete CHARTS[k]; });
-    CHARTS[id] = { W: W, H: H, L: L, R: R, T: T, B: B, label: label, series: series.map(function (s) {
+    CHARTS[id] = { W: W, H: H, L: L, R: R, T: T, B: B, label: label, xLabel: opts.xLabel, series: series.map(function (s) {
       return { name: s.name, pts: s.points.map(function (p) { return [x(p[0]), y(p[1]), p[0], p[1]]; }) };
     }) };
     var aria = (opts.title || 'Chart') + (showNow ? ': now ' + pillText : '');
@@ -198,7 +221,7 @@
     hits.forEach(function (p, i) { set(dots[i], { cx: p[0], cy: p[1] }); });
     set(g.querySelector('.vx'), { x1: h[0], x2: h[0] });
     set(g.querySelector('.hy'), { y1: h[1], y2: h[1] });
-    var name = c.series[best].name, vt = (c.series.length > 1 && name ? name + ' ' : '') + c.label(h[3]), tt = fullTime(h[2]);
+    var name = c.series[best].name, vt = (c.series.length > 1 && name ? name + ' ' : '') + c.label(h[3]), tt = c.xLabel ? c.xLabel(h[2]) : fullTime(h[2]);
     var vw = vt.length * CHAR_W + 8, tw = tt.length * CHAR_W + 10, vy = Math.max(c.T + 9, Math.min(c.H - c.B - 9, h[1]));
     var vx = Math.min(c.W - c.R + 4, c.W - vw - 2);
     set(g.querySelector('.hv-pv'), { x: vx, y: vy - 9, width: vw });
@@ -246,5 +269,5 @@
   document.addEventListener('pointerover', donutHover);
   document.addEventListener('pointerout', donutHover);
 
-  window.BBCharts = { spark: spark, line: line, donut: donut, theme: theme, compact: compact, niceStep: niceStep };
+  window.BBCharts = { spark: spark, line: line, donut: donut, theme: theme, compact: compact, niceStep: niceStep, frame: frame };
 })();

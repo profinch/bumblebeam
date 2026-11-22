@@ -41,6 +41,9 @@
   .top-row .price-chip { padding: 5px 8px; }
   .top-row .main-nav { justify-self: stretch; justify-content: space-between; }
 }
+/* <bb-logo> is drawn once the page is read (bb.js): its box is there from the start, so the header never grows */
+bb-logo { display: inline-flex; flex: none; width: 42px; height: 42px; }
+bb-logo[size="32"] { width: 32px; height: 32px; } bb-logo[size="28"] { width: 28px; height: 28px; } bb-logo[size="24"] { width: 24px; height: 24px; }
 .brand { display: flex; align-items: center; gap: 11px; color: var(--text); font-weight: 700; font-size: 19px; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand em { font-style: normal; font-weight: 400; color: var(--muted); }
@@ -83,6 +86,15 @@
 }
 .main-nav a:hover { color: var(--text); text-decoration: none; }
 .main-nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+/* opt-in: quiet tabs, a second row under the main ones (a page's own choice: a network, a direction): smaller, the
+   chosen one underlined as the main tabs are; an .end button sits at the right (a swap ⇄) */
+.subtabs { display: flex; align-items: flex-end; gap: 22px; border-bottom: 1px solid var(--border-dim); }
+.subtabs button { padding: 4px 0 7px; margin-bottom: -1px; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
+  font: 700 11px var(--font-mono); letter-spacing: 0.04em; color: var(--muted); white-space: nowrap; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.subtabs button.end { margin-left: auto; padding-left: 6px; padding-right: 2px; font-size: 14px; letter-spacing: 0; border-bottom-color: transparent; }
+.subtabs button.end:hover { color: var(--accent); }
 
 /* "Start mining" sits in the menu as a button, not a tab */
 .main-nav a.nav-cta {
@@ -177,11 +189,18 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .bar { height: 3px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; margin-top: 6px; width: 100%; max-width: 300px; }
 .bar > i { display: block; height: 100%; border-radius: 2px; background: var(--color-yellow); }
 .bar.accent > i { background: var(--accent); }
+/* opt-in: a button that changes its word (Copy, then Copied) keeps one width for both: every word inside sits in
+   the same cell, only the one shown is visible; .done shows the second */
+.btn.swap { display: inline-grid; justify-items: center; }
+.btn.swap > span { grid-area: 1 / 1; }
+.btn.swap > span + span, .btn.swap.done > span:first-child { visibility: hidden; }
+.btn.swap.done > span + span { visibility: visible; }
 .badge { display: inline-block; font: 700 10px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; }
 .badge.ok { color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
 .badge.pending { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.1); }
 .badge.bad { color: var(--color-red); background: rgba(var(--red-rgb), 0.12); }
 .badge.solo { color: var(--color-purple); background: rgba(var(--purple-rgb), 0.12); }
+.badge.info { color: var(--color-blue); background: rgba(11, 204, 247, 0.12); }      /* opt-in: a neutral state (the wallet's maturing coins) */
 
 /* a block our pool found: its height as a badge, in the explorer and the pool's network page */
 .badge.ours-h { font-size: 11px; letter-spacing: 0.02em; line-height: 1.2; padding: 1px 6px; margin: -2px 0 -2px -6px; text-decoration: none; }
@@ -191,6 +210,10 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 
 /* charts */
 .chart { width: 100%; height: auto; display: block; }
+/* a box a line() chart will fill (BBCharts.frame or .line): its height kept before the chart comes, in line()'s
+   proportions (1000 x 260, a phone's 380 x 210) */
+.chart-box { aspect-ratio: 1000 / 260; }
+@media (max-width: 700px) { .chart-box { aspect-ratio: 380 / 210; } }
 .chart text { font: 9.5px var(--font-sans); fill: rgba(255, 255, 255, 0.6); }
 .chart text.pill-text { font: 700 9.5px var(--font-mono); fill: var(--bg); }
 .chart .grid { stroke: rgba(255, 255, 255, 0.06); }
@@ -209,6 +232,11 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 .more[hidden] { display: none; }
 .note { margin-top: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45; border-radius: 6px; border: 1px solid var(--border); color: var(--text-dim); }
 .note.warn { border-color: rgba(var(--yellow-rgb), 0.35); background: rgba(var(--yellow-rgb), 0.07); }
+/* a note that can be closed: <div class="note warn closable"><button class="note-x" aria-label="Close">×</button>text</div>;
+   the words keep clear of the cross */
+.note.closable { position: relative; padding-right: 30px; }
+.note-x { position: absolute; top: 5px; right: 6px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font: 16px/1 var(--font-sans); cursor: pointer; }
+.note-x:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
 .note.ok { border-color: rgba(var(--accent-rgb), 0.3); background: rgba(var(--accent-rgb), 0.06); }
 .step .row { margin-top: 10px; }
 
@@ -260,7 +288,9 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
    open list, so that, opened, they read as one shape: the button's bottom corners square, the
    list's round */
 .dd { position: relative; min-width: 190px; }
+/* top-aligned: an empty one (before its options come) is as high as a filled one */
 .dd-btn {
+  vertical-align: top;
   width: 100%; height: 36px; padding: 0 30px 0 10px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
   background: var(--field-fill);
@@ -274,13 +304,15 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
   position: absolute; left: 0; right: 0; top: calc(100% - 1px); z-index: 30; margin: 0; padding: 2px 0 6px; list-style: none;
   max-height: 300px; overflow-y: auto; color-scheme: dark;
   background: var(--field-fill); border: 1px solid rgba(var(--accent-rgb), 0.5); border-top: 0; border-radius: 0 0 6px 6px;
+  background-color: var(--bg);      /* under the fixed gradient: where a composited popup does not paint that, the list is not see-through */
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
   /* the shadow only below and beside: above, it fell on the button and drew a seam */
   clip-path: inset(0 -40px -40px -40px);
 }
-.dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.dd-list [role="option"] { padding: 7px 10px 7px 20px; font: 13px var(--font-mono); text-transform: none; letter-spacing: 0; color: var(--text-dim); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }      /* a name longer than the list: cut with …, not mid-letter */
 
 /* a compact list for table filters in a panel head */
+.dd-list [role="option"][aria-disabled="true"] { color: var(--muted); opacity: 0.6; cursor: default; }
 .dd.compact { min-width: 130px; }
 .dd.compact .dd-btn { height: 28px; font-size: 12px; }
 .dd.compact .dd-list [role="option"] { padding: 6px 10px 6px 14px; font-size: 12px; }
@@ -291,6 +323,8 @@ th.sortable:hover { color: var(--text); }
 th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); color: var(--accent); }
 .dd-list [role="option"].active { background: rgba(var(--accent-rgb), 0.12); color: var(--text); }
 .dd-list [role="option"][aria-selected="true"] { color: var(--accent); }
+/* opt-in: a thin line between groups of a list ({ sep: true } in BB.dropdown) */
+.dd-list .dd-sep { height: 1px; margin: 4px 10px; background: var(--border); list-style: none; }
 
 /* scrolling boxes (wide tables, code, the card list): a thin accent bar, no track, no arrows */
 .dd-list::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .code pre::-webkit-scrollbar, .doc-obj::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -436,6 +470,8 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
   pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 0.14s ease, transform 0.14s ease;
 }
 .bb-tip.below { transform: translateY(-4px); }
+/* opt-in (data-tip-wide on the element): up to 360 px, line breaks kept (e.g. a label, then a whole address) */
+.bb-tip.wide { max-width: min(360px, calc(100vw - 16px)); white-space: pre-line; }
 .bb-tip.on { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .bb-tip { transition: none; }
@@ -476,6 +512,21 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 }
 .dd.open .dd-btn::after { transform: scaleY(-1); }
 
+/* number steppers (components/stepper.js): the accent chevrons of the card list, up over down, inside the field's
+   right edge, in place of the browser's spin buttons */
+.stepper-box { position: relative; display: inline-flex; }
+.stepper-box input { padding-right: 22px !important; -moz-appearance: textfield; appearance: textfield; }
+.stepper-box input::-webkit-inner-spin-button, .stepper-box input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper-box button { position: absolute; right: 1px; width: 18px; height: calc(50% - 1px); padding: 0; border: 0; background: none; cursor: pointer; }
+.stepper-box .stepper-up { top: 1px; } .stepper-box .stepper-down { bottom: 1px; }
+.stepper-box button::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 5px; margin: -2px 0 0 -4px; background: var(--muted); transition: background 0.15s;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+.stepper-box .stepper-up::after { transform: scaleY(-1); margin-top: -3px; }
+.stepper-box button:hover::after, .stepper-box input:focus ~ button::after { background: var(--accent); }
+
 /* ecosystem bar (<bb-eco>, components/bb.js): one thin line above every site's header */
 .eco { padding: 0 var(--page-padding-x); border-bottom: 1px solid var(--border-dim); background: rgba(0, 0, 0, 0.15); }
 .eco-row { max-width: var(--page-width); margin: 0 auto; display: flex; align-items: center; gap: 4px 18px; flex-wrap: wrap; min-height: 30px; font: 700 var(--fs-xs) var(--font-mono); letter-spacing: var(--caps-spacing); text-transform: uppercase; }
@@ -489,10 +540,18 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .eco-row a i.rig { background: var(--muted); }
 
 .btn.solid { color: var(--bg); background: var(--gradient-accent); border-color: transparent; }
+/* the gradient spans the border too: under the transparent 1px border it repeated from its far end, a light
+   stripe down the button's left edge */
+.btn.solid { background-origin: border-box; }
 .btn:disabled { opacity: .45; cursor: default; }
 .badge.warn { color: var(--color-yellow); background: rgba(var(--yellow-rgb), 0.1); }
 .note.warn { border-color: rgba(var(--yellow-rgb), 0.35); background: rgba(var(--yellow-rgb), 0.07); }
 .note.bad { border-color: rgba(var(--red-rgb), 0.35); background: rgba(var(--red-rgb), 0.07); }
+/* opt-in: a list row or table row that is no good any more (expired, failed), tinted red (stronger than .note.bad: rows lie on a panel), a little
+   more under the pointer or when chosen */
+.li.bad, tr.bad > td { background: rgba(var(--red-rgb), 0.14); box-shadow: inset 2px 0 0 rgba(var(--red-rgb), 0.8); }
+tr.bad > td:not(:first-child) { box-shadow: none; }
+.li.bad:hover, .li.bad.on, tr.bad:hover > td { background: rgba(var(--red-rgb), 0.2); }
 .field textarea {
   min-height: 72px; padding: 8px 10px; resize: vertical; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
   background: var(--field-fill); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
@@ -505,6 +564,52 @@ th.sortable[data-dir]:not([data-dir=""])::after { content: " " attr(data-dir); c
 .donut path { transition: opacity .15s; }
 .donut-wrap.hovering .donut path:not(.on) { opacity: .35; }
 
+
+/* ==== added for the puzzle site (2026-11-02), for any site that wants them. Each piece is opt-in: it acts
+   only through its own class, so pages without it look exactly as before. ==== */
+
+/* the header's search with something it cannot open: <form class="search bad"> */
+.search.bad { border-color: rgba(var(--red-rgb), 0.6); }
+
+/* a log: a few lines of what a long job is doing, scrolling, empty = not shown */
+.log { margin: 12px 0 0; padding: 10px 12px; max-height: 180px; overflow: auto; white-space: pre-wrap; background: var(--surface3); border: 1px solid var(--border-dim); border-radius: 6px; font: 11px/1.5 var(--font-mono); color: var(--text-dim); scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; }
+.log::-webkit-scrollbar { width: 4px; height: 4px; }
+.log::-webkit-scrollbar-track { background: transparent; }
+.log::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.45); border-radius: 2px; }
+.log::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.log:empty { display: none; }
+/* a terminal: <div class="k term-k">Terminal</div><pre class="log term"></pre>: one height from the start (kept when
+   empty, so nothing jumps), a blinking block cursor after the last line */
+.term-k { margin: 14px 0 -6px; }
+.log.term { height: 132px; max-height: none; }
+.log.term:empty { display: block; }
+.log.term::after { content: ''; display: inline-block; width: 0.6em; height: 1.1em; vertical-align: text-bottom; background: var(--accent); animation: term-blink 1s steps(1) infinite; }
+@keyframes term-blink { 50% { opacity: 0; } }
+/* the log's live last line: something is going on right now (a spinner, what, how long) */
+.log .busy { color: var(--accent); }
+
+/* a row of buttons with a note after them */
+.actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+/* a badge not (yet) earned */
+.badge.dimmed { color: var(--muted); background: rgba(255, 255, 255, 0.05); }
+/* a checkbox with its words: <label class="check"><input type="checkbox"> Words</label> */
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-base); color: var(--text-dim); cursor: pointer; }
+.check input { -webkit-appearance: none; appearance: none; flex: none; position: relative; width: 16px; height: 16px; margin: 0; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--field-fill, rgba(255, 255, 255, 0.04)); transition: border-color 0.15s, background 0.15s; }
+.check:hover input:not(:disabled), .check input:focus-visible { border-color: rgba(var(--accent-rgb), 0.7); }
+.check input:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.35); outline-offset: 2px; }
+.check input:checked { border-color: transparent; background: var(--gradient-accent); }
+/* the tick: two sides of a square turned, in the page's dark */
+.check input:checked::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 4px; height: 8px; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.check input:disabled { opacity: 0.45; cursor: default; }
+.check:has(input:disabled) { cursor: default; }
+/* text in the accent */
+.accent-text { color: var(--accent); }
+/* boxes that set their own display (grid, flex) still hide with the hidden attribute */
+.tiles[hidden], .row[hidden], .actions-row[hidden], .note[hidden], .bar[hidden], .panel[hidden], .log[hidden] { display: none; }
+/* a segmented switch's disabled button */
+.seg button:disabled { opacity: 0.4; cursor: default; }
+
 /* small shared pieces (were the explorer's): a hash or key that may break anywhere, a key-value list,
    signed amounts, no-wrap / wrap, a click-to-copy text, small print */
 .hash { font-family: var(--font-mono); word-break: break-all; }
@@ -515,10 +620,101 @@ td .kv { font-size: 11px; gap: 2px 10px; }
 .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amt.neg { color: var(--color-red); }
 .amt.pos { color: var(--accent); }
-.nowrap { white-space: nowrap; }
 .wrap { white-space: normal; }
 .copy { cursor: pointer; }
+/* opt-in: a small copy button (two sheets), a green tick for 2 s once copied (the 3BMiner pattern) */
+.cp { display: inline-flex; align-items: center; background: none; border: 0; padding: 0; margin: 0; color: var(--muted); cursor: pointer; line-height: 0; }
+.cp[hidden] { display: none; } /* its display above would beat the attribute */
+.cp:hover { color: var(--text-dim); }
+.cp.done { color: #34d399; }
+.cp svg { width: 12px; height: 12px; }
 .copy:hover { color: var(--accent); }
 .small { font-size: 10px; }
 /* a calculator's results: tiles in a grid (were the pool's) */
 .calc-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+
+/* a value still on its way: three honeycomb cells in the accent lighting up in turn, one line high (a tile's .v) */
+.bb-wait { display: inline-flex; align-items: center; gap: 4px; height: 1em; vertical-align: middle; }
+.bb-wait i { width: 10px; height: 11.5px; background: var(--accent); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); opacity: 0.18; animation: bb-hex 1.2s ease-in-out infinite; }
+.bb-wait i:nth-child(2) { animation-delay: 0.2s; } .bb-wait i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bb-hex { 30% { opacity: 1; transform: scale(1.15); } 60% { opacity: 0.18; transform: none; } }
+/* a value that has just come in fades in, as in the wallet: add .bb-fade again (after a reflow) for each new value */
+@keyframes bb-fade { from { opacity: 0; } to { opacity: 1; } }
+.bb-fade { animation: bb-fade 0.4s ease-out backwards; }
+/* a speedometer: ui/components/gauge.js draws it into <div class="gauge"></div> */
+.gauge { width: 100%; max-width: 260px; aspect-ratio: 220 / 194; } /* its svg's box, kept before gauge.js draws it */
+.gauge svg { display: block; width: 100%; height: auto; overflow: visible; }
+.gauge-track, .gauge-fill { fill: none; stroke-width: 10; stroke-linecap: round; }
+.gauge-track { stroke: rgba(255, 255, 255, 0.1); }
+.gauge-fill { stroke: var(--accent); transition: stroke-dasharray 0.8s ease; filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.45)); }
+.gauge.idle .gauge-fill { stroke: none; }
+.gauge-tick { stroke: var(--muted2); stroke-width: 1.5; }
+.gauge-label { fill: var(--muted); font: 8.5px var(--font-mono); text-anchor: middle; }
+.gauge-mark { stroke: var(--accent); stroke-width: 2; }
+.gauge-mark-label { fill: var(--accent); font: 700 8.5px var(--font-mono); }
+.gauge-needle { fill: var(--accent); transform-box: view-box; transform-origin: 110px 108px; transition: transform 0.8s cubic-bezier(0.3, 1.4, 0.5, 1); }
+.gauge.idle .gauge-needle { fill: var(--muted); }
+.gauge-hub { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+.gauge.idle .gauge-hub { stroke: var(--muted); }
+.gauge-value { fill: var(--text); font: 700 20px var(--font-mono); text-anchor: middle; }
+.gauge-unit { fill: var(--muted); font: 700 9px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; text-anchor: middle; }
+
+/* opt-in: a page's lead paragraph under its title (pool connect page) */
+.page-lead { margin: -6px 0 18px; max-width: 820px; font-size: var(--fs-body); line-height: 1.6; color: var(--text-dim); }
+
+/* opt-in: numbered or bulleted instructions in running text, with inline code (pool connect page) */
+.howto { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--text-dim); line-height: 1.5; }
+.howto li::marker { color: var(--muted); font: 700 var(--fs-m) var(--font-mono); }
+/* a technical name in running text (a curve, a hash, a command): <code class="mark">, and code in the how-to, the FAQ
+   and a page's lead; in the chain's --mark, a colour the links never have */
+.howto code, .faq code, .page-lead code, code.mark {
+  font: 600 0.9em var(--font-mono); color: var(--mark); padding: 1px 5px; border-radius: 4px;
+  background: rgba(var(--mark-rgb), 0.12); overflow-wrap: anywhere;
+}
+code.mark { white-space: nowrap; } /* a short name never splits across lines ("April 2025") */
+
+/* opt-in: questions that open in place (<details> in .faq) */
+.faq details { border-top: 1px solid var(--border-dim); }
+.faq details:first-child { border-top: 0; }
+.faq summary {
+  display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; cursor: pointer; list-style: none;
+  font-size: var(--fs-base); font-weight: 600; color: var(--text);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: '+'; flex: none; font: 700 var(--fs-base) var(--font-mono); color: var(--muted); }
+.faq details[open] summary::after { content: '−'; color: var(--accent); }
+.faq summary:hover { color: var(--accent); }
+.faq details > div { padding: 0 0 12px; font-size: var(--fs-base); line-height: 1.55; color: var(--text-dim); }
+.faq details > div b { color: var(--text); }
+
+/* opt-in: a short message in running text (a result, an error): mono, yellow, no frame (3BMiner's); .bad red */
+.msg { margin: 8px 0 0; font: var(--fs-m) var(--font-mono); line-height: 1.5; color: var(--color-yellow); }
+.msg.bad { color: var(--color-red); }
+.msg:empty { display: none; }
+
+/* opt-in: a list of checks or steps, each line with its mark: li.ok ✓ green, li.bad ✗ red, li.warn ! yellow,
+   li.wait … dim and breathing, li.off – dimmed; <b> names it, <span> says what happened. Name and words side by
+   side while they fit, the words under the name on a phone */
+.checks { list-style: none; margin: 12px 0; padding: 0; font: var(--fs-m) var(--font-mono); line-height: 1.5; }
+.checks li { display: grid; grid-template-columns: 18px minmax(110px, 170px) minmax(0, 1fr); gap: 0 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--border-dim); }
+.checks li:last-child { border-bottom: 0; }
+.checks li::before { content: '·'; text-align: center; font-weight: 700; color: var(--muted); }
+.checks li.ok::before { content: '✓'; color: var(--color-green); }
+.checks li.bad::before { content: '✗'; color: var(--color-red); }
+.checks li.warn::before { content: '!'; color: var(--color-yellow); }
+.checks li.info::before { content: 'i'; font-family: var(--font-mono); color: var(--muted); } /* read, not checked on its own (a signed part, say) */
+.checks li.wait::before { content: '…'; color: var(--text-dim); animation: checks-wait 1.2s ease-in-out infinite; }
+.checks li.off::before { content: '–'; }
+.checks li > b { font-weight: 700; color: var(--text); }
+.checks li.off > b { color: var(--muted); }
+.checks li > span { color: var(--text-dim); overflow-wrap: anywhere; min-width: 0; }
+@keyframes checks-wait { 50% { opacity: 0.3; } }
+@media (max-width: 560px) { .checks li { grid-template-columns: 18px minmax(0, 1fr); } .checks li > span { grid-column: 2; } }
+
+/* <bb-social> (bb.js): BumbleBeam's accounts as a row of small icon links, grey, lit as the text on hover */
+bb-social { display: inline-flex; vertical-align: middle; min-height: 16px; }
+bb-social:not([only]) { min-width: 128px; } /* its five icons' room before bb.js draws them: nothing moves */
+.bb-social { display: inline-flex; align-items: center; gap: 12px; }
+.bb-social a { display: inline-flex; color: var(--muted); line-height: 0; }
+.bb-social a:hover { color: var(--text); text-decoration: none; }
+.bb-social svg { width: 16px; height: 16px; fill: currentColor; }

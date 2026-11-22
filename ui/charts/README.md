@@ -44,8 +44,12 @@ BBCharts.line(points or series, {
   peak: false,             // mark the highest point
   zero: undefined,         // y from 0 (default: when all values >= 0)
   narrow: undefined,       // phone layout (default: viewport <= 700px)
+  xLabel: undefined,       // t -> text for the time axis and the crosshair (default: clock time)
+  marks: [],               // [[t, label], ...]: dotted vertical lines, the label at the top
+  labelChars: undefined,   // the right column at least this wide (a live chart that must not shift)
   height: undefined, empty: 'No data yet',
 })
 BBCharts.donut([{ name, value, color }], { total, sub, label, title })
+BBCharts.frame(text, { labelChars, narrow, height }) // an empty line() of the same box, before its data comes
 BBCharts.theme()           // resolved colours for canvas charts (BeeChart's ChartTheme)
 ```
