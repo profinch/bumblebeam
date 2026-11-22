@@ -93,6 +93,8 @@ services:
   # (PUZZLE_NODE_API in .env, not in the repo), the radar and its optional Telegram posts. Published nowhere.
   puzzle-api:
     image: ${PUZZLE_API_IMAGE:?set PUZZLE_API_IMAGE in .env}
+    # a small init as PID 1: docker stop reaches node as SIGTERM, which writes its state down before it goes
+    init: true
     container_name: puzzle-api
     hostname: puzzle-api
     restart: unless-stopped
@@ -100,9 +102,14 @@ services:
       NODE_API: ${PUZZLE_NODE_API:?set PUZZLE_NODE_API in .env}
       DATA_DIR: /data
       PUBLIC_URL: https://puzzle.bumblebeam.org
+      EXPLORER_URL: ${PUZZLE_EXPLORER_URL:-https://mempool.space}   # the site's tx/address links: our node's explorer
       TG_BOT_TOKEN: ${PUZZLE_TG_BOT_TOKEN:-}
       TG_CHAT_ID: ${PUZZLE_TG_CHAT_ID:-}
-      TG_LANG: ${PUZZLE_TG_LANG:-en}
+      POOL_SECRET: ${PUZZLE_POOL_SECRET:-}              # hex; empty = one made in /data on first start
+      POOL_RECEIPT_KEY: ${PUZZLE_RECEIPT_KEY:-}         # hex; the key whose public half is claimkit.js RECEIPT_PUB (receipts for found keys)
+      POOL_PAYOUT_ADDRESS: ${PUZZLE_POOL_PAYOUT:-}      # the pool's 1.1 BTC of a prize; required: the API does not start without it
+      POOL_TRANSPORT_KEY: ${PUZZLE_TRANSPORT_KEY:-}     # 64 hex, P-256; finds come sealed for it (web/engine/seal.js TRANSPORT_PUB); required
+      POOL_VAULT_KEY: ${PUZZLE_VAULT_KEY:-}             # 64 hex; seals the vault's found keys (api/vault.js); required, keep a copy off the server
     volumes:
       - /data/bumblebeam/puzzle:/data       # state.json; owned by uid 1000 (node)
     networks:

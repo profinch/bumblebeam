@@ -16,7 +16,7 @@ SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
 MONO = "ui-monospace, 'SF Mono', Menlo, monospace"
 
 
-def banner(t, T, W, H, k=1.0, text=True, flat=False):
+def banner(t, T, W, H, k=1.0, text=True, flat=False, tag="BEAM Community Ecosystem", url="https://bumblebeam.org"):
     R = 30.0 * k
     hw, vs = math.sqrt(3) * R, 1.5 * R
     s = 5.6 * k                              # the logo: 32 units -> ~180 px at k=1
@@ -45,8 +45,8 @@ def banner(t, T, W, H, k=1.0, text=True, flat=False):
     ly = cy0 - 16 * s
     block = "" if not text else f'''<g transform="translate({lx:.1f} {ly:.1f}) scale({s})">{F.bee(t, T)}</g>
 <text x="{tx:.1f}" y="{cy0 + 10 * k:.1f}" font-family="{SANS}" font-weight="700" font-size="{96 * k:.1f}" fill="#fff">Bumble<tspan fill="url(#beam)">Beam</tspan></text>
-<text x="{tx + 4 * k:.1f}" y="{cy0 + 62 * k:.1f}" font-family="{SANS}" font-size="{30 * k:.1f}" fill="rgba(255,255,255,.72)">BEAM Community Ecosystem</text>
-<text x="{tx + 5 * k:.1f}" y="{cy0 + 108 * k:.1f}" font-family="{MONO}" font-weight="700" font-size="{24 * k:.1f}" fill="#00f6d2">https://bumblebeam.org</text>
+<text x="{tx + 4 * k:.1f}" y="{cy0 + 62 * k:.1f}" font-family="{SANS}" font-size="{30 * k:.1f}" fill="rgba(255,255,255,.72)">{tag}</text>
+<text x="{tx + 5 * k:.1f}" y="{cy0 + 108 * k:.1f}" font-family="{MONO}" font-weight="700" font-size="{24 * k:.1f}" fill="#00f6d2">{url}</text>
 '''
     return F.page(f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b5a85"/><stop offset=".55" stop-color="#042548"/><stop offset="1" stop-color="#031c38"/></linearGradient>
