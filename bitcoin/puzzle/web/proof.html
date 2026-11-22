@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof of the Pool Finds: Key, Salt, Commitment | BumbleBeam</title>
+<meta name="description" content="Every puzzle key the BumbleBeam pool has found: the commitment made at the moment of the find with its OpenTimestamps proof, and once the prize is spent the key, the salt, the piece and the claim, checked again in your browser.">
+<!-- the page's one address, and how a link to it looks when shared (brand/src/og_puzzle.py draws the picture) -->
+<link rel="canonical" href="https://puzzle.bumblebeam.org/proof">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:url" content="https://puzzle.bumblebeam.org/proof">
+<meta property="og:title" content="Proof of the Pool Finds: Key, Salt, Commitment">
+<meta property="og:description" content="Every puzzle key the BumbleBeam pool has found: the commitment made at the moment of the find with its OpenTimestamps proof, and once the prize is spent the key, the salt, the piece and the claim, checked again in your browser.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v"><!--ssr:btc-price-v-->loading…<!--/ssr--></b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
+
+<main>
+  <div class="page-head"><h1 class="page-title">Proof of the finds</h1></div>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">What this page proves</h2>
+    <p>When a browser in the pool finds the key of a puzzle, it first makes a commitment: <code class="mark">sha256(key ‖ address ‖ salt)</code> of the key, the payout address of the finder and <code class="mark">32</code> random bytes (the salt), timestamped by the public <code class="mark">OpenTimestamps</code> calendars. Then it sends its own claim through <code class="mark">MARA Slipstream</code>, and only then tells our server. The commitment is published here at once. It gives nothing away.</p>
+    <p>Once the prize is spent, nothing is left to steal, and the rest is published: the key, the salt, the piece it was found in and the claim transaction. <b>Verify</b> checks all of it again in your browser, with nothing taken on trust from our server: the key opens the address of the puzzle, it lies in that piece, the commitment is <code class="mark">sha256(key ‖ address ‖ salt)</code>, the <code class="mark">.ots</code> file stamps that commitment, and the claim paid the address of the finder its share. Whether the stamp came before the claim, <a href="https://opentimestamps.org" target="_blank" rel="noopener">opentimestamps.org</a> tells: drop the two files below there.</p>
+  </section>
+
+  <!-- a receipt a finder saved (the find's card, Save the receipt): checked here, in the browser (proof.js) -->
+  <section class="panel proof-check" id="rc-box">
+    <div class="panel-head"><h2 class="panel-title">Check a receipt</h2></div>
+    <p class="dim">A finder saves the signed receipt of the pool from the card of the find (Save the receipt). Drop that file here, or choose it: this page checks the signature of the pool on it in your browser, and finds the find on this page.</p>
+    <div class="actions-row"><label class="btn ghost rc-pick">Choose the receipt file<input type="file" id="rc-file" accept=".json,application/json" hidden></label><span class="dim mono" id="rc-name"></span></div>
+    <ul class="checks" id="rc-out" hidden></ul>
+  </section>
+
+  <!-- the finds: one panel each, filled in from /api/pool/finds; the first answer replaces the placeholder in place -->
+  <div id="finds"><!--ssr:finds--><section class="panel proof-empty"><div class="panel-head"><h2 class="panel-title">Finds</h2></div><p class="dim proof-none" id="finds-none"><span class="bb-wait"><i></i><i></i><i></i></span></p></section><!--/ssr--></div>
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/tx.js?v=dev"></script>
+<script src="/engine/puzzles.js?v=dev"></script>
+<script src="/engine/claimkit.js?v=dev"></script>
+<script src="/render.js?v=dev"></script>
+<script src="/proof.js?v=dev"></script>
+</body>
+</html>
