@@ -1,0 +1,37 @@
+# BumbleBeam Puzzle
+
+> The Bitcoin puzzle (also called the 1000 BTC puzzle) read live from a Bitcoin node, and a community pool that searches the easiest unsolved puzzle (#71 now) in visitors' browsers, on WebGPU or the CPU. Open source.
+
+Prizes, statuses and the pool's numbers change every minute: quote them from the JSON API below with its `updated` time, not from a cached copy of a page. Every GET endpoint below is public, sends `Access-Control-Allow-Origin: *`, is cached for 5 to 60 seconds and is limited to about 10 requests a second per client.
+
+## Facts that do not change
+
+- In January 2015 one transaction (08389f34c98c606322740c0be6a7125d9860bb8d5cb182c02f98461e5fa6cd15) sent bitcoin to 256 addresses, 160 of which still count.
+- The private key of puzzle #N is a number in [2^(N-1), 2^N - 1]: #71 has 2^70 keys to try.
+- From #65 on, every fifth puzzle has its public key on the blockchain, which makes it far easier (Pollard's kangaroo); the others can only be searched key by key.
+- The pool hands each browser its own piece of the range (2^33 keys) with hidden check keys; the finder gets the prize's whole bitcoins but one (6 of 7.1 BTC on #71). Rules: https://puzzle.bumblebeam.org/rules
+
+## API
+
+- [All 160 puzzles](https://puzzle.bumblebeam.org/api/puzzles): `updated`, `tip`, `btc_usd`, `target`, `open`, `open_btc`, `solved`, and `puzzles[]` with `n`, `address`, `range`, `balance` (BTC), `status` (open or solved), `solved` {time, txid, height, amount}, `exposed` (public key on the blockchain), `claiming` (a spend waiting in the mempool)
+- [One puzzle](https://puzzle.bumblebeam.org/api/puzzles/71): the same, with every transaction of its address (`history`)
+- [The radar](https://puzzle.bumblebeam.org/api/events): solves, spends waiting in the mempool, public keys revealed, top-ups
+- [Knocks](https://puzzle.bumblebeam.org/api/knocks): small payments into open puzzle addresses, with their notes
+- [The pool](https://puzzle.bumblebeam.org/api/pool): the puzzle searched, keys checked, pieces, speed, searchers, the split
+- [Top searchers](https://puzzle.bumblebeam.org/api/pool/top), [the pool's speed over time](https://puzzle.bumblebeam.org/api/pool/history?range=7d)
+- [Finds and their proofs](https://puzzle.bumblebeam.org/api/pool/finds): the commitment at the moment of a find, with its OpenTimestamps file; the key, the salt and the claim once the prize is spent
+- [Benchmark results by device](https://puzzle.bumblebeam.org/api/bench): keys per second, timed by the server
+- [Health](https://puzzle.bumblebeam.org/api/health), [BTC price](https://puzzle.bumblebeam.org/api/price)
+
+## Pages
+
+- [All 160 puzzles, live](https://puzzle.bumblebeam.org/): prizes, which are solved and how, the radar
+- [Puzzle #71](https://puzzle.bumblebeam.org/puzzle/71): one page for each puzzle, /puzzle/1 to /puzzle/160: its address, prize, key range, public key, how it was solved, every transaction
+- [How it works](https://puzzle.bumblebeam.org/learn): from a key to an address; brute force, baby-step giant-step and Pollard's kangaroo; an odds calculator
+- [The pool](https://puzzle.bumblebeam.org/pool), [its rules](https://puzzle.bumblebeam.org/rules) and [the proof of its finds](https://puzzle.bumblebeam.org/proof)
+- [Search in the browser](https://puzzle.bumblebeam.org/play) and [the benchmark](https://puzzle.bumblebeam.org/bench)
+
+## Optional
+
+- [Source code](https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle)
+- Contact: support@bumblebeam.org

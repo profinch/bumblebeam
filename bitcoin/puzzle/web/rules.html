@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Puzzle Pool Rules: the Prize but 1 BTC to the Finder | BumbleBeam</title>
+<meta name="description" content="How the BumbleBeam puzzle pool works: pieces, check keys, the split (6 of 7.1 BTC to the finder on #71) sent by the browser of the finder itself, the public proof of every find, what is stored, and what is not promised.">
+<!-- the page's one address, and how a link to it looks when shared (brand/src/og_puzzle.py draws the picture) -->
+<link rel="canonical" href="https://puzzle.bumblebeam.org/rules">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:url" content="https://puzzle.bumblebeam.org/rules">
+<meta property="og:title" content="Bitcoin Puzzle Pool Rules: the Prize but 1 BTC to the Finder">
+<meta property="og:description" content="How the BumbleBeam puzzle pool works: pieces, check keys, the split (6 of 7.1 BTC to the finder on #71) sent by the browser of the finder itself, the public proof of every find, what is stored, and what is not promised.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v">loading…</b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules" class="active">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
+
+<main>
+  <div class="page-head"><h1 class="page-title">Rules of the pool</h1></div>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">The short version</h2>
+    <ul>
+      <li>Your browser searches a piece of the range of the puzzle that nobody else gets. By default it works only while the tab is in front. A switch lets it go on in the background, but never after the tab is closed.</li>
+      <li>You search under your own Bitcoin address: it is needed to start, because your share goes to it the moment the key is found.</li>
+      <li>If your browser finds the key, it claims the prize by itself, within a second or two: <b>the whole bitcoins of the prize but one</b> to your address (6 of 7.1 BTC on #71, 6 of 7.2 on #72), the rest to the pool, which pays the transaction fees from its part. Your browser sends that split before our server hears of the find.</li>
+      <li>Every find is published on <a href="/proof">the proof page</a>, so anyone can check that the finder got the share.</li>
+      <li>Nothing is promised. The odds are tiny, other teams search the same range, and the key may never be found by anyone here.</li>
+    </ul>
+  </section>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">How the work is shared</h2>
+    <p>The current target is the smallest open puzzle whose public key is hidden: #71 today, the next one when it falls. Its range of 2⁷⁰ keys is cut into pieces of 2³³ (8.6 billion) keys. The server hands them out in a secret pseudo-random order, so nobody can tell which parts are done. Every 210 blocks (about 35 hours) the order is reshuffled from the hash of a new block, and pieces already given out are never given out again.</p>
+    <p>A piece is yours for 90 minutes. Pieces not finished in time, released or failed go back to the pool and are handed out again first.</p>
+    <p>Every piece hides a few check keys (between three and seven) among decoys, ten addresses in all with that of the puzzle. Your browser cannot tell the real ones from the decoys, nor how many are real, until the whole piece is done. The server credits a piece only when the report names every real one. Skipping part of a piece means missing some: no credit, and the piece goes to someone else.</p>
+  </section>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">If your browser finds the key</h2>
+    <p>Nothing for you to do. The page does this by itself, in this order:</p>
+    <ol>
+      <li><b>A commitment.</b> It takes the SHA-256 of the key, your payout address and 32 random bytes (the salt), and has that one hash timestamped by the public OpenTimestamps calendars. The hash gives the key away to nobody, but later it proves that your address knew the key at that moment.</li>
+      <li><b>The claim.</b> It builds and signs one transaction that spends the coins of the prize itself (the small coins anyone can send to the address of a puzzle stay where they are): your share to your address, the rest to the pool, the fees out of the part of the pool (and never more than 0.3% of the prize). It checks every output, then sends it through MARA Slipstream, which passes a transaction straight to the MARA miners, never through the public mempool, where the public key it shows would let bots compute the private key and outbid it.</li>
+      <li><b>Then the pool.</b> Only after Slipstream was tried does the key go to our server, with the salt, the commitment and the answer from Slipstream. The server checks all of it, closes your piece for good (it is never handed out again), sends the transaction again until it is mined, and if MARA mines a block without it (only MARA blocks can hold it), signs it again with a higher fee. The extra fee comes out of the part of the pool: your output never gets smaller. At once it gives your browser a <b>receipt</b>, signed with the published key of the pool: your find, your address, your share, your transactions and the time. Your browser checks it and keeps it. If a transaction your browser sent breaks the rules (a changed copy of the page could pay you everything and the pool nothing), the server sets it aside and signs the fair split itself, from every coin on the address of the puzzle: your share in full to your address, everything else to the pool.</li>
+    </ol>
+    <p>You see "Key found, transaction sent", what goes to your address, the transaction id and what Slipstream answered, but not the key. The key stays hidden until the claim is six blocks deep (about an hour after it is mined), when nothing is left to steal and no reorganisation of the chain can undo it, and your browser keeps everything until then: a reload or a closed tab carries on where it stopped.</p>
+    <p>If Slipstream cannot be reached from your browser, the key goes to our server all the same: the server keeps it, sends the claim through Slipstream itself, and the page asks you to write to <a href="mailto:support@bumblebeam.org">support@bumblebeam.org</a> at once, so we see your share through with you. Your timestamped commitment and the receipt of the pool prove that your address found the key. If our server cannot be reached either, the key stays in your browser, which keeps trying every minute.</p>
+    <p>A key found on <a href="/play">Play</a> is all yours: with your payout address saved in the browser, the page sends the prize there through Slipstream by itself. Without one, or without Slipstream, the key goes to our server in the same way and the page asks you to write to support. The lucky key of the home page, should it ever open a puzzle, is kept on our server too: claim the prize within 24 hours, or the pool claims it.</p>
+    <p>While a find waits for its claim to be mined, the pool is paused: no more pieces are handed out, and the pages say the key was found. The details and the proof follow once the claim is confirmed.</p>
+  </section>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">How anyone can check us</h2>
+    <p>Once the claim is six blocks deep, the <a href="/proof">proof page</a> publishes the key, the salt, the commitment with its timestamp file, the piece it was found in and the claim transaction. Its Verify button checks in your own browser that the key opens the address of the puzzle, that the commitment is the hash of the key, the address and the salt, and that the claim paid the address of the finder its share. On <a href="https://opentimestamps.org" target="_blank" rel="noopener">opentimestamps.org</a> you can see when the commitment was made.</p>
+    <p>So the pool cannot quietly take everything. The transactions of the finder go out first, and before the pool does anything with the key it signs the receipt. If the prize were ever spent in a way that does not pay that finder, the receipt is the signed word of the pool itself against it, and anyone can check the signature against this key, published here before any find:</p>
+    <p class="rules-key"><code class="mark">042c604f34ebfc297f0065d69130bbc2207cfb77e6be6d3332a56af7d284e196fe87b7aefc2d6c9dbe02a7fa02e7b9291390074c0dd7cb9dc28bf23e151ee8e1f3</code><button type="button" class="cp" data-copy="042c604f34ebfc297f0065d69130bbc2207cfb77e6be6d3332a56af7d284e196fe87b7aefc2d6c9dbe02a7fa02e7b9291390074c0dd7cb9dc28bf23e151ee8e1f3" title="The public key the pool signs its receipts with (secp256k1, uncompressed): 042c604f34ebfc297f0065d69130bbc2207cfb77e6be6d3332a56af7d284e196fe87b7aefc2d6c9dbe02a7fa02e7b9291390074c0dd7cb9dc28bf23e151ee8e1f3" aria-label="Copy the pool receipt key"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button></p>
+    <p>The timestamp adds a witness that is not ours. It is slower: the calendars write to Bitcoin about once an hour, so it may land after the claim is mined, and then it shows when, not that the finder was first. The receipt covers that hour.</p>
+    <p>What this does not cover: a browser running a copy of the page changed in advance could keep the whole prize. And once the prize is spent, its public key is on the chain, so we can compute the private key and see whose piece it was in.</p>
+  </section>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">What is stored</h2>
+    <ul>
+      <li>Your Bitcoin address, with your pieces, keys checked and who invited you. The top of the table is public.</li>
+      <li>For each piece: when it was given out, done or returned, and the speed you reported.</li>
+      <li>No IP addresses: only a keyed hash of each, for the rate limits.</li>
+      <li>When a key is found: the piece, the payout address, the commitment and its timestamp, the receipt of the pool, the answer from Slipstream and the transaction ids. The key, the salt and the signed transaction stay in the memory of the server only, until the claim is six blocks deep. Then they are published. A key that came without a safe claim (Slipstream not reached, a find on Play without an address, the lucky key) is written down on the server until its prize is spent.</li>
+    </ul>
+    <p>Invites give no money: they show how many people came through your link and what they checked.</p>
+  </section>
+
+  <section class="panel about-body rules">
+    <h2 class="panel-title">The honest part</h2>
+    <p>A home GPU checks the range of #71 at about 10⁸ keys a second, so one such card needs around 200,000 years for half the range. A thousand browsers bring that to 200 years, and farms of GPUs search the same range. Join for the fun of it, for the shared chance, and because it is a good way to learn how Bitcoin keys work, not for income. The <a href="/learn#odds">odds calculator</a> puts the chance and electricity of your card side by side.</p>
+    <p>The puzzle was set in 2015 by its creator as a measure of the strength of Bitcoin keys, and whoever finds a key may take its coins. This site is open source: <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">github.com/profinch/bumblebeam</a>.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+</body>
+</html>

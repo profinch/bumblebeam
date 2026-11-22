@@ -1,79 +1,775 @@
-/* puzzle.bumblebeam.org: only what this site needs on top of ui/ (tokens, base, components). */
+/* puzzle.bumblebeam.org: only what this site alone needs, on top of ui/ (tokens, base, components with the
+   pool's header and footer, and the opt-in pieces: .log, .actions-row, .check, .badge.dimmed,
+   .accent-text, .search.bad, the .dd card list). Anything a second site could use goes to ui/, not here. */
 
-/* the header has no search: the price and the language switch sit where the search would be */
-.top-row .top-tools { grid-area: search; justify-self: end; display: flex; align-items: center; gap: 12px; }
-.top-row .top-tools .price-chip { margin: 0; }
-.top-row .main-nav { grid-area: price / price / nav / nav; }
-@media (max-width: 820px) {
-  .top-row .top-tools { justify-self: start; }
-  .top-row .main-nav { grid-area: nav; }
-}
-
-.lead { max-width: 820px; font-size: var(--fs-base); }
-.lead sup { font-size: 0.75em; }
-.accent { color: var(--accent); }
+/* a label over a value outside tiles (the target card, the claim, the search's found key) */
 .k { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+
+/* the index: the opening text, the content's full width, no frame */
+.intro { margin: -4px 0 18px; font-size: var(--fs-body); line-height: 1.65; color: var(--text-dim); }
+.intro b { color: var(--text); }
+.intro sup { font-size: 0.75em; }
+.about-body { max-width: none; }
+.about-body.clue-body, .about-body.rules { max-width: none; }
+/* a table whose rows come later and may be many (bench's results, the pool's top): one height from the start, its head
+   and about eight rows, the rest scrolled under a head that stays on top */
+.rows-box { height: 386px; overflow: auto; overscroll-behavior: contain; }
+.rows-box thead th { position: sticky; top: 0; z-index: 1; background: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04)) fixed, var(--page-gradient) fixed; }
+.rules p, .rules li { text-align: justify; } /* the rules: the page's whole width, flush on both sides */ /* /learn's creator's clue: its opening text across the whole card, */
+.clue-body p { text-align: justify; } /* flush on both sides */
+.intro .about-body p { margin: 0; }
+.intro .about-body b { color: var(--text); }
+.intro sup { font-size: 0.75em; }
+.about-body { max-width: 820px; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); }
+.about-body p { margin: 0 0 10px; }
 
 /* the target card */
 .target { border-color: rgba(var(--accent-rgb), 0.35); background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.07), rgba(255, 255, 255, 0.03)); }
-.target-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 24px; margin-bottom: 8px; }
+.target-text { margin: 4px 0 16px; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); }
+.target-text b { color: var(--text); }
+/* two by two: the address and the prize, then the range and its size */
+.target-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+@media (max-width: 560px) { .target-grid { grid-template-columns: minmax(0, 1fr); } }
+/* three columns on a screen not much wider than 1180 px leave the text's column narrow: the fields go one under the
+   other there, so the address and the range never wrap to a second line once they arrive (nothing below moves) */
+@media (min-width: 1181px) and (max-width: 1440px) { .target-grid { grid-template-columns: minmax(0, 1fr); } }
+/* the card's body: the text, the fields and the call; the key; the pool's speedometer. Three columns on a wide
+   screen; the key goes under the text on a narrower one, and everything in one column on a phone */
+.target-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px 270px; grid-template-areas: "main key side"; gap: 24px; align-items: start; }
+.target-main { grid-area: main; }
+.target-key { grid-area: key; }
+.target-side { grid-area: side; }
+@media (max-width: 1180px) {
+  .target-body { grid-template-columns: minmax(0, 1fr) 270px; grid-template-areas: "main side" "key side"; }
+}
+/* three columns: the speedometer's column is as tall as the key's; its title level with the key's title, its
+   numbers level with the square's bottom edge, the speedometer between them */
+@media (min-width: 1181px) {
+  .target-body .target-key { align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; }
+  .target-body .target-side { align-self: stretch; justify-content: space-between; }
+  .target-body .target-side > .k { margin-bottom: 0; }
+}
+.target-actions { margin-top: 16px; }
+.target-side { align-self: center; display: flex; flex-direction: column; align-items: center; padding-left: 24px; border-left: 1px solid var(--border-dim); }
+.target-side > .k { margin-bottom: 4px; }
+.target-facts { width: 100%; margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; }
+.target-facts .k { display: block; margin-bottom: 4px; }
+.target-facts b { font: 700 var(--fs-base) var(--font-mono); color: var(--text); }
+@media (max-width: 820px) {
+  .target-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "key" "side"; }
+  .target-side { padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--border-dim); }
+  .target-facts { max-width: 320px; }
+}
 .target-grid .mono { font-size: var(--fs-base); overflow-wrap: anywhere; }
 .target-grid .addr a { color: var(--text); }
 
+/* the key: 64 hex digits, each a 4 x 4 square of its 16 values. Known digits are dark; the first unknown one
+   lights only the values it can take; in the others all 16 are possible and one is being tried. Drawn on a canvas
+   by app.js in whole device pixels; the box only gives it the width */
+.target-key .k { display: flex; justify-content: space-between; gap: 10px; }
+.key-count { text-transform: none; letter-spacing: 0; font-family: var(--font-mono); color: var(--muted); }
+.key-count b { color: var(--accent); font-weight: 400; }
+.key-sq { max-width: 300px; line-height: 0; aspect-ratio: 1; } /* square from the start: the canvas comes later (keysq.js) */
+.key-sq canvas { display: block; }
+@media (max-width: 1180px) { .target-key { padding-top: 16px; border-top: 1px solid var(--border-dim); } .target-key .k { max-width: 300px; } }
+/* a phone: the square and its title in the middle of the card */
+@media (max-width: 820px) {
+  .key-sq { max-width: 420px; margin: 0 auto; }
+  .key-sq canvas { margin: 0 auto; }
+  .target-key .k { margin-left: auto; margin-right: auto; }
+}
+
 /* the calculator */
 .calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.calc .field select {
-  height: 36px; padding: 0 8px; color: var(--text); font: 13px var(--font-mono); text-transform: none; letter-spacing: 0;
-  background: var(--field-bg); border: 1px solid var(--border); border-radius: 6px; color-scheme: dark;
-}
-.calc .field select:focus { border-color: rgba(var(--accent-rgb), 0.5); outline: none; }
 .calc .field input { min-width: 0; }
-.calc-out { margin-bottom: 0; }
+.calc .dd { min-width: 0; }
 .calc-out .tile .s { white-space: normal; }
-.note.bad { border-color: rgba(var(--red-rgb), 0.45); background: rgba(var(--red-rgb), 0.1); color: var(--text); }
-.note[hidden] { display: none; }
 
 /* the radar */
 .events { list-style: none; margin: 0 0 8px; padding: 0; font: 12px var(--font-mono); }
 .events li { padding: 7px 0; border-bottom: 1px solid var(--border-dim); }
 .events li:last-child { border-bottom: 0; }
 .radar-now { font-weight: 700; margin-bottom: 10px; }
+/* knocks | solves: two scrolling boxes of one height; the last two rows fade out until the scroll reaches the end */
+/* the knocks and the solves share the width equally */
+.radar-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.radar-cols > div { min-width: 0; }
+.radar-cols .sub-title { margin-top: 0; }
+.radar-scroll { height: 380px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }
+/* the fade covers the rows only: a second, solid layer keeps the scrollbar's strip on the right untouched */
+.radar-scroll.fade {
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 64px), transparent), linear-gradient(#000, #000);
+  -webkit-mask-size: 100% 100%, 8px 100%; -webkit-mask-position: 0 0, right 0; -webkit-mask-repeat: no-repeat;
+  mask-image: linear-gradient(#000 calc(100% - 64px), transparent), linear-gradient(#000, #000);
+  mask-size: 100% 100%, 8px 100%; mask-position: 0 0, right 0; mask-repeat: no-repeat;
+}
+/* the table inside: no side margins of its own (they made the box scroll sideways), no sideways scroll needed */
+.radar-scroll .table-wrap { margin: 0; padding: 0; overflow: visible; }
+.radar-scroll .events { margin: 0; }
+/* the site's thin accent scrollbar; the thumb keeps clear of the head's line */
+.radar-scroll::-webkit-scrollbar { width: 4px; }
+.radar-scroll::-webkit-scrollbar-track { background: transparent; margin: 8px 0 4px; }
+.radar-scroll::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.45); border-radius: 2px; }
+.radar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.7); }
+.radar-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports not selector(::-webkit-scrollbar) { .radar-scroll { scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent; } }
+/* the heads stay put over their scrolling boxes: each is its own table with the body's fixed columns, and leaves
+   room for the scrollbar */
+.radar-head { padding-right: 6px; }
+.solves-t, .knocks-t { table-layout: fixed; }
+.solves-t td, .knocks-t td { overflow: hidden; text-overflow: ellipsis; }
+.solves-t .c-when { width: 22%; } .solves-t .c-n { width: 14%; } .solves-t .c-prize { width: 18%; } .solves-t .c-how { width: 22%; } .solves-t .c-tx { width: 24%; }
+.knocks-t .c-when { width: 17%; } .knocks-t .c-n { width: 15%; } .knocks-t .c-amt { width: 19%; } .knocks-t .c-note { width: 27%; } .knocks-t .c-tx { width: 22%; }
+/* a knock's approved note: grey, in its own column, cut with an ellipsis (the whole text is its tip) */
+.knocks-t td.knote { color: var(--muted); font-family: var(--font-sans); font-style: italic; }
+/* a note may take two lines in its cell (the row keeps its height), cut only past that */
+.knocks-t td.knote:not(:empty) { white-space: normal; font-size: 11px; line-height: 1.3; cursor: help; }
+.knocks-t td.knote > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.knocks-t td b { color: var(--text); font-weight: 400; }
+.knocks-t tr.ev .name { color: var(--color-green); }
+.knocks-t tr.new { animation: knock-in 0.6s ease; }
+@keyframes knock-in { from { transform: translateY(-10px); opacity: 0; } }
+/* the two tables side by side need room: halves up to 1400 px, one under the other from 1180 down */
+@media (max-width: 1180px) {
+  .radar-cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .radar-scroll { height: 300px; }
+}
+@media (max-width: 480px) {
+  /* a phone: the solves table keeps #, when, prize and how; the transaction is a tap on the row's number away */
+  /* a phone: no transaction column (the puzzle number links to it in the solves table) */
+  .solves-t th:nth-child(5), .solves-t td:nth-child(5), .knocks-t th:nth-child(5), .knocks-t td:nth-child(5) { display: none; }
+  .knocks-t .c-note { width: 27%; }
+  .solves-t .c-when { width: 26%; } .solves-t .c-n { width: 13%; } .solves-t .c-prize { width: 27%; } .solves-t .c-how { width: 34%; } .solves-t .c-tx { width: 0; }
+  .knocks-t .c-when { width: 28%; } .knocks-t .c-n { width: 15%; } .knocks-t .c-amt { width: 30%; } .knocks-t .c-tx { width: 0; }
+  .solves-t, .knocks-t { font-size: 11px; }
+  .solves-t th, .solves-t td, .knocks-t th, .knocks-t td { padding-left: 6px; padding-right: 6px; }
+}
 .sub-title { font: 700 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 4px; }
 
-/* the table */
+/* the table of 160 */
 .ptable td a { color: var(--text-dim); }
+/* the puzzle number: the same accent link in every table on the home page */
+.ptable tbody tr td.name a { color: var(--accent); }
 .ptable tr.is-open td a { color: var(--text); }
 .ptable tr.is-solved td { color: var(--muted); }
 .ptable tr.is-target td { background: rgba(var(--accent-rgb), 0.08); }
-.badge.dimmed { color: var(--muted); background: rgba(255, 255, 255, 0.05); }
+/* home: every puzzle is in the table (the page, and the server before it, put all 160 rows in), the filter's data-f
+   shows its part, so a reader without JavaScript has them all */
+.ptable[data-f="open"] tbody tr:not(.is-open), .ptable[data-f="solved"] tbody tr:not(.is-solved), .ptable[data-f="exposed"] tbody tr:not(.is-exposed) { display: none; }
 
-.about-body { max-width: 820px; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); }
-.about-body p { margin: 0 0 10px; }
-
-/* Play, Benchmark, Learn */
-.actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
-.btn:disabled { opacity: 0.45; cursor: default; }
-.log { margin: 12px 0 0; padding: 10px 12px; max-height: 180px; overflow: auto; white-space: pre-wrap; background: var(--surface3); border: 1px solid var(--border-dim); border-radius: 6px; font: 11px/1.5 var(--font-mono); color: var(--text-dim); }
-.log:empty, .log[hidden] { display: none; }
+/* Play, Benchmark */
 .found { border-color: rgba(var(--accent-rgb), 0.5); }
 .submit { margin-top: 14px; }
 .submit .grow { flex: 1 1 240px; }
 .panel .tiles { margin-top: 4px; }
-.seg button:disabled { opacity: 0.4; cursor: default; }
+.panel > .bar { max-width: none; }
+.bg-switch { margin-top: 10px; }
 
+/* Learn: the key -> address chain and the race */
 .keyin { max-width: 640px; margin-bottom: 12px; }
 .chain { list-style: none; margin: 0 0 12px; padding: 0; counter-reset: c; }
-.chain li { position: relative; padding: 8px 0 8px 34px; border-bottom: 1px solid var(--border-dim); }
+.chain li { position: relative; padding: 10px 0 10px 39px; border-bottom: 1px solid var(--border-dim); }
+/* the text 11 px from its cell: every other cell is shifted half a cell, so is its text */
+.chain li:nth-child(even) { padding-left: 54px; }
 .chain li:last-child { border-bottom: 0; }
-.chain li::before { counter-increment: c; content: counter(c); position: absolute; left: 0; top: 10px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--font-mono); color: var(--bg); background: var(--gradient-accent); }
+/* the steps: numbers in circles, every other one shifted half a step, a thin line joining them */
+.chain li::before { counter-increment: c; content: counter(c); position: absolute; left: 3px; top: 8px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 11px var(--font-mono); color: var(--bg); background: var(--gradient-accent); z-index: 1; }
+.chain li:nth-child(even)::before { left: 18px; }
+.chain li::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 43px;
+  background: linear-gradient(var(--border-dim), var(--border-dim)) no-repeat 13px 0 / 1px 100%; }
+/* the first cell's line reaches up to the number field's edge */
+.chain li:first-child::after { top: 0; }
+/* the last circle ends the line */
+.chain li:last-child::after { bottom: auto; height: 24px; }
+.chain li:nth-child(even)::after { background-position: 28px 0; }
+.chain { position: relative; }
+.chain li.hit::before { background: var(--color-green); }
 .chain .val { font-size: var(--fs-m); overflow-wrap: anywhere; color: var(--text); }
 .chain .sub { font-size: var(--fs-s); margin-top: 2px; }
-
-.race-ctl { margin-bottom: 14px; }
-.race-ctl .field input { width: 110px; }
-.lane { margin-bottom: 10px; }
-.lane-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: var(--fs-base); }
+.chain .sub .hexv { color: var(--text); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.race-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--border-dim); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
+.race-bar .rb-k { font: 700 10px/1 var(--font-mono); letter-spacing: 0.06em; padding-top: 2px; text-transform: uppercase; color: var(--muted); }
+.race-bar .rb-sp { flex: 1; }
+.race-bar .seg { flex-wrap: nowrap; }
+/* a phone: all on one line, the labels dropped where they would push the buttons onto a second one */
+@media (max-width: 560px) { .race-bar { gap: 8px; padding: 8px 10px; } .race-bar .seg button { padding-left: 9px; padding-right: 9px; } }
+@media (max-width: 440px) { .race-bar .rb-k { display: none; } }
+/* the race: three dials side by side, each the whole haystack (a ring of comb: where it looks) with its work inside
+   (learn.js) */
+.race { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 10px; }
+.lane { min-width: 0; text-align: center; } /* the heads are made as tall as the tallest by learn.js, so the dials stay level */
+.lane-h { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: var(--fs-base); }
 .lane-h .dim { font-size: var(--fs-s); }
-.lane-v { margin-left: auto; font-size: var(--fs-s); color: var(--text-dim); }
-.lane canvas { display: block; width: 100%; height: 34px; }
-.panel > .bar { max-width: none; }
+.lane[data-m="brute"] .lane-h b { color: #f7931a; } .lane[data-m="bsgs"] .lane-h b { color: #00f6d2; } .lane[data-m="kangaroo"] .lane-h b { color: #c39bff; }
+.lane canvas { display: block; width: 100%; max-width: 190px; aspect-ratio: 1 / 1; margin: 8px auto 4px; }
+/* under a dial: its status, then short label / value rows */
+.lane-v { max-width: 190px; min-height: 66px; margin: 0 auto; font: 12px/1.5 var(--font-mono); color: var(--text-dim); } /* room for a status and three rows, empty until there is something to say */
+.lane-v .lv-st { font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.r-info { margin-top: 18px; } /* the race's lesson as an info card, like the key machine's */
+.r-info { transition: opacity 0.4s ease-out; }
+.r-info.pending { display: none; } /* under the dials (narrow screens): no place kept, it comes in at the end */
+@media (min-width: 1100px) { .r-info.pending { display: block; visibility: hidden; opacity: 0; } } /* right of them: its place kept, then it fades in */
+@keyframes r-info-in { from { opacity: 0; } to { opacity: 1; } }
+.r-info:not(.pending) { animation: r-info-in 0.4s ease-out backwards; }
+/* the lines under a dial fade in with each new status, as in the wallet (bb-fade) */
+@keyframes lv-fade { from { opacity: 0; } to { opacity: 1; } }
+.lane-v .lv-in { animation: lv-fade 0.4s ease-out backwards; }
+/* on a wide screen the card stands right of the dials, its top level with theirs */
+@media (min-width: 1100px) {
+  /* the bar, the number's line and the dials in the left column (the bar ends where the third dial does), the
+     card right of the dials */
+  .race-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); column-gap: 24px; align-items: start; }
+  .race-row .race-bar { grid-column: 1; grid-row: 1; }
+  .race-row .r-secret { grid-column: 1; grid-row: 2; }
+  .race-row .race { grid-column: 1; grid-row: 3; margin-bottom: 0; }
+  .race-row .r-info { grid-column: 2; grid-row: 3; margin-top: 10px; }
+}
+.r-info b { color: var(--text); }
+.lane-v .lv-r { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border-dim); padding: 2px 0; }
+.lane-v .lv-r span { color: var(--muted); white-space: nowrap; }
+.lane-v .lv-r b { font-weight: 400; color: var(--text-dim); text-align: right; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .race { gap: 14px; } .lane-h { font-size: var(--fs-s); line-height: 1.3; } .lane canvas { margin-top: 6px; } .lane-h .dim { font-size: 10px; } .lane-v { font-size: 10px; } .lane-v { min-height: 76px; } .lane-v .lv-r { flex-wrap: wrap; gap: 0 6px; text-align: left; } .lane-v .lv-r b { margin-left: auto; } .lane-v .lv-r.lv-speed { flex-direction: column; align-items: flex-start; } .lane-v .lv-r.lv-speed b { margin-left: 0; text-align: left; } } /* speed and expected on two lines, both on the left */ /* label and value side by side while they fit, the value under it, on the right, only when not */ /* label and value side by side while they fit, the value under it only when not */
+
+/* the pool page */
+.run-tiles { margin-top: 14px; }
+.run-tiles .tile .s { white-space: normal; overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.invite { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.invite[hidden] { display: none; }
+.invite .qr { flex: none; width: 180px; height: 180px; border-radius: 8px; overflow: hidden; }
+.invite .qr svg, .invite .qr canvas { display: block; width: 100%; height: 100%; }
+.inv-side { flex: 1 1 240px; min-width: 0; }
+.inv-side .hint { margin: 10px 0 0; font: 13px/1.55 var(--font-sans); color: var(--text-dim); } /* the card's own text, as elsewhere */
+.inv-side .code { align-items: center; } /* one line: the link level with its Copy button */
+
+/* the claim (by hand: claim.js) and the find (found.js): what was sent, step by step (ui's .checks) */
+.found-lead { margin: 4px 0 2px; font-size: var(--fs-body); line-height: 1.55; color: var(--text); }
+.found-steps li { grid-template-columns: 18px 150px minmax(0, 1fr); }
+@media (max-width: 560px) { .found-steps li { grid-template-columns: 18px minmax(0, 1fr); } }
+.found .actions-row { margin-top: 12px; }
+/* the find's card (found.js): one sentence, six steps as a bar with the one now, the steps in a fold */
+.found .panel-title .star { color: var(--accent); }
+.found .panel-title { position: relative; }
+.found .panel-title .fw { position: absolute; left: 0; top: -150px; width: 300px; height: 225px; pointer-events: none; z-index: 3; } /* the find's confetti, from the star */
+.found .o { color: var(--accent); font-weight: 600; }
+.found-bar { display: flex; gap: 4px; margin: 14px 0 0; }
+.found-bar i { flex: 1; height: 6px; border-radius: 3px; background: var(--border-strong); }
+.found-bar i.d { background: var(--color-green); }
+.found-bar i.n { background: var(--accent); animation: found-now 1.4s ease-in-out infinite; }
+.found-bar i.bad { background: var(--color-red); }
+@keyframes found-now { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .found-bar i.n { animation: none; } }
+.found-say { margin-top: 6px; font: var(--fs-s) var(--font-mono); color: var(--muted); }
+.found-fold { margin-top: 14px; }
+.found-steps li:not(.ok):not(.bad):not(.warn):not(.wait)::before { content: '○'; font-weight: 400; } /* not reached yet: no dot */
+.receipt-acts { margin-top: 8px; }
+.found-hidden { margin-top: 24px; } /* room for the "i" cell on its top edge */
+/* the card's tail under the steps: the note on the hidden key, or the key and the receipt (found.js grow(): the note
+   fades, the tail grows to the key, then to the receipt) */
+/* the key once it is safe, drawn as the home page's lucky key */
+.found-key { margin: 16px 0 0; }
+.found-tail { position: relative; display: flow-root; } /* its children's margins inside it, with .grow and without: the reveal ends where it stands */
+.found-tail.grow { overflow: hidden; }
+.found-tail .tile.key-info.leaving { position: absolute; left: 0; right: 0; top: 0; } /* out of the flow (stronger than .tile.key-info's own position) */
+.found-steps { margin-bottom: 0; } /* the tail's own margin is the gap under the steps */
+.found-key .k + .keyline, .found-key .k + .wif { margin: 6px 0 12px; }
+.keyline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 600 var(--fs-base) var(--font-mono); }
+.keyline .kg { display: inline-flex; gap: 1px; }
+.keyline i { font-style: normal; width: 1.2em; height: 1.6em; display: grid; place-items: center; border-radius: 3px; }
+.keyline i.z { color: var(--muted2); background: var(--surface2); }
+.keyline i.o { color: var(--color-green); background: rgba(0, 246, 210, 0.15); }
+.keyline .kx { color: var(--muted); }
+.keyline .cp svg { width: 14px; height: 14px; }
+.found-key .wif { font-size: var(--fs-base); color: var(--text); word-break: break-all; } /* the copy button runs on after its last character */
+.found-key .wif .cp { margin-left: 8px; vertical-align: -1px; }
+.found a.h88 { white-space: nowrap; } /* a hash as 8…8 never splits */
+#f-note[hidden] { display: none; }
+.found .cp[data-copy] svg { width: 14px; height: 14px; }
+.found .paper .ln { align-items: baseline; }
+.found .paper .ln .cp { margin-right: 6px; height: 1em; vertical-align: -1px; } /* copy, left of the value, on its line */
+.found .paper .ln .cp svg { width: 12px; height: 12px; }
+/* the claim as a paper receipt */
+.found .paper { max-width: 560px; margin: 16px 0 0; padding: 20px 22px; border-radius: 10px; background: rgba(255, 255, 255, 0.035); border: 1px dashed var(--border-strong); font: var(--fs-base) var(--font-mono); }
+.found .paper h3 { text-align: center; margin: 0 0 4px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; }
+.found .paper .c { text-align: center; color: var(--muted); font-size: var(--fs-s); margin: 0 0 12px; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .found .paper { margin: 16px auto 0; } .found-acts { margin-left: auto; margin-right: auto; } } /* a phone, a small screen: the receipt in the middle, as the share picture */
+.found .paper .ln { display: flex; gap: 8px; margin: 6px 0; }
+.found .paper .ln > span:nth-child(2) { flex: 1; border-bottom: 1px dotted var(--border-strong); margin-bottom: 4px; }
+.found .paper .cals { margin: -2px 0 8px; text-align: right; font-size: var(--fs-s); line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; } /* the calendars, under Timestamp */
+.found .paper .cals i { display: inline-block; width: 1.4em; font-style: normal; text-align: right; }
+.found .paper .cals .ok i { color: var(--color-green); }
+.found .paper .cals .bad i { color: var(--color-red); }
+.found .paper .cut { border-top: 1px dashed var(--border-strong); margin: 14px 0; }
+.found .paper .tot { font-size: 17px; font-weight: 700; }
+.found .paper .tot + .c { margin: 4px 0 0; }
+.found .paper .sealw { text-align: center; }
+.found .paper .h3 + .c, .found .paper h3 + .c { margin-bottom: 2px; }
+.found .paper .seal { display: inline-block; margin-top: 12px; padding: 4px 10px; line-height: 1.35; text-align: center; border: 1px solid var(--color-green); color: var(--color-green); border-radius: 4px; font-size: var(--fs-s); transform: rotate(-3deg); }
+.found-acts { justify-content: center; max-width: 560px; } /* under the receipt, in its middle */
+/* /proof: one panel per find; the placeholder as tall as the empty answer, so nothing moves when it comes */
+.proof-find + .proof-find { margin-top: 16px; }
+.proof-grid { margin: 6px 0 14px; }
+.proof-actions { flex-wrap: wrap; }
+.proof-how { margin: 10px 0 0; font-size: var(--fs-m); line-height: 1.55; }
+.proof-none { margin: 0; min-height: 3.2em; }
+@media (max-width: 560px) { .proof-none { min-height: 6.4em; } }
+
+/* the rules */
+.rules h2 { margin-bottom: 10px; }
+.rules ul, .rules ol { margin: 0 0 6px; padding-left: 20px; }
+.rules li { margin-bottom: 6px; }
+
+/* the footer status's text room: its longest usual text, "stale → 1,000,000" */
+#foot-status { --status-room: 17ch; }
+.target-facts .small-s { font-size: var(--fs-s); margin-top: 2px; }
+/* the narrowest phones (320 px): a size smaller still, so no cell of the radar's tables is cut */
+@media (max-width: 340px) {
+  .solves-t, .knocks-t { font-size: 10px; }
+  .solves-t th, .solves-t td, .knocks-t th, .knocks-t td { padding-left: 4px; padding-right: 4px; }
+  .solves-t .badge { padding: 3px 5px; }
+}
+
+/* /learn */
+.keyin-row { align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 0; } /* the first cell sits 8 px under the field, as every cell under its row's line */
+.keyin-row .keyin { flex: 1 1 0; min-width: 0; margin-bottom: 0; }
+.chain .val .chg { color: var(--accent); }
+.chain li.hit .sub { color: var(--color-green); }
+.chain li.hit .sub a { color: var(--accent); }
+.fold { margin-top: 10px; border-top: 1px solid var(--border-dim); padding-top: 10px; }
+.fold.no-rule { border-top: 0; padding-top: 0; margin-top: 14px; } /* under the race dials, no line before it */
+.key-lab + .fold { border-top: 0; padding-top: 0; } /* no line over the steps' meaning: the steps end with their own */
+.fold summary { cursor: pointer; font: 700 var(--fs-m) var(--font-mono); color: var(--accent); }
+.fold p { margin: 8px 0 0; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); }
+.fold p b { color: var(--text); }
+.hay-field { max-width: 520px; margin-bottom: 14px; }
+/* the slider is not a text field: none of .field input's box (its padding kept the thumb off both ends, its fill
+   fixed to the window shifted the empty track's colour on scroll) */
+.hay-field input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; padding: 0; margin: 4px 0 0; border: 0; border-radius: 0; background: none; cursor: pointer; }
+.hay-field input[type=range]:focus { outline: none; }
+/* the part up to the thumb in the accent (--p, from learn.js), the rest a plain veil over the panel: not ui/'s
+   --field-fill, which is fixed to the window and so shifts the empty track's colour while the page scrolls */
+.hay-field input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; border: 1px solid var(--border); border-left: 0; border-right: 0;
+  background: linear-gradient(90deg, var(--accent) var(--p, 50%), rgba(255, 255, 255, 0.09) var(--p, 50%)); }
+.hay-field input[type=range]::-webkit-slider-runnable-track { background-repeat: no-repeat; background-origin: border-box; } /* no repeat of the fill under the right border */
+.hay-field input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.09); }
+.hay-field input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.hay-field input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2); }
+.hay-field input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; }
+.hay-field input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.4); }
+.hay-field b { color: var(--accent); }
+/* the haystack as a race on a log time scale: a browser tab and an RTX 4090 as two bars (their names cut out of the
+   fill by the round end, the page showing through), everyday and cosmic events as lines of light through both,
+   named under them; the scale slides with the slider (learn.js) */
+.hay-tl { position: relative; height: 122px; margin-top: 6px; clip-path: inset(-8px 0 0 0); } /* nothing slides past the card's sides */
+.hay-tl svg { position: absolute; left: 0; top: 0; width: 100%; height: 60px; z-index: 1; overflow: visible; }
+.hay-tl svg text { font: 700 12px var(--font-mono); }
+.hay-tl svg text.s { font-weight: 400; font-size: 10.5px; }
+.hay-tl .tl-time { position: absolute; left: 0; font: 700 12px var(--font-mono); white-space: nowrap; z-index: 4; }
+.hay-tl .tl-time.t { top: 5px; } .hay-tl .tl-time.g { top: 39px; }
+.hay-tl .tl-time small { font-weight: 400; font-size: 10.5px; opacity: 0.85; }
+.hay-tl .tl-line { position: absolute; left: 0; top: -4px; height: 79px; width: 1px; margin-left: -0.5px; z-index: 3; pointer-events: none;
+  background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25) 50%, rgba(255, 255, 255, 0.55)); box-shadow: 0 0 5px rgba(255, 255, 255, 0.45), 0 0 1px rgba(255, 255, 255, 0.6); }
+.hay-tl .tl-ev { position: absolute; left: 0; top: 78px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 10.5px/1.2 var(--font-mono); color: var(--text-dim); white-space: nowrap; }
+.hay-tl .tl-ev .em { display: inline-block; font-size: 18px; line-height: 1; transform-origin: 50% 0; } /* scaled down to a dot where crowded (learn.js) */
+.hay-tl .tl-ev.past { color: var(--text); }
+@media (max-width: 560px) { .hay-tl { height: 136px; } .hay-tl .tl-ev { white-space: normal; text-align: center; max-width: 84px; font-size: 10px; } }
+/* under it the numbers in a row (a grid of two on a phone), then one fact */
+.hay-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 20px; margin-top: 6px; }
+.hay-sum .k { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.hay-sum .v { font: 700 16px var(--font-mono); margin-top: 4px; color: var(--text); }
+.hay-sum .s { font-size: var(--fs-s); color: var(--text-dim); margin-top: 2px; }
+.hay-sum .v.a { color: var(--accent); } .hay-sum .v.t { color: #ffc46b; } .hay-sum .v.g { color: #00f6d2; }
+@media (max-width: 700px) { .hay-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hay-fact { margin: 14px 0 0; }
+.hay-fact .em { font-style: normal; margin-right: 4px; }
+.r-secret { margin: 0 0 10px; font-size: var(--fs-s); line-height: 1.3; min-height: 1.3em; } /* its line kept before the race */
+@media (max-width: 360px) { .r-secret { min-height: 2.6em; } } /* two lines only on the narrowest phones */
+.hist-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px 0 8px; flex-wrap: wrap; }
+.hist-head b { color: var(--accent); }
+.btn-s { padding: 5px 10px; font-size: var(--fs-s); }
+.hist { max-width: 780px; aspect-ratio: 355.1 / 125; } /* 20 x 8 cells' box, kept before learn.js draws them */ /* the 160 as honeycomb (learn.js), colours as in the legend */
+.hist svg { display: block; width: 100%; height: auto; }
+.hist a, .hist a:hover { text-decoration: none; } /* each cell links to its puzzle's page, with no hover effect */
+/* no focus ring where a click or a page move put the focus: the comb's cells (out of the tab order; Back to the page
+   leaves the focus on the cell clicked) and a heading nav.js focuses after a move */
+.hist a:focus, .hist a:focus-visible, [tabindex="-1"]:focus, [tabindex="-1"]:focus-visible { outline: none; }
+.hist polygon { fill: rgba(var(--accent-rgb), 0.35); transition: fill 0.3s, stroke 0.3s; stroke: transparent; stroke-width: 1; }
+.hist text { font: 5.5px var(--font-mono); fill: rgba(255, 255, 255, 0.55); text-anchor: middle; pointer-events: none; }
+.hist .x polygon { fill: rgba(var(--purple-rgb), 0.7); }
+.hist .b polygon { fill: rgba(0, 246, 210, 0.45); }
+.hist .b text { fill: rgba(3, 46, 73, 0.75); }
+.hist .g polygon { fill: rgba(var(--purple-rgb), 0.32); } /* solved by kangaroos: a lighter purple than an open key's, no outline */
+/* the comb and its legend on the right (under it on a phone) */
+.hist-wrap { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 28px; }
+.hist-wrap .hist-leg { padding-top: 4px; } /* level with the comb's top */
+.hist-wrap .hist { flex: 1 1 560px; }
+.hist-wrap .hist-leg { flex-direction: column; gap: 10px; margin: 0; }
+@media (max-width: 700px) { .hist-wrap .hist-leg { flex-direction: row; } }
+/* the timeline: play, then the years' track with every solve marked above the line */
+.hist-tl { display: flex; align-items: flex-start; gap: 12px; margin: 4px 0 14px; max-width: 780px; }
+.hist-yr { font: 700 16px var(--font-mono); color: var(--accent); margin-top: 11px; min-width: 4ch; flex: none; } /* the year the comb shows */
+.hist-play { width: 30px; height: 30px; flex: none; padding: 0; display: grid; place-items: center; margin-top: 4px; font-size: 13px; line-height: 1; }
+.hist-track { position: relative; flex: 1; min-width: 0; }
+.hist-track canvas { display: block; width: 100%; height: 14px; }
+.hist-track input { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 16px; margin: 0; padding: 0; border: 0; background: none; cursor: pointer; }
+.hist-track input:focus { outline: none; }
+.hist-track input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--p, 100%), rgba(255, 255, 255, 0.12) var(--p, 100%)); }
+.hist-track input::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }
+.hist-track input::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+.hist-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2); }
+.hist-track input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; }
+.hist-years { position: relative; height: 16px; font: 10px var(--font-mono); color: var(--muted); }
+.hist-years span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.hist-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font: var(--fs-s) var(--font-mono); color: var(--muted); }
+.hist-leg span { display: inline-flex; align-items: center; } /* each mark level with its words */
+.hist-leg i { display: inline-block; flex: none; width: 10px; height: 11px; margin-right: 6px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); } /* little cells, as in the comb */
+.hist-leg i.o { background: rgba(var(--accent-rgb), 0.35); } .hist-leg i.x { background: rgba(var(--purple-rgb), 0.7); }
+.hist-leg i.b { background: rgba(0, 246, 210, 0.45); } .hist-leg i.g { background: rgba(var(--purple-rgb), 0.32); }
+/* the odds calculator: one row of compact inputs, each with a short label beside it, then four tiles, then one
+   line of verdict */
+#odds .calc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#odds .calc .field { flex-direction: row; align-items: center; gap: 6px; margin: 0; }
+#odds .calc .field > span { margin: 0; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+#odds .calc .field > span.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#odds .calc .f-wide .dd { width: 146px; }
+#odds .calc input { width: 62px; margin: 0; }
+#odds .calc #c-speed { width: 72px; } #odds .calc #c-kwh { width: 70px; } #odds .calc input { padding-left: 8px; padding-right: 6px; }
+@media (max-width: 560px) { #odds .calc .f-wide { flex: 1 1 140px; } #odds .calc .f-wide .dd { width: 100%; } }
+.calc-verdict { margin: 12px 0 0; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); }
+/* until the puzzles come and the odds are worked out, their tiles' and verdict's room is kept (nothing below jumps) */
+#c-out:empty { min-height: 119px; } #c-verdict:empty { min-height: 1.6em; }
+@media (max-width: 820px) { #c-out:empty { min-height: 158px; } #c-verdict:empty { min-height: 3.2em; } }
+@media (max-width: 560px) { #c-out:empty { min-height: 248px; } #c-verdict:empty { min-height: 4.8em; } }
+/* home: the 160 table's room until its rows come (the open ones by default, 43 px each): --open-rows is the count
+   this browser saw last (head.js), 77 when it has seen none; a solve or a new puzzle moves it one row, once */
+#puzzles .table-wrap:has(#rows:empty) { min-height: calc(var(--open-rows, 77) * 43px + 38px); }
+@media (max-width: 820px) { #puzzles .table-wrap:has(#rows:empty) { min-height: calc(var(--open-rows, 77) * 43px + 42px); } }
+.calc-verdict.warn b { color: var(--color-red); } .calc-verdict.ok b { color: var(--color-green); }
+.lotto { margin-top: 6px; font-size: var(--fs-s); color: var(--muted); }
+.cta { border-color: rgba(var(--accent-rgb), 0.35); }
+
+/* the random key under the target's buttons: the open digits, as the key range writes its ends */
+.target-try { margin-top: 16px; }
+.target-try .k { margin-bottom: 6px; }
+/* the whole key: 0x and eight groups of eight cells; zeros dim, the open digits lit, a changed digit flashes */
+#target-try { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 600 var(--fs-base) var(--font-mono); }
+#target-try .kg { display: inline-flex; gap: 1px; }
+#target-try i { font-style: normal; width: 1.2em; height: 1.6em; display: grid; place-items: center; border-radius: 3px; }
+#target-try i.z { color: var(--muted2); background: var(--surface2); }
+#target-try i.o { color: var(--accent); background: rgba(var(--accent-rgb), 0.12); }
+#target-try .kx { color: var(--muted); }
+#target-try .cp { margin-left: 2px; }
+#target-try .bal { margin-left: 6px; font: 600 var(--fs-m) var(--font-mono); color: var(--muted); white-space: nowrap; }
+#target-try .bal.hit { color: #ffd23f; }
+/* the one key found: its digits turn green and glow, the square has stopped */
+#target-try.found i.o { color: var(--color-green); background: rgba(0, 246, 210, 0.15); }
+#target-try.found .bal { font-size: var(--fs-base); }
+.target-try:has(#target-try.found) .k { color: #ffd23f; }
+.target-try .k a { color: #ffd23f; text-decoration: underline; text-underline-offset: 2px; }
+.target-try .clover { font-size: 13px; letter-spacing: 0; }
+/* the win's confetti: a canvas over the space right of the winner's title (its pieces fade before its edges) */
+.target-try .k { position: relative; }
+.target-try .fw { position: absolute; left: calc(100% - 28px); top: -150px; width: 300px; height: 225px; pointer-events: none; z-index: 3; }
+.target-try .k { width: max-content; max-width: 100%; }
+#target-try .cp svg { width: 14px; height: 14px; }
+/* three columns: the text column as tall as the key's, the random key on its bottom edge, level with the square */
+@media (min-width: 1181px) {
+  .target-body .target-main { align-self: stretch; display: flex; flex-direction: column; }
+  .target-body .target-main .target-try { margin-top: auto; padding-top: 16px; }
+}
+
+/* the radar's two tables: every row the same height, the knocks' note rows too */
+.knocks-t tbody td, .solves-t tbody td { height: 43px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+/* a phone: the title takes the width, so the rockets go up above its right end */
+@media (max-width: 600px) { .target-try .fw { left: auto; right: -8px; top: -160px; width: 180px; height: 220px; } }
+/* a phone: a panel's meta stays on the right end of its title's line, as on a wide screen (ui/ puts it left) */
+@media (max-width: 560px) { .panel-head .panel-meta { margin-left: auto; text-align: right; justify-content: flex-end; } }
+@media (max-width: 560px) { .panel-head .panel-meta.tagline { display: none; } } /* /learn's section taglines: a nicety the title does without on a phone */
+
+/* /learn's key machine: the steps on the left, an info box on the right; the box goes under them on a phone */
+.key-lab { display: grid; grid-template-columns: minmax(0, max-content) minmax(260px, 1fr); gap: 24px; align-items: start; } /* the box takes all the room right of the steps */
+.key-info { margin: 0; font-size: var(--fs-base); line-height: 1.6; color: var(--text-dim); overflow-wrap: anywhere; } /* a tile, as the haystack's cards */
+/* a tile with an accent stripe down its left side (the NiceHash page's "our order" stripe: an inset shadow, so it
+   follows the rounded corners), and an "i" in a honeycomb cell sitting on its top edge */
+.tile.key-info { position: relative; box-shadow: inset 3px 0 0 var(--accent); padding-top: 18px; margin-top: 10px; }
+.key-info-badge { position: absolute; top: -11px; left: 11px; width: 20px; height: 23px; display: grid; place-items: center; color: var(--bg);
+  font: italic 700 12px Georgia, serif;
+  /* the cell is drawn, not clipped: Chrome dropped the clip-path while scrolling and showed a square */
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 23'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f7931a'/%3E%3Cstop offset='1' stop-color='%23ffc46b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpolygon points='10,0 20,5.75 20,17.25 10,23 0,17.25 0,5.75' fill='url(%23g)'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+@media (max-width: 900px) { .key-lab { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+/* the steps' lines end where the +1 button ends: the column is as wide as the field (as wide as before) and its
+   buttons, no wider */
+.key-lab-main { width: fit-content; max-width: 100%; }
+.key-lab .keyin { flex: 0 1 auto; width: 640px; }
+.key-lab .keyin-row { flex-wrap: nowrap; }
+.key-lab .keyin-row .btn { flex: none; }
+/* the home page's four figures: two by two on a phone, not one under another */
+@media (max-width: 700px) {
+  #tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #tiles .tile { padding: 12px; }
+  #tiles .tile .v { font-size: 18px; }
+  #tiles .tile .s { font-size: 11px; white-space: normal; overflow-wrap: anywhere; } /* "7.1 BTC (brute force only)" wraps instead of running out */
+}
+@media (max-width: 360px) { .race-bar { gap: 6px; padding: 8px; } .race-bar .seg { gap: 3px; } .race-bar .seg button { padding-left: 7px; padding-right: 7px; } .race-bar .btn { padding-left: 10px; padding-right: 10px; } } /* the narrowest phones: tighter, still one line */
+/* /learn's closing call: one row on a wide screen; on a phone the main button full width, the other two side by side
+   under it */
+@media (max-width: 560px) {
+  .cta-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .cta-row .btn { width: 100%; box-sizing: border-box; white-space: normal; line-height: 1.25; justify-content: center; text-align: center; padding-left: 8px; padding-right: 8px; height: auto; min-height: 30px; padding-top: 6px; padding-bottom: 6px; }
+  .cta-row .cta-main { grid-column: 1 / -1; }
+}
+/* /play's slot machine: the puzzle's address over the one being checked, a cell a character, in the key square's
+   look (dark rounded cells; a match lit in the accent; the find all in turquoise with a glow) */
+.slot { margin: 14px 0 12px; }
+.slot .k { margin: 8px 0 5px; }
+.slot-row { display: grid; grid-template-columns: repeat(var(--n, 34), minmax(0, 1fr)); gap: 3px; max-width: 760px; }
+.slot-row i { font: 600 var(--fs-base)/1 var(--font-mono); font-style: normal; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: 3px; background: var(--surface2); color: var(--text-dim); transition: background 0.15s, color 0.15s; } /* the home page's key cells */
+.slot-row.t i { color: var(--accent); background: rgba(var(--accent-rgb), 0.12); }
+.slot-row i.m, .slot.won .slot-row i { color: var(--color-green); background: rgba(0, 246, 210, 0.15); } /* a match lit as the home page's winning key */
+@media (max-width: 560px) { .slot-row { gap: 1.5px; } .slot-row i { font-size: 9px; border-radius: 2px; } }
+/* /play: the private key representation left of the puzzle's facts, exactly as on the home page (title, count and
+   square: .key-sq's own rules); over the facts, centred, on a phone */
+.play-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 28px; align-items: start; }
+.play-key .k { display: flex; justify-content: space-between; gap: 10px; }
+.play-main .calc { margin-bottom: 12px; }
+@media (max-width: 560px) { #p-engine-note { flex-basis: 100%; } } /* a phone: the engine's note on a line of its own from the start */
+@media (max-width: 820px) { .play-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; } .play-key .k { margin-left: auto; margin-right: auto; } }
+/* the site's card lists than ui/'s 36 px, every text field as low as them, and the engine's buttons */
+.dd-btn { height: 30px; font-size: 12px; }
+.btn:not(.small):not(.cta-top) { height: 30px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; } /* every button as high as the fields; the header's keeps the search box's height */
+.field input:not([type=range]):not([type=checkbox]) { height: 30px; padding-top: 0; padding-bottom: 0; font-size: 12px; }
+#p-engine button { height: 30px; padding: 0 12px; font-size: 11px; }
+/* /play's search tiles: one line each, cut with an ellipsis rather than running out of the tile */
+#p-run .tile .v, #p-run .tile .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* /play: the find, the key big in a glowing box, the time and the address beside it */
+.kf-badge { margin-left: auto; font: 700 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.1); border-radius: 999px; padding: 4px 10px; }
+.kf { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: fit-content; max-width: 100%; margin-top: 12px; } /* not stretched: two equal columns as wide as the address; room above for the key's cell */
+/* the key as an info box (the stripe down its left, a honeycomb cell on its top edge, a lock's key in it), on its own
+   warm background */
+.kf-key { position: relative; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 22px 20px 18px; border-radius: 8px;
+  border: 1px solid var(--border-dim); background: radial-gradient(120% 140% at 0% 0%, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.03) 60%), var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent); }
+.kf-key .key-info-badge svg { display: block; width: 7px; height: 12px; }
+.kf-hex { font: 700 32px/1.15 var(--font-mono); color: var(--accent); text-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45); overflow-wrap: anywhere; }
+.kf-hex.hid { font-size: 18px; line-height: 1.4; } /* the words in place of a hidden key: smaller than a key */
+.kf-dec { margin-top: 8px; font: 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.kf-dec span { color: var(--text-dim); }
+.kf-side { display: grid; gap: 12px; min-width: 0; }
+.kf-row { min-width: 0; padding: 12px 16px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-dim); }
+.kf-row .k { margin-bottom: 4px; }
+.kf-v { font: 700 20px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+.kf-v.kf-addr { font-size: 14px; }
+/* a phone: the key on a row of its own when the address would not fit beside it, the time and the address under it,
+   side by side if they fit; the address never breaks */
+@media (max-width: 560px) {
+  .kf { display: flex; flex-wrap: wrap; gap: 10px; width: auto; }
+  .kf-key { flex: 1 1 150px; padding: 16px; }
+  .kf-hex { font-size: 26px; }
+  .kf-side { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 10px; }
+  .kf-row { flex: 1 1 auto; padding: 10px; }
+  .kf-v { font-size: 18px; }
+  .kf-v.kf-addr { font-size: min(11px, 2.9vw); white-space: nowrap; overflow-wrap: normal; }
+}
+
+/* /play's confetti: from the found key's box, over the space up and right of it */
+.kf-key > .fw { position: absolute; left: 120px; top: -150px; width: 300px; height: 225px; pointer-events: none; z-index: 3; }
+@media (max-width: 600px) { .kf-key > .fw { --fw-left: 1; left: auto; right: -8px; top: -160px; width: 92%; height: 220px; } } /* a phone: thrown to the left, some nearly across the box */
+
+/* /bench: the live line of the speed while it measures */
+.live { margin-top: 14px; }
+/* /bench: everything in place from the start: the engine switch as low as play's, a one-line note (it changes while
+   it runs), the log one height whatever it holds */
+#b-engine button { height: 30px; padding: 0 12px; font-size: 11px; }
+/* the run's steps across from the buttons: the one now lit, the done ones ticked, the seconds left after them */
+.b-steps { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted2); }
+@media (max-width: 560px) { .b-steps { flex-basis: 100%; } } /* a phone: the steps always on their own line under the buttons */
+.b-steps i { font-style: normal; color: var(--muted2); }
+.b-step { position: relative; padding: 0 8px; height: 22px; line-height: 20px; box-sizing: border-box; border-radius: 999px; border: 1px solid var(--border-dim); }
+.b-step.on { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.1); animation: b-pulse 1.2s ease-in-out infinite; }
+.b-step.ok { color: var(--color-green); border-color: rgba(0, 246, 210, 0.35); }
+.b-step b { position: absolute; top: -6px; right: -5px; width: 13px; height: 13px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 8px/1 var(--font-sans); color: var(--bg); background: var(--color-green); box-shadow: 0 0 0 2px var(--surface); opacity: 0; transform: scale(0.5); transition: opacity 0.2s, transform 0.2s; }
+.b-step.ok b { opacity: 1; transform: none; } /* the tick on the corner, outside the chip: it takes no room */
+@keyframes b-pulse { 50% { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15); } }
+.b-eta { margin-left: 4px; min-width: 5ch; color: var(--accent); font-variant-numeric: tabular-nums; }
+.b-eta.bad { color: var(--color-red); }
+.b-tnote { margin: 16px 0 0; } /* the results table's note: the cards' body text, clear of the table */
+/* a phone: the name over the whole width, the two buttons sharing the row under it */
+.join-row { position: relative; }
+/* the profile icon: a square button as high as the rest; off (dim, not clickable) without an address */
+/* the unused-address warning floats over the page right under the address field, on a solid ground, so it moves
+   nothing when it comes or is closed */
+.note.addr-pop { position: absolute; z-index: 5; left: 0; top: 100%; margin-top: 6px; width: min(560px, 100%); box-sizing: border-box;
+  /* the page's own fixed gradient under it, as the fields have (--field-fill): it looks the same at every scroll */
+  background: linear-gradient(rgba(var(--yellow-rgb), 0.1), rgba(var(--yellow-rgb), 0.1)) fixed, linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05)) fixed, var(--page-gradient) fixed;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.note.addr-pop[hidden] { display: none; }
+.join-row .field { flex: 1 1 360px; }
+#j-addr-note { line-height: 16px; } /* the ✓ or ✗ in it never makes the line taller */ /* the pool's address field takes the row's room, the buttons beside it */
+@media (max-width: 560px) { #b-submit .field, .join-row .field { flex: 1 1 100%; } #b-submit .btn, .join-row .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; } } /* each on one line, sharing the row while both fit, else one under the other */
+/* a live chart's head (bench, pool): a dot that pulses while it measures, as the footer's live pill */
+.live-k { display: flex; align-items: center; gap: 7px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted2); }
+.live-dot.on { background: var(--accent); animation: live-dot 1.2s ease-in-out infinite; }
+@keyframes live-dot { 50% { box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.2); } }
+.dev-line { margin-top: 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-line b { color: var(--text-dim); font-weight: 700; }
+/* the table's name for this card: a field's box, not a field (nothing is typed) */
+.b-name { height: 30px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border-dim); border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03); font: 12px var(--font-mono); color: var(--text); text-transform: none; letter-spacing: 0; white-space: nowrap; overflow: hidden; }
+@media (max-width: 560px) { #b-out .tile .v { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } /* one line, so the tiles keep their height */
+.live .k { margin-bottom: 4px; }
+
+/* /play: the picture of a find to share (sharecard.js) */
+.share { margin-top: 22px; }
+.share-g { display: grid; grid-template-columns: 300px minmax(0, 648px); justify-content: start; gap: 24px; align-items: start; } /* the sizes on the left, the picture next to them, the stage as wide as the link picture at its height */
+.share-g .share-side { order: -1; }
+/* the picture picked, at one height whatever its shape, so the block does not jump when another is picked */
+.share-stage { display: grid; place-items: start; height: 340px; } /* the picture next to the sizes, on their top edge */
+.share-pic { display: block; max-width: 100%; max-height: 340px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.share-pic:not([src]) { width: 100%; aspect-ratio: 1200 / 630; max-height: 300px; background: var(--surface); box-shadow: none; }
+.share-pic.tall:not([src]) { width: auto; height: 300px; aspect-ratio: 1080 / 1920; }
+.share-opt { display: block; width: 100%; margin: 0 0 8px; padding: 10px 12px; text-align: left; cursor: pointer; color: var(--text); font: inherit;
+  background: transparent; border: 1px solid var(--border-dim); border-radius: 8px; transition: border-color 0.15s, background 0.15s; }
+.share-opt:hover { border-color: rgba(var(--accent-rgb), 0.4); }
+.share-opt.on { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.08); }
+.share-opt b { font: 700 12px var(--font-mono); }
+.share-opt.on b { color: var(--accent); }
+.share-opt span { float: right; font: 11px var(--font-mono); color: var(--muted); }
+.share-opt p { margin: 4px 0 0; font-size: 12px; color: var(--text-dim); }
+.share-side .actions-row { margin-top: 6px; }
+@media (max-width: 1040px) { .share-g { grid-template-columns: 280px minmax(0, 1fr); } }
+@media (max-width: 760px) { .share-g { grid-template-columns: minmax(0, 1fr); gap: 12px; } .share-g .share-side { order: 0; } .share-stage { height: 300px; place-items: center; } .share-pic { max-height: 300px; } } /* room for the tallest, so nothing jumps */
+#p-found .kf + .note { margin-top: 12px; }
+/* the attention block: the info block with a red stripe and a "!" in a red cell, for what the reader must do now */
+.tile.key-info.attn { box-shadow: inset 3px 0 0 var(--color-red); color: var(--text); margin-top: 22px; }
+.key-info.attn .key-info-badge { font: 700 13px var(--font-sans); color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 23'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23e5484d'/%3E%3Cstop offset='1' stop-color='%23ff8a7a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpolygon points='10,0 20,5.75 20,17.25 10,23 0,17.25 0,5.75' fill='url(%23g)'/%3E%3C/svg%3E"); }
+.key-info.attn b { color: var(--color-red); }
+#p-found .kf + .key-info { margin-top: 22px; } /* room for the "i" cell on its top edge */
+.share .seg { flex-wrap: wrap; }
+
+/* ---------- /pool: the pool at a glance (pooldash.js), as the Beam pool's dashboard ---------- */
+.dash-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.dash-tiles .tile .v { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-tiles .tile .s { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1000px) { .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 701px) { .dash-row .chart-box { aspect-ratio: 1000 / 380; } }
+/* the chart, and the way in beside it; one under the other on small screens */
+.dash-row { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-bottom: 16px; }
+.dash-row > .panel { margin-bottom: 0; min-width: 0; }
+@media (max-width: 900px) { .dash-row { grid-template-columns: minmax(0, 1fr); } }
+.g-join { display: flex; flex-direction: column; }
+.g-pitch { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--text-dim); }
+.g-pitch b { color: var(--text); }
+.g-join .join-row .field { flex: 1 1 100%; }
+.g-go { width: 100%; justify-content: center; margin-top: 12px; }
+.g-new, .g-back { display: flex; flex-direction: column; flex: 1; }
+.g-note { margin-top: auto; padding-top: 10px; line-height: 16px; min-height: 42px; } /* at the card's foot, two lines kept */
+/* which state shows is set before the page is drawn (head.js: html[data-pool-st]) */
+html[data-pool-st="new"] .g-back, html:not([data-pool-st="new"]) .g-new { display: none; }
+.g-found, html[data-pool-st="found"] .g-back { display: none; }
+html[data-pool-st="found"] .g-found { display: flex; flex-direction: column; flex: 1; }
+.g-found .av { font-size: 20px; }
+.g-found-p { margin: 14px 0 0; }
+.g-who { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.06); border-radius: 10px; }
+.g-who .av { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
+.g-who .av svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.g-who-t { flex: 1; min-width: 0; }
+.g-who .k { font: 700 10px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.g-a { margin-top: 3px; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-s { margin-top: 3px; font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* what happened lately: the radar's scrolling table */
+.feed-scroll { height: 300px; }
+.feed-t { table-layout: fixed; }
+.feed-t td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-t .c-when { width: 14%; } .feed-t .c-who { width: 22%; } .feed-t .c-what { width: 36%; } .feed-t .c-keys { width: 14%; } .feed-t .c-rate { width: 14%; }
+.feed-t tr.failed td { color: var(--muted); }
+.feed-t tr.joined td:nth-child(3) { color: var(--color-green); }
+.feed-t tr.new { animation: knock-in 0.6s ease; }
+@media (max-width: 700px) {
+  .feed-t th:nth-child(n+4), .feed-t td:nth-child(n+4) { display: none; }
+  .feed-t .c-when { width: 22%; } .feed-t .c-who { width: 41%; } .feed-t .c-what { width: 37%; } .feed-t .c-keys, .feed-t .c-rate { width: 0; }
+  .feed-scroll { height: 260px; }
+}
+.rows-box tr.ours td { background: rgba(var(--accent-rgb), 0.07); }
+/* the haystack: the whole range, a speck per piece searched */
+.hay { position: relative; height: 54px; border-radius: 8px; border: 1px solid var(--border); background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 9px); overflow: hidden; }
+.hay i { position: absolute; top: 8px; bottom: 8px; width: 2px; margin-left: -1px; background: var(--accent); box-shadow: 0 0 6px var(--accent); opacity: 0.85; }
+.hay-scale { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.hay-note { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text-dim); min-height: 3.1em; }
+@media (max-width: 560px) { .hay-note { min-height: 9.3em; } } /* the note in six lines on a phone, its place kept */
+/* the hive: every searcher a flat-topped cell (pooldash.js lays them out) */
+.hive { position: relative; min-height: 131px; }
+.hive .c { position: absolute; width: 74px; height: 64px; display: grid; place-items: center; text-align: center; text-decoration: none; font: 700 10px/1.25 var(--font-mono); color: var(--bg); clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: rgba(var(--accent-rgb), var(--o, 0.5)); transition: filter 0.15s; }
+.hive .c:hover { filter: brightness(1.25); }
+.hive .c span { padding: 0 6px; overflow: hidden; }
+.hive .c.mine { background: rgba(0, 246, 210, var(--o, 0.6)); }
+.hive .c.plus { background: rgba(255, 255, 255, 0.07); color: var(--accent); }
+.hive .c.plus span { font-size: 22px; }
+
+/* ---------- a searcher's page (searcher.html): which parts show is set before it is drawn (head.js) ---------- */
+.s-addr-row { display: flex; align-items: center; gap: 12px; margin: -6px 0 16px; min-width: 0; }
+.s-addr { min-width: 0; padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.08); font-size: 14px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.s-addr-row .cp { flex: none; }
+.s-addr-row .cp svg { width: 15px; height: 15px; }
+.s-addr-row .cp:hover { color: var(--accent); }
+.s-addr-row .cp.done { color: #34d399; }
+@media (max-width: 560px) { .s-addr { font-size: 12px; } }
+.log .star { color: var(--accent); } /* a find's line in the search's log */
+.note.s-other { display: none; margin-bottom: 16px; }
+html[data-pool="other"] .note.s-other { display: block; }
+html[data-pool="other"] #run-panel, html[data-pool="other"] #inv-panel, html[data-pool="other"] #claim { display: none; }
+.me-badges { margin: -4px 0 16px; }
+#me-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { #me-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* two by two on a phone */
+#run-panel .run-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 560px) { #run-panel .run-tiles { grid-template-columns: minmax(0, 1fr); } }
+#run-panel .join-row { align-items: center; }
+#run-panel .join-row .bg-switch { margin: 0 0 0 auto; }
+@media (max-width: 560px) { #run-panel .join-row .bg-switch { margin: 4px 0 0; flex: 1 1 100%; } }
+@media (max-width: 560px) { .refs-t th:nth-child(3), .refs-t td:nth-child(3), .refs-t th:nth-child(4), .refs-t td:nth-child(4) { display: none; } } /* a phone: address, keys, last seen */
+.rules-key { display: flex; align-items: flex-start; gap: 8px; }
+.rules-key code { font-size: 12px; overflow-wrap: anywhere; word-break: break-all; }
+.rules-key .cp { margin-top: 3px; }
+.rules-key .cp svg { width: 14px; height: 14px; }
+
+/* /puzzle/<n>: the neighbours under the page (the breadcrumbs are in its structured data only: the title says it) */
+.pz-addr { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.pz-addr .pz-a { overflow-wrap: anywhere; }
+.pz-addr .cp svg { width: 14px; height: 14px; }
+.pz-addr .cp, .pz-addr a.cp { color: var(--muted); } /* the link icon as grey as the copy button (a link's colour would win) */
+.pz-addr .cp:hover, .pz-addr a.cp:hover { color: var(--accent); }
+/* the outlined buttons answer the pointer as the filters do (ui's .seg buttons) */
+.btn.ghost:hover { border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
+.pz-nav { justify-content: center; margin-top: 18px; }
+.pz-txs td:nth-child(2) { white-space: nowrap; }
+/* the transactions: fixed columns, the same on every puzzle's page with notes or without; the note column keeps its
+   width on a wide screen (the transaction's takes what is left), a note longer than two lines shows whole on hover,
+   as the radar's; on a phone the table scrolls sideways */
+.pz-txs { table-layout: fixed; min-width: 720px; }
+.pz-txs .c-when { width: 120px; } .pz-txs .c-in, .pz-txs .c-out { width: 150px; } .pz-txs .c-note { width: 320px; }
+.pz-txs td { overflow: hidden; text-overflow: ellipsis; }
+.pz-txs td.knote { color: var(--muted); font-family: var(--font-sans); font-style: italic; white-space: normal; font-size: 11px; line-height: 1.3; }
+.pz-txs td.knote:not(:empty) { cursor: help; }
+.pz-txs td.knote > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.pz-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pz-tiles .tile .v { font-size: 20px; overflow-wrap: anywhere; } /* "1.38 × 10²³ years" wraps, never cut */
+@media (max-width: 1100px) { .pz-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .pz-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .pz-tiles .tile .v { font-size: 18px; } }
+
+/* /proof: a value with its copy (and link) icons beside it */
+.proof-v { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; overflow-wrap: anywhere; }
+.proof-v > span { overflow-wrap: anywhere; min-width: 0; }
+.proof-v .cp svg { width: 13px; height: 13px; }
+.proof-v .cp:hover, .proof-v a.cp:hover { color: var(--accent); }
+.proof-v a.cp { color: var(--muted); }
+
+/* /proof: a receipt file dropped or chosen, checked in the browser */
+.btn .btn-fp { width: 19px; height: 19px; margin: -3px 0; flex: none; } /* bigger than the text, the button as high as its neighbours */
+.proof-check.drop { border-color: rgba(var(--accent-rgb), 0.7); background: rgba(var(--accent-rgb), 0.05); }
+.proof-check > p { margin: 4px 0 0; font-size: var(--fs-base); }
+.rc-pick { cursor: pointer; }

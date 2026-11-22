@@ -1,3 +1,19 @@
+# BumbleBeam Puzzle - https://puzzle.bumblebeam.org
+# Every crawler is welcome, search and AI alike. The read-only JSON API is open: the pages are filled from it (a
+# search engine that renders a page needs it), and agents may quote it (see /llms.txt); its answers carry
+# X-Robots-Tag: noindex, so they do not show up in results themselves. A searcher's page (/pool/<address>) carries
+# noindex rather than a Disallow here, so a crawler can see it and leave it out.
 User-agent: *
 Allow: /
-Disallow: /api/
+# redirects to an outside block explorer, a never-ending event stream, one searcher's numbers, and answers that ask
+# the Bitcoin node each time
+Disallow: /api/go/
+Disallow: /api/pool/live
+Disallow: /api/pool/me
+Disallow: /api/address/
+Disallow: /api/fees
+Disallow: /api/puzzles/*/utxos
+# the pages' own HTML, without their numbers (the server reads its pages from there)
+Disallow: /_tpl/
+
+Sitemap: https://puzzle.bumblebeam.org/sitemap.xml

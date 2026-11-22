@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Searcher in the Bitcoin Puzzle Pool | BumbleBeam</title>
+<meta name="description" content="The page of a searcher in the Bitcoin puzzle pool: keys checked, pieces, rank and invites, and on your own page the search itself.">
+<!-- one searcher's numbers under their own address: not for search results (nginx also sends X-Robots-Tag) -->
+<meta name="robots" content="noindex">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:title" content="A Searcher in the Bitcoin Puzzle Pool">
+<meta property="og:description" content="The page of a searcher in the Bitcoin puzzle pool: keys checked, pieces, rank and invites, and on your own page the search itself.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v">loading…</b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
+
+<main>
+  <!-- /pool/<address>: a searcher's page. Your own (the address this browser searches under): your numbers, the
+       search, your invite. Someone else's: their numbers only -->
+  <div class="page-head"><h1 class="page-title" id="s-title">Your search</h1></div>
+  <!-- the page's address, marked out; beside it ui's copy button and its balance on the block explorer (the wallet's link icon) -->
+  <div class="s-addr-row"><span class="s-addr mono" id="s-addr">&nbsp;</span><button type="button" class="cp" id="s-copy" title="Copy the address" aria-label="Copy the address"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button><a class="cp s-bal" id="s-bal" href="/pool" target="_blank" rel="noopener" title="Its balance and transactions on the block explorer" aria-label="Its balance on the block explorer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div>
+
+  <div class="tiles" id="me-tiles">
+    <div class="tile"><div class="k"><span class="tipped" title="The place among all searchers by keys checked.">Rank</span></div><div class="v accent" id="m-rank"><span class="bb-wait"><i></i><i></i><i></i></span></div><div class="s" id="m-rank-s">&nbsp;</div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Every key checked under this address in finished pieces.">Keys checked</span></div><div class="v" id="m-keys"><span class="bb-wait"><i></i><i></i><i></i></span></div><div class="s" id="m-keys-s">&nbsp;</div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Pieces finished and credited: every one passed its hidden check keys.">Pieces</span></div><div class="v" id="m-pieces"><span class="bb-wait"><i></i><i></i><i></i></span></div><div class="s" id="m-pieces-s">&nbsp;</div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Searchers who came through the invite link of this address, and how many keys they checked.">Invited</span></div><div class="v" id="m-refs"><span class="bb-wait"><i></i><i></i><i></i></span></div><div class="s" id="m-refs-s">&nbsp;</div></div>
+  </div>
+  <!-- in place from the start, all dimmed; the ones earned light up -->
+  <div class="badges me-badges" id="me-badges"><span class="badge dimmed">a billion keys</span><span class="badge dimmed">10 billion</span><span class="badge dimmed">100 billion</span><span class="badge dimmed">a trillion keys</span><span class="badge dimmed">first piece</span><span class="badge dimmed">10 pieces</span><span class="badge dimmed">100 pieces</span><span class="badge dimmed">1,000 pieces</span><span class="badge dimmed">first invite</span><span class="badge dimmed">10 invited</span><span class="badge dimmed">100 invited</span></div>
+
+  <!-- which parts show is set before the page is drawn (head.js, html[data-pool]: own, other), so nothing jumps -->
+  <div class="note s-other">This is the page of another searcher: their numbers only. <a href="/pool">Search under your own address</a>, or if this address is yours, <a href="#" id="s-mine">search under it here</a>.</div>
+
+  <section class="panel" id="run-panel">
+    <div class="panel-head"><h2 class="panel-title">Search</h2><div class="panel-meta" id="j-ref"></div></div>
+    <div class="row join-row">
+      <button class="btn solid" type="button" id="j-start">Start searching</button>
+      <button class="btn ghost" type="button" id="j-stop" disabled>Stop</button>
+      <label class="check bg-switch"><input type="checkbox" data-bg> <span class="tipped" title="Off: the search stops while you look at another tab, so your graphics card is never busy without you knowing. On: it keeps going in the background until you close this tab or press Stop.">Keep searching when this tab is in the background</span></label>
+    </div>
+    <div class="dev-line mono" id="j-dev">&nbsp;</div>
+    <!-- the search's own parts are in place from the start and only filled in, so nothing jumps when it starts -->
+    <div class="live"><div class="k live-k"><i class="live-dot" id="j-dot"></i>Live: keys/s</div><div class="chart-box" id="j-chart"></div></div>
+    <div class="tiles run-tiles" id="j-run">
+      <div class="tile"><div class="k"><span class="tipped" title="How many keys your graphics card checks per second.">Speed</span></div><div class="v accent" id="r-rate">&nbsp;</div><div class="s" id="r-gpu">&nbsp;</div></div>
+      <div class="tile"><div class="k"><span class="tipped" title="The part of the range your browser is checking right now. Nobody else gets it.">This piece</span></div><div class="v" id="r-piece">&nbsp;</div><div class="s" id="r-range">press Start</div></div>
+      <div class="tile"><div class="k"><span class="tipped" title="Pieces finished and credited since you pressed Start.">This session</span></div><div class="v" id="r-done">0 pieces</div><div class="s" id="r-keys">&nbsp;</div></div>
+    </div>
+    <div class="bar accent" id="r-barw"><i id="r-bar" style="width:0%"></i></div>
+    <div class="k term-k">Terminal</div>
+    <pre class="log term" id="r-log"></pre>
+  </section>
+
+  <section class="panel found" id="claim" hidden></section>
+
+  <section class="panel" id="inv-panel">
+    <div class="panel-head"><h2 class="panel-title">Referrals</h2><div class="panel-meta tagline" id="ref-meta">your link carries your address</div></div>
+    <div class="invite" id="inv">
+      <div class="qr" id="inv-qr"></div>
+      <div class="inv-side">
+        <div class="code"><pre id="inv-link"></pre><button class="btn small swap" type="button" id="inv-copy"><span>Copy</span><span>Copied</span></button></div>
+        <div class="actions-row"><button class="btn solid" type="button" id="inv-png">Save image</button><button class="btn ghost swap" type="button" id="inv-share"><span>Share</span><span>Copied</span></button></div>
+        <p class="hint">Friends who open it search under their own address, and you see here who came and how much they checked.</p>
+      </div>
+    </div>
+    <h3 class="sub-title">Invited</h3>
+    <div class="table-wrap"><table class="refs-t">
+      <thead><tr><th>Address</th><th class="num">Keys</th><th class="num">Pieces</th><th>Joined</th><th>Last seen</th></tr></thead>
+      <tbody id="ref-rows"><tr><td colspan="5" class="dim">&nbsp;</td></tr></tbody>
+    </table></div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+<script src="/ui/components/qr.js?v=dev"></script>
+<script src="/ui/components/confetti.js?v=dev"></script>
+<script src="/sharecard.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/tx.js?v=dev"></script>
+<script src="/engine/puzzles.js?v=dev"></script>
+<script src="/engine/claimkit.js?v=dev"></script>
+<script src="/engine/seal.js?v=dev"></script>
+<script src="/engine/gpu.js?v=dev"></script>
+<script src="/ui/charts/charts.js?v=dev"></script>
+<script src="/engine/gpuname.js?v=dev"></script>
+<script src="/common.js?v=dev"></script>
+<script src="/findview.js?v=dev"></script>
+<script src="/claim.js?v=dev"></script>
+<script src="/found.js?v=dev"></script>
+<script src="/pool.js?v=dev"></script>
+</body>
+</html>

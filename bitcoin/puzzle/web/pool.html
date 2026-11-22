@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Puzzle Pool: Search the Next Key Together | BumbleBeam</title>
+<meta name="description" content="Search the easiest unsolved Bitcoin puzzle together: each browser is given its own piece of the range, and the finder gets the whole bitcoins of the prize but one (6 of 7.1 BTC on #71).">
+<!-- the page's one address, and how a link to it looks when shared (brand/src/og_puzzle.py draws the picture) -->
+<link rel="canonical" href="https://puzzle.bumblebeam.org/pool">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:url" content="https://puzzle.bumblebeam.org/pool">
+<meta property="og:title" content="Bitcoin Puzzle Pool: Search the Next Key Together">
+<meta property="og:description" content="Search the easiest unsolved Bitcoin puzzle together: each browser is given its own piece of the range, and the finder gets the whole bitcoins of the prize but one (6 of 7.1 BTC on #71).">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top active" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v"><!--ssr:btc-price-v-->loading…<!--/ssr--></b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool" class="active">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
+
+<main>
+  <div class="page-head"><h1 class="page-title" id="pl-title"><!--ssr:pl-title-->Search #71 together<!--/ssr--></h1></div>
+  <p class="intro"><b>Alone, even the fastest graphics card would need thousands of years for this puzzle. Together, every card here takes its own slice, and the prize can fall to any one of them.</b> Enter your address under <b>Join</b> and press <code class="mark">Start searching</code>: your own page opens, and our server hands your browser a piece of the range that nobody else gets, with hidden check keys that show it was really searched. If the key turns up in your piece, your browser sends the claim itself, <span id="pl-split"><!--ssr:pl-split--><b>6</b> of <b>7.1&nbsp;BTC</b><!--/ssr--></span> to your address, before anyone else hears of it. Below are the pieces as they are finished, the top searchers and the whole hive. The details are in the <a href="/rules">rules</a>.</p>
+
+  <!-- the pool at a glance, as on the Beam pool: small tiles, then the chart with the way in beside it -->
+  <div class="tiles dash-tiles">
+    <div class="tile"><div class="k"><span class="tipped" title="How many keys all the browsers in the pool check per second together, as they report it.">Pool speed</span></div><div class="v accent" id="t-speed"><!--ssr:t-speed--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-speed-s"><!--ssr:t-speed-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Every key the pool has checked so far on this puzzle, and what share of all its keys that is.">Keys checked</span></div><div class="v" id="t-keys"><!--ssr:t-keys--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-share"><!--ssr:t-share-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Pieces searched and credited: each one passed its hidden check keys. Out of all the pieces the range is cut into.">Pieces</span></div><div class="v" id="t-pieces"><!--ssr:t-pieces--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-pieces-s"><!--ssr:t-pieces-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Payout addresses with at least one finished piece, and how many of them searched this week.">Searchers</span></div><div class="v" id="t-players"><!--ssr:t-players--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-players-s"><!--ssr:t-players-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="What the browser that finds the key keeps, out of the whole prize. The rest goes to the pool, and it pays the fees from it.">Prize</span></div><div class="v" id="t-prize"><!--ssr:t-prize--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-prize-s"><!--ssr:t-prize-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="The order in which pieces are handed out is a secret, and it is reshuffled every 210 Bitcoin blocks (about 35 hours) from the hash of that block: 1000 Shuffles between two halvings. No piece is ever handed out twice.">Shuffle</span></div><div class="v" id="t-shuffle"><!--ssr:t-shuffle--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-shuffle-s"><!--ssr:t-shuffle-s-->&nbsp;<!--/ssr--></div></div>
+  </div>
+
+  <div class="dash-row">
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title"><span class="tipped" title="The keys the pool really checked per second: each finished piece counted over the time it was out, pauses included. The last point is what the browsers report right now.">Pool speed</span></h2><div class="panel-meta"><div class="seg range" role="group" aria-label="Chart range" id="g-range"><button type="button" data-r="24h">24h</button><button type="button" data-r="7d">7d</button><button type="button" data-r="30d">30d</button></div></div></div>
+      <div class="chart-box" id="g-chart"></div>
+    </section>
+
+    <!-- the way in: new (a field and Start), back (your page), or searching (how far) -->
+    <section class="panel g-join" id="g-join">
+      <div class="panel-head"><h2 class="panel-title" id="g-join-title">Join</h2></div>
+      <div class="g-new">
+        <p class="g-pitch">Take your own slice of #<span class="g-n">71</span>. If the key is in it, your browser sends <b class="g-finder">6&nbsp;BTC</b> to your address by itself.</p>
+        <div class="join-row">
+          <label class="field"><span><span class="tipped" title="An address from your own wallet. Your credit and invites are counted under it, it gets its own page, and if your browser finds the key, your share goes to it in the transactions the page sends at that moment.">Your Bitcoin address</span></span><input id="g-addr" spellcheck="false" autocomplete="off" placeholder="bc1q…"></label>
+          <!-- over the page, under the field: it moves nothing when it comes or goes -->
+          <div class="note warn closable addr-pop" id="g-addr-warn" hidden></div>
+        </div>
+        <button class="btn solid g-go" type="button" id="g-start">Start searching</button>
+        <div class="dim mono sub g-note" id="g-addr-note">Needed to search: your share of a prize goes to it.</div>
+      </div>
+      <!-- a find waits for its claim: the pool is paused -->
+      <div class="g-found">
+        <div class="g-who"><div class="av">★</div><div class="g-who-t"><div class="k">Key found</div><div class="g-a">Puzzle #<span class="g-n">71</span>’s key is found</div><div class="g-s mono" id="g-found-s">&nbsp;</div></div></div>
+        <p class="g-pitch g-found-p">A searcher in this pool found the key. The search is paused: the details and the proof follow once the claim is confirmed.</p>
+        <div class="dim mono sub g-note"><a href="/proof">The proof page</a></div>
+      </div>
+      <div class="g-back">
+        <div class="g-who"><div class="av"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></div><div class="g-who-t"><div class="k" id="g-back-k">Welcome back</div><div class="g-a mono" id="g-back-a">&nbsp;</div><div class="g-s mono" id="g-back-s">&nbsp;</div></div></div>
+        <a class="btn solid g-go" href="/pool" id="g-open">Open my page</a>
+        <div class="dim mono sub g-note" id="g-back-note">Not you? <a href="#" id="g-other">Use another address</a></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- what happens in the pool, newest first: as wide as the tables, as the radar on the home page -->
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title"><span class="live-k"><i class="live-dot" id="g-feed-dot"></i>Live</span></h2><div class="panel-meta tagline">pieces finished, new searchers</div></div>
+    <div class="radar-head"><table class="feed-t"><colgroup><col class="c-when"><col class="c-who"><col class="c-what"><col class="c-keys"><col class="c-rate"></colgroup>
+      <thead><tr><th>When</th><th>Searcher</th><th>What</th><th class="num">Keys</th><th class="num">Speed</th></tr></thead>
+    </table></div>
+    <div class="radar-scroll fade feed-scroll"><div class="table-wrap"><table class="feed-t"><colgroup><col class="c-when"><col class="c-who"><col class="c-what"><col class="c-keys"><col class="c-rate"></colgroup>
+      <tbody id="g-feed"></tbody>
+    </table></div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Top searchers</h2><div class="panel-meta tagline">by keys checked</div></div>
+    <div class="table-wrap rows-box"><table>
+      <thead id="top-head"><tr><th class="num sortable" data-sort="rank" title="Rank by keys checked" tabindex="0">#</th><th>Address</th><th class="num sortable" data-sort="keys" tabindex="0">Keys</th><th class="num sortable" data-sort="chunks" tabindex="0">Pieces</th><th class="num sortable" data-sort="refs" tabindex="0">Invited</th><th class="sortable" data-sort="last" tabindex="0">Last seen</th></tr></thead>
+      <tbody id="top"></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title"><span class="tipped" title="The whole range of the puzzle as one line. Each speck is a piece the pool has searched.">The haystack</span></h2><div class="panel-meta tagline" id="g-hay-m">&nbsp;</div></div>
+    <div class="hay" id="g-hay"></div>
+    <div class="hay-scale mono"><span id="g-hay-lo">2⁷⁰</span><span id="g-hay-mid">&nbsp;</span><span id="g-hay-hi">2⁷¹</span></div>
+    <p class="hay-note" id="g-hay-note">&nbsp;</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">The hive</h2><div class="panel-meta tagline">every searcher, the brighter the more keys</div></div>
+    <div class="hive" id="g-hive"></div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/tx.js?v=dev"></script>
+<script src="/ui/charts/charts.js?v=dev"></script>
+<script src="/common.js?v=dev"></script>
+<script src="/render.js?v=dev"></script>
+<script src="/pooldash.js?v=dev"></script>
+</body>
+</html>

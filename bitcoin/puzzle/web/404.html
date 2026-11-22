@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found | BumbleBeam Puzzle</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v">loading…</b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+
+<main>
+  <div class="page-head"><h1 class="page-title">Not found</h1></div>
+  <div class="panel empty nf"><img class="nf-art" src="/404.svg" alt="404: an empty honeycomb cell" width="420" height="188">There is no such page. <a href="/">Back to the puzzles</a></div>
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+</body>
+</html>

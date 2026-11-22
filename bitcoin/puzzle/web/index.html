@@ -3,8 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BumbleBeam Puzzle - the Bitcoin puzzle, live</title>
-<meta name="description" content="The Bitcoin puzzle live from our own node: all 160 puzzle addresses, prizes, which keys are found, an honest odds calculator and the puzzle radar.">
+<title>Bitcoin Puzzle: Live Status of All 160, Pool &amp; Radar | BumbleBeam</title>
+<meta name="description" content="The Bitcoin puzzle live from a Bitcoin node: all 160 puzzle addresses, prizes, which keys are found, the shared search for #71 and the puzzle radar.">
+<!-- the page's one address, and how a link to it looks when shared (brand/src/og_puzzle.py draws the picture) -->
+<link rel="canonical" href="https://puzzle.bumblebeam.org/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:url" content="https://puzzle.bumblebeam.org/">
+<meta property="og:title" content="Bitcoin Puzzle: Live Status of All 160, Pool &amp; Radar">
+<meta property="og:description" content="The Bitcoin puzzle live from a Bitcoin node: all 160 puzzle addresses, prizes, which keys are found, the shared search for #71 and the puzzle radar.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" type="application/json" href="/api/puzzles" title="The state of the 160 puzzles (JSON)">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://puzzle.bumblebeam.org/#site","url":"https://puzzle.bumblebeam.org/","name":"BumbleBeam Puzzle","inLanguage":"en","publisher":{"@id":"https://bumblebeam.org/#org"}},{"@type":"Organization","@id":"https://bumblebeam.org/#org","name":"BumbleBeam","url":"https://bumblebeam.org","email":"support@bumblebeam.org","sameAs":["https://github.com/profinch/bumblebeam"]},{"@type":"Dataset","name":"The state of the 160 Bitcoin puzzle addresses","alternateName":"The 1000 BTC puzzle, live","description":"Every address of the 2015 Bitcoin puzzle (the 1000 BTC puzzle) with its key range, balance, status (open, or solved: when and in which transaction) and whether its public key is on the blockchain, read once a minute from a Bitcoin node.","url":"https://puzzle.bumblebeam.org/","isAccessibleForFree":true,"creator":{"@id":"https://bumblebeam.org/#org"},"variableMeasured":["puzzle number","address","key range","balance (BTC)","status","public key revealed","solve date"],"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://puzzle.bumblebeam.org/api/puzzles"}]}]}</script>
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <!-- the shared look: ui/ in the repo root, copied in by the image build; v=dev becomes the release -->
@@ -12,109 +25,142 @@
 <link rel="stylesheet" href="/ui/base.css?v=dev">
 <link rel="stylesheet" href="/ui/components.css?v=dev">
 <link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
 </head>
 <body>
-<bb-eco here="puzzle"></bb-eco>
 <header class="top">
   <div class="top-row">
-    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
-    <div class="top-tools">
-      <span class="price-chip" id="btc-price" data-i18n-title="priceTip">BTC <b id="btc-price-v">…</b></span>
-    </div>
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v"><!--ssr:btc-price-v-->loading…<!--/ssr--></b></span>
     <nav class="main-nav" aria-label="Main">
       <a href="/" class="active">Puzzles</a>
-      <a href="/play">Play</a>
       <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
       <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
     </nav>
   </div>
 </header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
 
 <main>
-  <div class="page-head"><h1 class="page-title" data-i18n="title">The Bitcoin puzzle, live</h1>
-    <div class="actions"><span class="pill-status" id="live"><i></i><span id="live-t">…</span></span></div></div>
-  <p class="hint lead" data-i18n-html="lead">In January 2015 someone sent bitcoin to 256 addresses whose private keys are numbers in growing ranges: the key of puzzle #N lies between 2<sup>N−1</sup> and 2<sup>N</sup>−1. Whoever finds a key takes its prize. Everything below is read from our own Bitcoin node.</p>
+  <div class="page-head"><h1 class="page-title">The Bitcoin puzzle</h1></div>
+  <p class="intro" id="lead"><!--ssr:lead--><b>Over 900 bitcoin lie on the blockchain, waiting for whoever finds the right numbers.</b> In <code class="mark">2015</code>, in what became known as the Bitcoin puzzle (or the 1000 BTC puzzle), an unknown creator sent bitcoin to <code class="mark">256</code> addresses (<code class="mark">160</code> of which still count) and deliberately made the keys easy: the key for <code class="mark">puzzle #N</code> is simply a number with <code class="mark">N</code> binary digits. The small ones fell within weeks. The creator then kept raising the prizes, and today <code class="mark">#N</code> holds about <code class="mark">N/10</code> BTC. From <a href="/puzzle/65">puzzle #65</a> onwards, every fifth puzzle has its public key in the open, making it far easier to crack. The rest can only be guessed, number by number: <a href="/puzzle/71">puzzle #71</a>, the next one, has <code class="mark">2⁷⁰</code> keys to try. Everything here is read live from a Bitcoin node, and <a href="/learn#odds">the odds</a> are honest. Play for the thrill, not for a paycheck.<!--/ssr--></p>
 
   <div class="tiles" id="tiles">
-    <div class="tile"><div class="k" data-i18n="tOpen">Unclaimed prizes</div><div class="v accent" id="t-open">…</div><div class="s" id="t-open-s">&nbsp;</div></div>
-    <div class="tile"><div class="k" data-i18n="tCount">Puzzles</div><div class="v" id="t-count">…</div><div class="s" id="t-count-s">&nbsp;</div></div>
-    <div class="tile"><div class="k" data-i18n="tTarget">Next in line</div><div class="v accent" id="t-target">…</div><div class="s" id="t-target-s">&nbsp;</div></div>
-    <div class="tile"><div class="k" data-i18n="tLast">Last solved</div><div class="v" id="t-last">…</div><div class="s" id="t-last-s">&nbsp;</div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="All the bitcoin still sitting on puzzle addresses whose keys nobody has found yet. The dollar figure uses the BTC price today.">Unclaimed prizes</span></div><div class="v" id="t-open"><!--ssr:t-open--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-open-s"><!--ssr:t-open-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Puzzles that still hold their prize, out of the 160 in play (in 2017 the creator took back #161 to #256). Solved means someone found the key and took the bitcoin.">Puzzles</span></div><div class="v" id="t-count"><!--ssr:t-count--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-count-s"><!--ssr:t-count-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="The easiest unsolved puzzle. Its public key has never been revealed, so the only known way in is to try every number in its range one by one. This is the one our pool searches.">Next in line</span></div><div class="v accent" id="t-target"><!--ssr:t-target--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-target-s"><!--ssr:t-target-s-->7.1 BTC (brute force only)<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="The most recent puzzle someone cracked: the prize taken, and the day it happened.">Last solved</span></div><div class="v" id="t-last"><!--ssr:t-last--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="t-last-s"><!--ssr:t-last-s-->&nbsp;<!--/ssr--></div></div>
   </div>
 
   <section class="panel target" id="target">
-    <div class="panel-head"><h2 class="panel-title" id="target-title">…</h2><div class="panel-meta" id="target-meta"></div></div>
-    <div class="target-grid">
-      <div><div class="k" data-i18n="address">Address</div><div class="mono addr" id="target-addr">…</div></div>
-      <div><div class="k" data-i18n="range">Key range</div><div class="mono" id="target-range">…</div></div>
-      <div><div class="k" data-i18n="keys">Keys to check</div><div class="mono" id="target-keys">…</div></div>
-      <div><div class="k" data-i18n="prize">Prize</div><div class="mono accent" id="target-prize">…</div></div>
+    <div class="panel-head"><h2 class="panel-title" id="target-title"><!--ssr:target-title-->…<!--/ssr--></h2></div>
+    <div class="target-body">
+      <div class="target-main">
+        <p class="target-text" id="soon"><!--ssr:soon-->The easiest unsolved puzzle. Its public key has never been revealed, so the only known way in is to try the keys in its range one by one. Alone, that is a lottery ticket: one RTX 4090 would need about 7,500 years to try them all. The BumbleBeam pool searches it together: each browser is given its own piece of the range, no two browsers get the same piece, and whoever finds the key gets <b>6</b> of <b>7.1 BTC</b>.<!--/ssr--></p>
+        <div class="target-grid">
+          <div><div class="k"><span class="tipped" title="The Bitcoin address that holds the prize of this puzzle. Whoever has its private key can move the coins.">Address</span></div><div class="mono addr" id="target-addr"><!--ssr:target-addr-->…<!--/ssr--></div></div>
+          <div><div class="k"><span class="tipped" title="What the address holds right now, and what that is worth at the BTC price today.">Prize</span></div><div class="mono accent-text" id="target-prize"><!--ssr:target-prize-->…<!--/ssr--></div></div>
+          <div><div class="k"><span class="tipped" title="The private key is a number somewhere between these two values, written in hexadecimal.">Key range</span></div><div class="mono" id="target-range"><!--ssr:target-range-->…<!--/ssr--></div></div>
+          <div><div class="k"><span class="tipped" title="How many numbers lie in the range. Every one may have to be tried before the right one turns up.">Keys to check</span></div><div class="mono" id="target-keys"><!--ssr:target-keys-->…<!--/ssr--></div></div>
+        </div>
+        <div class="actions-row target-actions">
+          <a class="btn solid" href="/pool">Join the search</a>
+          <a class="btn ghost" href="/rules">How it works</a>
+        </div>
+        <!-- a key from the range, drawn at random: the same digits the square lights up, new with each of its tries -->
+        <div class="target-try"><div class="k"><span class="clover" aria-hidden="true">🍀</span> <span class="tipped" title="Every 1.6 seconds your browser draws a random key from the range of the puzzle, the same one the square shows, and checks right here whether it opens the address of the puzzle. The odds are about 1 in 1.18 sextillion, so it is just for fun. If a key ever fits, the draw stops on it, the prize appears next to it, and the page sends it to the payout address saved in your browser through a private relay (without one, the key is kept on our server and you write to support). The key itself shows only once the prize is safe: whoever sees it before could take the coins." id="target-try-title">Your lucky key</span></div><div class="mono" id="target-try"><span class="kx">0x</span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i></span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i></span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i></span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i></span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i></span><span class="kg"><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="z">0</i><i class="o"></i><i class="o"></i></span><span class="kg"><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i></span><span class="kg"><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i></span><button type="button" class="cp" title="Copy the key" aria-label="Copy the key"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button><span class="bal tipped" title="What the address of this key holds. Every key in the range opens its own address, and all of them are empty except one: the address of the puzzle, with its prize. The check is done in your browser against the address of the puzzle.">0 BTC</span></div></div>
+      </div>
+      <div class="target-key">
+        <div class="k"><span class="tipped" title="A Bitcoin private key has 64 hex digits, each one of 16 values (0 to f). Each square here is one digit, its 16 small squares its 16 values. For this puzzle the first digits are zero and known, and the last ones are what the pool tries.">Private key representation</span><span class="key-count" id="key-count"></span></div>
+        <div class="key-sq" id="key-sq" aria-hidden="true"></div>
+      </div>
+      <aside class="target-side">
+        <div class="k"><span class="tipped" title="How many keys all the browsers in the pool check per second together, as they report it. The scale grows ten times at each mark.">Pool speed</span></div>
+        <div class="gauge" id="pl-gauge"></div>
+        <div class="target-facts">
+          <div><span class="k"><span class="tipped" title="Browsers that took or finished a piece of the range in the last ten minutes.">Searching now</span></span><b id="pl-active"><!--ssr:pl-active--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></b><div class="dim small-s" id="pl-active-s"><!--ssr:pl-active-s-->&nbsp;<!--/ssr--></div></div>
+          <div><span class="k"><span class="tipped" title="Every key the pool has checked on this puzzle so far, against all the keys in its range.">Keys checked</span></span><b id="pl-keys"><!--ssr:pl-keys--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></b><div class="dim small-s" id="pl-of"><!--ssr:pl-of-->&nbsp;<!--/ssr--></div></div>
+        </div>
+      </aside>
     </div>
-    <div class="note" data-i18n-html="soon">A coordinated search is coming: every browser and GPU gets its own piece of the range, nobody checks the same keys twice, and the finder keeps <b>6 of 7.1 BTC</b>. Until then: <a href="/play">search a small puzzle yourself</a>, <a href="/bench">time your GPU</a>, and the odds below, honestly.</div>
   </section>
 
-  <section class="panel" id="odds">
-    <div class="panel-head"><h2 class="panel-title" data-i18n="oddsTitle">Odds calculator</h2><div class="panel-meta" data-i18n="oddsMeta">your hardware against the range</div></div>
-    <p class="hint" data-i18n-html="oddsHint">A hidden public key leaves only brute force: every key in the range is a lottery ticket. Where the public key is on the chain (#140, #145, … #160), Pollard's kangaroo needs about 2·√range steps instead. Speeds are estimates; <a href="/bench">the benchmark</a> measures yours.</p>
-    <div class="calc">
-      <label class="field"><span data-i18n="cPuzzle">Puzzle</span><select id="c-puzzle"></select></label>
-      <label class="field"><span data-i18n="cDevice">Device</span><select id="c-device"></select></label>
-      <label class="field"><span data-i18n="cSpeed">Keys per second, each</span><input id="c-speed" inputmode="decimal" spellcheck="false"></label>
-      <label class="field"><span data-i18n="cCount">How many</span><input id="c-count" type="number" min="1" step="1" value="1"></label>
-      <label class="field"><span data-i18n="cHours">Hours a day</span><input id="c-hours" type="number" min="0" max="24" step="1" value="24"></label>
-      <label class="field"><span data-i18n="cDays">Days</span><input id="c-days" type="number" min="1" step="1" value="365"></label>
-      <label class="field"><span data-i18n="cWatts">Watts, each</span><input id="c-watts" type="number" min="0" step="10"></label>
-      <label class="field"><span data-i18n="cKwh">Electricity, $ per kWh</span><input id="c-kwh" type="number" min="0" step="0.01" value="0.15"></label>
-    </div>
-    <div class="tiles calc-out" id="c-out"></div>
-    <div class="note" id="c-verdict"></div>
-  </section>
+
+  <!-- the lucky key's claim, when a draw opens the target (prize.js, loaded then) -->
+  <section class="panel found" id="lucky-claim" hidden></section>
 
   <section class="panel" id="radar">
-    <div class="panel-head"><h2 class="panel-title" data-i18n="radarTitle">Radar</h2><div class="panel-meta" data-i18n="radarMeta">every open address, every minute</div></div>
-    <p class="hint" data-i18n="radarHint">Our node watches all open puzzle addresses. A spend waiting in the mempool means someone is taking a prize right now; a confirmed one means the puzzle is solved.</p>
-    <div id="radar-list"></div>
-    <h3 class="sub-title" data-i18n="recentSolves">Recent solves</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>#</th><th data-i18n="when">When</th><th class="num" data-i18n="prize">Prize</th><th data-i18n="how">How</th><th data-i18n="tx">Transaction</th></tr></thead>
-      <tbody id="solves"></tbody>
-    </table></div>
+    <div class="panel-head"><h2 class="panel-title">Radar</h2></div>
+    <p class="target-text">A Bitcoin node checks every open puzzle address once a minute, in new blocks and in the mempool. A spend waiting in the mempool means someone is taking a prize at this very moment, and once it confirms, the puzzle is solved. Small payments into an address are knocks: a sign that someone is keeping an eye on it.</p>
+    <div id="radar-now"><!--ssr:radar-now--><!--/ssr--></div>
+    <!-- two columns of the same height, each scrolling on its own, the last two rows fading out until the end -->
+    <div class="radar-cols">
+      <div class="radar-knocks">
+        <h3 class="sub-title"><span class="tipped" title="Small payments into an open puzzle address, with nothing going out. Nobody knows why people send them (marks, tests, luck), but they show which puzzles are watched.">Knock knock</span></h3>
+        <div class="radar-head"><table class="knocks-t"><colgroup><col class="c-when"><col class="c-n"><col class="c-amt"><col class="c-note"><col class="c-tx"></colgroup>
+          <thead><tr><th class="sortable" data-t="knocks" data-sort="when" tabindex="0">When</th><th class="sortable" data-t="knocks" data-sort="n" tabindex="0">Puzzle #</th><th class="num">Knock</th><th><span class="tipped" title="The text some knockers write into their transaction (OP_RETURN). Shown only after a review: no threats, insults, links or ads.">Note</span></th><th>Transaction</th></tr></thead>
+        </table></div>
+        <div class="radar-scroll fade" id="knock-scroll"><div class="table-wrap"><table class="knocks-t"><colgroup><col class="c-when"><col class="c-n"><col class="c-amt"><col class="c-note"><col class="c-tx"></colgroup>
+          <tbody id="radar-list"><!--ssr:radar-list--><!--/ssr--></tbody>
+        </table></div></div>
+      </div>
+      <div>
+        <h3 class="sub-title"><span class="tipped" title="Every puzzle whose prize has been taken, newest first: when, how much, and how. Brute force means only the address was known and someone tried keys until one fit. Kangaroo means the public key was on the chain, which makes the search far shorter.">Recent solves</span></h3>
+        <!-- the head stays put: its own table, the same columns as the scrolling body -->
+        <div class="radar-head"><table class="solves-t"><colgroup><col class="c-when"><col class="c-n"><col class="c-prize"><col class="c-how"><col class="c-tx"></colgroup>
+          <thead><tr><th class="sortable" data-t="solves" data-sort="when" tabindex="0">When</th><th class="sortable" data-t="solves" data-sort="n" tabindex="0">Puzzle #</th><th class="num">Prize</th><th>How</th><th>Transaction</th></tr></thead>
+        </table></div>
+        <div class="radar-scroll fade" id="solves-scroll"><div class="table-wrap"><table class="solves-t"><colgroup><col class="c-when"><col class="c-n"><col class="c-prize"><col class="c-how"><col class="c-tx"></colgroup>
+          <tbody id="solves"><!--ssr:solves--><!--/ssr--></tbody>
+        </table></div></div>
+      </div>
+    </div>
   </section>
 
   <section class="panel" id="puzzles">
-    <div class="panel-head"><h2 class="panel-title" data-i18n="allTitle">All 160 puzzles</h2>
+    <div class="panel-head"><h2 class="panel-title">All 160 puzzles</h2>
       <div class="seg" id="filter" role="group" aria-label="Filter">
-        <button type="button" class="on" data-f="open" data-i18n="fOpen">Open</button>
-        <button type="button" data-f="all" data-i18n="fAll">All</button>
-        <button type="button" data-f="exposed" data-i18n="fExposed">Public key known</button>
-        <button type="button" data-f="solved" data-i18n="fSolved">Solved</button>
+        <button type="button" class="on" data-f="open">Open</button>
+        <button type="button" data-f="all">All</button>
+        <button type="button" data-f="exposed">Public key known</button>
+        <button type="button" data-f="solved">Solved</button>
       </div></div>
-    <div class="table-wrap"><table class="ptable">
-      <thead><tr><th class="num">#</th><th data-i18n="address">Address</th><th data-i18n="rangeFrom">Range from</th><th class="num" data-i18n="prize">Prize</th><th data-i18n="status">Status</th><th data-i18n="pubkey">Public key</th><th data-i18n="solvedOn">Solved</th></tr></thead>
-      <tbody id="rows"></tbody>
+    <div class="table-wrap"><table class="ptable" data-f="open">
+      <thead><tr><th>Puzzle #</th><th>Address</th><th>Range from</th><th class="num">Prize</th><th>Status</th><th>Public key</th><th>Solved</th></tr></thead>
+      <tbody id="rows"><!--ssr:rows--><!--/ssr--></tbody>
     </table></div>
   </section>
 
-  <section class="panel about" id="about">
-    <div class="panel-head"><h2 class="panel-title" data-i18n="aboutTitle">About</h2></div>
-    <div class="about-body" data-i18n-html="aboutBody">
-      <p>The puzzle was made in 2015 with one transaction to 256 addresses; in 2017 the creator moved out #161–#256 and raised the rest tenfold, and in 2023 tenfold again. #N now holds about N/10 BTC. In 2019 the creator also spent a little from every fifth address from #65 on, which put their public keys on the chain.</p>
-      <p>This site reads all of it from a Bitcoin node of our own, not from someone else's API. The open-source code is in the <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">BumbleBeam repository</a>.</p>
-      <p>A word of honesty: the lower open puzzles are a race with farms of GPUs. The calculator shows what a home card can expect, electricity included. Play for the fun of it, not for the money.</p>
-    </div>
-  </section>
 </main>
 
 <footer class="foot">
-  <a href="https://pool.bumblebeam.org" data-i18n="footPool">Mine BEAM</a>
-  <a href="/api/puzzles">API</a>
-  <a href="https://t.me/BumbleBeamOrg" target="_blank" rel="noopener">Telegram</a>
-  <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a>
-  <span class="dim" id="foot-node">&nbsp;</span>
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
 </footer>
 
-<script src="/ui/components/bb.js?v=dev"></script>
 <script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+<script src="/ui/components/gauge.js?v=dev"></script>
+<script src="/ui/components/confetti.js?v=dev"></script>
+<script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/seal.js?v=dev"></script>
+<script src="/keysq.js?v=dev"></script>
+<script src="/render.js?v=dev"></script>
 <script src="/app.js?v=dev"></script>
 </body>
 </html>

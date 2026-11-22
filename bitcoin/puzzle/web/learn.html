@@ -3,77 +3,176 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Learn - BumbleBeam Puzzle</title>
-<meta name="description" content="How a Bitcoin private key becomes an address, and three ways to find one in a range: brute force, baby-step giant-step and Pollard's kangaroo, raced live in your browser.">
+<title>How the Bitcoin Puzzle Works: Keys, Brute Force, Kangaroo &amp; Your Odds | BumbleBeam</title>
+<meta name="description" content="How a Bitcoin private key becomes an address, and three ways to find one in a range: brute force, baby-step giant-step and the Pollard kangaroo, raced live in your browser. And an honest odds calculator: your cards, the chance, the electricity.">
+<!-- the page's one address, and how a link to it looks when shared (brand/src/og_puzzle.py draws the picture) -->
+<link rel="canonical" href="https://puzzle.bumblebeam.org/learn">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:url" content="https://puzzle.bumblebeam.org/learn">
+<meta property="og:title" content="How the Bitcoin Puzzle Works: Keys, Brute Force, Kangaroo &amp; Your Odds">
+<meta property="og:description" content="How a Bitcoin private key becomes an address, and three ways to find one in a range: brute force, baby-step giant-step and the Pollard kangaroo, raced live in your browser. And an honest odds calculator: your cards, the chance, the electricity.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#042548">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/ui/tokens.css?v=dev">
 <link rel="stylesheet" href="/ui/base.css?v=dev">
 <link rel="stylesheet" href="/ui/components.css?v=dev">
 <link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
 </head>
 <body>
-<bb-eco here="puzzle"></bb-eco>
 <header class="top">
   <div class="top-row">
-    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span>Bumble<b>Beam</b> <em>Puzzle</em></span></a>
-    <div class="top-tools"></div>
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v">loading…</b></span>
     <nav class="main-nav" aria-label="Main">
       <a href="/">Puzzles</a>
-      <a href="/play">Play</a>
       <a href="/learn" class="active">Learn</a>
+      <a href="/play">Play</a>
       <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
     </nav>
   </div>
 </header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
 
 <main>
   <div class="page-head"><h1 class="page-title">How the puzzle works</h1></div>
+  <p class="intro">What a Bitcoin key really is, why the puzzle is so hard, how the solved ones were found and what your own odds are, in plain words and with things to try.</p>
 
   <section class="panel">
-    <div class="panel-head"><h2 class="panel-title">1 · From a key to an address</h2><div class="panel-meta">one way only</div></div>
-    <p class="hint">A private key is just a number. Multiplying the curve's starting point G by it gives the public key; two hashes of that give the address. Every step is quick forwards and, as far as anyone knows, impossible backwards: the only way from an address to its key is to try keys.</p>
-    <label class="field keyin"><span>Private key (decimal or 0x hex)</span><input id="k-in" value="1" spellcheck="false"></label>
-    <ol class="chain" id="k-out"></ol>
-    <p class="hint">Puzzle #N's key has exactly N bits, so it lies between 2<sup>N−1</sup> and 2<sup>N</sup>−1. Try <a href="#" data-k="3">3</a> (#2), <a href="#" data-k="0xd2c55">0xd2c55</a> (#20) or <a href="#" data-k="0x349b84b6431a6c4ef1">0x349b84b6431a6c4ef1</a> (#70): each gives that puzzle's address.</p>
+    <div class="panel-head"><h2 class="panel-title">A key is just a number</h2><div class="panel-meta tagline">one-way machine</div></div>
+    <p class="target-text">A Bitcoin address works like a locked mailbox, and its key is just a number. Type any number below and watch it turn into an address. The machine only runs one way. Going from a key to an address takes a millisecond. Going back is something nobody knows how to do. So the only way to open the box is to try numbers until one fits.</p>
+    <!-- the machine on the left, what to try on the right (under it on a phone) -->
+    <div class="key-lab">
+      <div class="key-lab-main">
+      <div class="row keyin-row">
+        <label class="field keyin"><span>Your number</span><input id="k-in" value="1" inputmode="numeric" maxlength="78" autocomplete="off" spellcheck="false"></label>
+        <button class="btn ghost" type="button" id="k-dec" title="One less">−1</button>
+        <button class="btn ghost" type="button" id="k-inc" title="One more">+1</button>
+      </div>
+      <ol class="chain" id="k-out"></ol>
+      </div>
+      <aside class="tile key-info"><span class="key-info-badge" aria-hidden="true">i</span>Change a single digit and the whole address changes. There is no getting warmer. The key of <code class="mark">puzzle #N</code> has exactly <code class="mark">N</code> binary digits. Try <a href="#" data-k="3">3</a> (<a href="/puzzle/2" title="1CUNEBjYrCn2y1SdiUMohaKUi4wpP326Lb">Puzzle #2</a>), <a href="#" data-k="863317">863317</a> (<a href="/puzzle/20" title="1HsMJxNiV7TLxmoF6uJNkydxPFDog4NQum">Puzzle #20</a>) or <a href="#" data-k="970436974005023690481">970436974005023690481</a> (<a href="/puzzle/70" title="19YZECXj3SxEZMoUeJ1yiPsw8xANe7M7QR">Puzzle #70</a>), then press +1. Each one turns into the real address that once held the prize of that puzzle, and the next number into the address of a stranger.</aside>
+    </div>
+    <details class="fold"><summary>What do the steps mean?</summary>
+      <p>A private key is a secret number. The public key is a point on a curve that everyone uses, reached by adding the starting point of the curve to itself that many times. The address is a short fingerprint of that point. Anyone can check the steps forward. Nobody can run them backward. That one-way street is what keeps every bitcoin safe, and the puzzle keys are only weak because their numbers are deliberately small.</p>
+    </details>
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2 class="panel-title">2 · Three ways to find a key</h2><div class="panel-meta">raced live on your CPU</div></div>
-    <p class="hint"><b>Brute force</b> needs only the address and tries keys in order: on average half the range. <b>Baby-step giant-step</b> and <b>Pollard's kangaroo</b> need the public key, and then about 2·√range steps: for a 40-bit range a million instead of half a trillion. BSGS pays with memory (a table of √range points), the kangaroo only keeps a few “distinguished” points it lands on.</p>
-    <div class="row race-ctl">
-      <label class="field"><span>Range: bits</span><input id="r-bits" type="number" min="16" max="44" value="40"></label>
-      <button class="btn solid" type="button" id="r-go">Hide a key and race</button>
-      <button class="btn ghost" type="button" id="r-stop" disabled>Stop</button>
-      <span class="dim mono" id="r-secret"></span>
-    </div>
+    <div class="panel-head"><h2 class="panel-title">How big is the haystack?</h2><div class="panel-meta tagline">every digit doubles it</div></div>
+    <p class="target-text">Each extra binary digit doubles the number of possible keys, and with it the time to try them all. A 4-digit bike lock has 10,000 combinations, a phone number about 10 billion. <a data-tn-addr href="/puzzle/71" title="1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU">Puzzle #71</a> has <span id="t-keys">1.18 sextillion</span>, <span id="t-sand">about 160 times all the grains of sand on the beaches of Earth</span>. Slide to race a browser tab and a graphics card through any puzzle.</p>
+    <label class="field hay-field"><span>Puzzle number: <b id="h-n">#71</b></span><input type="range" id="h-in" min="1" max="160" step="0.01" value="71"></label>
+    <div class="hay-tl" id="h-tl" aria-hidden="true"></div>
+    <div class="hay-sum" id="h-sum"></div>
+    <p class="target-text hay-fact" id="h-fact">&nbsp;</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Three ways to search</h2><div class="panel-meta tagline">raced live on your device</div></div>
+    <p class="target-text">We hide a random number, and three methods race to find it, right here on your device. Each dial represents the whole haystack: its ring of comb cells shows where a method is looking, and the arc inside shows how much work it has done so far (on a log scale, with ticks at twice the square root and at half the haystack). Checking one by one only needs the address. The two clever methods need the public key, and that changes everything. They need about twice the square root of the haystack: for a trillion keys, about two million hops instead of half a trillion tries.</p>
+    <div class="race-row">
+      <!-- the race's controls in one bar: the haystack's size on the left, race and stop on the right -->
+      <div class="race-bar">
+        <span class="rb-k">Haystack</span>
+        <div class="seg" id="r-size"><button type="button" data-b="32">32</button><button type="button" data-b="36" class="on">36</button><button type="button" data-b="40">40</button></div>
+        <span class="rb-k">digits</span>
+        <span class="rb-sp"></span>
+        <button class="btn solid" type="button" id="r-go">Hide &amp; race</button>
+        <button class="btn ghost" type="button" id="r-stop" disabled>Stop</button>
+      </div>
+      <div class="dim mono r-secret" id="r-secret"></div>
+      <!-- the dials and, right of them where there is room (under them otherwise), the race's lesson as an info card;
+           its place is kept from the start (invisible until the race is over), so nothing moves when it shows -->
     <div class="race" id="race">
-      <div class="lane" data-m="brute"><div class="lane-h"><b>Brute force</b><span class="dim">needs: the address</span><span class="mono lane-v" id="v-brute">–</span></div><canvas height="34"></canvas></div>
-      <div class="lane" data-m="bsgs"><div class="lane-h"><b>Baby-step giant-step</b><span class="dim">needs: the public key, √range memory</span><span class="mono lane-v" id="v-bsgs">–</span></div><canvas height="34"></canvas></div>
-      <div class="lane" data-m="kangaroo"><div class="lane-h"><b>Kangaroo</b><span class="dim">needs: the public key, little memory</span><span class="mono lane-v" id="v-kangaroo">–</span></div><canvas height="34"></canvas></div>
+      <div class="lane" data-m="brute"><div class="lane-h"><b>One by one</b><span class="dim">needs the address</span></div><canvas></canvas><div class="mono lane-v" id="v-brute"></div></div>
+      <div class="lane" data-m="bsgs"><div class="lane-h"><b>Meet in the middle</b><span class="dim">needs the public key</span></div><canvas></canvas><div class="mono lane-v" id="v-bsgs"></div></div>
+      <div class="lane" data-m="kangaroo"><div class="lane-h"><b>Kangaroos</b><span class="dim">need the public key</span></div><canvas></canvas><div class="mono lane-v" id="v-kangaroo"></div></div>
     </div>
-    <div class="note" id="r-note">Each lane is the range from 2<sup>N−1</sup> to 2<sup>N</sup>−1. Brute force fills it from the left; BSGS lays out its baby steps, then strides through in giant steps; the kangaroo's tame herd leaves marks where it lands on distinguished points, until a wild one lands on the same trail.</div>
+    <aside class="tile key-info r-info pending" id="r-after"><span class="key-info-badge" aria-hidden="true">i</span>On this device, checking one by one through <a href="/pool">Puzzle #71</a> would take <b>about 33 million years</b> for an even chance. That is why <a href="/pool">a pool</a> splits the range between many browsers.</aside>
+    </div>
+    <details class="fold no-rule"><summary>How do the clever ones work?</summary>
+      <p><b>Meet in the middle:</b> first, write down every small step along the first stretch of a road, like a mark at every metre of the first kilometre. Then walk the road in one-kilometre strides. At each stop, check whether you are standing on a mark. A million-metre road then takes about a thousand strides instead of a million steps. The price is the list of marks. For big puzzles, it would not fit in any computer.</p>
+      <p><b>Kangaroos:</b> a tame kangaroo starts from a known place and hops along, leaving footprints at a few spots (the lit cells on its dial). The white line is where the number was hidden. A wild kangaroo starts from the secret key and hops by the same rules. Once the wild one lands on a footprint, both follow the same path, and the distance between their starts reveals the key. It takes about as many hops as meet in the middle takes steps, but almost no memory.</p>
+    </details>
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2 class="panel-title">3 · Why every fifth puzzle is different</h2></div>
-    <div class="about-body">
-      <p>In 2019 the puzzle's creator spent a little from #65, #70, #75 … #160. A spend reveals the public key, so those puzzles fell to the kangaroo instead of brute force: #135 needs about 2·2<sup>67</sup> ≈ 3 × 10<sup>20</sup> kangaroo jumps, against 2<sup>133</sup> ≈ 10<sup>40</sup> keys by brute force. That is why #120, #125, #130 and #135 were solved while #71 to #74, far smaller, are still open.</p>
-      <p>For the others only the address is known, and brute force is all there is. Each bit doubles the work: #71 has four times the keys of #69, which fell to brute force in April 2025. Open puzzles with a known public key today: #140, #145, #150, #155, #160, the next candidates for a kangaroo pool.</p>
-      <p>The solves so far, with dates and transactions, are on the <a href="/#radar">radar</a>.</p>
+    <div class="panel-head"><h2 class="panel-title">The clue from the creator</h2><div class="panel-meta tagline">why every fifth puzzle fell</div></div>
+    <div class="about-body clue-body">
+      <p data-plinks>In <code class="mark">June 2019</code>, the creator moved a tiny amount from puzzles #65, #70, #75, and every fifth one up to #160. Spending from an address puts its public key on the blockchain for all to see. That was all the kangaroos needed. #65 fell six days later, and by early July, every one up to #100 was gone. #120, #125, #130, and #135 followed over the next years, even though they are far bigger than #71.</p>
+      <p data-plinks>The other puzzles never revealed their public key. For them, trying numbers one by one is the only known way. Each step up doubles the work, so #71 has four times as many keys as #69, which someone found in <code class="mark">April 2025</code>.</p>
+      <p data-plinks>Five puzzles still have a public key in the open: #140, #145, #150, #155, and #160. They are huge even for kangaroos. #140 needs about six times as many hops as #135 did. Every solve, with its date and transaction, is on the <a href="/#radar">radar</a>.</p>
     </div>
+    <div class="hist-head"><span class="k">All 160 puzzles</span></div>
+    <div class="hist-tl">
+      <button class="btn ghost btn-s hist-play" type="button" id="hist-play" aria-label="Replay 2015 to today">▶</button>
+      <b class="hist-yr" id="hist-yr">2026</b>
+      <div class="hist-track"><canvas id="hist-marks" aria-hidden="true"></canvas><input type="range" id="hist-sl" min="0" max="1000" value="1000" aria-label="Year"><div class="hist-years" id="hist-years"></div></div>
+    </div>
+    <!-- the timeline, then the comb with its legend on the right (under it on a phone); the timeline: play, and a track of the
+         years with every solve marked on it (cyan one by one, purple by kangaroos), to drag through -->
+    <div class="hist-wrap">
+      <div class="hist" id="hist" aria-hidden="true"></div>
+      <div class="hist-leg"><span><i class="o"></i>open</span><span><i class="x"></i>open with public key out</span><span><i class="b"></i>solved by trying numbers</span><span><i class="g"></i>solved by kangaroos</span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="odds">
+    <div class="panel-head"><h2 class="panel-title">Odds calculator</h2><div class="panel-meta tagline">searching alone, honestly</div></div>
+    <p class="target-text">Every key you check is a lottery ticket. Here is what one person can expect, searching alone with their own hardware. Speeds are estimates, and <a href="/bench">the benchmark</a> measures yours.</p>
+    <div class="calc">
+      <div class="field f-wide"><span class="sr">Puzzle</span><div class="dd" id="c-puzzle"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Puzzle"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
+      <div class="field f-wide"><span class="sr">Device</span><div class="dd" id="c-device"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Device"></button><ul class="dd-list" role="listbox" tabindex="-1" hidden></ul></div></div>
+      <label class="field"><span>keys/s</span><input id="c-speed" inputmode="decimal" spellcheck="false"></label>
+      <label class="field"><span>×</span><input id="c-count" class="stepper" type="number" min="1" step="1" value="1"></label>
+      <label class="field"><span>h/day</span><input id="c-hours" class="stepper" type="number" min="0" max="24" step="1" value="24"></label>
+      <label class="field"><span>days</span><input id="c-days" class="stepper" type="number" min="1" step="1" value="365"></label>
+      <label class="field"><span>W</span><input id="c-watts" class="stepper" type="number" min="0" step="10"></label>
+      <label class="field"><span>$/kWh</span><input id="c-kwh" class="stepper" type="number" min="0" step="0.01" value="0.15"></label>
+    </div>
+    <div class="calc-out" id="c-out"></div>
+    <p class="calc-verdict" id="c-verdict"></p>
+    <p class="target-text lotto">For comparison, one Powerball ticket wins the jackpot 1 in 292 million times.</p>
+  </section>
+
+  <section class="panel cta">
+    <div class="panel-head"><h2 class="panel-title">Want to try your luck?</h2></div>
+    <p class="target-text">Start small. The first puzzles were solved years ago, so you can find their keys in your browser in seconds and see exactly what a win looks like. When you are ready, join the search for <a data-tn-link href="/puzzle/71">puzzle #71</a>. Your browser checks its own slice of the range, with keys never the same as those of anyone else. If your slice holds the key, you get <span id="t-share"><b>6</b> of the <b>7.1 BTC</b></span>. The odds are tiny. It is a lottery for fun.</p>
+    <!-- the main way in first and widest on a phone, the other two beside each other under it -->
+    <div class="actions-row cta-row"><a class="btn solid cta-main" href="/pool">Join the search for <span data-tn>#71</span></a><a class="btn solid" href="/play">Try a small puzzle</a><a class="btn ghost" href="/rules">Read the rules</a></div>
   </section>
 </main>
 
 <footer class="foot">
-  <a href="https://pool.bumblebeam.org">Mine BEAM</a>
-  <a href="https://t.me/BumbleBeamOrg" target="_blank" rel="noopener">Telegram</a>
-  <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
 </footer>
 
-<script src="/ui/components/bb.js?v=dev"></script>
 <script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
 <script src="/engine/secp.js?v=dev"></script>
+<script src="/engine/puzzles.js?v=dev"></script>
+<script src="/ui/components/dd.js?v=dev"></script>
+<script src="/ui/components/stepper.js?v=dev"></script>
 <script src="/common.js?v=dev"></script>
 <script src="/learn.js?v=dev"></script>
 </body>

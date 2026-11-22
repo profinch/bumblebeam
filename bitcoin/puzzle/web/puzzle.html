@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" data-chain="bitcoin">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Puzzle | BumbleBeam</title>
+<meta name="description" content="One puzzle of the Bitcoin puzzle, live from a Bitcoin node: its address, prize, key range, public key and every transaction.">
+<!-- one page for each of the 160 puzzles (/puzzle/<n>): puzzle-api (api/pages.js) writes the puzzle's title,
+     description, canonical address and numbers into this page before it is sent; puzzle.js draws the same from /api -->
+<!--ssr:head--><!--/ssr-->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BumbleBeam Puzzle">
+<meta property="og:title" content="Bitcoin Puzzle">
+<meta property="og:description" content="One puzzle of the Bitcoin puzzle, live from a Bitcoin node: its address, prize, key range, public key and every transaction.">
+<meta property="og:image" content="https://puzzle.bumblebeam.org/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#042548">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/ui/tokens.css?v=dev">
+<link rel="stylesheet" href="/ui/base.css?v=dev">
+<link rel="stylesheet" href="/ui/components.css?v=dev">
+<link rel="stylesheet" href="/puzzle.css?v=dev">
+<script src="/ui/components/bb.js?v=dev"></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/" aria-label="BumbleBeam Puzzle, home"><bb-logo></bb-logo><span class="word">Bumble<b>Beam</b> <i class="sub-word">Puzzle</i></span></a>
+    <a class="btn cta-top" href="/pool" data-route="pool">Start puzzle</a>
+    <form class="search" id="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="search-input" placeholder="Payout address" autocomplete="off" spellcheck="false" aria-label="A Bitcoin payout address, to open its keys checked, pieces, rank and invites">
+      <kbd id="search-kbd" title="Press / to search">/</kbd>
+    </form>
+    <span class="price-chip" id="btc-price" title="The price of one bitcoin in US dollars, as the price feed of a Bitcoin node reports it (it averages several big exchanges). Refreshed every few minutes.">BTC <b id="btc-price-v">loading…</b></span>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/" class="active">Puzzles</a>
+      <a href="/learn">Learn</a>
+      <a href="/play">Play</a>
+      <a href="/bench">Benchmark</a>
+      <a href="/rules">Rules</a>
+      <a href="/pool">Pool</a>
+      <a href="/" id="nav-my" hidden>My stats</a>
+    </nav>
+  </div>
+</header>
+<script src="/head.js?v=dev"></script>
+<script src="/nav.js?v=dev"></script>
+
+<main>
+  <div class="page-head"><h1 class="page-title" id="pz-title"><!--ssr:pz-title-->Bitcoin Puzzle<!--/ssr--></h1></div>
+  <p class="intro" id="pz-intro"><!--ssr:pz-intro--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></p>
+
+  <div class="tiles pz-tiles">
+    <div class="tile"><div class="k"><span class="tipped" title="What the address holds now. For a solved puzzle, what its finder took.">Prize</span></div><div class="v accent" id="pz-prize"><!--ssr:pz-prize--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="pz-prize-s"><!--ssr:pz-prize-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="What the address of the puzzle holds right now, on the block explorer. For a solved puzzle, the small amounts people sent to it since.">Balance now</span></div><div class="v" id="pz-bal"><!--ssr:pz-bal--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="pz-bal-s"><!--ssr:pz-bal-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="Open: nobody has taken the prize. Solved: someone found the key and took it, by brute force or (with the public key known) by the Pollard kangaroo.">Status</span></div><div class="v" id="pz-status"><!--ssr:pz-status--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="pz-status-s"><!--ssr:pz-status-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="How many numbers the key could be: the key of puzzle #N has N binary digits, so there are 2 to the power N−1 of them.">Keys</span></div><div class="v" id="pz-keys"><!--ssr:pz-keys--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="pz-keys-s"><!--ssr:pz-keys-s-->&nbsp;<!--/ssr--></div></div>
+    <div class="tile"><div class="k"><span class="tipped" title="How long trying every key of the range one by one takes on one RTX 4090 (about 5 billion keys a second).">Brute force</span></div><div class="v" id="pz-card"><!--ssr:pz-card--><span class="bb-wait"><i></i><i></i><i></i></span><!--/ssr--></div><div class="s" id="pz-card-s"><!--ssr:pz-card-s-->&nbsp;<!--/ssr--></div></div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">The puzzle</h2></div>
+    <div class="target-grid">
+      <div><div class="k"><span class="tipped" title="The Bitcoin address that holds the prize of this puzzle, on the explorer.">Address</span></div><div class="mono addr pz-addr" id="pz-addr"><!--ssr:pz-addr-->…<!--/ssr--></div></div>
+      <div><div class="k"><span class="tipped" title="The private key is a number between these two values, in hexadecimal.">Key range</span></div><div class="mono" id="pz-range"><!--ssr:pz-range-->…<!--/ssr--></div></div>
+      <div><div class="k"><span class="tipped" title="Once an address has sent bitcoin out, its public key is on the blockchain, and the key can be found far faster.">Public key</span></div><div class="mono" id="pz-pubkey"><!--ssr:pz-pubkey-->…<!--/ssr--></div></div>
+      <div><div class="k"><span class="tipped" title="When the prize was taken, and the transaction that took it.">Solved</span></div><div class="mono" id="pz-solved"><!--ssr:pz-solved-->…<!--/ssr--></div></div>
+    </div>
+    <div class="actions-row" id="pz-actions"><!--ssr:pz-actions--><a class="btn ghost" href="/learn">How the puzzle works</a><!--/ssr--></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2 class="panel-title">Transactions</h2><div class="panel-meta" id="pz-txs-n"><!--ssr:pz-txs-n-->&nbsp;<!--/ssr--></div></div>
+    <div class="table-wrap"><table class="pz-txs">
+      <colgroup><col class="c-when"><col class="c-tx"><col class="c-in"><col class="c-out"><col class="c-note"></colgroup>
+      <thead><tr><th>When</th><th>Transaction</th><th class="num">In, BTC</th><th class="num">Out, BTC</th><th><span class="tipped" title="The text some senders write into their transaction (OP_RETURN). Shown only after a review: no threats, insults, links or ads.">Note</span></th></tr></thead>
+      <tbody id="pz-txs"><!--ssr:pz-txs--><!--/ssr--></tbody>
+    </table></div>
+  </section>
+
+  <div class="actions-row pz-nav" id="pz-nav"><!--ssr:pz-nav--><a class="btn ghost" href="/">All 160 puzzles</a><!--/ssr--></div>
+</main>
+
+<footer class="foot">
+  <a href="https://explorer.bumblebeam.org" target="_blank" rel="noopener">Explorer</a>
+  <a href="https://pool.bumblebeam.org" target="_blank" rel="noopener">Beam pool</a>
+  <a href="mailto:support@bumblebeam.org">Support</a>
+  <span class="pill-status" id="foot-status"><i></i><span id="foot-status-text">connecting…</span></span>
+  <bb-social></bb-social>
+  <p class="foot-copy"><span class="fp">© 2026 <a href="https://bumblebeam.org" target="_blank" rel="noopener">BumbleBeam</a></span><span class="fd d1"> · </span><span class="fp">a community search for the <a href="https://bitcoin.org" target="_blank" rel="noopener">Bitcoin (BTC)</a> puzzle</span><span class="fd d2"> · </span><span class="fp">open source under Apache-2.0 on <a href="https://github.com/profinch/bumblebeam/tree/main/bitcoin/puzzle" target="_blank" rel="noopener">GitHub</a></span></p>
+</footer>
+
+<script src="/ui/components/tips.js?v=dev"></script>
+<script src="/ui/components/keys.js?v=dev"></script>
+<script src="/render.js?v=dev"></script>
+<script src="/puzzle.js?v=dev"></script>
+</body>
+</html>
